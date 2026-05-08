@@ -1,17 +1,81 @@
-# smart_glasses
+# Smart Glasses
+FLUTTER 3.41.6 !
 
-A new Flutter project.
+Flutter-приложение для Android с dual-screen (телефон + очки).
 
-## Getting Started
+## Архитектура
 
-This project is a starting point for a Flutter application.
+Feature-First + Cubit (BLoC)
 
-A few resources to get you started if this is your first Flutter project:
+```
+lib/
+├── app/           # DI, приложение, glasses runtime
+├── core/          # Константы, services
+└── features/      # home, glasses, initialization, scanner, voice
+```
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Реализовано
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- Home Screen с управлением и отображением
+- Offline voice recognition (Vosk)
+- Barcode scanner (multi_scanner)
+- 2 экрана для очков с анимацией
+- MethodChannel связь Main ↔ Glasses
+
+## Добавление экрана в очки
+
+### 1. State + Cubit + Screen
+
+```dart
+// state
+sealed class GlassesScreenXState { const GlassesScreenXState(); }
+class GlassesScreenXInitial extends GlassesScreenXState {}
+class GlassesScreenXUpdated extends GlassesScreenXState {
+  const GlassesScreenXUpdated({required this.data});
+  final String data;
+}
+
+// cubit
+class GlassesScreenXCubit extends Cubit<GlassesScreenXState> {
+  GlassesScreenXCubit() : super(const GlassesScreenXInitial());
+  void updateData(String data) => emit(GlassesScreenXUpdated(data: data));
+}
+
+// screen
+class GlassesScreenX extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => BlocBuilder<GlassesScreenXCubit, GlassesScreenXState>(
+    builder: (context, state) => Text(state is GlassesScreenXUpdated ? state.data : ''),
+  );
+}
+```
+
+### 2. Подключение в `GlassesRuntimeApp`
+
+```dart
+late final GlassesScreenXCubit _screenXCubit;
+_screenXCubit = GlassesScreenXCubit();
+
+// _buildScreen:
+case '/screenX': return const GlassesScreenX();
+
+// providers:
+BlocProvider.value(value: _screenXCubit),
+
+// dispose:
+_screenXCubit.close(),
+```
+
+### 3. Навигация
+
+```kotlin
+// MainActivity.kt
+methodChannel.invokeMethod("navigateGlassesToRoute", "/screenX")
+```
+
+## Build
+
+```bash
+flutter pub get
+flutter run
+```

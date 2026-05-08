@@ -1,4 +1,4 @@
-package com.example.smart_wear_flutter_test
+package ru.tander.smart_glasses
 
 import android.app.Presentation
 import android.content.Context
@@ -11,9 +11,6 @@ import android.view.Display
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.Point
-import android.view.WindowInsets
-import android.view.WindowManager
-import android.os.Build
 import android.widget.Toast
 import androidx.annotation.NonNull
 import io.flutter.FlutterInjector
