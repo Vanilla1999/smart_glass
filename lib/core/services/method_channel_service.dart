@@ -1,0 +1,113 @@
+import 'package:flutter/services.dart';
+import 'package:smart_glasses/core/constants/app_constants.dart';
+
+/// Service for managing MethodChannel communication with native code
+class MethodChannelService {
+  MethodChannelService._();
+
+  static final MethodChannelService _instance = MethodChannelService._();
+  factory MethodChannelService() => _instance;
+
+  final MethodChannel _appChannel = const MethodChannel(AppConstants.appChannelName);
+  final MethodChannel _glassesChannel = const MethodChannel(AppConstants.glassesChannelName);
+
+  /// Show glasses with progress bar
+  Future<void> showGlasses(int counter) async {
+    try {
+      await _appChannel.invokeMethod('showGlasses', counter);
+    } catch (e) {
+      print('Error showing glasses: $e');
+      rethrow;
+    }
+  }
+
+  /// Show glasses initialization screen
+  Future<void> showGlassesInitialization() async {
+    try {
+      print('MethodChannelService: Showing glasses initialization screen');
+      await _appChannel.invokeMethod('showGlassesInitialization');
+    } catch (e) {
+      print('Error showing glasses initialization: $e');
+      rethrow;
+    }
+  }
+
+  /// Navigate glasses to empty screen
+  Future<void> navigateGlassesToEmpty() async {
+    try {
+      print('MethodChannelService: Navigating glasses to empty screen');
+      await _appChannel.invokeMethod('navigateGlassesToEmpty');
+    } catch (e) {
+      print('Error navigating to empty screen: $e');
+      rethrow;
+    }
+  }
+
+  /// Show glasses screen 2
+  Future<void> showGlassesScreen2(int counter) async {
+    try {
+      await _appChannel.invokeMethod('showGlassesScreen2', counter);
+    } catch (e) {
+      print('Error showing glasses screen 2: $e');
+      rethrow;
+    }
+  }
+
+  /// Update counter on glasses
+  Future<void> updateCounter(int counter) async {
+    try {
+      await _appChannel.invokeMethod('updateCounter', counter);
+    } catch (e) {
+      print('Error updating counter: $e');
+      rethrow;
+    }
+  }
+
+  /// Update recognized text on glasses
+  Future<void> updateRecognizedText(String text) async {
+    try {
+      print('MethodChannelService: Sending text to glasses: $text');
+      await _appChannel.invokeMethod('updateRecognizedText', text);
+      print('MethodChannelService: Text sent successfully');
+    } catch (e) {
+      print('Error updating recognized text: $e');
+      rethrow;
+    }
+  }
+
+  /// Save logs to file
+  Future<void> saveLogs() async {
+    try {
+      await _appChannel.invokeMethod('saveLogs');
+    } catch (e) {
+      print('Error saving logs: $e');
+      rethrow;
+    }
+  }
+
+  /// Clear logs
+  Future<void> clearLogs() async {
+    try {
+      await _appChannel.invokeMethod('clearLogs');
+    } catch (e) {
+      print('Error clearing logs: $e');
+      rethrow;
+    }
+  }
+
+  /// Get initial counter value from glasses
+  Future<int> getInitialCounter() async {
+    try {
+      final int result = await _glassesChannel.invokeMethod('getInitialCounter');
+      return result;
+    } catch (e) {
+      print('Error getting initial counter: $e');
+      return 0;
+    }
+  }
+
+  /// Set method call handler for glasses channel
+  void setGlassesMethodCallHandler(Future<dynamic> Function(MethodCall call) handler) {
+    _glassesChannel.setMethodCallHandler(handler);
+  }
+}
