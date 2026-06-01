@@ -8,6 +8,7 @@ class ControlButtons extends StatelessWidget {
     required this.onSaveLogs,
     required this.onClearLogs,
     required this.onIncrementCounter,
+    required this.onPrintTags,
     super.key,
   });
 
@@ -16,6 +17,7 @@ class ControlButtons extends StatelessWidget {
   final VoidCallback onSaveLogs;
   final VoidCallback onClearLogs;
   final VoidCallback onIncrementCounter;
+  final VoidCallback onPrintTags;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +41,15 @@ class ControlButtons extends StatelessWidget {
         ElevatedButton(
           onPressed: onClearLogs,
           child: const Text('Очистить логи'),
+        ),
+        const SizedBox(height: 40),
+        ElevatedButton(
+          onPressed: onPrintTags,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Печать ценников'),
         ),
         const SizedBox(height: 10),
         ElevatedButton(

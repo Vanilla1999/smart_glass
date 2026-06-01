@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/app/di/app_scope.dart';
 import 'package:smart_glasses/features/home/presentation/cubit/home_cubit.dart';
 import 'package:smart_glasses/features/home/presentation/cubit/home_state.dart';
@@ -11,6 +13,7 @@ import 'package:smart_glasses/features/scanner/presentation/cubit/scanner_cubit.
 import 'package:smart_glasses/features/scanner/presentation/cubit/scanner_state.dart';
 import 'package:smart_glasses/features/voice/presentation/cubit/voice_cubit.dart';
 import 'package:smart_glasses/features/voice/presentation/cubit/voice_state.dart';
+import 'package:smart_glasses/modules/wear/navigation/wear_routes.dart';
 
 /// Home screen
 class HomeScreen extends StatelessWidget {
@@ -34,6 +37,22 @@ class HomeScreen extends StatelessWidget {
 class _HomeScreenContent extends StatelessWidget {
   const _HomeScreenContent();
 
+  void _openWearModule(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProviderScope(
+          child: MaterialApp.router(
+            routerConfig: GoRouter(
+              initialLocation: '/wear_main_screen',
+              routes: WearRoute.goRouteWear,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -56,6 +75,7 @@ class _HomeScreenContent extends StatelessWidget {
                         onSaveLogs: () => context.read<HomeCubit>().saveLogs(),
                         onClearLogs: () => context.read<HomeCubit>().clearLogs(),
                         onIncrementCounter: () => context.read<HomeCubit>().incrementCounter(),
+                        onPrintTags: () => _openWearModule(context),
                       );
                     }
                     return const CircularProgressIndicator();
