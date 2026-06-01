@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
+import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_bridge.dart';
+import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/cubit/wear_auth_cubit.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/main/wear_scanner_connect_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/db_settings_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_screen.dart';
@@ -13,7 +14,7 @@ import 'package:smart_glasses/modules/wear/presentation/widgets/wear_svg_icon.da
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
-import 'package:pole_base_kit/pole_base_kit.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class WearMainScreen extends ConsumerStatefulWidget {
   const WearMainScreen({super.key});
@@ -29,6 +30,17 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
   void initState() {
     super.initState();
     WearDependencies.I.warmupVoiceTypingInBackground();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      wearGlassesBridge.show(WearGlassesPayload.authWaitingBarcode());
+    });
+  }
+
+  @override
+  void dispose() {
+    // Do not hide glasses projection here: this screen can be disposed during
+    // a normal transition to the next wear screen (for example after auth).
+    // Hide the projection only from explicit wear-flow exit actions.
+    super.dispose();
   }
 
   bool _isStatusRouteOpen = false;
@@ -40,10 +52,19 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
         (WearAuthState? previous, WearAuthState next) {
       if (previous?.phase != next.phase &&
           next.phase == WearAuthPhase.loading) {
+        wearGlassesBridge.update(WearGlassesPayload.authLoading());
         _dismissStatusIfOpen();
       }
       if (previous?.nav != next.nav && next.nav != null) {
         final WearStatusScreenArgs nav = next.nav!;
+        wearGlassesBridge.update(
+          WearGlassesPayload.status(
+            isError: nav.kind == WearStatusKind.error,
+            title: nav.title,
+            subtitle: nav.message,
+            statusText: nav.kind == WearStatusKind.error ? 'Ошибка' : 'Успешно',
+          ),
+        );
         ref.read(wearAuthNotifierProvider.notifier).consumeNavigation();
         _openOrReplaceStatus(nav);
       }
@@ -121,9 +142,7 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
                       onLongPress: () => ref
                           .read(wearAuthNotifierProvider.notifier)
                           .handleLogoLongPress(),
-                      child: const PBIcon(
-                        PBIconData(WearImages.logo, immutableColor: true),
-                      ),
+                      child: SvgPicture.asset(WearImages.logo),
                     ),
                   ],
                 ),

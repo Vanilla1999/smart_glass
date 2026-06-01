@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_bridge.dart';
+import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/printers/wear_printer_select_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/wear_settings_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
@@ -20,6 +22,14 @@ class WearMenuScreen extends StatefulWidget {
 
 class _WearMenuScreenState extends State<WearMenuScreen> {
   final ScrollController _scroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      wearGlassesBridge.update(WearGlassesPayload.menu());
+    });
+  }
 
   @override
   void dispose() {

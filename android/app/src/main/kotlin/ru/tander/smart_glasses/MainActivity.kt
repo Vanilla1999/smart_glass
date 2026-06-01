@@ -30,6 +30,7 @@ class MainActivity : FlutterFragmentActivity() {
     private var displayManager: DisplayManager? = null
     private var currentCounter = 0
     private var currentRecognizedText = ""
+    private var currentWearGlassesPayload: Map<*, *>? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
@@ -91,6 +92,23 @@ class MainActivity : FlutterFragmentActivity() {
                         updateGlassesRecognizedText(currentRecognizedText)
                         result.success(true)
                     }
+                    "showWearGlasses" -> {
+                        val payload = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
+                        Log.d("SmartWear", "showWearGlasses called: $payload")
+                        showWearGlasses(payload)
+                        result.success(true)
+                    }
+                    "updateWearGlasses" -> {
+                        val payload = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
+                        Log.d("SmartWear", "updateWearGlasses called: $payload")
+                        updateWearGlasses(payload)
+                        result.success(true)
+                    }
+                    "hideWearGlasses" -> {
+                        Log.d("SmartWear", "hideWearGlasses called")
+                        hideWearGlasses()
+                        result.success(true)
+                    }
                     "saveLogs" -> {
                         saveLogsToFile()
                         result.success(true)
@@ -119,6 +137,7 @@ class MainActivity : FlutterFragmentActivity() {
             val secondaryDisplay = displays[displays.size - 1]
 
             glassesPresentation?.dismiss()
+            currentWearGlassesPayload = null
             // Engine is already pre-warmed, just create Presentation
 
             if (glassesEngine != null) {
@@ -141,6 +160,7 @@ class MainActivity : FlutterFragmentActivity() {
             val secondaryDisplay = displays[displays.size - 1]
 
             glassesPresentation?.dismiss()
+            currentWearGlassesPayload = null
 
             if (glassesEngine != null) {
                 glassesPresentation = GlassesPresentation(this, secondaryDisplay, glassesEngine!!)
@@ -181,6 +201,40 @@ class MainActivity : FlutterFragmentActivity() {
         } else {
             Log.d("SmartWear", "No secondary display found")
         }
+    }
+
+    private fun showWearGlasses(payload: Map<*, *>) {
+        currentWearGlassesPayload = payload
+        val displays = displayManager?.getDisplays()
+        if (displays != null && displays.size > 1) {
+            val secondaryDisplay = displays[displays.size - 1]
+
+            if (glassesPresentation == null && glassesEngine != null) {
+                glassesPresentation = GlassesPresentation(this, secondaryDisplay, glassesEngine!!)
+                glassesPresentation?.show()
+            }
+
+            Log.d("SmartWear", "Navigating to wear projection on glasses")
+            glassesChannel?.invokeMethod("updateWearGlasses", payload)
+            glassesChannel?.invokeMethod("navigateToRoute", "/wear")
+        } else {
+            Log.d("SmartWear", "No secondary display found for wear projection")
+        }
+    }
+
+    private fun updateWearGlasses(payload: Map<*, *>) {
+        currentWearGlassesPayload = payload
+        if (glassesPresentation == null) {
+            Log.d("SmartWear", "Wear projection update requested before presentation; creating presentation")
+            showWearGlasses(payload)
+            return
+        }
+        glassesChannel?.invokeMethod("updateWearGlasses", payload)
+    }
+
+    private fun hideWearGlasses() {
+        currentWearGlassesPayload = null
+        glassesChannel?.invokeMethod("navigateToRoute", "/empty")
     }
 
     private fun updateGlassesCounter(counter: Int) {

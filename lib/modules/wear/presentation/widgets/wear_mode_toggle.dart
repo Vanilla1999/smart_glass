@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
-import 'package:pole_base_kit/pole_base_kit.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 class WearModeToggle extends StatelessWidget {

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
+import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_bridge.dart';
+import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_input_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/cubit/wear_scan_cubit.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_product_select_screen.dart';
@@ -35,22 +37,50 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
       get _provider => wearScanNotifierProvider(widget.printers);
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      wearGlassesBridge.update(WearGlassesPayload.scanWaiting());
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final WearScanState state = ref.watch(_provider);
 
     ref.listen<WearScanState>(_provider,
         (WearScanState? previous, WearScanState next) {
       if (previous?.phase != next.phase && next.phase == WearScanPhase.loading) {
+        wearGlassesBridge.update(WearGlassesPayload.scanLoading());
         _dismissStatusIfOpen();
       }
 
       if (previous?.navStatus != next.navStatus && next.navStatus != null) {
         final WearStatusScreenArgs nav = next.navStatus!;
+        wearGlassesBridge.update(
+          WearGlassesPayload.status(
+            isError: nav.kind == WearStatusKind.error,
+            title: nav.title,
+            subtitle: nav.message,
+            statusText: nav.kind == WearStatusKind.error ? 'Ошибка' : 'Успешно',
+          ),
+        );
         ref.read(_provider.notifier).consumeNavigation();
         _openOrReplaceStatus(nav);
       }
       if (previous?.navSelect != next.navSelect && next.navSelect != null) {
         final WearProductSelectArgs args = next.navSelect!;
+        wearGlassesBridge.update(
+          WearGlassesPayload(
+            screenType: WearGlassesScreenType.productSelect,
+            phase: WearGlassesPhase.idle,
+            title: 'Дубль ШК',
+            subtitle: 'Выберите нужный товар',
+            items: args.products.map((BarcodeProductInfo p) => p.name).toList(),
+            selectedIndex: 0,
+            pageText: args.products.length > 5 ? 'Показаны первые 5' : null,
+          ),
+        );
         ref.read(_provider.notifier).consumeNavigation();
         _openProductSelect(args);
       }

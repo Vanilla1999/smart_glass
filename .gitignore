@@ -33,6 +33,9 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Local environment files with secrets. Commit only *.example templates.
+assets/develop.env
+
 # Symbolication related
 app.*.symbols
 

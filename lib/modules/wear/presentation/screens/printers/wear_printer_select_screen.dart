@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
+import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_bridge.dart';
+import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/printers/cubit/wear_printer_select_cubit.dart';
 
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_scan_idle_screen.dart';
@@ -28,6 +30,14 @@ class _WearPrinterSelectScreenState
   final ScrollController _scroll = ScrollController();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _sendGlassesState(ref.read(wearPrinterSelectNotifierProvider));
+    });
+  }
+
+  @override
   void dispose() {
     _scroll.dispose();
     super.dispose();
@@ -42,6 +52,12 @@ class _WearPrinterSelectScreenState
         (WearPrinterSelectState? previous, WearPrinterSelectState next) {
       if (previous?.step != next.step) {
         _scrollToTop();
+      }
+      if (previous?.phase != next.phase ||
+          previous?.step != next.step ||
+          previous?.printers != next.printers ||
+          previous?.error != next.error) {
+        _sendGlassesState(next);
       }
       if (previous?.yellowPrinter != next.yellowPrinter &&
           next.yellowPrinter != null) {
@@ -191,6 +207,47 @@ class _WearPrinterSelectScreenState
       yellowPrinter: yellow,
     );
     context.go(WearScanIdleScreen.route, extra: selection);
+  }
+
+  void _sendGlassesState(WearPrinterSelectState state) {
+    if (state.isLoading) {
+      wearGlassesBridge.update(
+        const WearGlassesPayload(
+          screenType: WearGlassesScreenType.printer,
+          phase: WearGlassesPhase.loading,
+          title: 'Выбор принтера',
+          statusText: 'Инициализация...',
+          isLoading: true,
+        ),
+      );
+      return;
+    }
+
+    if (state.hasError && state.printers.isEmpty) {
+      wearGlassesBridge.update(
+        WearGlassesPayload.status(
+          isError: true,
+          title: 'Ошибка загрузки принтеров',
+          subtitle: state.error,
+        ),
+      );
+      return;
+    }
+
+    final List<WearPrinter> printers = _visiblePrinters(state);
+    wearGlassesBridge.update(
+      WearGlassesPayload(
+        screenType: WearGlassesScreenType.printer,
+        phase: WearGlassesPhase.idle,
+        title: 'Выбор принтера',
+        subtitle: state.step == WearPrinterSelectStep.yellow
+            ? 'Жёлтые ценники'
+            : 'Белые ценники',
+        items: printers.map((WearPrinter printer) => printer.name).toList(),
+        selectedIndex: 0,
+        pageText: printers.length > 5 ? 'Показаны первые 5' : null,
+      ),
+    );
   }
 
   void _scrollToTop() {

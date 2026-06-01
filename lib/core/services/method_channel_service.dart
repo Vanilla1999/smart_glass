@@ -75,6 +75,36 @@ class MethodChannelService {
     }
   }
 
+  /// Show wear projection screen on glasses and send initial payload.
+  Future<void> showWearGlasses(Map<String, dynamic> payload) async {
+    try {
+      await _appChannel.invokeMethod('showWearGlasses', payload);
+    } catch (e) {
+      print('Error showing wear glasses: $e');
+      rethrow;
+    }
+  }
+
+  /// Update current wear projection payload on glasses.
+  Future<void> updateWearGlasses(Map<String, dynamic> payload) async {
+    try {
+      await _appChannel.invokeMethod('updateWearGlasses', payload);
+    } catch (e) {
+      print('Error updating wear glasses: $e');
+      rethrow;
+    }
+  }
+
+  /// Hide wear projection screen on glasses.
+  Future<void> hideWearGlasses() async {
+    try {
+      await _appChannel.invokeMethod('hideWearGlasses');
+    } catch (e) {
+      print('Error hiding wear glasses: $e');
+      rethrow;
+    }
+  }
+
   /// Save logs to file
   Future<void> saveLogs() async {
     try {

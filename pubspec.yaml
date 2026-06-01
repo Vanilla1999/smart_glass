@@ -32,9 +32,6 @@ dependencies:
   permission_handler: ^12.0.0
   shared_preferences: ^2.3.4
   fbdb: ^1.4.0
-  # TODO: заменить на git когда будет доступ
-  pole_base_kit:
-    path: packages/pole_base_kit
 
 dependency_overrides:
   permission_handler: ^12.0.0

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:pole_base_kit/pole_base_kit.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 
 class HomeButtonWear extends StatelessWidget {
@@ -13,9 +13,7 @@ class HomeButtonWear extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: const PBIcon(
-        PBIconData(WearImages.homeButton, immutableColor: true),
-      ),
+      child: SvgPicture.asset(WearImages.homeButton),
     );
   }
 }

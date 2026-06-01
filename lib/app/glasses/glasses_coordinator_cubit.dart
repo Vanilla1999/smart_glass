@@ -13,6 +13,7 @@ class GlassesCoordinatorCubit extends Cubit<GlassesCoordinatorState> {
     required this.onUpdateScreen1Counter,
     required this.onUpdateScreen1RecognizedText,
     required this.onUpdateScreen2RecognizedText,
+    required this.onUpdateWearGlasses,
   })  : _methodChannelService = methodChannelService,
         super(const GlassesCoordinatorInitial());
 
@@ -28,6 +29,9 @@ class GlassesCoordinatorCubit extends Cubit<GlassesCoordinatorState> {
   
   // Screen 2 data callbacks
   final Function(String text) onUpdateScreen2RecognizedText;
+
+  // Wear projection callbacks
+  final Function(Map<String, dynamic> payload) onUpdateWearGlasses;
 
   String _currentRoute = '/';
 
@@ -57,6 +61,9 @@ class GlassesCoordinatorCubit extends Cubit<GlassesCoordinatorState> {
         break;
       case 'updateRecognizedText':
         _handleUpdateRecognizedText(call.arguments as String? ?? '');
+        break;
+      case 'updateWearGlasses':
+        _handleUpdateWearGlasses(call.arguments);
         break;
     }
   }
@@ -104,6 +111,12 @@ class GlassesCoordinatorCubit extends Cubit<GlassesCoordinatorState> {
       onUpdateScreen1RecognizedText(text);
     } else if (_currentRoute == '/screen2') {
       onUpdateScreen2RecognizedText(text);
+    }
+  }
+
+  void _handleUpdateWearGlasses(dynamic arguments) {
+    if (arguments is Map) {
+      onUpdateWearGlasses(Map<String, dynamic>.from(arguments));
     }
   }
 }
