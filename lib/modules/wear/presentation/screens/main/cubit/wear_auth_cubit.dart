@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:multi_scanner/multi_scanner.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
+import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/use_case/authenticate_user_use_case.dart';
@@ -50,13 +53,11 @@ class WearAuthState {
 class WearAuthNotifier extends StateNotifier<WearAuthState>
     implements MultiScannerDelegate {
   WearAuthNotifier(Ref ref) : super(WearAuthState.initial()) {
-    // TODO: remove stub dep
-    // _scannerNotifier = ref.read(scannerNotifierProvider.notifier);
-    // _wearMetricsService = ref.read(wearMetricsServiceProvider.notifier);
-    // _wearMetricsService.startLogMetrics();
-    // _scannerNotifier.multiScanner.addDelegate(this);
+    _scanner.addDelegate(this);
   }
-  // late final WearMetricsService _wearMetricsService;
+
+  final MultiScanner _scanner = MultiScanner.last();
+
   static const String _mockLogoBarcode =
       '{"uuid": "be9f894e-bebe-11f0-ccaf-00e04c1521d1", "kiscode": "mmmkakoikiss", "version": 2}';
   static final AuthenticatedUser _mockSkipUser = AuthenticatedUser(
@@ -65,23 +66,18 @@ class WearAuthNotifier extends StateNotifier<WearAuthState>
     name: 'Колиус',
   );
 
-  // late final ScannerNotifier _scannerNotifier;
-
   @override
   void dispose() {
-    // _scannerNotifier.multiScanner.removeDelegate(this);
+    _scanner.removeDelegate(this);
     super.dispose();
   }
 
+
   @override
   bool? onScanEvent(String payload) {
-    // _wearMetricsService.showWakeNotification();
     if (WearSession.isAuthorized) {
       return true;
     }
-    // if (_scannerNotifier.onScanEvent(payload) == true) {
-    //   return true;
-    // }
     authorizeByBadgeBarcode(payload);
     return true;
   }
@@ -156,6 +152,11 @@ class WearAuthNotifier extends StateNotifier<WearAuthState>
     state = state.copyWith(phase: WearAuthPhase.loading);
 
     try {
+      if (WearMockConfig.isEnabled) {
+        await _authorizeWithMockUser();
+        return;
+      }
+
       // 0) поднимаем соединение с БД объекта сразу
       // await WearDependencies.I.ensureBdtoOpened();
 
@@ -194,6 +195,24 @@ class WearAuthNotifier extends StateNotifier<WearAuthState>
         ),
       );
     }
+  }
+
+  Future<void> _authorizeWithMockUser() async {
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    WearSession.setUser(_mockSkipUser);
+
+    await WearFeedback.play(WearStatusKind.success);
+    state = state.copyWith(
+      phase: WearAuthPhase.idle,
+      nav: WearStatusScreenArgs(
+        kind: WearStatusKind.success,
+        title: 'Вошли как',
+        message: _mockSkipUser.name,
+        autoAfter: const Duration(seconds: 2),
+        autoAction: WearStatusAutoAction.go,
+        autoRoute: WearMenuScreen.route,
+      ),
+    );
   }
 
   void consumeNavigation() {

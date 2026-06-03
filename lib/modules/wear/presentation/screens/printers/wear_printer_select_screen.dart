@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
-import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_bridge.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/printers/cubit/wear_printer_select_cubit.dart';
 
@@ -12,6 +12,7 @@ import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dar
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
+import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
@@ -206,12 +207,14 @@ class _WearPrinterSelectScreenState
       whitePrinter: white,
       yellowPrinter: yellow,
     );
+    WearSession.setPrinterSelection(selection);
+    WearStatusIconReporter.I.refreshAndResend();
     context.go(WearScanIdleScreen.route, extra: selection);
   }
 
   void _sendGlassesState(WearPrinterSelectState state) {
     if (state.isLoading) {
-      wearGlassesBridge.update(
+      WearStatusIconReporter.I.send(
         const WearGlassesPayload(
           screenType: WearGlassesScreenType.printer,
           phase: WearGlassesPhase.loading,
@@ -224,7 +227,7 @@ class _WearPrinterSelectScreenState
     }
 
     if (state.hasError && state.printers.isEmpty) {
-      wearGlassesBridge.update(
+      WearStatusIconReporter.I.send(
         WearGlassesPayload.status(
           isError: true,
           title: 'Ошибка загрузки принтеров',
@@ -235,7 +238,7 @@ class _WearPrinterSelectScreenState
     }
 
     final List<WearPrinter> printers = _visiblePrinters(state);
-    wearGlassesBridge.update(
+    WearStatusIconReporter.I.send(
       WearGlassesPayload(
         screenType: WearGlassesScreenType.printer,
         phase: WearGlassesPhase.idle,
@@ -245,7 +248,7 @@ class _WearPrinterSelectScreenState
             : 'Белые ценники',
         items: printers.map((WearPrinter printer) => printer.name).toList(),
         selectedIndex: 0,
-        pageText: printers.length > 5 ? 'Показаны первые 5' : null,
+        pageText: printers.length > 4 ? 'Показаны первые 4' : null,
       ),
     );
   }

@@ -32,6 +32,12 @@ class WearGlassesPayload {
     this.pageText,
     this.primaryAction,
     this.secondaryAction,
+    this.statusIcon,
+    this.showWifiIcon = true,
+    this.wifiAvailable = false,
+    this.wifiLevel = 3,
+    this.showPrinterIcon = false,
+    this.printerAvailable = false,
   });
 
   factory WearGlassesPayload.authWaitingBarcode() {
@@ -93,6 +99,24 @@ class WearGlassesPayload {
     );
   }
 
+  factory WearGlassesPayload.loading({
+    required WearGlassesScreenType screenType,
+    required String title,
+    required String statusText,
+    String? subtitle,
+    String? statusIcon,
+  }) {
+    return WearGlassesPayload(
+      screenType: screenType,
+      phase: WearGlassesPhase.loading,
+      title: title,
+      subtitle: subtitle,
+      statusText: statusText,
+      isLoading: true,
+      statusIcon: statusIcon,
+    );
+  }
+
   factory WearGlassesPayload.printing({String? productName}) {
     return WearGlassesPayload(
       screenType: WearGlassesScreenType.printing,
@@ -109,6 +133,7 @@ class WearGlassesPayload {
     required String title,
     String? subtitle,
     String? statusText,
+    String? statusIcon,
   }) {
     return WearGlassesPayload(
       screenType: WearGlassesScreenType.status,
@@ -117,6 +142,7 @@ class WearGlassesPayload {
       subtitle: subtitle,
       statusText: statusText,
       isError: isError,
+      statusIcon: statusIcon,
     );
   }
 
@@ -132,6 +158,41 @@ class WearGlassesPayload {
   final String? pageText;
   final String? primaryAction;
   final String? secondaryAction;
+  final String? statusIcon;
+  final bool showWifiIcon;
+  final bool wifiAvailable;
+  final int wifiLevel;
+  final bool showPrinterIcon;
+  final bool printerAvailable;
+
+  WearGlassesPayload copyWithStatusIcons({
+    bool? showWifiIcon,
+    bool? wifiAvailable,
+    int? wifiLevel,
+    bool? showPrinterIcon,
+    bool? printerAvailable,
+  }) {
+    return WearGlassesPayload(
+      screenType: screenType,
+      phase: phase,
+      title: title,
+      subtitle: subtitle,
+      statusText: statusText,
+      isLoading: isLoading,
+      isError: isError,
+      items: items,
+      selectedIndex: selectedIndex,
+      pageText: pageText,
+      primaryAction: primaryAction,
+      secondaryAction: secondaryAction,
+      statusIcon: statusIcon,
+      showWifiIcon: showWifiIcon ?? this.showWifiIcon,
+      wifiAvailable: wifiAvailable ?? this.wifiAvailable,
+      wifiLevel: wifiLevel ?? this.wifiLevel,
+      showPrinterIcon: showPrinterIcon ?? this.showPrinterIcon,
+      printerAvailable: printerAvailable ?? this.printerAvailable,
+    );
+  }
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -147,6 +208,12 @@ class WearGlassesPayload {
       'pageText': pageText,
       'primaryAction': primaryAction,
       'secondaryAction': secondaryAction,
+      'statusIcon': statusIcon,
+      'showWifiIcon': showWifiIcon,
+      'wifiAvailable': wifiAvailable,
+      'wifiLevel': wifiLevel,
+      'showPrinterIcon': showPrinterIcon,
+      'printerAvailable': printerAvailable,
     };
   }
 }

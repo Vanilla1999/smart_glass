@@ -5,6 +5,7 @@ import 'package:smart_glasses/modules/wear/presentation/screens/menu/wear_menu_s
 import 'package:smart_glasses/modules/wear/presentation/widgets/home_button.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scanner_status_indicator.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_position_indicator.dart';
+import 'package:smart_glasses/modules/wear/presentation/widgets/wear_status_bar.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 
 class WearScreenScaffold extends ConsumerWidget {
@@ -41,6 +42,18 @@ class WearScreenScaffold extends ConsumerWidget {
                 child: Transform.translate(
                   offset: const Offset(-60, 20),
                   child: const WearScannerStatusIndicator(),
+                ),
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.topCenter,
+            child: Padding(
+              padding: const EdgeInsets.all(4.5),
+              child: IgnorePointer(
+                child: Transform.translate(
+                  offset: const Offset(78, 20),
+                  child: const WearStatusBar(),
                 ),
               ),
             ),

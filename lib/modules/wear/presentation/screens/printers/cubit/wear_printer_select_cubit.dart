@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
+import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/available_printer.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/use_case/get_available_printers_use_case.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
@@ -68,12 +69,12 @@ class WearPrinterSelectState {
 
 class WearPrinterSelectNotifier extends StateNotifier<WearPrinterSelectState> {
   WearPrinterSelectNotifier({GetAvailablePrintersUseCase? useCase})
-      : _useCase = useCase ?? WearDependencies.I.getAvailablePrintersUseCase(),
+      : _useCase = useCase,
         super(WearPrinterSelectState.initial()) {
     load();
   }
 
-  final GetAvailablePrintersUseCase _useCase;
+  final GetAvailablePrintersUseCase? _useCase;
 
   Future<void> load() async {
     if (state.isLoading) return;
@@ -82,7 +83,23 @@ class WearPrinterSelectNotifier extends StateNotifier<WearPrinterSelectState> {
       clearError: true,
     );
     try {
-      final List<AvailablePrinter> printers = await _useCase.call();
+      if (WearMockConfig.isEnabled) {
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+        if (!mounted) return;
+        state = state.copyWith(
+          phase: WearPrinterSelectPhase.idle,
+          printers: const <WearPrinter>[
+            WearPrinter(id: 'mock-white-1', name: 'MOCK Белый 1'),
+            WearPrinter(id: 'mock-yellow-1', name: 'MOCK Желтый 1'),
+            WearPrinter(id: 'mock-mobile-2', name: 'MOCK Мобильный 2'),
+          ],
+        );
+        return;
+      }
+
+      final GetAvailablePrintersUseCase useCase =
+          _useCase ?? WearDependencies.I.getAvailablePrintersUseCase();
+      final List<AvailablePrinter> printers = await useCase.call();
       if (!mounted) return;
       final List<WearPrinter> mapped = printers
           .map(

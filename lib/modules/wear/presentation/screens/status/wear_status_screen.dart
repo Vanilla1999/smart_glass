@@ -1,15 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
-import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_bridge.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
+import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 class WearStatusScreen extends StatefulWidget {
   const WearStatusScreen({
@@ -36,12 +36,13 @@ class _WearStatusScreenState extends State<WearStatusScreen> {
     if (a == null) return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      wearGlassesBridge.update(
+      WearStatusIconReporter.I.send(
         WearGlassesPayload.status(
           isError: a.kind == WearStatusKind.error,
           title: a.title,
           subtitle: a.message,
           statusText: a.kind == WearStatusKind.error ? 'Ошибка' : 'Успешно',
+          statusIcon: _statusIconFor(a),
         ),
       );
     });
@@ -90,9 +91,7 @@ class _WearStatusScreenState extends State<WearStatusScreen> {
         );
     final String message = _normalizeStatusMessage(args.message);
 
-    final String iconPath = args.kind == WearStatusKind.success
-        ? WearImages.good
-        : WearImages.error;
+    final String? iconPath = _statusIconFor(args);
 
     return WearScreenScaffold(
       showHomeButton: args.showHome,
@@ -102,8 +101,16 @@ class _WearStatusScreenState extends State<WearStatusScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              SvgPicture.asset(iconPath),
-              const SizedBox(height: 7),
+              if (iconPath != null) ...<Widget>[
+                SvgPicture.asset(
+                  iconPath,
+                  colorFilter: const ColorFilter.mode(
+                    WearColors.green,
+                    BlendMode.srcIn,
+                  ),
+                ),
+                const SizedBox(height: 7),
+              ],
               Text(
                 args.title,
                 style: WearTypography.bodyxsm,
@@ -139,5 +146,15 @@ class _WearStatusScreenState extends State<WearStatusScreen> {
       return 'Ошибка соединения с БД. Повторите попытку.';
     }
     return raw;
+  }
+
+  String? _statusIconFor(WearStatusScreenArgs args) {
+    if (args.kind == WearStatusKind.error) {
+      return WearImages.error;
+    }
+
+    final bool isScanPrintSuccess = args.kind == WearStatusKind.success &&
+        args.title.toLowerCase().contains('ценник');
+    return isScanPrintSuccess ? WearImages.good : null;
   }
 }

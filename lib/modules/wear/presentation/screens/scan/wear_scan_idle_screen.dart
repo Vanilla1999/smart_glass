@@ -3,16 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
-import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_bridge.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_input_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/cubit/wear_scan_cubit.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_product_select_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_screen.dart';
-import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
+import 'package:smart_glasses/modules/wear/presentation/widgets/wear_svg_icon.dart';
+import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
+import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
 class WearScanIdleScreen extends ConsumerStatefulWidget {
@@ -40,7 +41,7 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      wearGlassesBridge.update(WearGlassesPayload.scanWaiting());
+      WearStatusIconReporter.I.send(WearGlassesPayload.scanWaiting());
     });
   }
 
@@ -50,19 +51,51 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
 
     ref.listen<WearScanState>(_provider,
         (WearScanState? previous, WearScanState next) {
-      if (previous?.phase != next.phase && next.phase == WearScanPhase.loading) {
-        wearGlassesBridge.update(WearGlassesPayload.scanLoading());
+      if (previous?.phase != next.phase &&
+          next.phase == WearScanPhase.loading) {
+        WearStatusIconReporter.I.send(
+          WearGlassesPayload.loading(
+            screenType: WearGlassesScreenType.scan,
+            title: 'Сканирование',
+            statusText: next.loadingText,
+            statusIcon: next.loadingIcon,
+          ),
+        );
         _dismissStatusIfOpen();
+      }
+
+      if (previous?.loadingText != next.loadingText && next.isLoading) {
+        WearStatusIconReporter.I.send(
+          WearGlassesPayload.loading(
+            screenType: WearGlassesScreenType.scan,
+            title: 'Сканирование',
+            statusText: next.loadingText,
+            statusIcon: next.loadingIcon,
+          ),
+        );
+      }
+
+      if (previous?.loadingIcon != next.loadingIcon && next.isLoading) {
+        WearStatusIconReporter.I.send(
+          WearGlassesPayload.loading(
+            screenType: WearGlassesScreenType.scan,
+            title: 'Сканирование',
+            statusText: next.loadingText,
+            statusIcon: next.loadingIcon,
+          ),
+        );
       }
 
       if (previous?.navStatus != next.navStatus && next.navStatus != null) {
         final WearStatusScreenArgs nav = next.navStatus!;
-        wearGlassesBridge.update(
+        WearStatusIconReporter.I.send(
           WearGlassesPayload.status(
             isError: nav.kind == WearStatusKind.error,
             title: nav.title,
             subtitle: nav.message,
             statusText: nav.kind == WearStatusKind.error ? 'Ошибка' : 'Успешно',
+            statusIcon:
+                nav.kind == WearStatusKind.success ? WearImages.good : null,
           ),
         );
         ref.read(_provider.notifier).consumeNavigation();
@@ -70,7 +103,7 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
       }
       if (previous?.navSelect != next.navSelect && next.navSelect != null) {
         final WearProductSelectArgs args = next.navSelect!;
-        wearGlassesBridge.update(
+        WearStatusIconReporter.I.send(
           WearGlassesPayload(
             screenType: WearGlassesScreenType.productSelect,
             phase: WearGlassesPhase.idle,
@@ -78,7 +111,7 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
             subtitle: 'Выберите нужный товар',
             items: args.products.map((BarcodeProductInfo p) => p.name).toList(),
             selectedIndex: 0,
-            pageText: args.products.length > 5 ? 'Показаны первые 5' : null,
+            pageText: args.products.length > 4 ? 'Показаны первые 4' : null,
           ),
         );
         ref.read(_provider.notifier).consumeNavigation();
@@ -93,39 +126,25 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
           Center(
             child: Padding(
               padding: const EdgeInsets.all(4.5),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Text(
-                    'Для печати\nотсканируйте ценник\nили товар',
-                    style: WearTypography.lable.copyWith(height: 1.25),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  _PillButton(
-                    title: 'Ручной ввод',
-                    onTap: () async {
-                      final String? code = await context.push<String>(
-                        WearPrintCodeInputScreen.route,
-                      );
+              child: _ScanWaitingContent(
+                onManualInput: () async {
+                  final String? code = await context.push<String>(
+                    WearPrintCodeInputScreen.route,
+                  );
 
-                      if (code == null || code.trim().isEmpty) {
-                        return;
-                      }
-                      ref.read(_provider.notifier).handleBarcode(code.trim());
-                    },
-                  ),
-                ],
+                  if (code == null || code.trim().isEmpty) {
+                    return;
+                  }
+                  ref.read(_provider.notifier).handleBarcode(code.trim());
+                },
               ),
             ),
           ),
           if (state.isLoading)
-            const Positioned.fill(
-              child: ColoredBox(
-                color: Color(0x66FFFFFF),
-                child: Center(
-                  child: WearLoading(size: 44),
-                ),
+            Positioned.fill(
+              child: _ScanLoadingView(
+                statusText: state.loadingText,
+                icon: state.loadingIcon,
               ),
             ),
         ],
@@ -170,9 +189,7 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
     _isStatusRouteOpen = false;
   }
 
-  Future<void> _openProductSelect(
-    WearProductSelectArgs args,
-  ) async {
+  Future<void> _openProductSelect(WearProductSelectArgs args) async {
     final bool scanScreenIsCurrent = ModalRoute.of(context)?.isCurrent ?? true;
     if (_isStatusRouteOpen && !scanScreenIsCurrent) {
       if (mounted && Navigator.of(context).canPop()) {
@@ -197,14 +214,175 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
   }
 }
 
+class _ScanWaitingContent extends StatelessWidget {
+  const _ScanWaitingContent({required this.onManualInput});
+
+  final VoidCallback onManualInput;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        const _ScanIconBubble(),
+        const SizedBox(height: 12),
+        Text(
+          'Сканирование товара',
+          style: WearTypography.lable18,
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Наведите камеру\nна штрих-код',
+          style: WearTypography.lable.copyWith(
+            color: WearColors.textSecondary,
+            height: 1.2,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 14),
+        const _ScanStatusLine(text: 'Поиск ШК...'),
+        const SizedBox(height: 16),
+        _PillButton(
+          title: 'Ручной ввод',
+          icon: WearImages.barcode,
+          onTap: onManualInput,
+        ),
+      ],
+    );
+  }
+}
+
+class _ScanLoadingView extends StatelessWidget {
+  const _ScanLoadingView({
+    required this.statusText,
+    required this.icon,
+  });
+
+  final String statusText;
+  final String icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(color: Color(0xCCFFFFFF)),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(4.5),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              _ScanIconBubble(icon: icon),
+              const SizedBox(height: 12),
+              Text(
+                'Сканирование товара',
+                style: WearTypography.lable18,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Наведите камеру\nна штрих-код',
+                style: WearTypography.lable.copyWith(
+                  color: WearColors.textSecondary,
+                  height: 1.2,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 14),
+              _ScanStatusLine(text: statusText, icon: icon),
+              const SizedBox(height: 10),
+              const SizedBox(
+                width: 112,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.all(Radius.circular(999)),
+                  child: LinearProgressIndicator(
+                    minHeight: 3,
+                    backgroundColor: Color(0x1A464646),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      WearColors.textDefault,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ScanIconBubble extends StatelessWidget {
+  const _ScanIconBubble({this.icon = WearImages.barcode});
+
+  final String icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: const BoxDecoration(
+        color: WearColors.buttonSecondaryDefault,
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: WearSvgIcon(
+          icon,
+          size: 22,
+          color: WearColors.textDefault,
+        ),
+      ),
+    );
+  }
+}
+
+class _ScanStatusLine extends StatelessWidget {
+  const _ScanStatusLine({
+    required this.text,
+    this.icon = WearImages.scanerIndicator,
+  });
+
+  final String text;
+  final String icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        WearSvgIcon(
+          icon == WearImages.printer
+              ? WearImages.printer
+              : WearImages.scanerIndicator,
+          size: 16,
+          color: WearColors.green,
+        ),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            text,
+            style: WearTypography.lable.copyWith(height: 1.1),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _PillButton extends StatelessWidget {
   const _PillButton({
     required this.title,
     required this.onTap,
+    this.icon,
   });
 
   final String title;
   final VoidCallback onTap;
+  final String? icon;
 
   static const double _radius = 33.0;
   static const double _height = 34.0;
@@ -218,16 +396,31 @@ class _PillButton extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: SizedBox(
-          width: 123,
+          width: 138,
           height: _height,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Center(
-              child: Text(
-                title,
-                style: WearTypography.lable.copyWith(fontSize: 15),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  if (icon != null) ...<Widget>[
+                    WearSvgIcon(
+                      icon!,
+                      size: 14,
+                      color: WearColors.textDefault,
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  Flexible(
+                    child: Text(
+                      title,
+                      style: WearTypography.lable.copyWith(fontSize: 15),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

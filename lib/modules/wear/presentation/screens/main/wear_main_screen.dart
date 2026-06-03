@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
-import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_bridge.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/cubit/wear_auth_cubit.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/db_settings_screen.dart';
@@ -10,7 +9,9 @@ import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_stat
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scanner_status_indicator.dart';
+import 'package:smart_glasses/modules/wear/presentation/widgets/wear_status_bar.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_svg_icon.dart';
+import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
@@ -30,8 +31,9 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
   void initState() {
     super.initState();
     WearDependencies.I.warmupVoiceTypingInBackground();
+    WearStatusIconReporter.I.start();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      wearGlassesBridge.show(WearGlassesPayload.authWaitingBarcode());
+      WearStatusIconReporter.I.show(WearGlassesPayload.authWaitingBarcode());
     });
   }
 
@@ -52,12 +54,12 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
         (WearAuthState? previous, WearAuthState next) {
       if (previous?.phase != next.phase &&
           next.phase == WearAuthPhase.loading) {
-        wearGlassesBridge.update(WearGlassesPayload.authLoading());
+        WearStatusIconReporter.I.send(WearGlassesPayload.authLoading());
         _dismissStatusIfOpen();
       }
       if (previous?.nav != next.nav && next.nav != null) {
         final WearStatusScreenArgs nav = next.nav!;
-        wearGlassesBridge.update(
+        WearStatusIconReporter.I.send(
           WearGlassesPayload.status(
             isError: nav.kind == WearStatusKind.error,
             title: nav.title,
@@ -165,6 +167,18 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
                   child: Transform.translate(
                     offset: const Offset(-60, 20),
                     child: const WearScannerStatusIndicator(),
+                  ),
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.topCenter,
+              child: Padding(
+                padding: const EdgeInsets.all(4.5),
+                child: IgnorePointer(
+                  child: Transform.translate(
+                    offset: const Offset(78, 20),
+                    child: const WearStatusBar(),
                   ),
                 ),
               ),

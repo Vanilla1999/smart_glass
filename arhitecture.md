@@ -20,6 +20,7 @@
 | Voice recognition | `vosk_flutter_service` + `record` |
 | Scanner | `multi_scanner` |
 | Assets | `assets/vosk-model-small-ru-0.22.zip` |
+| Wi‑Fi status | `wifi_info_plugin_plus` + `permission_handler` |
 
 ## Структура каталогов
 
@@ -336,6 +337,10 @@ lib/modules/wear/
 │   └── wear_printer_selection.dart
 ├── navigation/
 │   └── wear_routes.dart            # GoRouter-конфигурация (10 роутов)
+├── services/
+│   ├── wear_wifi_status_service.dart      # Реальный Wi‑Fi статус через wifi_info_plugin_plus
+│   ├── wear_printer_status_service.dart   # Статус выбранного принтера (доступен/нет)
+│   └── wear_status_icon_reporter.dart     # Реактивная отправка статуса на очки (polling 2s)
 ├── presentation/
 │   ├── input/
 │   │   ├── cubit/
@@ -372,6 +377,8 @@ lib/modules/wear/
 │       ├── wear_pill.dart
 │       ├── wear_position_indicator.dart
 │       ├── wear_scanner_status_indicator.dart
+│       ├── wear_screen_scaffold.dart          # Общая обёртка экранов (статус-бар + сканер-индикатор)
+│       ├── wear_status_bar.dart              # Device-side Wi‑Fi / printer status icons (polling 10s)
 │       └── wear_svg_icon.dart
 └── theme/
     ├── wear_colors.dart
@@ -410,6 +417,15 @@ lib/modules/wear/
 | `WearSettingsScreen` | `/wear_settings` | Экран настроек |
 | `DBSettingsScreen` | `/db_settings` | Настройки подключения к Firebird |
 
+#### Дизайн-конвенции статусных иконок
+
+Очки нормально воспринимают только один цвет, поэтому:
+
+- все статусные иконки (Wi‑Fi, принтер) отображаются зелёным;
+- offline-состояние показывается не цветом, а перечёркиванием (slash-линия);
+- Wi‑Fi иконка рисуется через `CustomPainter` (3 уровня сигнала + точка);
+- принтер — SVG-ассет `WearImages.printer`.
+
 ### Dependencies
 
 `WearDependencies` — ручной singleton с ленивой инициализацией:
@@ -425,6 +441,32 @@ Riverpod-провайдеры создаются через `autoDispose` и ж�
 | `wearAuthNotifierProvider` | StateNotifierProvider | Состояние авторизации, навигационные команды |
 | `wearPrinterSelectControllerProvider` | — | Выбор принтера |
 | `wearScanCubitProvider` | — | Сканирование и печать |
+
+#### Сервисы статусных иконок
+
+`WearStatusIconReporter` — singleton, который:
+
+- каждые 2 секунды опрашивает `WearWifiStatusService` и `WearPrinterStatusService`;
+- сравнивает snapshot статуса с предыдущим;
+- при изменении пересылает на очки новый payload с полями `showWifiIcon`, `wifiAvailable`, `wifiLevel`, `showPrinterIcon`, `printerAvailable`;
+- используется всеми экранами вместо прямого вызова `wearGlassesBridge`.
+
+`WearWifiStatusService`:
+
+- вызывает `WifiInfoPlugin.wifiDetails`;
+- проверяет `Permission.locationWhenInUse` (запрашивает при необходимости);
+- определяет доступность через `connectionType`, `ssid`, `ipAddress`, `networkId`, `signalStrength`;
+- маппит `signalStrength` (0..9 от `calculateSignalLevel(rssi, 10)`) в уровни 1..3.
+
+`WearPrinterStatusService`:
+
+- читает выбранные принтеры из `WearSession.printerSelectionOrNull`;
+- в реальном режиме сверяет их с `GetAvailablePrintersUseCase`;
+- в mock-режиме возвращает доступность, если выбор принтера существует.
+
+#### Барьер повторного ШК
+
+В `WearScanNotifier` добавлена блокировка: одинаковый ШК подряд (`_lastAcceptedBarcode`) не уходит в печать повторно.
 
 ### Внешние заглушки
 
@@ -465,6 +507,8 @@ Navigator.push(
 - `pole_base_kit` как локальный path-пакет вместо git-зависимости;
 - Закомментированные импорты Bluetooth/Scanner-зависимостей, которые были в оригинальном nbo;
 - Отсутствие `ProviderScope` на уровне корневого `MaterialApp` (создаётся динамически при входе в модуль).
+- `assets/develop.env` объявлен в `pubspec.yaml`, но игнорируется `.gitignore` — свежий checkout/CI без него упадёт на сборке assets.
+- `dart analyze` на большом наборе файлов может лагать и виснуть — рекомендуется запускать по 1–2 файлам за раз.
 
 ## Правила Изменений
 

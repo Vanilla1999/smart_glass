@@ -14,6 +14,12 @@ class WearGlassesState {
     this.pageText,
     this.primaryAction,
     this.secondaryAction,
+    this.statusIcon,
+    this.showWifiIcon = true,
+    this.wifiAvailable = false,
+    this.wifiLevel = 3,
+    this.showPrinterIcon = false,
+    this.printerAvailable = false,
   });
 
   factory WearGlassesState.initial() {
@@ -36,6 +42,12 @@ class WearGlassesState {
       pageText: _string(payload['pageText']),
       primaryAction: _string(payload['primaryAction']),
       secondaryAction: _string(payload['secondaryAction']),
+      statusIcon: _string(payload['statusIcon']),
+      showWifiIcon: _bool(payload['showWifiIcon'], fallback: true),
+      wifiAvailable: _bool(payload['wifiAvailable']),
+      wifiLevel: _int(payload['wifiLevel'], fallback: 3).clamp(1, 3),
+      showPrinterIcon: _bool(payload['showPrinterIcon']),
+      printerAvailable: _bool(payload['printerAvailable']),
     );
   }
 
@@ -51,6 +63,12 @@ class WearGlassesState {
   final String? pageText;
   final String? primaryAction;
   final String? secondaryAction;
+  final String? statusIcon;
+  final bool showWifiIcon;
+  final bool wifiAvailable;
+  final int wifiLevel;
+  final bool showPrinterIcon;
+  final bool printerAvailable;
 
   static WearGlassesScreenType _screenType(dynamic raw) {
     return WearGlassesScreenType.values.firstWhere(
@@ -83,16 +101,17 @@ class WearGlassesState {
     return raw.toString();
   }
 
-  static bool _bool(dynamic raw) {
+  static bool _bool(dynamic raw, {bool fallback = false}) {
+    if (raw == null) return fallback;
     if (raw is bool) return raw;
     if (raw is num) return raw != 0;
     final String? value = _string(raw)?.toLowerCase().trim();
     return value == 'true' || value == '1' || value == 'yes';
   }
 
-  static int _int(dynamic raw) {
+  static int _int(dynamic raw, {int fallback = 0}) {
     if (raw is int) return raw;
     if (raw is num) return raw.toInt();
-    return int.tryParse(_string(raw)?.trim() ?? '') ?? 0;
+    return int.tryParse(_string(raw)?.trim() ?? '') ?? fallback;
   }
 }

@@ -1078,6 +1078,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.3"
+  wifi_info_plugin_plus:
+    dependency: "direct main"
+    description:
+      name: wifi_info_plugin_plus
+      sha256: a47dbf602e4b3bf650e7ba01d01d85c4bcd4f2f303cd5f0c4aa98f810e3ef2d4
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.3"
   xdg_directories:
     dependency: transitive
     description:

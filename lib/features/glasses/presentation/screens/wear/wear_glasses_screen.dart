@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_glasses_cubit.dart';
 import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_glasses_state.dart';
 import 'package:smart_glasses/features/glasses/presentation/widgets/wear/wear_glasses_scaffold.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
+import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 
 class WearGlassesScreen extends StatelessWidget {
   const WearGlassesScreen({super.key});
@@ -15,9 +17,12 @@ class WearGlassesScreen extends StatelessWidget {
         return WearGlassesScaffold(
           child: Stack(
             children: <Widget>[
-              const Align(
+              Align(
                 alignment: Alignment.topRight,
-                child: _StatusBar(),
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 24),
+                  child: _StatusBar(state: state),
+                ),
               ),
               Center(
                 child: SizedBox(
@@ -47,8 +52,7 @@ class _TitleBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color color =
-        state.isError ? Colors.redAccent : WearGlassesScaffold.accentColor;
+    const Color color = WearGlassesScaffold.accentColor;
     final bool isList = state.items.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -159,14 +163,26 @@ class _MainStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color color =
-        state.isError ? Colors.redAccent : WearGlassesScaffold.accentColor;
+    const Color color = WearGlassesScaffold.accentColor;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
+            if (state.statusIcon != null &&
+                state.statusIcon!.trim().isNotEmpty) ...<Widget>[
+              SvgPicture.asset(
+                state.statusIcon!,
+                width: 20,
+                height: 20,
+                colorFilter: const ColorFilter.mode(
+                  WearGlassesScaffold.accentColor,
+                  BlendMode.srcIn,
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
             if (state.isLoading) ...<Widget>[
               SizedBox(
                 width: 18,
@@ -313,9 +329,9 @@ class _SelectionMarkerPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
     final Path path = Path()
-      ..moveTo(size.width * 0.20, size.height * 0.50)
-      ..lineTo(size.width * 0.45, size.height * 0.75)
-      ..lineTo(size.width * 0.82, size.height * 0.25);
+      ..moveTo(size.width * 0.38, size.height * 0.25)
+      ..lineTo(size.width * 0.68, size.height * 0.50)
+      ..lineTo(size.width * 0.38, size.height * 0.75);
     canvas.drawPath(path, paint);
   }
 
@@ -395,17 +411,128 @@ class _PageText extends StatelessWidget {
 }
 
 class _StatusBar extends StatelessWidget {
-  const _StatusBar();
+  const _StatusBar({required this.state});
+
+  final WearGlassesState state;
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Icon(Icons.wifi, size: 20, color: Colors.black),
-        SizedBox(width: 12),
-        Icon(Icons.battery_full, size: 20, color: Colors.black),
+        if (state.showWifiIcon)
+          _GlassesCrossableIcon(
+            available: state.wifiAvailable,
+            child: CustomPaint(
+              size: const Size.square(20),
+              painter: _GlassesWifiPainter(level: state.wifiLevel),
+            ),
+          ),
+        if (state.showWifiIcon && state.showPrinterIcon)
+          const SizedBox(width: 12),
+        if (state.showPrinterIcon)
+          _GlassesCrossableIcon(
+            available: state.printerAvailable,
+            child: SvgPicture.asset(
+              WearImages.printer,
+              width: 20,
+              height: 20,
+              colorFilter: const ColorFilter.mode(
+                WearGlassesScaffold.accentColor,
+                BlendMode.srcIn,
+              ),
+            ),
+          ),
       ],
     );
+  }
+}
+
+class _GlassesCrossableIcon extends StatelessWidget {
+  const _GlassesCrossableIcon({
+    required this.available,
+    required this.child,
+  });
+
+  final bool available;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 20,
+      height: 20,
+      child: Stack(
+        alignment: Alignment.center,
+        children: <Widget>[
+          child,
+          if (!available)
+            Transform.rotate(
+              angle: -0.75,
+              child: Container(
+                width: 24,
+                height: 2.2,
+                decoration: BoxDecoration(
+                  color: WearGlassesScaffold.accentColor,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GlassesWifiPainter extends CustomPainter {
+  const _GlassesWifiPainter({required this.level});
+
+  final int level;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint = Paint()
+      ..color = WearGlassesScaffold.accentColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    final Offset center = Offset(size.width / 2, size.height * 0.82);
+    final int visibleLevel = level.clamp(1, 3);
+
+    if (visibleLevel >= 3) {
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: 12),
+        -2.38,
+        1.62,
+        false,
+        paint,
+      );
+    }
+    if (visibleLevel >= 2) {
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: 8),
+        -2.28,
+        1.42,
+        false,
+        paint,
+      );
+    }
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: 4),
+      -2.08,
+      1.02,
+      false,
+      paint,
+    );
+    canvas.drawCircle(
+      center,
+      1.7,
+      Paint()..color = WearGlassesScaffold.accentColor,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _GlassesWifiPainter oldDelegate) {
+    return oldDelegate.level != level;
   }
 }
