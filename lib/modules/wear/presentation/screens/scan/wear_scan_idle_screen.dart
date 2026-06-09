@@ -93,9 +93,11 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
             isError: nav.kind == WearStatusKind.error,
             title: nav.title,
             subtitle: nav.message,
-            statusText: nav.kind == WearStatusKind.error ? 'Ошибка' : 'Успешно',
-            statusIcon:
-                nav.kind == WearStatusKind.success ? WearImages.good : null,
+            statusText: nav.kind == WearStatusKind.error
+                ? (nav.glassesStatusText ?? 'Ошибка')
+                : 'Успешно',
+            statusIcon: nav.glassesStatusIcon ??
+                (nav.kind == WearStatusKind.success ? WearImages.good : null),
           ),
         );
         ref.read(_provider.notifier).consumeNavigation();

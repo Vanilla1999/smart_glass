@@ -41,8 +41,10 @@ class _WearStatusScreenState extends State<WearStatusScreen> {
           isError: a.kind == WearStatusKind.error,
           title: a.title,
           subtitle: a.message,
-          statusText: a.kind == WearStatusKind.error ? 'Ошибка' : 'Успешно',
-          statusIcon: _statusIconFor(a),
+          statusText: a.kind == WearStatusKind.error
+              ? (a.glassesStatusText ?? 'Ошибка')
+              : 'Успешно',
+          statusIcon: a.glassesStatusIcon ?? _statusIconFor(a),
         ),
       );
     });

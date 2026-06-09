@@ -13,6 +13,8 @@ class WearStatusScreenArgs {
     this.autoExtra,
     this.autoAction = WearStatusAutoAction.none,
     this.showHome = false,
+    this.glassesStatusText,
+    this.glassesStatusIcon,
   });
 
   factory WearStatusScreenArgs.userNotFound() {
@@ -39,4 +41,7 @@ class WearStatusScreenArgs {
   final WearStatusAutoAction autoAction;
 
   final bool showHome;
+
+  final String? glassesStatusText;
+  final String? glassesStatusIcon;
 }
