@@ -31,6 +31,7 @@ class WearScanState {
     required this.navSelect,
     required this.loadingText,
     required this.loadingIcon,
+    this.productName,
   });
 
   factory WearScanState.initial() {
@@ -48,8 +49,11 @@ class WearScanState {
   final WearProductSelectArgs? navSelect;
   final String loadingText;
   final String loadingIcon;
+  final String? productName;
 
   bool get isLoading => phase == WearScanPhase.loading;
+
+  bool get isPrinting => isLoading && loadingIcon == WearImages.printer;
 
   WearScanState copyWith({
     WearScanPhase? phase,
@@ -57,6 +61,7 @@ class WearScanState {
     WearProductSelectArgs? navSelect,
     String? loadingText,
     String? loadingIcon,
+    String? productName,
     bool clearNav = false,
   }) {
     return WearScanState(
@@ -65,6 +70,7 @@ class WearScanState {
       navSelect: clearNav ? null : (navSelect ?? this.navSelect),
       loadingText: loadingText ?? this.loadingText,
       loadingIcon: loadingIcon ?? this.loadingIcon,
+      productName: productName ?? this.productName,
     );
   }
 }
@@ -229,12 +235,14 @@ class WearScanNotifier extends StateNotifier<WearScanState>
     required AuthenticatedUser user,
     required WearPrinterSelection selection,
   }) async {
+    final String resolvedName = _resolveProductTitle(product);
+    state = state.copyWith(
+      loadingText: 'Отправляем на печать...',
+      loadingIcon: WearImages.printer,
+      productName: resolvedName,
+    );
     try {
       if (WearMockConfig.isEnabled) {
-        state = state.copyWith(
-          loadingText: 'Отправляем на печать...',
-          loadingIcon: WearImages.printer,
-        );
         await Future<void>.delayed(_mockStageDelay);
         if (!mounted) return;
         state = state.copyWith(

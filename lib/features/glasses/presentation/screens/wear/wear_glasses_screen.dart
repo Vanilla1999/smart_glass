@@ -18,14 +18,14 @@ class WearGlassesScreen extends StatelessWidget {
           child: Stack(
             children: <Widget>[
               Padding(
-                padding: const EdgeInsets.only(top: 32),
+                padding: const EdgeInsets.only(top: 20),
                 child: Center(
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisSize: MainAxisSize.max,
                     children: <Widget>[
                       _TitleBlock(state: state),
-                      const SizedBox(height: 24),
-                      _Body(state: state),
+                      const SizedBox(height: 12),
+                      Expanded(child: _Body(state: state)),
                     ],
                   ),
                 ),
@@ -129,28 +129,27 @@ class _HelpBody extends StatelessWidget {
   Widget build(BuildContext context) {
     const Color color = WearGlassesScaffold.accentColor;
     return Column(
-      mainAxisAlignment: MainAxisAlignment.end,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-          for (int i = 0; i < state.items.length; i++) ...<Widget>[
-            if (i > 0) const SizedBox(height: 12),
-            Text(
-              state.items[i],
-              style: TextStyle(
-                color: color,
-                fontSize: 20,
-                height: 1.4,
-                fontWeight: FontWeight.w400,
-              ),
+        for (int i = 0; i < state.items.length; i++) ...<Widget>[
+          if (i > 0) const Spacer(),
+          Text(
+            state.items[i],
+            style: TextStyle(
+              color: color,
+              fontSize: 18,
+              height: 1.3,
+              fontWeight: FontWeight.w400,
             ),
-          ],
-          if (state.primaryAction != null ||
-              state.secondaryAction != null) ...<Widget>[
-            const SizedBox(height: 26),
-            _Actions(state: state),
-          ],
+          ),
         ],
-      );
+        if (state.primaryAction != null ||
+            state.secondaryAction != null) ...<Widget>[
+          const Spacer(),
+          _Actions(state: state),
+        ],
+      ],
+    );
   }
 }
 
@@ -375,7 +374,11 @@ class _Actions extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: <Widget>[
-        if (state.primaryAction != null) _ActionPill(state.primaryAction!),
+        if (state.primaryAction != null)
+          _ActionPill(
+            state.primaryAction!,
+            isSecondary: state.screenType == WearGlassesScreenType.help,
+          ),
         if (state.secondaryAction != null) ...<Widget>[
           const SizedBox(width: 12),
           _ActionPill(state.secondaryAction!, isSecondary: true),
@@ -401,7 +404,7 @@ class _ActionPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 6),
         child: Text(
           text,
           style: TextStyle(

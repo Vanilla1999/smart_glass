@@ -15,6 +15,7 @@ class WearScreenScaffold extends ConsumerWidget {
     this.showHomeButton = false,
     this.onHomeTap,
     this.scrollController,
+    this.showStatusBar = true,
   });
 
   final Widget child;
@@ -22,6 +23,7 @@ class WearScreenScaffold extends ConsumerWidget {
   final VoidCallback? onHomeTap;
 
   final ScrollController? scrollController;
+  final bool showStatusBar;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -34,30 +36,32 @@ class WearScreenScaffold extends ConsumerWidget {
             IgnorePointer(
               child: WearPositionIndicator(controller: scrollController!),
             ),
-          Align(
-            alignment: Alignment.topCenter,
-            child: Padding(
-              padding: const EdgeInsets.all(4.5),
-              child: IgnorePointer(
-                child: Transform.translate(
-                  offset: const Offset(-60, 20),
-                  child: const WearScannerStatusIndicator(),
+          if (showStatusBar) ...<Widget>[
+            Align(
+              alignment: Alignment.topCenter,
+              child: Padding(
+                padding: const EdgeInsets.all(4.5),
+                child: IgnorePointer(
+                  child: Transform.translate(
+                    offset: const Offset(-60, 20),
+                    child: const WearScannerStatusIndicator(),
+                  ),
                 ),
               ),
             ),
-          ),
-          Align(
-            alignment: Alignment.topCenter,
-            child: Padding(
-              padding: const EdgeInsets.all(4.5),
-              child: IgnorePointer(
-                child: Transform.translate(
-                  offset: const Offset(78, 20),
-                  child: const WearStatusBar(),
+            Align(
+              alignment: Alignment.topCenter,
+              child: Padding(
+                padding: const EdgeInsets.all(4.5),
+                child: IgnorePointer(
+                  child: Transform.translate(
+                    offset: const Offset(78, 20),
+                    child: const WearStatusBar(),
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
           if (showHomeButton)
             Align(
               alignment: Alignment.topCenter,

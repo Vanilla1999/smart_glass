@@ -7,6 +7,7 @@ import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_pay
 import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_input_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/cubit/wear_scan_cubit.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_product_select_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/continue_scan/wear_continue_scan_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
@@ -51,39 +52,38 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
 
     ref.listen<WearScanState>(_provider,
         (WearScanState? previous, WearScanState next) {
+      void sendGlasses() {
+        if (next.isPrinting) {
+          WearStatusIconReporter.I.send(
+            WearGlassesPayload.printing(
+              productName: next.productName,
+              statusIcon: next.loadingIcon,
+            ),
+          );
+        } else {
+          WearStatusIconReporter.I.send(
+            WearGlassesPayload.loading(
+              screenType: WearGlassesScreenType.scan,
+              title: 'Сканирование',
+              statusText: next.loadingText,
+              statusIcon: next.loadingIcon,
+            ),
+          );
+        }
+      }
+
       if (previous?.phase != next.phase &&
           next.phase == WearScanPhase.loading) {
-        WearStatusIconReporter.I.send(
-          WearGlassesPayload.loading(
-            screenType: WearGlassesScreenType.scan,
-            title: 'Сканирование',
-            statusText: next.loadingText,
-            statusIcon: next.loadingIcon,
-          ),
-        );
+        sendGlasses();
         _dismissStatusIfOpen();
       }
 
       if (previous?.loadingText != next.loadingText && next.isLoading) {
-        WearStatusIconReporter.I.send(
-          WearGlassesPayload.loading(
-            screenType: WearGlassesScreenType.scan,
-            title: 'Сканирование',
-            statusText: next.loadingText,
-            statusIcon: next.loadingIcon,
-          ),
-        );
+        sendGlasses();
       }
 
       if (previous?.loadingIcon != next.loadingIcon && next.isLoading) {
-        WearStatusIconReporter.I.send(
-          WearGlassesPayload.loading(
-            screenType: WearGlassesScreenType.scan,
-            title: 'Сканирование',
-            statusText: next.loadingText,
-            statusIcon: next.loadingIcon,
-          ),
-        );
+        sendGlasses();
       }
 
       if (previous?.navStatus != next.navStatus && next.navStatus != null) {
@@ -175,6 +175,12 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
     }
     if (session == _statusRouteSession) {
       _isStatusRouteOpen = false;
+    }
+
+    final bool isPrintSuccess = args.kind == WearStatusKind.success &&
+        args.title.toLowerCase().contains('ценник');
+    if (isPrintSuccess && mounted) {
+      await context.push<bool>(WearContinueScanScreen.route);
     }
   }
 

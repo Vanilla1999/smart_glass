@@ -3,6 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_input_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/continue_scan/wear_continue_scan_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/help/wear_help_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/wear_main_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/wear_scanner_connect_screen.dart';
@@ -87,6 +88,12 @@ class WearRoute {
           path: WearHelpScreen.route,
           builder: (BuildContext context, GoRouterState state) {
             return const WearHelpScreen();
+          },
+        ),
+        GoRoute(
+          path: WearContinueScanScreen.route,
+          builder: (BuildContext context, GoRouterState state) {
+            return const WearContinueScanScreen();
           },
         ),
         GoRoute(

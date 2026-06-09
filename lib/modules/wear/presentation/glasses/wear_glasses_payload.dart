@@ -7,6 +7,7 @@ enum WearGlassesScreenType {
   printing,
   status,
   help,
+  continueScan,
 }
 
 enum WearGlassesPhase {
@@ -79,10 +80,22 @@ class WearGlassesPayload {
     );
   }
 
+  factory WearGlassesPayload.continueScan() {
+    return const WearGlassesPayload(
+      screenType: WearGlassesScreenType.continueScan,
+      phase: WearGlassesPhase.idle,
+      title: 'Сканирование товара',
+      subtitle: 'Готовы продолжить?',
+      primaryAction: 'Продолжить',
+      secondaryAction: 'Завершить',
+    );
+  }
+
   factory WearGlassesPayload.help() {
     return const WearGlassesPayload(
       screenType: WearGlassesScreenType.help,
       phase: WearGlassesPhase.idle,
+      showWifiIcon: false,
       title: 'Справка',
       items: <String>[
         'Дистанция сканирования: до 50 см',
@@ -131,13 +144,17 @@ class WearGlassesPayload {
     );
   }
 
-  factory WearGlassesPayload.printing({String? productName}) {
+  factory WearGlassesPayload.printing({
+    String? productName,
+    String? statusIcon,
+  }) {
     return WearGlassesPayload(
       screenType: WearGlassesScreenType.printing,
       phase: WearGlassesPhase.loading,
       title: 'Печать ценника',
       subtitle: productName,
       statusText: 'Отправляем на печать...',
+      statusIcon: statusIcon,
       isLoading: true,
     );
   }

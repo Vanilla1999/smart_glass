@@ -104,7 +104,7 @@ class WearStatusIconReporter {
     WearStatusIconSnapshot snapshot,
   ) {
     return payload.copyWithStatusIcons(
-      showWifiIcon: true,
+      showWifiIcon: payload.showWifiIcon,
       wifiAvailable: snapshot.wifi.isAvailable,
       wifiLevel: snapshot.wifi.level,
       showPrinterIcon: snapshot.showPrinter,
