@@ -79,6 +79,20 @@ class WearGlassesPayload {
     );
   }
 
+  factory WearGlassesPayload.help() {
+    return const WearGlassesPayload(
+      screenType: WearGlassesScreenType.help,
+      phase: WearGlassesPhase.idle,
+      title: 'Справка',
+      items: <String>[
+        'Дистанция сканирования: до 50 см',
+        'Голосовые команды:\n«Вверх», «Вниз», «Выбрать», «Назад», «Домой»',
+        'Кнопки:\n↑ - Вверх, ↓ - Вниз, Ок - Выбрать,\nУдержание Ок - Домой, Удержание ↓ - Назад',
+      ],
+      primaryAction: 'Начать работу',
+    );
+  }
+
   factory WearGlassesPayload.scanWaiting() {
     return const WearGlassesPayload(
       screenType: WearGlassesScreenType.scan,

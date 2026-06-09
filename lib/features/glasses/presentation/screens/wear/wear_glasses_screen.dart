@@ -17,24 +17,21 @@ class WearGlassesScreen extends StatelessWidget {
         return WearGlassesScaffold(
           child: Stack(
             children: <Widget>[
-              Align(
-                alignment: Alignment.topRight,
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 24),
-                  child: _StatusBar(state: state),
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    _TitleBlock(state: state),
+                    const SizedBox(height: 24),
+                    _Body(state: state),
+                  ],
                 ),
               ),
-              Center(
-                child: SizedBox(
-                  height: 340,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      _TitleBlock(state: state),
-                      const SizedBox(height: 24),
-                      Expanded(child: _Body(state: state)),
-                    ],
-                  ),
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  child: _StatusBar(state: state),
                 ),
               ),
             ],
@@ -65,7 +62,7 @@ class _TitleBlock extends StatelessWidget {
             height: isList ? 1.11 : 1.4,
             fontWeight: FontWeight.w500,
           ),
-          maxLines: 1,
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
         ),
@@ -98,6 +95,9 @@ class _Body extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (state.items.isNotEmpty) {
+      if (state.screenType == WearGlassesScreenType.help) {
+        return _HelpBody(state: state);
+      }
       return _WearList(state: state);
     }
     return Center(
@@ -114,6 +114,40 @@ class _Body extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _HelpBody extends StatelessWidget {
+  const _HelpBody({required this.state});
+
+  final WearGlassesState state;
+
+  @override
+  Widget build(BuildContext context) {
+    const Color color = WearGlassesScaffold.accentColor;
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+          for (int i = 0; i < state.items.length; i++) ...<Widget>[
+            if (i > 0) const SizedBox(height: 12),
+            Text(
+              state.items[i],
+              style: TextStyle(
+                color: color,
+                fontSize: 20,
+                height: 1.4,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
+          if (state.primaryAction != null ||
+              state.secondaryAction != null) ...<Widget>[
+            const SizedBox(height: 26),
+            _Actions(state: state),
+          ],
+        ],
+      );
   }
 }
 
@@ -179,17 +213,6 @@ class _MainStatus extends StatelessWidget {
                 colorFilter: const ColorFilter.mode(
                   WearGlassesScaffold.accentColor,
                   BlendMode.srcIn,
-                ),
-              ),
-              const SizedBox(width: 8),
-            ],
-            if (state.isLoading) ...<Widget>[
-              SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: color,
                 ),
               ),
               const SizedBox(width: 8),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/help/wear_help_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/printers/wear_printer_select_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/wear_settings_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
@@ -51,6 +52,10 @@ class _WearMenuScreenState extends State<WearMenuScreen> {
       WearPill(
         title: 'Печать ценника',
         onTap: () => context.push(WearPrinterSelectScreen.route),
+      ),
+      WearPill(
+        title: 'Справка',
+        onTap: () => context.push(WearHelpScreen.route),
       ),
       WearPill(
         title: 'Настройки',
