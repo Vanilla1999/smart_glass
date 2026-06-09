@@ -69,13 +69,13 @@ class WearGlassesPayload {
     );
   }
 
-  factory WearGlassesPayload.menu() {
-    return const WearGlassesPayload(
+  factory WearGlassesPayload.menu({int selectedIndex = 0}) {
+    return WearGlassesPayload(
       screenType: WearGlassesScreenType.menu,
       phase: WearGlassesPhase.idle,
       title: 'Выбор раздела',
-      items: <String>['Печать ценников', 'Доступность', 'Справка'],
-      selectedIndex: 0,
+      items: const <String>['Печать ценников', 'Доступность', 'Справка'],
+      selectedIndex: selectedIndex,
     );
   }
 

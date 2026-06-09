@@ -1,7 +1,7 @@
 import 'dart:ui' show lerpDouble;
 import 'package:flutter/material.dart';
 
-class WearScalingListView extends StatelessWidget {
+class WearScalingListView extends StatefulWidget {
   const WearScalingListView({
     super.key,
     required this.controller,
@@ -16,6 +16,7 @@ class WearScalingListView extends StatelessWidget {
     this.edgeFractionTop = 0.08,
     this.edgeFractionBottom = 0.12,
     this.physics = const ClampingScrollPhysics(),
+    this.onFocusChanged,
   });
 
   final ScrollController controller;
@@ -35,6 +36,71 @@ class WearScalingListView extends StatelessWidget {
   final double edgeFractionBottom;
 
   final ScrollPhysics physics;
+  final ValueChanged<int>? onFocusChanged;
+
+  static double computeTopInset(
+    double paddingTop,
+    double viewportHeight,
+    double edgeFractionTop,
+  ) {
+    return paddingTop + viewportHeight * edgeFractionTop;
+  }
+
+  static int computeFocusedListIndex({
+    required double offset,
+    required double viewportHeight,
+    required double topInset,
+    required double itemExtent,
+    required int itemCount,
+  }) {
+    final double viewportCenter = offset + viewportHeight / 2;
+    return ((viewportCenter - topInset - itemExtent / 2) / itemExtent)
+        .round()
+        .clamp(0, itemCount - 1);
+  }
+
+  @override
+  State<WearScalingListView> createState() => _WearScalingListViewState();
+}
+
+class _WearScalingListViewState extends State<WearScalingListView> {
+  int _lastFocusIndex = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.onFocusChanged != null) {
+      widget.controller.addListener(_onScroll);
+    }
+  }
+
+  @override
+  void dispose() {
+    if (widget.onFocusChanged != null) {
+      widget.controller.removeListener(_onScroll);
+    }
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!widget.controller.hasClients) return;
+    final double viewH = widget.controller.position.viewportDimension;
+    final double topInset = WearScalingListView.computeTopInset(
+      widget.padding.top,
+      viewH,
+      widget.edgeFractionTop,
+    );
+    final int index = WearScalingListView.computeFocusedListIndex(
+      offset: widget.controller.offset,
+      viewportHeight: viewH,
+      topInset: topInset,
+      itemExtent: widget.itemExtent,
+      itemCount: widget.itemCount,
+    );
+    if (index == _lastFocusIndex) return;
+    _lastFocusIndex = index;
+    widget.onFocusChanged!(index);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,50 +108,52 @@ class WearScalingListView extends StatelessWidget {
       builder: (BuildContext context, BoxConstraints constraints) {
         final double viewport = constraints.maxHeight;
 
-        final double edgeTop = viewport * edgeFractionTop;
-        final double edgeBottom = viewport * edgeFractionBottom;
+        final double edgeTop = viewport * widget.edgeFractionTop;
+        final double edgeBottom = viewport * widget.edgeFractionBottom;
 
         final EdgeInsets effectivePad = EdgeInsets.fromLTRB(
-          padding.left,
-          padding.top + edgeTop,
-          padding.right,
-          padding.bottom + edgeBottom,
+          widget.padding.left,
+          widget.padding.top + edgeTop,
+          widget.padding.right,
+          widget.padding.bottom + edgeBottom,
         );
 
         final double topInset = effectivePad.top;
 
         return ListView.builder(
-          controller: controller,
-          itemCount: itemCount,
-          itemExtent: itemExtent,
+          controller: widget.controller,
+          itemCount: widget.itemCount,
+          itemExtent: widget.itemExtent,
           padding: effectivePad,
-          physics: physics,
+          physics: widget.physics,
           itemBuilder: (BuildContext context, int index) {
-            final Widget child = itemBuilder(context, index);
+            final Widget child = widget.itemBuilder(context, index);
 
             return AnimatedBuilder(
-              animation: controller,
+              animation: widget.controller,
               child: child,
               builder: (BuildContext context, Widget? c) {
                 final double offset =
-                    controller.hasClients ? controller.offset : 0.0;
-                final double viewH = controller.hasClients
-                    ? controller.position.viewportDimension
+                    widget.controller.hasClients ? widget.controller.offset : 0.0;
+                final double viewH = widget.controller.hasClients
+                    ? widget.controller.position.viewportDimension
                     : viewport;
 
                 final double itemCenter =
-                    topInset + index * itemExtent + itemExtent / 2;
+                    topInset + index * widget.itemExtent + widget.itemExtent / 2;
                 final double viewportCenter = offset + viewH / 2;
                 final double dist = (itemCenter - viewportCenter).abs();
 
                 final double norm = (dist / (viewH / 2)).clamp(0.0, 1.0);
 
-                final double scale = lerpDouble(1.0, minScale, norm) ?? 1.0;
-                final double opacity = lerpDouble(1.0, minOpacity, norm) ?? 1.0;
+                final double scale = lerpDouble(1.0, widget.minScale, norm) ?? 1.0;
+                final double opacity = lerpDouble(1.0, widget.minOpacity, norm) ?? 1.0;
 
                 final double sideInset = lerpDouble(
-                        baseSideInset, baseSideInset + extraSideInset, norm) ??
-                    baseSideInset;
+                        widget.baseSideInset,
+                        widget.baseSideInset + widget.extraSideInset,
+                        norm) ??
+                    widget.baseSideInset;
 
                 return Opacity(
                   opacity: opacity,

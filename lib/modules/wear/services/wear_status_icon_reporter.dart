@@ -66,6 +66,12 @@ class WearStatusIconReporter {
     await wearGlassesBridge.update(next);
   }
 
+  Future<void> sendFast(WearGlassesPayload payload) async {
+    final WearGlassesPayload next = _withSnapshot(payload, _snapshot);
+    _lastPayload = next;
+    await wearGlassesBridge.update(next);
+  }
+
   Future<void> show(WearGlassesPayload payload) async {
     final WearStatusIconSnapshot snapshot = await refresh();
     final WearGlassesPayload next = _withSnapshot(payload, snapshot);

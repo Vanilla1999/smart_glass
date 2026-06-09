@@ -29,6 +29,7 @@ class WearPrinterSelectScreen extends ConsumerStatefulWidget {
 class _WearPrinterSelectScreenState
     extends ConsumerState<WearPrinterSelectScreen> {
   final ScrollController _scroll = ScrollController();
+  int _focusedIndex = 0;
 
   @override
   void initState() {
@@ -52,6 +53,7 @@ class _WearPrinterSelectScreenState
     ref.listen<WearPrinterSelectState>(wearPrinterSelectNotifierProvider,
         (WearPrinterSelectState? previous, WearPrinterSelectState next) {
       if (previous?.step != next.step) {
+        _focusedIndex = 0;
         _scrollToTop();
       }
       if (previous?.phase != next.phase ||
@@ -129,6 +131,14 @@ class _WearPrinterSelectScreenState
                 .read(wearPrinterSelectNotifierProvider.notifier)
                 .selectPrinter(p),
           );
+        },
+        onFocusChanged: (int listIndex) {
+          final List<WearPrinter> current = _visiblePrinters(ref.read(wearPrinterSelectNotifierProvider));
+          if (current.isEmpty) return;
+          final int printerIndex = (listIndex - 1).clamp(0, current.length - 1);
+          if (printerIndex == _focusedIndex) return;
+          _focusedIndex = printerIndex;
+          _sendGlassesState(ref.read(wearPrinterSelectNotifierProvider), fast: true);
         },
       ),
     );
@@ -212,9 +222,13 @@ class _WearPrinterSelectScreenState
     context.go(WearScanIdleScreen.route, extra: selection);
   }
 
-  void _sendGlassesState(WearPrinterSelectState state) {
+  void _sendGlassesState(WearPrinterSelectState state, {bool fast = false}) {
+    Future<void> Function(WearGlassesPayload) send = fast
+        ? WearStatusIconReporter.I.sendFast
+        : WearStatusIconReporter.I.send;
+
     if (state.isLoading) {
-      WearStatusIconReporter.I.send(
+      send(
         const WearGlassesPayload(
           screenType: WearGlassesScreenType.printer,
           phase: WearGlassesPhase.loading,
@@ -227,7 +241,7 @@ class _WearPrinterSelectScreenState
     }
 
     if (state.hasError && state.printers.isEmpty) {
-      WearStatusIconReporter.I.send(
+      send(
         WearGlassesPayload.status(
           isError: true,
           title: 'Ошибка загрузки принтеров',
@@ -238,7 +252,8 @@ class _WearPrinterSelectScreenState
     }
 
     final List<WearPrinter> printers = _visiblePrinters(state);
-    WearStatusIconReporter.I.send(
+    if (printers.isEmpty) return;
+    send(
       WearGlassesPayload(
         screenType: WearGlassesScreenType.printer,
         phase: WearGlassesPhase.idle,
@@ -247,7 +262,7 @@ class _WearPrinterSelectScreenState
             ? 'Жёлтые ценники'
             : 'Белые ценники',
         items: printers.map((WearPrinter printer) => printer.name).toList(),
-        selectedIndex: 0,
+        selectedIndex: _focusedIndex.clamp(0, printers.length - 1),
         pageText: printers.length > 4 ? 'Показаны первые 4' : null,
       ),
     );

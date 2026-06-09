@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
+import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
+import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
@@ -30,6 +32,11 @@ class WearProductSelectScreen extends StatefulWidget {
 
 class _WearProductSelectScreenState extends State<WearProductSelectScreen> {
   final ScrollController _scroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+  }
 
   @override
   void dispose() {
@@ -92,6 +99,23 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen> {
             subtitle: _resolveSubtitle(product),
             onTap: () => context.pop(product),
             onLongPress: () => _showProductDialog(context, product),
+          );
+        },
+        onFocusChanged: (int listIndex) {
+          final List<BarcodeProductInfo> current =
+              widget.args?.products ?? <BarcodeProductInfo>[];
+          if (current.isEmpty) return;
+          final int itemIndex = (listIndex - 1).clamp(0, current.length - 1);
+          WearStatusIconReporter.I.sendFast(
+            WearGlassesPayload(
+              screenType: WearGlassesScreenType.productSelect,
+              phase: WearGlassesPhase.idle,
+              title: 'Дубль ШК',
+              subtitle: 'Выберите нужный товар',
+              items: current.map((BarcodeProductInfo p) => p.name).toList(),
+              selectedIndex: itemIndex,
+              pageText: current.length > 4 ? 'Показаны первые 4' : null,
+            ),
           );
         },
       ),

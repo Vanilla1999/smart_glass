@@ -81,6 +81,12 @@ class _WearMenuScreenState extends State<WearMenuScreen> {
         baseSideInset: 10,
         extraSideInset: 30,
         itemBuilder: (BuildContext context, int i) => items[i],
+        onFocusChanged: (int listIndex) {
+          final int itemIndex = (listIndex - 1).clamp(0, 2);
+          WearStatusIconReporter.I.sendFast(
+            WearGlassesPayload.menu(selectedIndex: itemIndex),
+          );
+        },
       ),
     );
   }

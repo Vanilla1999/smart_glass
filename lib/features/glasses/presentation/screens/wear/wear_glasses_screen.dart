@@ -17,20 +17,23 @@ class WearGlassesScreen extends StatelessWidget {
         return WearGlassesScaffold(
           child: Stack(
             children: <Widget>[
-              Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    _TitleBlock(state: state),
-                    const SizedBox(height: 24),
-                    _Body(state: state),
-                  ],
+              Padding(
+                padding: const EdgeInsets.only(top: 32),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      _TitleBlock(state: state),
+                      const SizedBox(height: 24),
+                      _Body(state: state),
+                    ],
+                  ),
                 ),
               ),
               Align(
-                alignment: Alignment.bottomCenter,
+                alignment: Alignment.topRight,
                 child: Padding(
-                  padding: const EdgeInsets.only(bottom: 24),
+                  padding: const EdgeInsets.only(top: 8, right: 8),
                   child: _StatusBar(state: state),
                 ),
               ),
