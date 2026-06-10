@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
 import 'package:vosk_flutter_service/vosk_flutter.dart' as vosk;
 
 class SpeechRecognitionService {
@@ -13,16 +15,26 @@ class SpeechRecognitionService {
   final vosk.ModelLoader _modelLoader = vosk.ModelLoader();
   final StreamController<String> _resultsController =
       StreamController<String>.broadcast();
+  final AudioStreamService _audioStream;
 
   String _partialText = '';
   bool _isSessionActive = false;
+  bool _isListening = false;
 
   vosk.Model? _model;
   vosk.Recognizer? _recognizer;
 
+  SpeechRecognitionService({AudioStreamService? audioStreamService})
+      : _audioStream = audioStreamService ?? AudioStreamService();
+
   Stream<String> get resultsStream => _resultsController.stream;
   bool get isPrepared => _model != null && _recognizer != null;
   bool get isSessionActive => _isSessionActive;
+  bool get isListening => _isListening;
+
+  Future<bool> requestMicrophonePermission() {
+    return _audioStream.requestPermission();
+  }
 
   Future<void> prepare() async {
     await _ensureModelInitialized();
@@ -54,8 +66,60 @@ class SpeechRecognitionService {
     _partialText = '';
   }
 
+  Future<void> startListening() async {
+    print('[SpeechRecognitionService] startListening called, _isListening=$_isListening');
+    if (_isListening) {
+      print('[SpeechRecognitionService] already listening, skipping');
+      return;
+    }
+    print('[SpeechRecognitionService] requesting microphone permission...');
+    final hasPermission = await requestMicrophonePermission();
+    print('[SpeechRecognitionService] permission result: $hasPermission');
+    if (!hasPermission) {
+      throw StateError('Microphone permission denied');
+    }
+    print('[SpeechRecognitionService] preparing model...');
+    if (!isPrepared) {
+      await prepare();
+    }
+    print('[SpeechRecognitionService] starting session...');
+    await startSession();
+
+    print('[SpeechRecognitionService] adding audio callback...');
+    _audioStream.addDataCallback(_onAudioChunk);
+    print('[SpeechRecognitionService] starting audio stream...');
+    await _audioStream.start(
+      onError: (Object error, StackTrace stackTrace) {
+        print('[AudioStream] error: $error');
+      },
+    );
+    _isListening = true;
+    print('[SpeechRecognitionService] now listening!');
+  }
+
+  Future<void> stopListening() async {
+    print('[SpeechRecognitionService] stopListening called, _isListening=$_isListening');
+    if (!_isListening) return;
+    print('[SpeechRecognitionService] removing audio callback...');
+    _audioStream.removeDataCallback(_onAudioChunk);
+    await _audioStream.stop();
+    await stopSession();
+    _isListening = false;
+    print('[SpeechRecognitionService] stopped listening');
+  }
+
+  void _onAudioChunk(Uint8List bytes) {
+    try {
+      processAudioChunk(bytes);
+    } catch (error) {
+      print('[SpeechRecognitionService] processAudioChunk error: $error');
+    }
+  }
+
   Future<void> dispose() async {
+    _isListening = false;
     _isSessionActive = false;
+    await _audioStream.dispose();
     await _disposeRecognizer();
     _model?.dispose();
     _model = null;
@@ -72,7 +136,6 @@ class SpeechRecognitionService {
     if (bytes.lengthInBytes < 2) {
       return;
     }
-    // print('[PROCESSING CHUNK]');
     final recognizer = _recognizer;
     if (recognizer == null) {
       throw StateError(
@@ -80,6 +143,7 @@ class SpeechRecognitionService {
       );
     }
 
+    final t0 = DateTime.now().millisecondsSinceEpoch;
     final isResultReady = await recognizer.acceptWaveformBytes(bytes);
     if (isResultReady) {
       final resultJson = await recognizer.getResult();
@@ -87,7 +151,8 @@ class SpeechRecognitionService {
         'text',
       ]);
       if (resultText.isNotEmpty) {
-        print('[VOSK][FINAL] $resultText');
+        final t1 = DateTime.now().millisecondsSinceEpoch;
+        print('[VOSK][FINAL] $resultText at $t1 (vosk_latency: ${t1-t0}ms)');
         if (!_resultsController.isClosed) {
           _resultsController.add(resultText);
         }
@@ -101,7 +166,8 @@ class SpeechRecognitionService {
       'partial',
     ]);
     if (partialText.isNotEmpty && partialText != _partialText) {
-      print('[VOSK][PARTIAL] $partialText');
+      final t1 = DateTime.now().millisecondsSinceEpoch;
+      print('[VOSK][PARTIAL] $partialText at $t1');
     }
     _partialText = partialText;
   }

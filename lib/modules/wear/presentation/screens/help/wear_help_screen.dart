@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
+import 'package:smart_glasses/modules/wear/presentation/widgets/wear_voice_command_listener.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
@@ -33,44 +34,53 @@ class _WearHelpScreenState extends State<WearHelpScreen> {
     super.dispose();
   }
 
+  void _onVoiceSelect() {
+    WearStatusIconReporter.I.send(WearGlassesPayload.menu());
+    context.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return WearScreenScaffold(
-      scrollController: _scroll,
-      showStatusBar: false,
-      child: ListView(
-        controller: _scroll,
-        padding: const EdgeInsets.fromLTRB(16, 24, 16, 20),
-        children: <Widget>[
-          Text(
-            'Справка',
-            style: WearTypography.lable,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          const _HelpSection(
-            title: 'Дистанция сканирования',
-            body: 'до 50 см',
-          ),
-          const SizedBox(height: 8),
-          const _HelpSection(
-            title: 'Голосовые команды',
-            body: '«Вверх», «Вниз», «Выбрать», «Назад», «Домой»',
-          ),
-          const SizedBox(height: 8),
-          const _HelpSection(
-            title: 'Кнопки',
-            body: '↑ - Вверх\n↓ - Вниз\nОк - Выбрать\nУдержание Ок - Домой\nУдержание ↓ - Назад',
-          ),
-          const SizedBox(height: 12),
-          _OutlinedButton(
-            title: 'Начать работу',
-            onTap: () {
-              WearStatusIconReporter.I.send(WearGlassesPayload.menu());
-              context.pop();
-            },
-          ),
-        ],
+    return WearVoiceCommandListener(
+      onSelect: _onVoiceSelect,
+      child: WearScreenScaffold(
+        scrollController: _scroll,
+        showStatusBar: false,
+        child: ListView(
+          controller: _scroll,
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 20),
+          children: <Widget>[
+            Text(
+              'Справка',
+              style: WearTypography.lable,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            const _HelpSection(
+              title: 'Дистанция сканирования',
+              body: 'до 50 см',
+            ),
+            const SizedBox(height: 8),
+            const _HelpSection(
+              title: 'Голосовые команды',
+              body: '«Вверх», «Вниз», «Выбрать», «Назад», «Домой»',
+            ),
+            const SizedBox(height: 8),
+            const _HelpSection(
+              title: 'Кнопки',
+              body:
+                  '↑ - Вверх\n↓ - Вниз\nОк - Выбрать\nУдержание Ок - Домой\nУдержание ↓ - Назад',
+            ),
+            const SizedBox(height: 12),
+            _OutlinedButton(
+              title: 'Начать работу',
+              onTap: () {
+                WearStatusIconReporter.I.send(WearGlassesPayload.menu());
+                context.pop();
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

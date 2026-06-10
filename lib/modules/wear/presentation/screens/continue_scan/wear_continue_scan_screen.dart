@@ -4,6 +4,7 @@ import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_pay
 import 'package:smart_glasses/modules/wear/presentation/screens/menu/wear_menu_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_svg_icon.dart';
+import 'package:smart_glasses/modules/wear/presentation/widgets/wear_voice_command_listener.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
@@ -19,6 +20,8 @@ class WearContinueScanScreen extends StatefulWidget {
 }
 
 class _WearContinueScanScreenState extends State<WearContinueScanScreen> {
+  int _selectedButtonIndex = 0;
+
   @override
   void initState() {
     super.initState();
@@ -28,53 +31,77 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen> {
     });
   }
 
+  void _onVoiceUp() {
+    setState(() => _selectedButtonIndex = 0);
+  }
+
+  void _onVoiceDown() {
+    setState(() => _selectedButtonIndex = 1);
+  }
+
+  void _onVoiceSelect() {
+    if (_selectedButtonIndex == 0) {
+      WearStatusIconReporter.I.send(WearGlassesPayload.scanWaiting());
+      context.pop(true);
+    } else {
+      context.go(WearMenuScreen.route);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return WearScreenScaffold(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(4.5),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              const _ScanIconBubble(),
-              const SizedBox(height: 12),
-              Text(
-                'Сканирование товара',
-                style: WearTypography.lable18,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Готовы продолжить?',
-                style: WearTypography.lable.copyWith(
-                  color: WearColors.textSecondary,
-                  height: 1.2,
+    return WearVoiceCommandListener(
+      onUp: _onVoiceUp,
+      onDown: _onVoiceDown,
+      onSelect: _onVoiceSelect,
+      child: WearScreenScaffold(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(4.5),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const _ScanIconBubble(),
+                const SizedBox(height: 12),
+                Text(
+                  'Сканирование товара',
+                  style: WearTypography.lable18,
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 22),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  _ContinueButton(
-                    title: 'Продолжить',
-                    onTap: () {
-                      WearStatusIconReporter.I.send(
-                        WearGlassesPayload.scanWaiting(),
-                      );
-                      context.pop(true);
-                    },
+                const SizedBox(height: 6),
+                Text(
+                  'Готовы продолжить?',
+                  style: WearTypography.lable.copyWith(
+                    color: WearColors.textSecondary,
+                    height: 1.2,
                   ),
-                  const SizedBox(width: 12),
-                  _ContinueButton(
-                    title: 'Завершить',
-                    onTap: () => context.go(WearMenuScreen.route),
-                    isSecondary: true,
-                  ),
-                ],
-              ),
-            ],
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 22),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    _ContinueButton(
+                      title: 'Продолжить',
+                      onTap: () {
+                        WearStatusIconReporter.I.send(
+                          WearGlassesPayload.scanWaiting(),
+                        );
+                        context.pop(true);
+                      },
+                      isFocused: _selectedButtonIndex == 0,
+                    ),
+                    const SizedBox(width: 12),
+                    _ContinueButton(
+                      title: 'Завершить',
+                      onTap: () => context.go(WearMenuScreen.route),
+                      isSecondary: true,
+                      isFocused: _selectedButtonIndex == 1,
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -110,32 +137,45 @@ class _ContinueButton extends StatelessWidget {
     required this.title,
     required this.onTap,
     this.isSecondary = false,
+    this.isFocused = false,
   });
 
   final String title;
   final VoidCallback onTap;
   final bool isSecondary;
+  final bool isFocused;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: isSecondary ? WearColors.buttonSecondaryDefault : WearColors.red1,
-      borderRadius: BorderRadius.circular(33),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: SizedBox(
-          width: 138,
-          height: 34,
-          child: Center(
-            child: Text(
-              title,
-              style: WearTypography.lable.copyWith(
-                fontSize: 15,
-                color: isSecondary ? WearColors.textDefault : WearColors.white,
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(33),
+        border: Border.all(
+          color: isFocused ? WearColors.buttonPrimary : Colors.transparent,
+          width: 2,
+        ),
+      ),
+      child: Material(
+        color:
+            isSecondary ? WearColors.buttonSecondaryDefault : WearColors.red1,
+        borderRadius: BorderRadius.circular(33),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            width: 138,
+            height: 34,
+            child: Center(
+              child: Text(
+                title,
+                style: WearTypography.lable.copyWith(
+                  fontSize: 15,
+                  color:
+                      isSecondary ? WearColors.textDefault : WearColors.white,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
           ),
         ),

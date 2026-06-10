@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -8,7 +9,9 @@ import 'package:smart_glasses/modules/wear/presentation/screens/settings/wear_se
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
+import 'package:smart_glasses/modules/wear/presentation/widgets/wear_voice_command_listener.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
+import 'package:smart_glasses/modules/wear/services/wear_voice_session.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
@@ -21,21 +24,160 @@ class WearMenuScreen extends StatefulWidget {
   State<WearMenuScreen> createState() => _WearMenuScreenState();
 }
 
-class _WearMenuScreenState extends State<WearMenuScreen> {
+class _WearMenuScreenState extends State<WearMenuScreen>
+    with WidgetsBindingObserver {
   final ScrollController _scroll = ScrollController();
+  int _focusedIndex = 0;
+  static const int _menuItemCount = 3;
 
   @override
   void initState() {
     super.initState();
+    _focusedIndex = 0; // Сбрасываем при входе на экран
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      WearStatusIconReporter.I.send(WearGlassesPayload.menu());
+      WearStatusIconReporter.I.send(WearGlassesPayload.menu(selectedIndex: _focusedIndex));
+      print('[MenuScreen] starting voice session, _focusedIndex=$_focusedIndex...');
+      WearVoiceSession.I.start();
     });
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      print('[MenuScreen] app paused/detached, stopping voice session');
+      WearVoiceSession.I.stop();
+    } else if (state == AppLifecycleState.resumed) {
+      print('[MenuScreen] app resumed, restarting voice session');
+      WearVoiceSession.I.start();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _scroll.dispose();
     super.dispose();
+  }
+
+  void _onVoiceUp() {
+    print('[MenuScreen] ========== _onVoiceUp START ==========');
+    print('[MenuScreen] _onVoiceUp called, _focusedIndex=$_focusedIndex');
+    if (!_scroll.hasClients) {
+      print('[MenuScreen] no scroll clients, aborting');
+      return;
+    }
+    if (_focusedIndex <= 0) {
+      print('[MenuScreen] already at top, _focusedIndex=$_focusedIndex, aborting');
+      return;
+    }
+    _focusedIndex = _focusedIndex - 1;
+    print('[MenuScreen] _focusedIndex decremented to: $_focusedIndex');
+    print('[MenuScreen] MENU: [0]=Печать ценника, [1]=Справка, [2]=Настройки');
+    print('[MenuScreen] will navigate to: ${_getMenuItemName(_focusedIndex)}');
+    
+    final double target = ((_focusedIndex + 1) * 56.0).clamp(
+      0.0,
+      _scroll.position.maxScrollExtent,
+    );
+    print('[MenuScreen] scrolling to offset: $target');
+    _scroll.animateTo(target,
+        duration: const Duration(milliseconds: 150), curve: Curves.easeOut);
+    WearStatusIconReporter.I.sendFast(
+      WearGlassesPayload.menu(selectedIndex: _focusedIndex),
+    );
+    print('[MenuScreen] ========== _onVoiceUp END ==========');
+  }
+
+  void _onVoiceDown() {
+    print('[MenuScreen] ========== _onVoiceDown START ==========');
+    print('[MenuScreen] _onVoiceDown called, _focusedIndex=$_focusedIndex');
+    if (!_scroll.hasClients) {
+      print('[MenuScreen] no scroll clients, aborting');
+      return;
+    }
+    if (_focusedIndex >= _menuItemCount - 1) {
+      print('[MenuScreen] already at bottom (_menuItemCount=$_menuItemCount), _focusedIndex=$_focusedIndex, aborting');
+      return;
+    }
+    _focusedIndex = _focusedIndex + 1;
+    print('[MenuScreen] _focusedIndex incremented to: $_focusedIndex');
+    print('[MenuScreen] MENU: [0]=Печать ценника, [1]=Справка, [2]=Настройки');
+    print('[MenuScreen] will navigate to: ${_getMenuItemName(_focusedIndex)}');
+    
+    final double target = ((_focusedIndex + 1) * 56.0).clamp(
+      0.0,
+      _scroll.position.maxScrollExtent,
+    );
+    print('[MenuScreen] scrolling to offset: $target');
+    _scroll.animateTo(target,
+        duration: const Duration(milliseconds: 150), curve: Curves.easeOut);
+    WearStatusIconReporter.I.sendFast(
+      WearGlassesPayload.menu(selectedIndex: _focusedIndex),
+    );
+    print('[MenuScreen] ========== _onVoiceDown END ==========');
+  }
+
+  String _getMenuItemName(int index) {
+    switch (index) {
+      case 0:
+        return 'Печать ценника';
+      case 1:
+        return 'Справка';
+      case 2:
+        return 'Настройки';
+      default:
+        return 'UNKNOWN(index=$index)';
+    }
+  }
+
+  void _onVoiceSelect() {
+    print('[MenuScreen] ========== _onVoiceSelect START ==========');
+    final t0 = DateTime.now().millisecondsSinceEpoch;
+    print('[MenuScreen] _onVoiceSelect called');
+    print('[MenuScreen] _focusedIndex=$_focusedIndex (это индекс меню очков)');
+    print('[MenuScreen] MENU_ITEMS: [0]=Печать ценника, [1]=Справка, [2]=Настройки');
+    print('[MenuScreen] selected item: ${_getMenuItemName(_focusedIndex)}');
+    
+    if (!_scroll.hasClients) {
+      print('[MenuScreen] _onVoiceSelect: scroll has no clients, aborting');
+      return;
+    }
+    
+    final int listIndex = _focusedListIndex();
+    print('[MenuScreen] _focusedListIndex() returned: listIndex=$listIndex');
+    print('[MenuScreen] WIDGETS: [0]=Меню, [1]=Печать, [2]=Справка, [3]=Настройки, [4]=Spacer');
+    
+    // Выбираем на основе _focusedIndex (который обновляется через onFocusChanged)
+    print('[MenuScreen] USING _focusedIndex for navigation');
+    if (_focusedIndex == 0) {
+      print('[MenuScreen] NAVIGATING TO: WearPrinterSelectScreen');
+      final t1 = DateTime.now().millisecondsSinceEpoch;
+      print('[MenuScreen] LATENCY: voice->action: ${t1 - t0}ms');
+      WearVoiceSession.I.start();
+      context.push(WearPrinterSelectScreen.route);
+    } else if (_focusedIndex == 1) {
+      print('[MenuScreen] NAVIGATING TO: WearHelpScreen');
+      final t1 = DateTime.now().millisecondsSinceEpoch;
+      print('[MenuScreen] LATENCY: voice->action: ${t1 - t0}ms');
+      context.push(WearHelpScreen.route);
+    } else if (_focusedIndex == 2) {
+      print('[MenuScreen] NAVIGATING TO: WearSettingsScreen');
+      final t1 = DateTime.now().millisecondsSinceEpoch;
+      print('[MenuScreen] LATENCY: voice->action: ${t1 - t0}ms');
+      context.push(WearSettingsScreen.route);
+    } else {
+      print('[MenuScreen] _focusedIndex=$_focusedIndex is out of bounds!');
+    }
+    print('[MenuScreen] ========== _onVoiceSelect END ==========');
+  }
+
+  int _focusedListIndex() {
+    // Используем _focusedIndex напрямую вместо вычисления из scroll
+    // _focusedIndex: 0=Печать ценника, 1=Справка, 2=Настройки
+    print('[MenuScreen] _focusedListIndex: returning _focusedIndex=$_focusedIndex');
+    return _focusedIndex;
   }
 
   @override
@@ -51,7 +193,10 @@ class _WearMenuScreenState extends State<WearMenuScreen> {
       ),
       WearPill(
         title: 'Печать ценника',
-        onTap: () => context.push(WearPrinterSelectScreen.route),
+        onTap: () {
+          WearVoiceSession.I.start();
+          context.push(WearPrinterSelectScreen.route);
+        },
       ),
       WearPill(
         title: 'Справка',
@@ -67,26 +212,36 @@ class _WearMenuScreenState extends State<WearMenuScreen> {
       )
     ];
 
-    return WearScreenScaffold(
-      scrollController: _scroll,
-      child: WearScalingListView(
-        controller: _scroll,
-        itemCount: items.length,
-        itemExtent: 56,
-        padding: const EdgeInsets.fromLTRB(0, 18, 0, 4.5),
-        edgeFractionTop: 0.06,
-        edgeFractionBottom: 0.14,
-        minScale: 0.72,
-        minOpacity: 0.30,
-        baseSideInset: 10,
-        extraSideInset: 30,
-        itemBuilder: (BuildContext context, int i) => items[i],
-        onFocusChanged: (int listIndex) {
-          final int itemIndex = (listIndex - 1).clamp(0, 2);
-          WearStatusIconReporter.I.sendFast(
-            WearGlassesPayload.menu(selectedIndex: itemIndex),
-          );
-        },
+    return WearVoiceCommandListener(
+      onUp: _onVoiceUp,
+      onDown: _onVoiceDown,
+      onSelect: _onVoiceSelect,
+      child: WearScreenScaffold(
+        scrollController: _scroll,
+        child: WearScalingListView(
+          controller: _scroll,
+          itemCount: items.length,
+          itemExtent: 56,
+          padding: const EdgeInsets.fromLTRB(0, 18, 0, 4.5),
+          edgeFractionTop: 0.06,
+          edgeFractionBottom: 0.14,
+          minScale: 0.72,
+          minOpacity: 0.30,
+          baseSideInset: 10,
+          extraSideInset: 30,
+          itemBuilder: (BuildContext context, int i) => items[i],
+          onFocusChanged: (int listIndex) {
+            print('[MenuScreen] onFocusChanged: listIndex=$listIndex');
+            print('[MenuScreen] WIDGETS: [0]=Меню, [1]=Печать, [2]=Справка, [3]=Настройки, [4]=Spacer');
+            final int itemIndex = (listIndex - 1).clamp(0, 2);
+            print('[MenuScreen] onFocusChanged: itemIndex=$itemIndex => ${_getMenuItemName(itemIndex)}');
+            _focusedIndex = itemIndex;
+            print('[MenuScreen] onFocusChanged: _focusedIndex updated to: $_focusedIndex');
+            WearStatusIconReporter.I.sendFast(
+              WearGlassesPayload.menu(selectedIndex: itemIndex),
+            );
+          },
+        ),
       ),
     );
   }

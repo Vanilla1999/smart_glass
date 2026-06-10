@@ -5,6 +5,7 @@ import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_pay
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
+import 'package:smart_glasses/modules/wear/presentation/widgets/wear_voice_command_listener.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
@@ -32,6 +33,7 @@ class WearProductSelectScreen extends StatefulWidget {
 
 class _WearProductSelectScreenState extends State<WearProductSelectScreen> {
   final ScrollController _scroll = ScrollController();
+  int _focusedIndex = 0;
 
   @override
   void initState() {
@@ -42,6 +44,78 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen> {
   void dispose() {
     _scroll.dispose();
     super.dispose();
+  }
+
+  void _sendGlassesFocus() {
+    final List<BarcodeProductInfo> products =
+        widget.args?.products ?? <BarcodeProductInfo>[];
+    if (products.isEmpty) return;
+    final int idx = _focusedIndex.clamp(0, products.length - 1);
+    WearStatusIconReporter.I.sendFast(
+      WearGlassesPayload(
+        screenType: WearGlassesScreenType.productSelect,
+        phase: WearGlassesPhase.idle,
+        title: 'Дубль ШК',
+        subtitle: 'Выберите нужный товар',
+        items: products.map((BarcodeProductInfo p) => p.name).toList(),
+        selectedIndex: idx,
+        pageText: products.length > 4 ? 'Показаны первые 4' : null,
+      ),
+    );
+  }
+
+  void _onVoiceUp() {
+    final List<BarcodeProductInfo> products =
+        widget.args?.products ?? <BarcodeProductInfo>[];
+    if (products.isEmpty) return;
+    _focusedIndex = _focusedIndex.clamp(0, products.length - 1);
+    if (_focusedIndex <= 0) return;
+    _focusedIndex = _focusedIndex - 1;
+    final double target = ((_focusedIndex + 1) * 56.0).clamp(
+      0.0,
+      _scroll.position.maxScrollExtent,
+    );
+    _scroll.animateTo(target,
+        duration: const Duration(milliseconds: 150), curve: Curves.easeOut);
+    _sendGlassesFocus();
+  }
+
+  void _onVoiceDown() {
+    final List<BarcodeProductInfo> products =
+        widget.args?.products ?? <BarcodeProductInfo>[];
+    if (products.isEmpty) return;
+    _focusedIndex = _focusedIndex.clamp(0, products.length - 1);
+    if (_focusedIndex >= products.length - 1) return;
+    _focusedIndex = _focusedIndex + 1;
+    final double target = ((_focusedIndex + 1) * 56.0).clamp(
+      0.0,
+      _scroll.position.maxScrollExtent,
+    );
+    _scroll.animateTo(target,
+        duration: const Duration(milliseconds: 150), curve: Curves.easeOut);
+    _sendGlassesFocus();
+  }
+
+  void _onVoiceSelect() {
+    final List<BarcodeProductInfo> products =
+        widget.args?.products ?? <BarcodeProductInfo>[];
+    if (products.isEmpty || !_scroll.hasClients) return;
+    final double viewH = _scroll.position.viewportDimension;
+    const double paddingTop = 40;
+    const double edgeFracTop = 0.0;
+    const double itemExtent = 56;
+    final double topInset = paddingTop + viewH * edgeFracTop;
+    final int listIndex = WearScalingListView.computeFocusedListIndex(
+      offset: _scroll.offset,
+      viewportHeight: viewH,
+      topInset: topInset,
+      itemExtent: itemExtent,
+      itemCount: products.length + 2,
+    );
+    final int productIndex = listIndex - 1;
+    if (productIndex >= 0 && productIndex < products.length) {
+      context.pop(products[productIndex]);
+    }
   }
 
   @override
@@ -61,63 +135,68 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen> {
       );
     }
 
-    return WearScreenScaffold(
-      showHomeButton: true,
-      scrollController: _scroll,
-      child: WearScalingListView(
-        controller: _scroll,
-        itemCount: products.length + 2,
-        itemExtent: 56,
-        padding: const EdgeInsets.fromLTRB(0, 40, 0, 4.5),
-        edgeFractionTop: 0.0,
-        minScale: 0.68,
-        minOpacity: 0.26,
-        extraSideInset: 40,
-        itemBuilder: (BuildContext context, int i) {
-          if (i == 0) {
-            final String barcode = widget.args?.barcode ?? '';
-            final String header = barcode.trim().isEmpty
-                ? 'Несколько товаров'
-                : 'Несколько товаров\nс ШК $barcode';
-            return Align(
-              alignment: Alignment.topCenter,
-              child: Text(
-                header,
-                style: WearTypography.lable,
-                textAlign: TextAlign.center,
+    return WearVoiceCommandListener(
+      onUp: _onVoiceUp,
+      onDown: _onVoiceDown,
+      onSelect: _onVoiceSelect,
+      child: WearScreenScaffold(
+        showHomeButton: true,
+        scrollController: _scroll,
+        child: WearScalingListView(
+          controller: _scroll,
+          itemCount: products.length + 2,
+          itemExtent: 56,
+          padding: const EdgeInsets.fromLTRB(0, 40, 0, 4.5),
+          edgeFractionTop: 0.0,
+          minScale: 0.68,
+          minOpacity: 0.26,
+          extraSideInset: 40,
+          itemBuilder: (BuildContext context, int i) {
+            if (i == 0) {
+              final String barcode = widget.args?.barcode ?? '';
+              final String header = barcode.trim().isEmpty
+                  ? 'Несколько товаров'
+                  : 'Несколько товаров\nс ШК $barcode';
+              return Align(
+                alignment: Alignment.topCenter,
+                child: Text(
+                  header,
+                  style: WearTypography.lable,
+                  textAlign: TextAlign.center,
+                ),
+              );
+            }
+
+            if (i == products.length + 1) {
+              return const SizedBox.shrink();
+            }
+
+            final BarcodeProductInfo product = products[i - 1];
+            return WearPill(
+              title: _resolveTitle(product),
+              subtitle: _resolveSubtitle(product),
+              onTap: () => context.pop(product),
+              onLongPress: () => _showProductDialog(context, product),
+            );
+          },
+          onFocusChanged: (int listIndex) {
+            final List<BarcodeProductInfo> current =
+                widget.args?.products ?? <BarcodeProductInfo>[];
+            if (current.isEmpty) return;
+            final int itemIndex = (listIndex - 1).clamp(0, current.length - 1);
+            WearStatusIconReporter.I.sendFast(
+              WearGlassesPayload(
+                screenType: WearGlassesScreenType.productSelect,
+                phase: WearGlassesPhase.idle,
+                title: 'Дубль ШК',
+                subtitle: 'Выберите нужный товар',
+                items: current.map((BarcodeProductInfo p) => p.name).toList(),
+                selectedIndex: itemIndex,
+                pageText: current.length > 4 ? 'Показаны первые 4' : null,
               ),
             );
-          }
-
-          if (i == products.length + 1) {
-            return const SizedBox.shrink();
-          }
-
-          final BarcodeProductInfo product = products[i - 1];
-          return WearPill(
-            title: _resolveTitle(product),
-            subtitle: _resolveSubtitle(product),
-            onTap: () => context.pop(product),
-            onLongPress: () => _showProductDialog(context, product),
-          );
-        },
-        onFocusChanged: (int listIndex) {
-          final List<BarcodeProductInfo> current =
-              widget.args?.products ?? <BarcodeProductInfo>[];
-          if (current.isEmpty) return;
-          final int itemIndex = (listIndex - 1).clamp(0, current.length - 1);
-          WearStatusIconReporter.I.sendFast(
-            WearGlassesPayload(
-              screenType: WearGlassesScreenType.productSelect,
-              phase: WearGlassesPhase.idle,
-              title: 'Дубль ШК',
-              subtitle: 'Выберите нужный товар',
-              items: current.map((BarcodeProductInfo p) => p.name).toList(),
-              selectedIndex: itemIndex,
-              pageText: current.length > 4 ? 'Показаны первые 4' : null,
-            ),
-          );
-        },
+          },
+        ),
       ),
     );
   }

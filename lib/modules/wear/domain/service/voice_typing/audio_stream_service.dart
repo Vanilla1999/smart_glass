@@ -21,19 +21,36 @@ class AudioStreamService {
   bool _isRunning = false;
   double _audioLevel = 0.0;
 
+  final List<void Function(Uint8List)> _dataCallbacks = [];
+  void Function(Object error, StackTrace stackTrace)? _errorCallback;
+
   bool get isRunning => _isRunning;
   double get audioLevel => _audioLevel;
   Stream<double> get audioLevelStream => _audioLevelController.stream;
+
+  void addDataCallback(void Function(Uint8List) callback) {
+    _dataCallbacks.add(callback);
+  }
+
+  void removeDataCallback(void Function(Uint8List) callback) {
+    _dataCallbacks.remove(callback);
+  }
 
   Future<bool> requestPermission() {
     return _audioRecorder.hasPermission();
   }
 
   Future<void> start({
-    required void Function(Uint8List bytes) onData,
+    void Function(Uint8List bytes)? onData,
     void Function(Object error, StackTrace stackTrace)? onError,
   }) async {
     if (_isRunning) {
+      if (onData != null) {
+        addDataCallback(onData);
+      }
+      if (onError != null) {
+        _errorCallback = onError;
+      }
       return;
     }
 
@@ -45,14 +62,22 @@ class AudioStreamService {
       ),
     );
 
+    if (onData != null) {
+      addDataCallback(onData);
+    }
+    if (onError != null) {
+      _errorCallback = onError;
+    }
+
     _audioSubscription = audioStream.listen(
       (Uint8List bytes) {
         // _publishAudioLevel(bytes);
-
-        onData(bytes);
+        for (final cb in _dataCallbacks) {
+          cb(bytes);
+        }
       },
       onError: (Object error, StackTrace stackTrace) {
-        onError?.call(error, stackTrace);
+        _errorCallback?.call(error, stackTrace);
       },
     );
 
@@ -67,8 +92,15 @@ class AudioStreamService {
       await _audioRecorder.stop();
     }
 
+    _dataCallbacks.clear();
+    _errorCallback = null;
     _isRunning = false;
     _setAudioLevel(0.0);
+  }
+
+  Future<void> pauseCallbacks() async {
+    _dataCallbacks.clear();
+    _errorCallback = null;
   }
 
   Future<void> dispose() async {

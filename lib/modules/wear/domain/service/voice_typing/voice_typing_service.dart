@@ -57,7 +57,7 @@ class VoiceTypingService {
   }
 
   Future<void> stopSession() async {
-    await _audioStreamService.stop();
+    await _audioStreamService.pauseCallbacks();
     await _audioProcessing;
     await _speechRecognitionService.stopSession();
   }
@@ -65,8 +65,6 @@ class VoiceTypingService {
   Future<void> dispose() async {
     await stopSession();
     await _recognitionSubscription?.cancel();
-    await _speechRecognitionService.dispose();
-    await _audioStreamService.dispose();
     await _resultsController.close();
   }
 

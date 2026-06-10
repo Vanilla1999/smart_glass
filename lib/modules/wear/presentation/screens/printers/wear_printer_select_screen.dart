@@ -8,10 +8,12 @@ import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_pay
 import 'package:smart_glasses/modules/wear/presentation/screens/printers/cubit/wear_printer_select_cubit.dart';
 
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_scan_idle_screen.dart';
+import 'package:smart_glasses/modules/wear/services/wear_voice_session.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
+import 'package:smart_glasses/modules/wear/presentation/widgets/wear_voice_command_listener.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
@@ -34,6 +36,8 @@ class _WearPrinterSelectScreenState
   @override
   void initState() {
     super.initState();
+    print('[PrinterSelect] initState - starting voice session');
+    WearVoiceSession.I.start();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _sendGlassesState(ref.read(wearPrinterSelectNotifierProvider));
     });
@@ -68,10 +72,15 @@ class _WearPrinterSelectScreenState
       }
     });
 
-    return WearScreenScaffold(
-      showHomeButton: true,
-      scrollController: _scroll,
-      child: _buildContent(context, state),
+    return WearVoiceCommandListener(
+      onUp: _onVoiceUp,
+      onDown: _onVoiceDown,
+      onSelect: _onVoiceSelect,
+      child: WearScreenScaffold(
+        showHomeButton: true,
+        scrollController: _scroll,
+        child: _buildContent(context, state),
+      ),
     );
   }
 
@@ -133,12 +142,14 @@ class _WearPrinterSelectScreenState
           );
         },
         onFocusChanged: (int listIndex) {
-          final List<WearPrinter> current = _visiblePrinters(ref.read(wearPrinterSelectNotifierProvider));
+          final List<WearPrinter> current =
+              _visiblePrinters(ref.read(wearPrinterSelectNotifierProvider));
           if (current.isEmpty) return;
           final int printerIndex = (listIndex - 1).clamp(0, current.length - 1);
           if (printerIndex == _focusedIndex) return;
           _focusedIndex = printerIndex;
-          _sendGlassesState(ref.read(wearPrinterSelectNotifierProvider), fast: true);
+          _sendGlassesState(ref.read(wearPrinterSelectNotifierProvider),
+              fast: true);
         },
       ),
     );
@@ -149,6 +160,54 @@ class _WearPrinterSelectScreenState
       return 'Выберите принтер\nдля желтых ценников';
     }
     return 'Выберите принтер\nдля белых ценников';
+  }
+
+  void _onVoiceUp() {
+    if (!_scroll.hasClients) return;
+    final List<WearPrinter> printers =
+        _visiblePrinters(ref.read(wearPrinterSelectNotifierProvider));
+    if (printers.isEmpty) return;
+    _focusedIndex = _focusedIndex.clamp(0, printers.length - 1);
+    if (_focusedIndex <= 0) return;
+    _focusedIndex = _focusedIndex - 1;
+    final double target = (_focusedIndex * 56.0).clamp(
+      0.0,
+      _scroll.position.maxScrollExtent,
+    );
+    _scroll.animateTo(target,
+        duration: const Duration(milliseconds: 150), curve: Curves.easeOut);
+    _sendGlassesState(ref.read(wearPrinterSelectNotifierProvider), fast: true);
+  }
+
+  void _onVoiceDown() {
+    print('[PrinterSelect] _onVoiceDown called, focusedIndex=$_focusedIndex');
+    if (!_scroll.hasClients) return;
+    final List<WearPrinter> printers =
+        _visiblePrinters(ref.read(wearPrinterSelectNotifierProvider));
+    if (printers.isEmpty) return;
+    _focusedIndex = _focusedIndex.clamp(0, printers.length - 1);
+    if (_focusedIndex >= printers.length - 1) return;
+    _focusedIndex = _focusedIndex + 1;
+    final double target = (_focusedIndex * 56.0).clamp(
+      0.0,
+      _scroll.position.maxScrollExtent,
+    );
+    _scroll.animateTo(target,
+        duration: const Duration(milliseconds: 150), curve: Curves.easeOut);
+    _sendGlassesState(ref.read(wearPrinterSelectNotifierProvider), fast: true);
+  }
+
+  void _onVoiceSelect() {
+    print('[PrinterSelect] _onVoiceSelect called, focusedIndex=$_focusedIndex');
+    final WearPrinterSelectState s =
+        ref.read(wearPrinterSelectNotifierProvider);
+    if (s.isLoading || s.printers.isEmpty) return;
+    final List<WearPrinter> printers = _visiblePrinters(s);
+    if (_focusedIndex >= 0 && _focusedIndex < printers.length) {
+      ref
+          .read(wearPrinterSelectNotifierProvider.notifier)
+          .selectPrinter(printers[_focusedIndex]);
+    }
   }
 
   List<WearPrinter> _visiblePrinters(WearPrinterSelectState state) {

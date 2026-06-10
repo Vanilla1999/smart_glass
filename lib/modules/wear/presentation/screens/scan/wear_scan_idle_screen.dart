@@ -12,6 +12,7 @@ import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_stat
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_svg_icon.dart';
+import 'package:smart_glasses/modules/wear/presentation/widgets/wear_voice_command_listener.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
@@ -44,6 +45,16 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       WearStatusIconReporter.I.send(WearGlassesPayload.scanWaiting());
     });
+  }
+
+  Future<void> _onVoiceSelect() async {
+    final String? code = await context.push<String>(
+      WearPrintCodeInputScreen.route,
+    );
+    if (code == null || code.trim().isEmpty) {
+      return;
+    }
+    ref.read(_provider.notifier).handleBarcode(code.trim());
   }
 
   @override
@@ -121,35 +132,29 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
       }
     });
 
-    return WearScreenScaffold(
-      showHomeButton: true,
-      child: Stack(
-        children: <Widget>[
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(4.5),
-              child: _ScanWaitingContent(
-                onManualInput: () async {
-                  final String? code = await context.push<String>(
-                    WearPrintCodeInputScreen.route,
-                  );
-
-                  if (code == null || code.trim().isEmpty) {
-                    return;
-                  }
-                  ref.read(_provider.notifier).handleBarcode(code.trim());
-                },
+    return WearVoiceCommandListener(
+      onSelect: _onVoiceSelect,
+      child: WearScreenScaffold(
+        showHomeButton: true,
+        child: Stack(
+          children: <Widget>[
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(4.5),
+                child: _ScanWaitingContent(
+                  onManualInput: _onVoiceSelect,
+                ),
               ),
             ),
-          ),
-          if (state.isLoading)
-            Positioned.fill(
-              child: _ScanLoadingView(
-                statusText: state.loadingText,
-                icon: state.loadingIcon,
+            if (state.isLoading)
+              Positioned.fill(
+                child: _ScanLoadingView(
+                  statusText: state.loadingText,
+                  icon: state.loadingIcon,
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

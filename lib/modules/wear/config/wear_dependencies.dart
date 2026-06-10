@@ -3,6 +3,9 @@ import 'package:smart_glasses/modules/wear/data/auth/data_source/auth_data_sourc
 import 'package:smart_glasses/modules/wear/data/auth/data_source/auth_dio_client.dart';
 import 'package:smart_glasses/modules/wear/data/bdto/data_source/bdto_datasource.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/use_case/authenticate_user_use_case.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_control_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_typing_service.dart';
 
 // На следующих этапах пригодится, поэтому можно сразу оставить импорты
@@ -11,7 +14,9 @@ import 'package:smart_glasses/modules/wear/domain/price_tag_print/use_case/get_b
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/use_case/print_price_tag_use_case.dart';
 
 class WearDependencies {
-  WearDependencies._();
+  WearDependencies._() {
+    _initVoiceServices();
+  }
 
   static final WearDependencies I = WearDependencies._();
 
@@ -20,7 +25,29 @@ class WearDependencies {
   // -------------------------
   final BdtoDataSource bdto = BdtoDataSource();
 
-  final VoiceTypingService voiceTypingService = VoiceTypingService();
+  /// Shared Vosk recognizer — один на digit‑dictation и voice‑commands.
+  late final SpeechRecognitionService speechRecognitionService;
+
+  late final VoiceTypingService voiceTypingService;
+
+  late final WearVoiceControlService voiceControlService;
+
+  /// Shared audio stream — один на оба голосовых сервиса.
+  late final AudioStreamService audioStreamService;
+
+  void _initVoiceServices() {
+    audioStreamService = AudioStreamService();
+    speechRecognitionService = SpeechRecognitionService(
+      audioStreamService: audioStreamService,
+    );
+    voiceTypingService = VoiceTypingService(
+      speechRecognitionService: speechRecognitionService,
+      audioStreamService: audioStreamService,
+    );
+    voiceControlService = WearVoiceControlService(
+      speechRecognitionService: speechRecognitionService,
+    );
+  }
 
   Future<void>? _voiceTypingPrepareFuture;
 
