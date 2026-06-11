@@ -1,8 +1,8 @@
-import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_interaction_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/help/wear_help_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/printers/wear_printer_select_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/wear_settings_screen.dart';
@@ -28,7 +28,7 @@ class _WearMenuScreenState extends State<WearMenuScreen>
     with WidgetsBindingObserver {
   final ScrollController _scroll = ScrollController();
   int _focusedIndex = 0;
-  static const int _menuItemCount = 3;
+  static const int _menuItemCount = 4;
 
   @override
   void initState() {
@@ -36,8 +36,12 @@ class _WearMenuScreenState extends State<WearMenuScreen>
     _focusedIndex = 0; // Сбрасываем при входе на экран
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      WearStatusIconReporter.I.send(WearGlassesPayload.menu(selectedIndex: _focusedIndex));
-      print('[MenuScreen] starting voice session, _focusedIndex=$_focusedIndex...');
+      WearStatusIconReporter.I.send(
+        WearGlassesPayload.menu(selectedIndex: _focusedIndex),
+      );
+      print(
+        '[MenuScreen] starting voice session, _focusedIndex=$_focusedIndex...',
+      );
       WearVoiceSession.I.start();
     });
   }
@@ -69,14 +73,18 @@ class _WearMenuScreenState extends State<WearMenuScreen>
       return;
     }
     if (_focusedIndex <= 0) {
-      print('[MenuScreen] already at top, _focusedIndex=$_focusedIndex, aborting');
+      print(
+        '[MenuScreen] already at top, _focusedIndex=$_focusedIndex, aborting',
+      );
       return;
     }
     _focusedIndex = _focusedIndex - 1;
     print('[MenuScreen] _focusedIndex decremented to: $_focusedIndex');
-    print('[MenuScreen] MENU: [0]=Печать ценника, [1]=Справка, [2]=Настройки');
+    print(
+      '[MenuScreen] MENU: [0]=Печать ценника, [1]=Доступность, [2]=Справка, [3]=Настройки',
+    );
     print('[MenuScreen] will navigate to: ${_getMenuItemName(_focusedIndex)}');
-    
+
     final double target = ((_focusedIndex + 1) * 56.0).clamp(
       0.0,
       _scroll.position.maxScrollExtent,
@@ -98,14 +106,18 @@ class _WearMenuScreenState extends State<WearMenuScreen>
       return;
     }
     if (_focusedIndex >= _menuItemCount - 1) {
-      print('[MenuScreen] already at bottom (_menuItemCount=$_menuItemCount), _focusedIndex=$_focusedIndex, aborting');
+      print(
+        '[MenuScreen] already at bottom (_menuItemCount=$_menuItemCount), _focusedIndex=$_focusedIndex, aborting',
+      );
       return;
     }
     _focusedIndex = _focusedIndex + 1;
     print('[MenuScreen] _focusedIndex incremented to: $_focusedIndex');
-    print('[MenuScreen] MENU: [0]=Печать ценника, [1]=Справка, [2]=Настройки');
+    print(
+      '[MenuScreen] MENU: [0]=Печать ценника, [1]=Доступность, [2]=Справка, [3]=Настройки',
+    );
     print('[MenuScreen] will navigate to: ${_getMenuItemName(_focusedIndex)}');
-    
+
     final double target = ((_focusedIndex + 1) * 56.0).clamp(
       0.0,
       _scroll.position.maxScrollExtent,
@@ -124,8 +136,10 @@ class _WearMenuScreenState extends State<WearMenuScreen>
       case 0:
         return 'Печать ценника';
       case 1:
-        return 'Справка';
+        return 'Доступность';
       case 2:
+        return 'Справка';
+      case 3:
         return 'Настройки';
       default:
         return 'UNKNOWN(index=$index)';
@@ -137,18 +151,22 @@ class _WearMenuScreenState extends State<WearMenuScreen>
     final t0 = DateTime.now().millisecondsSinceEpoch;
     print('[MenuScreen] _onVoiceSelect called');
     print('[MenuScreen] _focusedIndex=$_focusedIndex (это индекс меню очков)');
-    print('[MenuScreen] MENU_ITEMS: [0]=Печать ценника, [1]=Справка, [2]=Настройки');
+    print(
+      '[MenuScreen] MENU_ITEMS: [0]=Печать ценника, [1]=Доступность, [2]=Справка, [3]=Настройки',
+    );
     print('[MenuScreen] selected item: ${_getMenuItemName(_focusedIndex)}');
-    
+
     if (!_scroll.hasClients) {
       print('[MenuScreen] _onVoiceSelect: scroll has no clients, aborting');
       return;
     }
-    
+
     final int listIndex = _focusedListIndex();
     print('[MenuScreen] _focusedListIndex() returned: listIndex=$listIndex');
-    print('[MenuScreen] WIDGETS: [0]=Меню, [1]=Печать, [2]=Справка, [3]=Настройки, [4]=Spacer');
-    
+    print(
+      '[MenuScreen] WIDGETS: [0]=Меню, [1]=Печать, [2]=Доступность, [3]=Справка, [4]=Настройки, [5]=Spacer',
+    );
+
     // Выбираем на основе _focusedIndex (который обновляется через onFocusChanged)
     print('[MenuScreen] USING _focusedIndex for navigation');
     if (_focusedIndex == 0) {
@@ -158,11 +176,16 @@ class _WearMenuScreenState extends State<WearMenuScreen>
       WearVoiceSession.I.start();
       context.push(WearPrinterSelectScreen.route);
     } else if (_focusedIndex == 1) {
+      print('[MenuScreen] NAVIGATING TO: WearAvailabilityInteractionScreen');
+      final t1 = DateTime.now().millisecondsSinceEpoch;
+      print('[MenuScreen] LATENCY: voice->action: ${t1 - t0}ms');
+      context.push(WearAvailabilityInteractionScreen.route);
+    } else if (_focusedIndex == 2) {
       print('[MenuScreen] NAVIGATING TO: WearHelpScreen');
       final t1 = DateTime.now().millisecondsSinceEpoch;
       print('[MenuScreen] LATENCY: voice->action: ${t1 - t0}ms');
       context.push(WearHelpScreen.route);
-    } else if (_focusedIndex == 2) {
+    } else if (_focusedIndex == 3) {
       print('[MenuScreen] NAVIGATING TO: WearSettingsScreen');
       final t1 = DateTime.now().millisecondsSinceEpoch;
       print('[MenuScreen] LATENCY: voice->action: ${t1 - t0}ms');
@@ -175,8 +198,10 @@ class _WearMenuScreenState extends State<WearMenuScreen>
 
   int _focusedListIndex() {
     // Используем _focusedIndex напрямую вместо вычисления из scroll
-    // _focusedIndex: 0=Печать ценника, 1=Справка, 2=Настройки
-    print('[MenuScreen] _focusedListIndex: returning _focusedIndex=$_focusedIndex');
+    // _focusedIndex: 0=Печать ценника, 1=Доступность, 2=Справка, 3=Настройки
+    print(
+      '[MenuScreen] _focusedListIndex: returning _focusedIndex=$_focusedIndex',
+    );
     return _focusedIndex;
   }
 
@@ -197,6 +222,10 @@ class _WearMenuScreenState extends State<WearMenuScreen>
           WearVoiceSession.I.start();
           context.push(WearPrinterSelectScreen.route);
         },
+      ),
+      WearPill(
+        title: 'Доступность',
+        onTap: () => context.push(WearAvailabilityInteractionScreen.route),
       ),
       WearPill(
         title: 'Справка',
@@ -232,11 +261,17 @@ class _WearMenuScreenState extends State<WearMenuScreen>
           itemBuilder: (BuildContext context, int i) => items[i],
           onFocusChanged: (int listIndex) {
             print('[MenuScreen] onFocusChanged: listIndex=$listIndex');
-            print('[MenuScreen] WIDGETS: [0]=Меню, [1]=Печать, [2]=Справка, [3]=Настройки, [4]=Spacer');
-            final int itemIndex = (listIndex - 1).clamp(0, 2);
-            print('[MenuScreen] onFocusChanged: itemIndex=$itemIndex => ${_getMenuItemName(itemIndex)}');
+            print(
+              '[MenuScreen] WIDGETS: [0]=Меню, [1]=Печать, [2]=Доступность, [3]=Справка, [4]=Настройки, [5]=Spacer',
+            );
+            final int itemIndex = (listIndex - 1).clamp(0, _menuItemCount - 1);
+            print(
+              '[MenuScreen] onFocusChanged: itemIndex=$itemIndex => ${_getMenuItemName(itemIndex)}',
+            );
             _focusedIndex = itemIndex;
-            print('[MenuScreen] onFocusChanged: _focusedIndex updated to: $_focusedIndex');
+            print(
+              '[MenuScreen] onFocusChanged: _focusedIndex updated to: $_focusedIndex',
+            );
             WearStatusIconReporter.I.sendFast(
               WearGlassesPayload.menu(selectedIndex: itemIndex),
             );

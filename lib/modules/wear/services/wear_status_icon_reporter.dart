@@ -37,6 +37,7 @@ class WearStatusIconReporter {
   Timer? _timer;
 
   WearStatusIconSnapshot get snapshot => _snapshot;
+  WearGlassesPayload? get lastPayload => _lastPayload;
 
   void start() {
     _timer ??= Timer.periodic(

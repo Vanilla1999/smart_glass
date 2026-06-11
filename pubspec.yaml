@@ -52,3 +52,4 @@ flutter:
     - assets/vosk-model-small-ru-0.22.zip
     - assets/svg/wear/
     - assets/develop.env
+    - assets/catalog/availability_catalog.json

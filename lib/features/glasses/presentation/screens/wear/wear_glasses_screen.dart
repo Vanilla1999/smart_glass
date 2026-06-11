@@ -54,6 +54,9 @@ class _TitleBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     const Color color = WearGlassesScaffold.accentColor;
     final bool isList = state.items.isNotEmpty;
+    final bool useDesignTitle =
+        state.screenType == WearGlassesScreenType.availability ||
+            state.screenType == WearGlassesScreenType.help;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: <Widget>[
@@ -61,8 +64,8 @@ class _TitleBlock extends StatelessWidget {
           state.title,
           style: TextStyle(
             color: color,
-            fontSize: isList ? 36 : 40,
-            height: isList ? 1.11 : 1.4,
+            fontSize: useDesignTitle || isList ? 36 : 40,
+            height: useDesignTitle || isList ? 1.11 : 1.4,
             fontWeight: FontWeight.w500,
           ),
           maxLines: 2,
@@ -103,6 +106,9 @@ class _Body extends StatelessWidget {
       }
       return _WearList(state: state);
     }
+    if (state.screenType == WearGlassesScreenType.availability) {
+      return _AvailabilityBody(state: state);
+    }
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -115,6 +121,222 @@ class _Body extends StatelessWidget {
             _Actions(state: state),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _AvailabilityBody extends StatelessWidget {
+  const _AvailabilityBody({required this.state});
+
+  final WearGlassesState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool hasStatus =
+        state.statusText != null && state.statusText!.trim().isNotEmpty;
+    final bool hasActions =
+        state.primaryAction != null || state.secondaryAction != null;
+    return SizedBox(
+      width: state.checkLines.isEmpty ? 520 : 577,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (state.bodyLines.isNotEmpty || state.checkLines.isNotEmpty)
+            state.checkLines.isEmpty
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      for (final String line in state.bodyLines)
+                        _InfoLine(line),
+                    ],
+                  )
+                : _AvailabilityDetails(state: state),
+          if (hasStatus) ...<Widget>[
+            if (state.bodyLines.isNotEmpty || state.checkLines.isNotEmpty)
+              const SizedBox(height: 18),
+            _MainStatus(state: state),
+          ],
+          if (state.footerText != null &&
+              state.footerText!.trim().isNotEmpty) ...<Widget>[
+            const SizedBox(height: 12),
+            Text(
+              state.footerText!,
+              style: const TextStyle(
+                color: WearGlassesScaffold.accentColor,
+                fontSize: 15,
+                height: 1.4,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+          ],
+          if (hasActions) ...<Widget>[
+            const SizedBox(height: 26),
+            _Actions(state: state),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AvailabilityDetails extends StatelessWidget {
+  const _AvailabilityDetails({required this.state});
+
+  final WearGlassesState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              for (final String line in state.bodyLines) _DetailLine(line),
+            ],
+          ),
+        ),
+        const SizedBox(width: 56),
+        SizedBox(
+          width: 166,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const _DetailLine('Проверки:'),
+              const SizedBox(height: 6),
+              for (final String line in state.checkLines) _CheckLine(line),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DetailLine extends StatelessWidget {
+  const _DetailLine(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: WearGlassesScaffold.accentColor,
+          fontSize: 20,
+          height: 1.4,
+          fontWeight: FontWeight.w400,
+        ),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+}
+
+class _CheckLine extends StatelessWidget {
+  const _CheckLine(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Padding(
+            padding: EdgeInsets.only(top: 2),
+            child: _CheckStatusMark(),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: WearGlassesScaffold.accentColor,
+                fontSize: 18,
+                height: 1.35,
+                fontWeight: FontWeight.w400,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CheckStatusMark extends StatelessWidget {
+  const _CheckStatusMark();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 18,
+      height: 18,
+      child: CustomPaint(
+        painter: _CheckStatusMarkPainter(),
+      ),
+    );
+  }
+}
+
+class _CheckStatusMarkPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint = Paint()
+      ..color = WearGlassesScaffold.accentColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawCircle(
+      Offset(size.width / 2, size.height / 2),
+      size.width * 0.38,
+      paint,
+    );
+    final Path path = Path()
+      ..moveTo(size.width * 0.34, size.height * 0.50)
+      ..lineTo(size.width * 0.45, size.height * 0.61)
+      ..lineTo(size.width * 0.66, size.height * 0.39);
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _InfoLine extends StatelessWidget {
+  const _InfoLine(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: WearGlassesScaffold.accentColor,
+          fontSize: 20,
+          height: 1.35,
+          fontWeight: FontWeight.w400,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
       ),
     );
   }
@@ -169,17 +391,29 @@ class _WearList extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.end,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: <Widget>[
-          Column(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              for (int i = 0; i < visible.length; i++)
-                Padding(
-                  padding:
-                      EdgeInsets.only(bottom: i == visible.length - 1 ? 0 : 4),
-                  child: _WearListItem(
-                    text: visible[i],
-                    selected: i == state.selectedIndex,
-                  ),
+              Expanded(
+                child: Column(
+                  children: <Widget>[
+                    for (int i = 0; i < visible.length; i++)
+                      Padding(
+                        padding: EdgeInsets.only(
+                          bottom: i == visible.length - 1 ? 0 : 4,
+                        ),
+                        child: _WearListItem(
+                          text: visible[i],
+                          selected: i == state.selectedIndex,
+                        ),
+                      ),
+                  ],
                 ),
+              ),
+              if (showPageText) ...<Widget>[
+                const SizedBox(width: 8),
+                const _ListScrollBar(),
+              ],
             ],
           ),
           if (showPageText) ...<Widget>[
@@ -189,6 +423,84 @@ class _WearList extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _ListScrollBar extends StatelessWidget {
+  const _ListScrollBar();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 16,
+      height: 188,
+      child: Column(
+        children: <Widget>[
+          _ScrollArrow(up: true),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: WearGlassesScaffold.accentColor,
+                    borderRadius: BorderRadius.all(Radius.circular(2)),
+                  ),
+                  child: SizedBox(width: 4, height: 71),
+                ),
+              ),
+            ),
+          ),
+          _ScrollArrow(up: false),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScrollArrow extends StatelessWidget {
+  const _ScrollArrow({required this.up});
+
+  final bool up;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 16,
+      height: 16,
+      child: CustomPaint(
+        painter: _ScrollArrowPainter(up: up),
+      ),
+    );
+  }
+}
+
+class _ScrollArrowPainter extends CustomPainter {
+  const _ScrollArrowPainter({required this.up});
+
+  final bool up;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint = Paint()
+      ..color = WearGlassesScaffold.accentColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final double top = up ? size.height * 0.62 : size.height * 0.38;
+    final double bottom = up ? size.height * 0.38 : size.height * 0.62;
+    final Path path = Path()
+      ..moveTo(size.width * 0.32, top)
+      ..lineTo(size.width * 0.50, bottom)
+      ..lineTo(size.width * 0.68, top);
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ScrollArrowPainter oldDelegate) {
+    return oldDelegate.up != up;
   }
 }
 

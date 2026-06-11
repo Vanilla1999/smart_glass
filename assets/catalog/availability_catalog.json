@@ -1,0 +1,5134 @@
+{
+  "groups": [
+    {
+      "id": 1,
+      "name": "Молочная продукция"
+    },
+    {
+      "id": 2,
+      "name": "Безалкогольные напитки"
+    }
+  ],
+  "products": [
+    {
+      "id": 3010420008,
+      "groupId": 1,
+      "name": "ЧУДО Коктейль молочный жид.шоколад 3% 0,2л ТБА(ВБД):27",
+      "code": "3010420008",
+      "barcodes": [
+        "3010420008",
+        "4630104200080"
+      ],
+      "priceTagBarcodes": [
+        "2230104200084"
+      ],
+      "price": 44.99,
+      "loyaltyPrice": null,
+      "rest": 22.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 3182084101,
+      "groupId": 1,
+      "name": "КУБАН МОЛОЧНИК Масло72,5% 0,17кг фол(СК Ленинград):12",
+      "code": "3182084101",
+      "barcodes": [
+        "3182084101",
+        "4631820841014"
+      ],
+      "priceTagBarcodes": [
+        "2231820841018"
+      ],
+      "price": 159.99,
+      "loyaltyPrice": null,
+      "rest": 21.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 3201241161,
+      "groupId": 1,
+      "name": "ИМУНЕЛЕ НЕО Напиток к/м земляника 1,2% 100г пл/бут(ВБД):6/24",
+      "code": "3201241161",
+      "barcodes": [
+        "3201241161",
+        "4632012411619"
+      ],
+      "priceTagBarcodes": [
+        "2232012411613"
+      ],
+      "price": 29.99,
+      "loyaltyPrice": null,
+      "rest": 17.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1728400015,
+      "groupId": 1,
+      "name": "СЛОБОДА Майонез Оливковый 67% 375г д/п(Эфко):24",
+      "code": "1728400015",
+      "barcodes": [
+        "1728400015",
+        "4617284000150"
+      ],
+      "priceTagBarcodes": [
+        "2217284000154"
+      ],
+      "price": 86.99,
+      "loyaltyPrice": null,
+      "rest": 17.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1829990070,
+      "groupId": 1,
+      "name": "КОРОВКА ИЗ КОРЕНОВКИ Сырок глаз.ван18%40г(КореновскийМКК):16",
+      "code": "1829990070",
+      "barcodes": [
+        "1829990070",
+        "4618299900701"
+      ],
+      "priceTagBarcodes": [
+        "2218299900705"
+      ],
+      "price": 36.99,
+      "loyaltyPrice": null,
+      "rest": 13.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1899900695,
+      "groupId": 1,
+      "name": "КОРОВКА ИЗ КОРЕНОВКИ Сырок глаз сг мол 18% 40г(КМКК):16",
+      "code": "1899900695",
+      "barcodes": [
+        "1899900695",
+        "4618999006956"
+      ],
+      "priceTagBarcodes": [
+        "2218999006950"
+      ],
+      "price": 36.99,
+      "loyaltyPrice": null,
+      "rest": 14.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 3201860038,
+      "groupId": 1,
+      "name": "ЧУДО Коктейль молочный клубника 2% 0,2л ТБА(ВБД):27",
+      "code": "3201860038",
+      "barcodes": [
+        "3201860038",
+        "4632018600383"
+      ],
+      "priceTagBarcodes": [
+        "2232018600387"
+      ],
+      "price": 43.99,
+      "loyaltyPrice": null,
+      "rest": 12.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1820841010,
+      "groupId": 1,
+      "name": "КУБАН МОЛОЧНИК Сырок н/ж изюм0,10кг бум/уп(СКЛенинградск):6",
+      "code": "1820841010",
+      "barcodes": [
+        "1820841010",
+        "4618208410109"
+      ],
+      "priceTagBarcodes": [
+        "2218208410103"
+      ],
+      "price": 44.99,
+      "loyaltyPrice": null,
+      "rest": 6.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1899911997,
+      "groupId": 1,
+      "name": "КУБАН МОЛОЧНИК Творог 5% 0,18кг фл/п (СК Ленинградский):12",
+      "code": "1899911997",
+      "barcodes": [
+        "1899911997",
+        "4618999119977"
+      ],
+      "priceTagBarcodes": [
+        "2218999119971"
+      ],
+      "price": 71.99,
+      "loyaltyPrice": null,
+      "rest": 12.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1899912051,
+      "groupId": 1,
+      "name": "КУБАНСКИЙ МОЛОЧНИК Ряженка 2,5% 0,45кг пл/бут (Лен ССК) :6",
+      "code": "1899912051",
+      "barcodes": [
+        "1899912051",
+        "4618999120515"
+      ],
+      "priceTagBarcodes": [
+        "2218999120519"
+      ],
+      "price": 76.99,
+      "loyaltyPrice": null,
+      "rest": 9.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1829990260,
+      "groupId": 1,
+      "name": "КОРОВКА ИЗ КОРЕНОВКИ Молоко паст 2,7% 0,9кг пл/бут(КМКК):6",
+      "code": "1829990260",
+      "barcodes": [
+        "1829990260",
+        "4618299902606"
+      ],
+      "priceTagBarcodes": [
+        "2218299902600"
+      ],
+      "price": 89.99,
+      "loyaltyPrice": null,
+      "rest": 7.0,
+      "checkPrice": true,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1899912472,
+      "groupId": 1,
+      "name": "ДАНИССИМО Фантазия Йогурт хруст шар 6,9% 105гр:12",
+      "code": "1899912472",
+      "barcodes": [
+        "1899912472",
+        "4618999124728"
+      ],
+      "priceTagBarcodes": [
+        "2218999124722"
+      ],
+      "price": 59.99,
+      "loyaltyPrice": null,
+      "rest": 9.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000006036,
+      "groupId": 1,
+      "name": "КУБ МОЛОЧНИК Снежок прод к/молочный 2,5%450гр пл/бут(ЛССК):6",
+      "code": "1000006036",
+      "barcodes": [
+        "1000006036",
+        "4610000060360"
+      ],
+      "priceTagBarcodes": [
+        "2210000060364"
+      ],
+      "price": 75.99,
+      "loyaltyPrice": null,
+      "rest": 10.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000011315,
+      "groupId": 1,
+      "name": "МАГНИТ Тан 1л пл/бут(Россия):6",
+      "code": "1000011315",
+      "barcodes": [
+        "1000011315",
+        "4610000113158"
+      ],
+      "priceTagBarcodes": [
+        "2210000113152"
+      ],
+      "price": 54.99,
+      "loyaltyPrice": null,
+      "rest": 1.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000016691,
+      "groupId": 1,
+      "name": "СЛОБОДА Майонез на перепелиных яйцах 67% 375г д/п (Эфко):24",
+      "code": "1000016691",
+      "barcodes": [
+        "1000016691",
+        "4610000166918"
+      ],
+      "priceTagBarcodes": [
+        "2210000166912"
+      ],
+      "price": 99.99,
+      "loyaltyPrice": null,
+      "rest": 12.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000047329,
+      "groupId": 1,
+      "name": "ЧУДО Десерт Творожный персик-груша 4,2% 100г пл/ст (ВБД):8",
+      "code": "1000047329",
+      "barcodes": [
+        "1000047329",
+        "4610000473290"
+      ],
+      "priceTagBarcodes": [
+        "2210000473294"
+      ],
+      "price": 52.99,
+      "loyaltyPrice": null,
+      "rest": 5.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000059925,
+      "groupId": 1,
+      "name": "А.РОСТАГРОКОМПЛЕКС Сырок глаз в мол/шок 26% 50г к/уп(РАК):12",
+      "code": "1000059925",
+      "barcodes": [
+        "1000059925",
+        "4610000599259"
+      ],
+      "priceTagBarcodes": [
+        "2210000599253"
+      ],
+      "price": 72.99,
+      "loyaltyPrice": null,
+      "rest": 12.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000047332,
+      "groupId": 1,
+      "name": "ЧУДО Десерт Творожный клубника-земляника 4%100г пл/ст(ВБД):8",
+      "code": "1000047332",
+      "barcodes": [
+        "1000047332",
+        "4610000473320"
+      ],
+      "priceTagBarcodes": [
+        "2210000473324"
+      ],
+      "price": 52.99,
+      "loyaltyPrice": null,
+      "rest": 10.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000124430,
+      "groupId": 1,
+      "name": "ДАНИССИМО Фантазия Йогурт гус ягод шар6,9%105гпл/ст:12",
+      "code": "1000124430",
+      "barcodes": [
+        "1000124430",
+        "4610001244301"
+      ],
+      "priceTagBarcodes": [
+        "2210001244305"
+      ],
+      "price": 59.99,
+      "loyaltyPrice": null,
+      "rest": 11.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000172831,
+      "groupId": 1,
+      "name": "КУБАНСКИЙ МОЛОЧНИК Молоко 2,5% 720г пл/кан (Ленинградский):6",
+      "code": "1000172831",
+      "barcodes": [
+        "1000172831",
+        "4610001728313"
+      ],
+      "priceTagBarcodes": [
+        "2210001728317"
+      ],
+      "price": 79.99,
+      "loyaltyPrice": null,
+      "rest": 9.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1835900051,
+      "groupId": 1,
+      "name": "ALPENLAND Прод йог Фрукт клубн/перс-марак 0,3%95г(Эрманн):24",
+      "code": "1835900051",
+      "barcodes": [
+        "1835900051",
+        "4618359000518"
+      ],
+      "priceTagBarcodes": [
+        "2218359000512"
+      ],
+      "price": 18.99,
+      "loyaltyPrice": null,
+      "rest": 12.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000180842,
+      "groupId": 1,
+      "name": "КУБАНСКАЯ БУРЕНКА Молоко у/паст 2,5% 950г ТБА (ВБД):12",
+      "code": "1000180842",
+      "barcodes": [
+        "1000180842",
+        "4610001808428"
+      ],
+      "priceTagBarcodes": [
+        "2210001808422"
+      ],
+      "price": 104.99,
+      "loyaltyPrice": null,
+      "rest": 11.0,
+      "checkPrice": true,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1899800733,
+      "groupId": 1,
+      "name": "ПРОСТОКВАШИНО Молоко паст 2,5% 0,93л пл/бут (Юнимилк):6",
+      "code": "1899800733",
+      "barcodes": [
+        "1899800733",
+        "4618998007336"
+      ],
+      "priceTagBarcodes": [
+        "2218998007330"
+      ],
+      "price": 79.99,
+      "loyaltyPrice": null,
+      "rest": 9.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000098953,
+      "groupId": 1,
+      "name": "КУБАНСКИЙ МОЛОЧНИК Масло слив 82,5% 170г(ЛенинградскийСК):12",
+      "code": "1000098953",
+      "barcodes": [
+        "1000098953",
+        "4610000989531"
+      ],
+      "priceTagBarcodes": [
+        "2210000989535"
+      ],
+      "price": 189.99,
+      "loyaltyPrice": null,
+      "rest": 3.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000091750,
+      "groupId": 1,
+      "name": "ВКУСНОТЕЕВО Молоко ультрапаст3,2% 900гпл/бут(ВоронежскМК):6",
+      "code": "1000091750",
+      "barcodes": [
+        "1000091750",
+        "4610000917503"
+      ],
+      "priceTagBarcodes": [
+        "2210000917507"
+      ],
+      "price": 113.99,
+      "loyaltyPrice": null,
+      "rest": 5.99999938058111,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000013733,
+      "groupId": 1,
+      "name": "СЕЛО ЗЕЛЕНОЕ Молоко у/паст 3,2% 0,95л т/пак (Сарапул):12",
+      "code": "1000013733",
+      "barcodes": [
+        "1000013733",
+        "4610000137338"
+      ],
+      "priceTagBarcodes": [
+        "2210000137332"
+      ],
+      "price": 93.99,
+      "loyaltyPrice": null,
+      "rest": 7.10076697090732,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000094185,
+      "groupId": 1,
+      "name": "А.РОСТАГРОКОМПЛЕКС Сырок мол шок/сгу 26% 50г к/уп (РАК):12",
+      "code": "1000094185",
+      "barcodes": [
+        "1000094185",
+        "4610000941850"
+      ],
+      "priceTagBarcodes": [
+        "2210000941854"
+      ],
+      "price": 72.99,
+      "loyaltyPrice": null,
+      "rest": 13.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000013704,
+      "groupId": 1,
+      "name": "КОРОВКА ИЗ КОРЕНОВКИ Кефир ГОСТ 2,7% 0,9кг пл/бут(КМКК):6",
+      "code": "1000013704",
+      "barcodes": [
+        "1000013704",
+        "4610000137048"
+      ],
+      "priceTagBarcodes": [
+        "2210000137042"
+      ],
+      "price": 109.99,
+      "loyaltyPrice": null,
+      "rest": 10.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000100774,
+      "groupId": 1,
+      "name": "САВУШКИН ПРОДУКТ Паста твор черника3,5% 120г (Савушкин):8",
+      "code": "1000100774",
+      "barcodes": [
+        "1000100774",
+        "4610001007746"
+      ],
+      "priceTagBarcodes": [
+        "2210001007740"
+      ],
+      "price": 52.99,
+      "loyaltyPrice": null,
+      "rest": 4.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000100776,
+      "groupId": 1,
+      "name": "САВУШКИН Прод.пас/твор чизкейк 3,5% 120г пл/ст(Савушкин):8",
+      "code": "1000100776",
+      "barcodes": [
+        "1000100776",
+        "4610001007760"
+      ],
+      "priceTagBarcodes": [
+        "2210001007764"
+      ],
+      "price": 52.99,
+      "loyaltyPrice": null,
+      "rest": 12.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000100778,
+      "groupId": 1,
+      "name": "САВУШКИН Прод.пас/твор кокос/минд 3,5% 120г пл/ст(Савушкин)8",
+      "code": "1000100778",
+      "barcodes": [
+        "1000100778",
+        "4610001007784"
+      ],
+      "priceTagBarcodes": [
+        "2210001007788"
+      ],
+      "price": 52.99,
+      "loyaltyPrice": null,
+      "rest": 8.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000190943,
+      "groupId": 1,
+      "name": "КОРОВ ИЗ КОРЕН Сыр тв ван гл мол шок 23%50г к/уп(КМКК):12",
+      "code": "1000190943",
+      "barcodes": [
+        "1000190943",
+        "4610001909439"
+      ],
+      "priceTagBarcodes": [
+        "2210001909433"
+      ],
+      "price": 69.99,
+      "loyaltyPrice": null,
+      "rest": 28.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000195107,
+      "groupId": 1,
+      "name": "ALPENLAND Прод йог лес яг/ябл-груша0,3% 95г пл/ст(Эрманн):24",
+      "code": "1000195107",
+      "barcodes": [
+        "1000195107",
+        "4610001951070"
+      ],
+      "priceTagBarcodes": [
+        "2210001951074"
+      ],
+      "price": 18.99,
+      "loyaltyPrice": null,
+      "rest": 5.0,
+      "checkPrice": false,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000071969,
+      "groupId": 1,
+      "name": "ДОМИК В ДЕРЕВНЕ Сливки стер 20% 480г ТБА(ВБД):12",
+      "code": "1000071969",
+      "barcodes": [
+        "1000071969",
+        "4610000719695"
+      ],
+      "priceTagBarcodes": [
+        "2210000719699"
+      ],
+      "price": 129.99,
+      "loyaltyPrice": null,
+      "rest": 12.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000201629,
+      "groupId": 1,
+      "name": "ЧУДО Йогурт питьевой клубн землян 1,9% 260г пл/бут(ВБД):6",
+      "code": "1000201629",
+      "barcodes": [
+        "1000201629",
+        "4610002016297"
+      ],
+      "priceTagBarcodes": [
+        "2210002016291"
+      ],
+      "price": 69.99,
+      "loyaltyPrice": null,
+      "rest": 7.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000208278,
+      "groupId": 1,
+      "name": "КОРОВКА ИЗ КОРЕНОВКИ Творог 9% 300г стаб/бэг (КМКК):6",
+      "code": "1000208278",
+      "barcodes": [
+        "1000208278",
+        "4610002082780"
+      ],
+      "priceTagBarcodes": [
+        "2210002082784"
+      ],
+      "price": 139.99,
+      "loyaltyPrice": null,
+      "rest": 1.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1079990193,
+      "groupId": 1,
+      "name": "НЕЖНЫЙ Творог мягкий 5% 125г пл/ст(Савушкин Продукт):8",
+      "code": "1079990193",
+      "barcodes": [
+        "1079990193",
+        "4610799901936"
+      ],
+      "priceTagBarcodes": [
+        "2210799901930"
+      ],
+      "price": 48.99,
+      "loyaltyPrice": null,
+      "rest": 1.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000206622,
+      "groupId": 1,
+      "name": "EPICA Йогурт манго/семена чиа 5% 130г пл/ст(Эрманн):6/12",
+      "code": "1000206622",
+      "barcodes": [
+        "1000206622",
+        "4610002066223"
+      ],
+      "priceTagBarcodes": [
+        "2210002066227"
+      ],
+      "price": 53.99,
+      "loyaltyPrice": null,
+      "rest": 11.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000226555,
+      "groupId": 1,
+      "name": "ВКУСНОТЕЕВО Сливки 10% 125г лин/п(Воронежский МК):12",
+      "code": "1000226555",
+      "barcodes": [
+        "1000226555",
+        "4610002265558"
+      ],
+      "priceTagBarcodes": [
+        "2210002265552"
+      ],
+      "price": 56.99,
+      "loyaltyPrice": null,
+      "rest": 3.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000233673,
+      "groupId": 1,
+      "name": "СЛОБОДА Майонез Провансаль 67% 375г д/п(Эфко):24",
+      "code": "1000233673",
+      "barcodes": [
+        "1000233673",
+        "4610002336739"
+      ],
+      "priceTagBarcodes": [
+        "2210002336733"
+      ],
+      "price": 109.99,
+      "loyaltyPrice": null,
+      "rest": 23.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000238637,
+      "groupId": 1,
+      "name": "Grand Dessert Пудинг бел шок клуб/сл6%200г пл/ст(Эрман):12",
+      "code": "1000238637",
+      "barcodes": [
+        "1000238637",
+        "4610002386376"
+      ],
+      "priceTagBarcodes": [
+        "2210002386370"
+      ],
+      "price": 94.99,
+      "loyaltyPrice": null,
+      "rest": 4.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000222957,
+      "groupId": 1,
+      "name": "ЧУДО Йогурт пит ягодное морож 1,9% 260г пл/бут(ВБД):6",
+      "code": "1000222957",
+      "barcodes": [
+        "1000222957",
+        "4610002229574"
+      ],
+      "priceTagBarcodes": [
+        "2210002229578"
+      ],
+      "price": 69.99,
+      "loyaltyPrice": null,
+      "rest": 6.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000185207,
+      "groupId": 1,
+      "name": "КОРОВКА ИЗ КОРЕНОВКИ Кефир 1% 900г пл/бут(КМКК):6",
+      "code": "1000185207",
+      "barcodes": [
+        "1000185207",
+        "4610001852070"
+      ],
+      "priceTagBarcodes": [
+        "2210001852074"
+      ],
+      "price": 99.99,
+      "loyaltyPrice": null,
+      "rest": 8.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000264408,
+      "groupId": 1,
+      "name": "TEOS Йогурт Греческий 2% 250г пл/ст(Савушкин):6",
+      "code": "1000264408",
+      "barcodes": [
+        "1000264408",
+        "4610002644087"
+      ],
+      "priceTagBarcodes": [
+        "2210002644081"
+      ],
+      "price": 89.99,
+      "loyaltyPrice": null,
+      "rest": 18.0,
+      "checkPrice": true,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000273825,
+      "groupId": 1,
+      "name": "КОРОВ ИЗ КОРЕН Сырок твор бел шок/карам23%50г к/уп(КМКК):12",
+      "code": "1000273825",
+      "barcodes": [
+        "1000273825",
+        "4610002738250"
+      ],
+      "priceTagBarcodes": [
+        "2210002738254"
+      ],
+      "price": 69.99,
+      "loyaltyPrice": null,
+      "rest": 13.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000322391,
+      "groupId": 1,
+      "name": "J7 Смузи со злаками киви/анан/ябл/бан/ман б/сахара 0,3л:6",
+      "code": "1000322391",
+      "barcodes": [
+        "1000322391",
+        "4610003223915"
+      ],
+      "priceTagBarcodes": [
+        "2210003223919"
+      ],
+      "price": 93.99,
+      "loyaltyPrice": null,
+      "rest": 6.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000337762,
+      "groupId": 1,
+      "name": "КОРОВКА ИЗ КОРЕНОВКИ Сметана 20% 300г пл/ст(КМКК):6",
+      "code": "1000337762",
+      "barcodes": [
+        "1000337762",
+        "4610003377625"
+      ],
+      "priceTagBarcodes": [
+        "2210003377629"
+      ],
+      "price": 109.99,
+      "loyaltyPrice": null,
+      "rest": 7.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000352800,
+      "groupId": 1,
+      "name": "HIGH PROTEIN Пудинг мол безлакт шоколад 1,5% 200г пл/ст:12",
+      "code": "1000352800",
+      "barcodes": [
+        "1000352800",
+        "4610003528003"
+      ],
+      "priceTagBarcodes": [
+        "2210003528007"
+      ],
+      "price": 129.99,
+      "loyaltyPrice": null,
+      "rest": 19.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000372785,
+      "groupId": 1,
+      "name": "ПРОСТОКВАШИНО Сметана 15% 300г пл/ст (Данон):12",
+      "code": "1000372785",
+      "barcodes": [
+        "1000372785",
+        "4610003727857"
+      ],
+      "priceTagBarcodes": [
+        "2210003727851"
+      ],
+      "price": 84.99,
+      "loyaltyPrice": null,
+      "rest": 15.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000372784,
+      "groupId": 1,
+      "name": "ПРОСТОКВАШИНО Сметана 10% 300г пл/ст (Данон):12",
+      "code": "1000372784",
+      "barcodes": [
+        "1000372784",
+        "4610003727840"
+      ],
+      "priceTagBarcodes": [
+        "2210003727844"
+      ],
+      "price": 59.99,
+      "loyaltyPrice": null,
+      "rest": 11.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000374189,
+      "groupId": 1,
+      "name": "ПЫШКА Маргарин для выпечки 72% 200г фол(Евдаково):20",
+      "code": "1000374189",
+      "barcodes": [
+        "1000374189",
+        "4610003741891"
+      ],
+      "priceTagBarcodes": [
+        "2210003741895"
+      ],
+      "price": 63.99,
+      "loyaltyPrice": null,
+      "rest": 6.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000380541,
+      "groupId": 1,
+      "name": "EPICA Йогурт пит манго2,5% 260г пл/бут(Эрманн):6",
+      "code": "1000380541",
+      "barcodes": [
+        "1000380541",
+        "4610003805418"
+      ],
+      "priceTagBarcodes": [
+        "2210003805412"
+      ],
+      "price": 69.99,
+      "loyaltyPrice": null,
+      "rest": 1.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000381717,
+      "groupId": 1,
+      "name": "ПРОСТОКВАШИНО Прод твор ананас/банан 3,6%110г пл/ст:8",
+      "code": "1000381717",
+      "barcodes": [
+        "1000381717",
+        "4610003817176"
+      ],
+      "priceTagBarcodes": [
+        "2210003817170"
+      ],
+      "price": 36.99,
+      "loyaltyPrice": null,
+      "rest": 1.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000400389,
+      "groupId": 1,
+      "name": "ПРОСТОКВАШИНО Прод твор зерн в слив 5% с клубн 140г стак:12",
+      "code": "1000400389",
+      "barcodes": [
+        "1000400389",
+        "4610004003899"
+      ],
+      "priceTagBarcodes": [
+        "2210004003893"
+      ],
+      "price": 59.99,
+      "loyaltyPrice": null,
+      "rest": 12.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000400387,
+      "groupId": 1,
+      "name": "ПРОСТОКВАШИНО Прод твор зерн в слив 5% 320г стак (Данон):12",
+      "code": "1000400387",
+      "barcodes": [
+        "1000400387",
+        "4610004003875"
+      ],
+      "priceTagBarcodes": [
+        "2210004003879"
+      ],
+      "price": 102.99,
+      "loyaltyPrice": null,
+      "rest": 8.0,
+      "checkPrice": true,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000396252,
+      "groupId": 1,
+      "name": "EPICA Йог пит маракуйя / мангостин 2,5% 260гпл/бут(Эрманн):6",
+      "code": "1000396252",
+      "barcodes": [
+        "1000396252",
+        "4610003962524"
+      ],
+      "priceTagBarcodes": [
+        "2210003962528"
+      ],
+      "price": 69.99,
+      "loyaltyPrice": null,
+      "rest": 12.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000208277,
+      "groupId": 1,
+      "name": "КОРОВКА ИЗ КОРЕНОВКИ Творог 5% 300г стаб/бэг (КМКК):6",
+      "code": "1000208277",
+      "barcodes": [
+        "1000208277",
+        "4610002082773"
+      ],
+      "priceTagBarcodes": [
+        "2210002082777"
+      ],
+      "price": 134.99,
+      "loyaltyPrice": null,
+      "rest": 7.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000423180,
+      "groupId": 1,
+      "name": "КУБАНСКИЙ МОЛОЧНИК Кефир 2,5% 0,450кг пл/бут (Лен СК):6",
+      "code": "1000423180",
+      "barcodes": [
+        "1000423180",
+        "4610004231803"
+      ],
+      "priceTagBarcodes": [
+        "2210004231807"
+      ],
+      "price": 59.99,
+      "loyaltyPrice": null,
+      "rest": 27.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000430759,
+      "groupId": 1,
+      "name": "КОРОВКА ИЗ КОРЕНОВКИ Сырок Клуб/сливки 23% 40г к/уп(КМКК):12",
+      "code": "1000430759",
+      "barcodes": [
+        "1000430759",
+        "4610004307591"
+      ],
+      "priceTagBarcodes": [
+        "2210004307595"
+      ],
+      "price": 69.99,
+      "loyaltyPrice": null,
+      "rest": 8.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000376901,
+      "groupId": 1,
+      "name": "ОВСЯША Нап овсяный обог вит и мин вещ 3,2% 1л т/пак(ЮСК):6",
+      "code": "1000376901",
+      "barcodes": [
+        "1000376901",
+        "4610003769017"
+      ],
+      "priceTagBarcodes": [
+        "2210003769011"
+      ],
+      "price": 99.99,
+      "loyaltyPrice": null,
+      "rest": 7.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000299287,
+      "groupId": 1,
+      "name": "ВКУСНОТЕЕВО Сливки 33% 250г лин/п(Воронежский МК):12",
+      "code": "1000299287",
+      "barcodes": [
+        "1000299287",
+        "4610002992874"
+      ],
+      "priceTagBarcodes": [
+        "2210002992878"
+      ],
+      "price": 179.99,
+      "loyaltyPrice": null,
+      "rest": 13.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000452079,
+      "groupId": 1,
+      "name": "GREEN MILK Напиток соевый Банан 1л т/пак (Союзпищепром):12",
+      "code": "1000452079",
+      "barcodes": [
+        "1000452079",
+        "4610004520792"
+      ],
+      "priceTagBarcodes": [
+        "2210004520796"
+      ],
+      "price": 113.99,
+      "loyaltyPrice": null,
+      "rest": 8.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000226556,
+      "groupId": 1,
+      "name": "ВКУСНОТЕЕВО Сливки 20% 125г лин/п(Воронежский МК):12",
+      "code": "1000226556",
+      "barcodes": [
+        "1000226556",
+        "4610002265565"
+      ],
+      "priceTagBarcodes": [
+        "2210002265569"
+      ],
+      "price": 69.99,
+      "loyaltyPrice": null,
+      "rest": 6.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000380540,
+      "groupId": 1,
+      "name": "EPICA Йогурт пит натуральный 2,9% 260г пл/бут(Эрманн):6",
+      "code": "1000380540",
+      "barcodes": [
+        "1000380540",
+        "4610003805401"
+      ],
+      "priceTagBarcodes": [
+        "2210003805405"
+      ],
+      "price": 63.99,
+      "loyaltyPrice": null,
+      "rest": 11.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000461171,
+      "groupId": 1,
+      "name": "КОРОВКА ИЗ КОРЕН Масло крест 72,5% 170г фольга (КМКК):12",
+      "code": "1000461171",
+      "barcodes": [
+        "1000461171",
+        "4610004611711"
+      ],
+      "priceTagBarcodes": [
+        "2210004611715"
+      ],
+      "price": 159.99,
+      "loyaltyPrice": null,
+      "rest": 14.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000467851,
+      "groupId": 1,
+      "name": "Сливки порц 10% 100г фл/п(Кампина):20",
+      "code": "1000467851",
+      "barcodes": [
+        "1000467851",
+        "4610004678516"
+      ],
+      "priceTagBarcodes": [
+        "2210004678510"
+      ],
+      "price": 59.99,
+      "loyaltyPrice": null,
+      "rest": 10.0,
+      "checkPrice": false,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000472413,
+      "groupId": 1,
+      "name": "NEMOLOKO Напиток овс шок 0,2л т/пак(Сады Придонья):14",
+      "code": "1000472413",
+      "barcodes": [
+        "1000472413",
+        "4610004724138"
+      ],
+      "priceTagBarcodes": [
+        "2210004724132"
+      ],
+      "price": 29.99,
+      "loyaltyPrice": null,
+      "rest": 2.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000472412,
+      "groupId": 1,
+      "name": "NEMOLOKO Напиток овс клас 1,5% 0,2л т/пак(Сады Придонья):14",
+      "code": "1000472412",
+      "barcodes": [
+        "1000472412",
+        "4610004724121"
+      ],
+      "priceTagBarcodes": [
+        "2210004724125"
+      ],
+      "price": 29.99,
+      "loyaltyPrice": null,
+      "rest": 3.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000508306,
+      "groupId": 1,
+      "name": "АКТИБИО Биойогурт пит клубн/земл 1,5% 260г пл/бут:9",
+      "code": "1000508306",
+      "barcodes": [
+        "1000508306",
+        "4610005083067"
+      ],
+      "priceTagBarcodes": [
+        "2210005083061"
+      ],
+      "price": 54.99,
+      "loyaltyPrice": null,
+      "rest": 12.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000508320,
+      "groupId": 1,
+      "name": "АКТИБИО Биойогурт пит злаки 1,6% 260г пл/бут:9",
+      "code": "1000508320",
+      "barcodes": [
+        "1000508320",
+        "4610005083203"
+      ],
+      "priceTagBarcodes": [
+        "2210005083207"
+      ],
+      "price": 54.99,
+      "loyaltyPrice": null,
+      "rest": 20.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000501598,
+      "groupId": 1,
+      "name": "MR RICCO Майонез Провансаль 67% 340г д/п (КЖК):22",
+      "code": "1000501598",
+      "barcodes": [
+        "1000501598",
+        "4610005015983"
+      ],
+      "priceTagBarcodes": [
+        "2210005015987"
+      ],
+      "price": 89.99,
+      "loyaltyPrice": null,
+      "rest": 13.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000496462,
+      "groupId": 1,
+      "name": "АЛЬПЕНГУРТ Крем взбитый Кулинар у/паст 26,5% 250г аэр/б:12",
+      "code": "1000496462",
+      "barcodes": [
+        "1000496462",
+        "4610004964626"
+      ],
+      "priceTagBarcodes": [
+        "2210004964620"
+      ],
+      "price": 309.99,
+      "loyaltyPrice": null,
+      "rest": 7.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000352797,
+      "groupId": 1,
+      "name": "EPICA Йогурт киви/фейхоа 4,8% 130г пл/ст (Эрманн):12",
+      "code": "1000352797",
+      "barcodes": [
+        "1000352797",
+        "4610003527976"
+      ],
+      "priceTagBarcodes": [
+        "2210003527970"
+      ],
+      "price": 53.99,
+      "loyaltyPrice": null,
+      "rest": 14.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000524625,
+      "groupId": 1,
+      "name": "АКТИМУНО Кисломолочный продукт Гранат и цинк 1,5% 95г:6/24",
+      "code": "1000524625",
+      "barcodes": [
+        "1000524625",
+        "4610005246257"
+      ],
+      "priceTagBarcodes": [
+        "2210005246251"
+      ],
+      "price": 29.99,
+      "loyaltyPrice": null,
+      "rest": 5.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000560169,
+      "groupId": 1,
+      "name": "GREEN MILK Нап Фермен яч/нут кокос 1л т/п (Союзпищепром):12",
+      "code": "1000560169",
+      "barcodes": [
+        "1000560169",
+        "4610005601698"
+      ],
+      "priceTagBarcodes": [
+        "2210005601692"
+      ],
+      "price": 113.99,
+      "loyaltyPrice": null,
+      "rest": 12.45,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000560170,
+      "groupId": 1,
+      "name": "GREEN MILK Нап Фермен яч/нут миндаль1л т/пак (Союзпищепр):12",
+      "code": "1000560170",
+      "barcodes": [
+        "1000560170",
+        "4610005601704"
+      ],
+      "priceTagBarcodes": [
+        "2210005601708"
+      ],
+      "price": 113.99,
+      "loyaltyPrice": null,
+      "rest": 26.4000000000001,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000351083,
+      "groupId": 1,
+      "name": "PARMALAT Молоко безлакт ультрапастер 1,8% 1л т/пак (БМК):12",
+      "code": "1000351083",
+      "barcodes": [
+        "1000351083",
+        "4610003510831"
+      ],
+      "priceTagBarcodes": [
+        "2210003510835"
+      ],
+      "price": 149.99,
+      "loyaltyPrice": null,
+      "rest": 10.0,
+      "checkPrice": true,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000369987,
+      "groupId": 1,
+      "name": "EXPONENTA Напиток к/м High-Pro обезж черн/земл 250г пл/ст:6",
+      "code": "1000369987",
+      "barcodes": [
+        "1000369987",
+        "4610003699871"
+      ],
+      "priceTagBarcodes": [
+        "2210003699875"
+      ],
+      "price": 149.99,
+      "loyaltyPrice": null,
+      "rest": 12.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000369986,
+      "groupId": 1,
+      "name": "EXPONENTA Напиток к/м High-Pro обезж кокос/мин 250г пл/ст:6",
+      "code": "1000369986",
+      "barcodes": [
+        "1000369986",
+        "4610003699864"
+      ],
+      "priceTagBarcodes": [
+        "2210003699868"
+      ],
+      "price": 149.99,
+      "loyaltyPrice": null,
+      "rest": 14.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 8000038344,
+      "groupId": 1,
+      "name": "КУБАНСКИЙ МОЛОЧНИК Творог 5% черн смор 120г пл/ван(ЛенСК):6",
+      "code": "8000038344",
+      "barcodes": [
+        "8000038344",
+        "4680000383448"
+      ],
+      "priceTagBarcodes": [
+        "2280000383442"
+      ],
+      "price": 79.99,
+      "loyaltyPrice": null,
+      "rest": 12.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 8000026013,
+      "groupId": 1,
+      "name": "КУБАНСКАЯ БУРЕНКА Молоко паст 3.2% 930мл пл/бут(ВБД):6",
+      "code": "8000026013",
+      "barcodes": [
+        "8000026013",
+        "4680000260138"
+      ],
+      "priceTagBarcodes": [
+        "2280000260132"
+      ],
+      "price": 89.99,
+      "loyaltyPrice": null,
+      "rest": 1.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 8000038343,
+      "groupId": 1,
+      "name": "КУБАНСКИЙ МОЛОЧНИК Творог со сметан 0% 120г пл/ван(ЛенСК):6",
+      "code": "8000038343",
+      "barcodes": [
+        "8000038343",
+        "4680000383431"
+      ],
+      "priceTagBarcodes": [
+        "2280000383435"
+      ],
+      "price": 75.99,
+      "loyaltyPrice": null,
+      "rest": 12.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 8000045827,
+      "groupId": 1,
+      "name": "СЛОБОДА Майонез Провансаль 67% 197г д/п(Эфко):24",
+      "code": "8000045827",
+      "barcodes": [
+        "8000045827",
+        "4680000458276"
+      ],
+      "priceTagBarcodes": [
+        "2280000458270"
+      ],
+      "price": 59.99,
+      "loyaltyPrice": null,
+      "rest": 8.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 8000045816,
+      "groupId": 1,
+      "name": "ВКУСНОТЕЕВО Масло слив Традици 82,5% 180г лин/к(Воронежс):12",
+      "code": "8000045816",
+      "barcodes": [
+        "8000045816",
+        "4680000458160"
+      ],
+      "priceTagBarcodes": [
+        "2280000458164"
+      ],
+      "price": 209.99,
+      "loyaltyPrice": null,
+      "rest": 10.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000584946,
+      "groupId": 1,
+      "name": "J7 Смузи со злаками витамин клуб/банан/яблоко 0,3л пл/бут:6",
+      "code": "1000584946",
+      "barcodes": [
+        "1000584946",
+        "4610005849465"
+      ],
+      "priceTagBarcodes": [
+        "2210005849469"
+      ],
+      "price": 93.99,
+      "loyaltyPrice": null,
+      "rest": 1.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 8000033677,
+      "groupId": 1,
+      "name": "АКТИБИО Биойогурт б/сах персик-малина 1,5% 260г:9",
+      "code": "8000033677",
+      "barcodes": [
+        "8000033677",
+        "4680000336772"
+      ],
+      "priceTagBarcodes": [
+        "2280000336776"
+      ],
+      "price": 54.99,
+      "loyaltyPrice": null,
+      "rest": 1.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 8000061566,
+      "groupId": 1,
+      "name": "САВУШКИН Сырок твор глаз кактус 20% 40г фл/п:18",
+      "code": "8000061566",
+      "barcodes": [
+        "8000061566",
+        "4680000615662"
+      ],
+      "priceTagBarcodes": [
+        "2280000615666"
+      ],
+      "price": 33.99,
+      "loyaltyPrice": null,
+      "rest": 22.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000350169,
+      "groupId": 1,
+      "name": "PARMALAT Сливки пит ультрапаст 11% 500г ТБА(Белгород МК):12",
+      "code": "1000350169",
+      "barcodes": [
+        "1000350169",
+        "4610003501693"
+      ],
+      "priceTagBarcodes": [
+        "2210003501697"
+      ],
+      "price": 189.99,
+      "loyaltyPrice": null,
+      "rest": 2.0,
+      "checkPrice": true,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 8000031034,
+      "groupId": 1,
+      "name": "HIGH PROTEIN Суфле с ванил/мол белком в темном шок 50г:6",
+      "code": "8000031034",
+      "barcodes": [
+        "8000031034",
+        "4680000310345"
+      ],
+      "priceTagBarcodes": [
+        "2280000310349"
+      ],
+      "price": 129.99,
+      "loyaltyPrice": null,
+      "rest": 8.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000352799,
+      "groupId": 1,
+      "name": "HIGH PROTEIN Пудинг мол безлакт ваниль 1,5% 200г пл/ст:12",
+      "code": "1000352799",
+      "barcodes": [
+        "1000352799",
+        "4610003527990"
+      ],
+      "priceTagBarcodes": [
+        "2210003527994"
+      ],
+      "price": 129.99,
+      "loyaltyPrice": null,
+      "rest": 30.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 3275570010,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Сок томатный 1л:12",
+      "code": "3275570010",
+      "barcodes": [
+        "3275570010",
+        "4632755700100"
+      ],
+      "priceTagBarcodes": [
+        "2232755700104"
+      ],
+      "price": 134.99,
+      "loyaltyPrice": null,
+      "rest": 8.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 3275570023,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Нектар мультифрукт 1л:12",
+      "code": "3275570023",
+      "barcodes": [
+        "3275570023",
+        "4632755700230"
+      ],
+      "priceTagBarcodes": [
+        "2232755700234"
+      ],
+      "price": 124.99,
+      "loyaltyPrice": null,
+      "rest": 25.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 3272500044,
+      "groupId": 2,
+      "name": "ADRENALINE RUSH Energy Напиток 250мл ж/б(Пепси):12",
+      "code": "3272500044",
+      "barcodes": [
+        "3272500044",
+        "4632725000445"
+      ],
+      "priceTagBarcodes": [
+        "2232725000449"
+      ],
+      "price": 89.99,
+      "loyaltyPrice": null,
+      "rest": 25.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 9059611114,
+      "groupId": 2,
+      "name": "ТЕТЯ ГРУША Напиток газ 0,5л ст/бут (ЮгПиво):20",
+      "code": "9059611114",
+      "barcodes": [
+        "9059611114",
+        "4690596111141"
+      ],
+      "priceTagBarcodes": [
+        "2290596111145"
+      ],
+      "price": 47.99,
+      "loyaltyPrice": null,
+      "rest": 35.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1518900022,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Нектар апельсин 1л(Мултон):12",
+      "code": "1518900022",
+      "barcodes": [
+        "1518900022",
+        "4615189000220"
+      ],
+      "priceTagBarcodes": [
+        "2215189000224"
+      ],
+      "price": 134.99,
+      "loyaltyPrice": null,
+      "rest": 30.4,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 9895900001,
+      "groupId": 2,
+      "name": "RED BULL Энерг Напиток 355мл ж/б(Ред Булл):24",
+      "code": "9895900001",
+      "barcodes": [
+        "9895900001",
+        "4698959000019"
+      ],
+      "priceTagBarcodes": [
+        "2298959000013"
+      ],
+      "price": 189.99,
+      "loyaltyPrice": null,
+      "rest": 24.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 2400017290,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Сок яблочный осветлённый 1л(Мултон):12",
+      "code": "2400017290",
+      "barcodes": [
+        "2400017290",
+        "4624000172909"
+      ],
+      "priceTagBarcodes": [
+        "2224000172903"
+      ],
+      "price": 124.99,
+      "loyaltyPrice": null,
+      "rest": 22.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 3274230002,
+      "groupId": 2,
+      "name": "NAR Сок гранатовый 1л:8",
+      "code": "3274230002",
+      "barcodes": [
+        "3274230002",
+        "4632742300023"
+      ],
+      "priceTagBarcodes": [
+        "2232742300027"
+      ],
+      "price": 209.99,
+      "loyaltyPrice": null,
+      "rest": 10.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 3272062010,
+      "groupId": 2,
+      "name": "САДЫ ПРИДОНЬЯ Сок ябл натур свежеотжат 1л(Сады Придонья):12",
+      "code": "3272062010",
+      "barcodes": [
+        "3272062010",
+        "4632720620105"
+      ],
+      "priceTagBarcodes": [
+        "2232720620109"
+      ],
+      "price": 99.99,
+      "loyaltyPrice": null,
+      "rest": 25.0,
+      "checkPrice": false,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 3272062003,
+      "groupId": 2,
+      "name": "САДЫ ПРИДОНЬЯ Сок мультифрукт 1л(Сады Придонья):12",
+      "code": "3272062003",
+      "barcodes": [
+        "3272062003",
+        "4632720620037"
+      ],
+      "priceTagBarcodes": [
+        "2232720620031"
+      ],
+      "price": 99.99,
+      "loyaltyPrice": null,
+      "rest": 10.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 2400001906,
+      "groupId": 2,
+      "name": "BONA AQUA Питьевая вода газ 1л ПЭТ(Мултон Партнерс):12",
+      "code": "2400001906",
+      "barcodes": [
+        "2400001906",
+        "4624000019068"
+      ],
+      "priceTagBarcodes": [
+        "2224000019062"
+      ],
+      "price": 65.99,
+      "loyaltyPrice": null,
+      "rest": 12.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 9812460036,
+      "groupId": 2,
+      "name": "J7 Сок апельсиновый 0,97л(ВБД):12",
+      "code": "9812460036",
+      "barcodes": [
+        "9812460036",
+        "4698124600365"
+      ],
+      "priceTagBarcodes": [
+        "2298124600369"
+      ],
+      "price": 219.99,
+      "loyaltyPrice": null,
+      "rest": 2.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 9812460037,
+      "groupId": 2,
+      "name": "J7 Сок яблочный 0,97л(ВБД):12",
+      "code": "9812460037",
+      "barcodes": [
+        "9812460037",
+        "4698124600372"
+      ],
+      "priceTagBarcodes": [
+        "2298124600376"
+      ],
+      "price": 169.99,
+      "loyaltyPrice": null,
+      "rest": 22.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 3272062005,
+      "groupId": 2,
+      "name": "САДЫ ПРИДОНЬЯ Сок ябл-персик 1л(Сады Придонья):12",
+      "code": "3272062005",
+      "barcodes": [
+        "3272062005",
+        "4632720620051"
+      ],
+      "priceTagBarcodes": [
+        "2232720620055"
+      ],
+      "price": 99.99,
+      "loyaltyPrice": null,
+      "rest": 10.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000011310,
+      "groupId": 2,
+      "name": "ЛЮБИМЫЙ Напиток земляничный лето 0,95л т/пак(Лебедянский):12",
+      "code": "1000011310",
+      "barcodes": [
+        "1000011310",
+        "4610000113103"
+      ],
+      "priceTagBarcodes": [
+        "2210000113107"
+      ],
+      "price": 113.99,
+      "loyaltyPrice": null,
+      "rest": 18.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 2400001913,
+      "groupId": 2,
+      "name": "СВЯТОЙ ИСТОЧНИК Питьев Вода газ 1,5л пл/бут(ИДС BORJOMI): 6",
+      "code": "2400001913",
+      "barcodes": [
+        "2400001913",
+        "4624000019136"
+      ],
+      "priceTagBarcodes": [
+        "2224000019130"
+      ],
+      "price": 55.99,
+      "loyaltyPrice": null,
+      "rest": 35.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1521515002,
+      "groupId": 2,
+      "name": "СВЯТОЙ ИСТОЧНИК Питьев вода негаз 1,5л пл/бут(ИДС BORJOMI):6",
+      "code": "1521515002",
+      "barcodes": [
+        "1521515002",
+        "4615215150028"
+      ],
+      "priceTagBarcodes": [
+        "2215215150022"
+      ],
+      "price": 55.99,
+      "loyaltyPrice": null,
+      "rest": 23.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 9858700006,
+      "groupId": 2,
+      "name": "ЧЕРНОГОЛОВКА Напиток Байкал газ2л пл/бут(Аквалайф):6",
+      "code": "9858700006",
+      "barcodes": [
+        "9858700006",
+        "4698587000061"
+      ],
+      "priceTagBarcodes": [
+        "2298587000065"
+      ],
+      "price": 139.99,
+      "loyaltyPrice": null,
+      "rest": 13.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 9858700005,
+      "groupId": 2,
+      "name": "ЧЕРНОГОЛОВКА Напиток Тархун газ 2л пл/бут(Аквалайф):6",
+      "code": "9858700005",
+      "barcodes": [
+        "9858700005",
+        "4698587000054"
+      ],
+      "priceTagBarcodes": [
+        "2298587000058"
+      ],
+      "price": 139.99,
+      "loyaltyPrice": null,
+      "rest": 9.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000056788,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Pulpy Напиток с/с апельсин 0,45л пл/бут(Мултон):12",
+      "code": "1000056788",
+      "barcodes": [
+        "1000056788",
+        "4610000567883"
+      ],
+      "priceTagBarcodes": [
+        "2210000567887"
+      ],
+      "price": 89.99,
+      "loyaltyPrice": null,
+      "rest": 20.0,
+      "checkPrice": true,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000095448,
+      "groupId": 2,
+      "name": "BORJOMI Минер вода 0,5л ст/бут(ИДС BORJOMI Грузия):12",
+      "code": "1000095448",
+      "barcodes": [
+        "1000095448",
+        "4610000954485"
+      ],
+      "priceTagBarcodes": [
+        "2210000954489"
+      ],
+      "price": 159.99,
+      "loyaltyPrice": null,
+      "rest": 35.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 3279600011,
+      "groupId": 2,
+      "name": "BONA AQUA Питьевая вода негаз 0,5л ПЭТ(Мултон Партнерс):24",
+      "code": "3279600011",
+      "barcodes": [
+        "3279600011",
+        "4632796000115"
+      ],
+      "priceTagBarcodes": [
+        "2232796000119"
+      ],
+      "price": 53.99,
+      "loyaltyPrice": null,
+      "rest": 37.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000013567,
+      "groupId": 2,
+      "name": "Вода негазированная 0,5л пл/бут (Россия):12",
+      "code": "1000013567",
+      "barcodes": [
+        "1000013567",
+        "4610000135679"
+      ],
+      "priceTagBarcodes": [
+        "2210000135673"
+      ],
+      "price": 44.99,
+      "loyaltyPrice": null,
+      "rest": 58.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 9409610256,
+      "groupId": 2,
+      "name": "BONA AQUA Питьевая вода газ 0,5л ПЭТ(Мултон Партнерс):24",
+      "code": "9409610256",
+      "barcodes": [
+        "9409610256",
+        "4694096102562"
+      ],
+      "priceTagBarcodes": [
+        "2294096102566"
+      ],
+      "price": 51.99,
+      "loyaltyPrice": null,
+      "rest": 46.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 9899996184,
+      "groupId": 2,
+      "name": "RICH Нектар вишневый 1л(Мултон):12",
+      "code": "9899996184",
+      "barcodes": [
+        "9899996184",
+        "4698999961844"
+      ],
+      "priceTagBarcodes": [
+        "2298999961848"
+      ],
+      "price": 199.99,
+      "loyaltyPrice": null,
+      "rest": 19.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 2400001903,
+      "groupId": 2,
+      "name": "BONA AQUA Питьевая вода негаз 1л ПЭТ(Мултон Партнерс):12",
+      "code": "2400001903",
+      "barcodes": [
+        "2400001903",
+        "4624000019037"
+      ],
+      "priceTagBarcodes": [
+        "2224000019031"
+      ],
+      "price": 69.99,
+      "loyaltyPrice": null,
+      "rest": 5.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000135250,
+      "groupId": 2,
+      "name": "ГОРЯЧИЙ КЛЮЧ №2000 Мин вод газ1,5лпл/бут(Горячеключевской):6",
+      "code": "1000135250",
+      "barcodes": [
+        "1000135250",
+        "4610001352501"
+      ],
+      "priceTagBarcodes": [
+        "2210001352505"
+      ],
+      "price": 53.99,
+      "loyaltyPrice": null,
+      "rest": 16.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1059990131,
+      "groupId": 2,
+      "name": "САДЫ ПРИДОНЬЯ Сок яблоко виноград 1л(Сады Придонья):12",
+      "code": "1059990131",
+      "barcodes": [
+        "1059990131",
+        "4610599901310"
+      ],
+      "priceTagBarcodes": [
+        "2210599901314"
+      ],
+      "price": 99.99,
+      "loyaltyPrice": null,
+      "rest": 16.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000139585,
+      "groupId": 2,
+      "name": "СТАРОМИНСКИЙ Квас 0,5л пл/бут (Прибой):12",
+      "code": "1000139585",
+      "barcodes": [
+        "1000139585",
+        "4610001395850"
+      ],
+      "priceTagBarcodes": [
+        "2210001395854"
+      ],
+      "price": 42.99,
+      "loyaltyPrice": null,
+      "rest": 27.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000095447,
+      "groupId": 2,
+      "name": "BORJOMI Минер вода 0,75л пл/бут(ИДС BORJOMI Грузия):6",
+      "code": "1000095447",
+      "barcodes": [
+        "1000095447",
+        "4610000954478"
+      ],
+      "priceTagBarcodes": [
+        "2210000954472"
+      ],
+      "price": 149.99,
+      "loyaltyPrice": null,
+      "rest": 28.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 9899996409,
+      "groupId": 2,
+      "name": "СТАРОМИНСКИЙ Квас Традиционный Пастеризованый 1,5л(Прибой):6",
+      "code": "9899996409",
+      "barcodes": [
+        "9899996409",
+        "4698999964098"
+      ],
+      "priceTagBarcodes": [
+        "2298999964092"
+      ],
+      "price": 89.99,
+      "loyaltyPrice": null,
+      "rest": 3.0,
+      "checkPrice": true,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 3275570002,
+      "groupId": 2,
+      "name": "RICH Сок яблочный 1л:12",
+      "code": "3275570002",
+      "barcodes": [
+        "3275570002",
+        "4632755700025"
+      ],
+      "priceTagBarcodes": [
+        "2232755700029"
+      ],
+      "price": 156.59,
+      "loyaltyPrice": null,
+      "rest": 31.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000165854,
+      "groupId": 2,
+      "name": "LIPTON Холодный Чай лимон 0,5л пл/бут(Пепсико):12",
+      "code": "1000165854",
+      "barcodes": [
+        "1000165854",
+        "4610001658542"
+      ],
+      "priceTagBarcodes": [
+        "2210001658546"
+      ],
+      "price": 93.99,
+      "loyaltyPrice": null,
+      "rest": 4.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000165866,
+      "groupId": 2,
+      "name": "LIPTON Холодный Чай Зеленый 0,5л пл/бут(Пепсико):12",
+      "code": "1000165866",
+      "barcodes": [
+        "1000165866",
+        "4610001658665"
+      ],
+      "priceTagBarcodes": [
+        "2210001658669"
+      ],
+      "price": 93.99,
+      "loyaltyPrice": null,
+      "rest": 10.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000165856,
+      "groupId": 2,
+      "name": "LIPTON Холодный Чай лимон 1л пл/бут(Пепсико):12",
+      "code": "1000165856",
+      "barcodes": [
+        "1000165856",
+        "4610001658566"
+      ],
+      "priceTagBarcodes": [
+        "2210001658560"
+      ],
+      "price": 159.99,
+      "loyaltyPrice": null,
+      "rest": 25.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000165868,
+      "groupId": 2,
+      "name": "LIPTON Холодный Чай Зеленый 1л пл/бут(Пепсико):12",
+      "code": "1000165868",
+      "barcodes": [
+        "1000165868",
+        "4610001658689"
+      ],
+      "priceTagBarcodes": [
+        "2210001658683"
+      ],
+      "price": 159.99,
+      "loyaltyPrice": null,
+      "rest": 19.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 3272102702,
+      "groupId": 2,
+      "name": "РЫЧАЛ-СУ Минеральная вода газ1л пл/бут(Рычал-Су):9",
+      "code": "3272102702",
+      "barcodes": [
+        "3272102702",
+        "4632721027026"
+      ],
+      "priceTagBarcodes": [
+        "2232721027020"
+      ],
+      "price": 103.99,
+      "loyaltyPrice": null,
+      "rest": 32.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 3272102701,
+      "groupId": 2,
+      "name": "РЫЧАЛ-СУ Минер вода газ 0,5л ст/бут (Рычал-Су):12",
+      "code": "3272102701",
+      "barcodes": [
+        "3272102701",
+        "4632721027019"
+      ],
+      "priceTagBarcodes": [
+        "2232721027013"
+      ],
+      "price": 79.99,
+      "loyaltyPrice": null,
+      "rest": 20.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000108428,
+      "groupId": 2,
+      "name": "BORJOMI Минер вода 0,5л пл/бут(ИДС BORJOMI Грузия):12",
+      "code": "1000108428",
+      "barcodes": [
+        "1000108428",
+        "4610001084280"
+      ],
+      "priceTagBarcodes": [
+        "2210001084284"
+      ],
+      "price": 119.99,
+      "loyaltyPrice": null,
+      "rest": 15.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000187811,
+      "groupId": 2,
+      "name": "ЛЮБИМЫЙ Напиток апел манго манд 1,93л т/пак(Лебедянский):6",
+      "code": "1000187811",
+      "barcodes": [
+        "1000187811",
+        "4610001878117"
+      ],
+      "priceTagBarcodes": [
+        "2210001878111"
+      ],
+      "price": 219.99,
+      "loyaltyPrice": null,
+      "rest": 19.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 9812460033,
+      "groupId": 2,
+      "name": "J7 Грейпфрутовый Нектар с мякотью 0,97л(ВБД):12",
+      "code": "9812460033",
+      "barcodes": [
+        "9812460033",
+        "4698124600334"
+      ],
+      "priceTagBarcodes": [
+        "2298124600338"
+      ],
+      "price": 179.99,
+      "loyaltyPrice": null,
+      "rest": 32.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000154898,
+      "groupId": 2,
+      "name": "АШ-ТАУ Минеральн вода газ 1,5л пл/бут(ВК Старый источник):6",
+      "code": "1000154898",
+      "barcodes": [
+        "1000154898",
+        "4610001548980"
+      ],
+      "priceTagBarcodes": [
+        "2210001548984"
+      ],
+      "price": 79.99,
+      "loyaltyPrice": null,
+      "rest": 9.0,
+      "checkPrice": false,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000141775,
+      "groupId": 2,
+      "name": "ЛЮБИМЫЙ Напиток Яб-Вишн-осв Череш 1,93л т/пак(Лебедянский):6",
+      "code": "1000141775",
+      "barcodes": [
+        "1000141775",
+        "4610001417750"
+      ],
+      "priceTagBarcodes": [
+        "2210001417754"
+      ],
+      "price": 179.99,
+      "loyaltyPrice": null,
+      "rest": 13.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000021016,
+      "groupId": 2,
+      "name": "НАПИТКИ ИЗ ЧЕРНОГОЛОВКИ Нап дюшес газ0,5л ст/бут(АКВАЛАЙФ)12",
+      "code": "1000021016",
+      "barcodes": [
+        "1000021016",
+        "4610000210161"
+      ],
+      "priceTagBarcodes": [
+        "2210000210165"
+      ],
+      "price": 86.99,
+      "loyaltyPrice": null,
+      "rest": 25.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000165857,
+      "groupId": 2,
+      "name": "LIPTON Холодный Чай Персик 0,5л пл/бут(Пепсико):12",
+      "code": "1000165857",
+      "barcodes": [
+        "1000165857",
+        "4610001658573"
+      ],
+      "priceTagBarcodes": [
+        "2210001658577"
+      ],
+      "price": 93.99,
+      "loyaltyPrice": null,
+      "rest": 14.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000204901,
+      "groupId": 2,
+      "name": "FRESH BAR Напиток Alfa Cola б/а газ 0,48л пл/бут(Росинка):12",
+      "code": "1000204901",
+      "barcodes": [
+        "1000204901",
+        "4610002049011"
+      ],
+      "priceTagBarcodes": [
+        "2210002049015"
+      ],
+      "price": 65.99,
+      "loyaltyPrice": null,
+      "rest": 6.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000215135,
+      "groupId": 2,
+      "name": "ТОЛЬКО Питьевая вода природная негаз 1,5л пл/бут(Эко-Лаб):6",
+      "code": "1000215135",
+      "barcodes": [
+        "1000215135",
+        "4610002151356"
+      ],
+      "priceTagBarcodes": [
+        "2210002151350"
+      ],
+      "price": 33.99,
+      "loyaltyPrice": null,
+      "rest": 15.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000199762,
+      "groupId": 2,
+      "name": "AQUA MINERALE Питьевая вода негаз 1л пл/бут(ПепсиКо):12",
+      "code": "1000199762",
+      "barcodes": [
+        "1000199762",
+        "4610001997627"
+      ],
+      "priceTagBarcodes": [
+        "2210001997621"
+      ],
+      "price": 75.99,
+      "loyaltyPrice": null,
+      "rest": 19.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000202497,
+      "groupId": 2,
+      "name": "СВЯТОЙ ИСТОЧНИК ПитьевВод негазСпорт0,75лпл/бут(АкваСтар):12",
+      "code": "1000202497",
+      "barcodes": [
+        "1000202497",
+        "4610002024971"
+      ],
+      "priceTagBarcodes": [
+        "2210002024975"
+      ],
+      "price": 63.99,
+      "loyaltyPrice": null,
+      "rest": 41.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000206543,
+      "groupId": 2,
+      "name": "ЛЕГЕНДА ГОР АРХЫЗ Вода природная 1,5л пл/бут(Аквалайн):6",
+      "code": "1000206543",
+      "barcodes": [
+        "1000206543",
+        "4610002065431"
+      ],
+      "priceTagBarcodes": [
+        "2210002065435"
+      ],
+      "price": 50.99,
+      "loyaltyPrice": null,
+      "rest": 2.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000204590,
+      "groupId": 2,
+      "name": "ПСЫЖ Минер Вода пит леч-стол прир газ 1л пл/бут(Аквалайн):6",
+      "code": "1000204590",
+      "barcodes": [
+        "1000204590",
+        "4610002045907"
+      ],
+      "priceTagBarcodes": [
+        "2210002045901"
+      ],
+      "price": 69.99,
+      "loyaltyPrice": null,
+      "rest": 19.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000226645,
+      "groupId": 2,
+      "name": "ЛЕГЕНДА ГОР АРХЫЗ МинВод газ природ 1,5л пл/бут(Аквалайн):6",
+      "code": "1000226645",
+      "barcodes": [
+        "1000226645",
+        "4610002266456"
+      ],
+      "priceTagBarcodes": [
+        "2210002266450"
+      ],
+      "price": 50.99,
+      "loyaltyPrice": null,
+      "rest": 9.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1514230006,
+      "groupId": 2,
+      "name": "NAR Сок гранатовый 0,31л ст(Ника ЛТД):18",
+      "code": "1514230006",
+      "barcodes": [
+        "1514230006",
+        "4615142300060"
+      ],
+      "priceTagBarcodes": [
+        "2215142300064"
+      ],
+      "price": 89.99,
+      "loyaltyPrice": null,
+      "rest": 19.0,
+      "checkPrice": true,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000136612,
+      "groupId": 2,
+      "name": "RICH Нектар манго-апельсин 1л т/пак(Мултон):12",
+      "code": "1000136612",
+      "barcodes": [
+        "1000136612",
+        "4610001366126"
+      ],
+      "priceTagBarcodes": [
+        "2210001366120"
+      ],
+      "price": 199.99,
+      "loyaltyPrice": null,
+      "rest": 22.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000136614,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Pulpy Напиток сок/с троп с мяк 0,9л пл/бут(Мултон):12",
+      "code": "1000136614",
+      "barcodes": [
+        "1000136614",
+        "4610001366140"
+      ],
+      "priceTagBarcodes": [
+        "2210001366144"
+      ],
+      "price": 113.99,
+      "loyaltyPrice": null,
+      "rest": 11.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000235506,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Pulpy нап с/с манго с кус анан0,45л пл/бут(Мултон):12",
+      "code": "1000235506",
+      "barcodes": [
+        "1000235506",
+        "4610002355068"
+      ],
+      "priceTagBarcodes": [
+        "2210002355062"
+      ],
+      "price": 94.99,
+      "loyaltyPrice": null,
+      "rest": 8.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 3275860002,
+      "groupId": 2,
+      "name": "RICH Нектар персиковый 1л(Мултон):12",
+      "code": "3275860002",
+      "barcodes": [
+        "3275860002",
+        "4632758600025"
+      ],
+      "priceTagBarcodes": [
+        "2232758600029"
+      ],
+      "price": 169.99,
+      "loyaltyPrice": null,
+      "rest": 16.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000238552,
+      "groupId": 2,
+      "name": "СВЯТОЙ ИСТОЧНИК Пит вода н/газ 1л пл/бут (Эдельвейс Л):12",
+      "code": "1000238552",
+      "barcodes": [
+        "1000238552",
+        "4610002385522"
+      ],
+      "priceTagBarcodes": [
+        "2210002385526"
+      ],
+      "price": 46.99,
+      "loyaltyPrice": null,
+      "rest": 14.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000013568,
+      "groupId": 2,
+      "name": "СВЯТОЙ ИСТОЧНИК Питьев вода газ 0,5л пл/бут(BORJOMI ИДС):12",
+      "code": "1000013568",
+      "barcodes": [
+        "1000013568",
+        "4610000135686"
+      ],
+      "priceTagBarcodes": [
+        "2210000135680"
+      ],
+      "price": 44.99,
+      "loyaltyPrice": null,
+      "rest": 15.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000156240,
+      "groupId": 2,
+      "name": "ЧЕРНОГОЛОВКА Напиток Лимонад газ 2л ПЭТ(Аквалайф ПК):6",
+      "code": "1000156240",
+      "barcodes": [
+        "1000156240",
+        "4610001562405"
+      ],
+      "priceTagBarcodes": [
+        "2210001562409"
+      ],
+      "price": 139.99,
+      "loyaltyPrice": null,
+      "rest": 17.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000247109,
+      "groupId": 2,
+      "name": "ЧЕРНОГОЛОВКА Напиток Лимонад газ 0,5л ст/бут(Аквалайф):12",
+      "code": "1000247109",
+      "barcodes": [
+        "1000247109",
+        "4610002471096"
+      ],
+      "priceTagBarcodes": [
+        "2210002471090"
+      ],
+      "price": 86.99,
+      "loyaltyPrice": null,
+      "rest": 28.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000242205,
+      "groupId": 2,
+      "name": "СВЯТОЙ ИСТОЧНИК Пит вода н/газ 0,33л пл/бут (Эдельвейс Л):12",
+      "code": "1000242205",
+      "barcodes": [
+        "1000242205",
+        "4610002422050"
+      ],
+      "priceTagBarcodes": [
+        "2210002422054"
+      ],
+      "price": 34.99,
+      "loyaltyPrice": null,
+      "rest": 20.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000244125,
+      "groupId": 2,
+      "name": "GORILLA Энергетический напиток сил/газ0,45л ж/б с кл(МПК):24",
+      "code": "1000244125",
+      "barcodes": [
+        "1000244125",
+        "4610002441259"
+      ],
+      "priceTagBarcodes": [
+        "2210002441253"
+      ],
+      "price": 95.99,
+      "loyaltyPrice": null,
+      "rest": 14.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000248553,
+      "groupId": 2,
+      "name": "САДЫ ПРИДОНЬЯ Exclusive Морс брус/малин 1л т/пак:12",
+      "code": "1000248553",
+      "barcodes": [
+        "1000248553",
+        "4610002485536"
+      ],
+      "priceTagBarcodes": [
+        "2210002485530"
+      ],
+      "price": 129.99,
+      "loyaltyPrice": null,
+      "rest": 17.0,
+      "checkPrice": true,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000151569,
+      "groupId": 2,
+      "name": "DONAT MG Минеральная вода газ 1л пл/бут(Атлантик Брендс):6",
+      "code": "1000151569",
+      "barcodes": [
+        "1000151569",
+        "4610001515692"
+      ],
+      "priceTagBarcodes": [
+        "2210001515696"
+      ],
+      "price": 269.99,
+      "loyaltyPrice": null,
+      "rest": 27.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 3272062001,
+      "groupId": 2,
+      "name": "САДЫ ПРИДОНЬЯ Сок зел яблоко 1л(Сады Придонья):12",
+      "code": "3272062001",
+      "barcodes": [
+        "3272062001",
+        "4632720620013"
+      ],
+      "priceTagBarcodes": [
+        "2232720620017"
+      ],
+      "price": 99.99,
+      "loyaltyPrice": null,
+      "rest": 26.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 2400017400,
+      "groupId": 2,
+      "name": "САДЫ ПРИДОНЬЯ Сок яблочно-вишневый 1л(Сады Придонья):12",
+      "code": "2400017400",
+      "barcodes": [
+        "2400017400",
+        "4624000174002"
+      ],
+      "priceTagBarcodes": [
+        "2224000174006"
+      ],
+      "price": 99.99,
+      "loyaltyPrice": null,
+      "rest": 7.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000273123,
+      "groupId": 2,
+      "name": "AQUA MINERALE Вода питьевая газ 0,5л пл/бут(Pepsico):12",
+      "code": "1000273123",
+      "barcodes": [
+        "1000273123",
+        "4610002731237"
+      ],
+      "priceTagBarcodes": [
+        "2210002731231"
+      ],
+      "price": 59.99,
+      "loyaltyPrice": null,
+      "rest": 9.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000273122,
+      "groupId": 2,
+      "name": "AQUA MINERALE Вода питьевая н/газ 0,5л пл/бут(Pepsico):12",
+      "code": "1000273122",
+      "barcodes": [
+        "1000273122",
+        "4610002731220"
+      ],
+      "priceTagBarcodes": [
+        "2210002731224"
+      ],
+      "price": 61.99,
+      "loyaltyPrice": null,
+      "rest": 25.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000273538,
+      "groupId": 2,
+      "name": "FLASH UP Энергет нап б/а газ 0,45л ж/б с кл(Балтика):24",
+      "code": "1000273538",
+      "barcodes": [
+        "1000273538",
+        "4610002735389"
+      ],
+      "priceTagBarcodes": [
+        "2210002735383"
+      ],
+      "price": 88.99,
+      "loyaltyPrice": null,
+      "rest": 36.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000275580,
+      "groupId": 2,
+      "name": "ADRENALINE Rush Напиток энергет газ 0,449л ж/б(Пепси):12",
+      "code": "1000275580",
+      "barcodes": [
+        "1000275580",
+        "4610002755806"
+      ],
+      "priceTagBarcodes": [
+        "2210002755800"
+      ],
+      "price": 139.99,
+      "loyaltyPrice": null,
+      "rest": 14.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000275581,
+      "groupId": 2,
+      "name": "ADRENALINE Rush Red Energi Напит энерг 0,449л ж/б(Пепси):12",
+      "code": "1000275581",
+      "barcodes": [
+        "1000275581",
+        "4610002755813"
+      ],
+      "priceTagBarcodes": [
+        "2210002755817"
+      ],
+      "price": 99.99,
+      "loyaltyPrice": null,
+      "rest": 20.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000275583,
+      "groupId": 2,
+      "name": "ADRENALINE Game Fuel Напиток энерг газ 0,449л ж/б(Пепси):12",
+      "code": "1000275583",
+      "barcodes": [
+        "1000275583",
+        "4610002755837"
+      ],
+      "priceTagBarcodes": [
+        "2210002755831"
+      ],
+      "price": 99.99,
+      "loyaltyPrice": null,
+      "rest": 14.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000275578,
+      "groupId": 2,
+      "name": "DRIVE ME Напиток энергет оригин газ 0,449л ж/б(Пепси):12",
+      "code": "1000275578",
+      "barcodes": [
+        "1000275578",
+        "4610002755783"
+      ],
+      "priceTagBarcodes": [
+        "2210002755787"
+      ],
+      "price": 79.99,
+      "loyaltyPrice": null,
+      "rest": 25.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000236222,
+      "groupId": 2,
+      "name": "FRESH BAR Напиток Orange blast силгаз 0,48л пл/бут (Дал):12",
+      "code": "1000236222",
+      "barcodes": [
+        "1000236222",
+        "4610002362226"
+      ],
+      "priceTagBarcodes": [
+        "2210002362220"
+      ],
+      "price": 68.99,
+      "loyaltyPrice": null,
+      "rest": 1.0,
+      "checkPrice": false,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000236223,
+      "groupId": 2,
+      "name": "FRESH BAR Напиток Citrus ice силгаз 0,48л пл/бут (Дал):12",
+      "code": "1000236223",
+      "barcodes": [
+        "1000236223",
+        "4610002362233"
+      ],
+      "priceTagBarcodes": [
+        "2210002362237"
+      ],
+      "price": 68.99,
+      "loyaltyPrice": null,
+      "rest": 10.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000280698,
+      "groupId": 2,
+      "name": "BORJOMI Вода минеральная лечеб/стол 1,25л пл/бут(Боржоми):6",
+      "code": "1000280698",
+      "barcodes": [
+        "1000280698",
+        "4610002806980"
+      ],
+      "priceTagBarcodes": [
+        "2210002806984"
+      ],
+      "price": 199.99,
+      "loyaltyPrice": null,
+      "rest": 23.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000274410,
+      "groupId": 2,
+      "name": "AQUA MINERALE Пит вода лимон н/газ 0,5л пл/бут(Pepsico):12",
+      "code": "1000274410",
+      "barcodes": [
+        "1000274410",
+        "4610002744107"
+      ],
+      "priceTagBarcodes": [
+        "2210002744101"
+      ],
+      "price": 63.89,
+      "loyaltyPrice": null,
+      "rest": 11.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 9812460040,
+      "groupId": 2,
+      "name": "J7 Нектар ананасовый 0,97л(ВБД):12",
+      "code": "9812460040",
+      "barcodes": [
+        "9812460040",
+        "4698124600402"
+      ],
+      "priceTagBarcodes": [
+        "2298124600406"
+      ],
+      "price": 179.99,
+      "loyaltyPrice": null,
+      "rest": 13.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000293658,
+      "groupId": 2,
+      "name": "J7 Fresh Taste Сок апельсин с мякотью 0,85л пл/бут(ВБД):4",
+      "code": "1000293658",
+      "barcodes": [
+        "1000293658",
+        "4610002936588"
+      ],
+      "priceTagBarcodes": [
+        "2210002936582"
+      ],
+      "price": 269.99,
+      "loyaltyPrice": null,
+      "rest": 13.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000206544,
+      "groupId": 2,
+      "name": "ЛЕГЕНДА ГОР АРХЫЗ Природная Вода негаз 5л пл/бут(Аквалайн):2",
+      "code": "1000206544",
+      "barcodes": [
+        "1000206544",
+        "4610002065448"
+      ],
+      "priceTagBarcodes": [
+        "2210002065442"
+      ],
+      "price": 129.99,
+      "loyaltyPrice": null,
+      "rest": 3.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000315358,
+      "groupId": 2,
+      "name": "BURN Нап энергет яблоко/ киви 0,449л ж/б(Кока-кола):12",
+      "code": "1000315358",
+      "barcodes": [
+        "1000315358",
+        "4610003153588"
+      ],
+      "priceTagBarcodes": [
+        "2210003153582"
+      ],
+      "price": 119.99,
+      "loyaltyPrice": null,
+      "rest": 7.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000315359,
+      "groupId": 2,
+      "name": "BURN Нап энергет оригинальный 0,449л ж/б(Кока-кола):12",
+      "code": "1000315359",
+      "barcodes": [
+        "1000315359",
+        "4610003153595"
+      ],
+      "priceTagBarcodes": [
+        "2210003153599"
+      ],
+      "price": 119.99,
+      "loyaltyPrice": null,
+      "rest": 5.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000249995,
+      "groupId": 2,
+      "name": "САДЫ ПРИДОНЬЯ Сок томатный с солью 1л т/пак:12",
+      "code": "1000249995",
+      "barcodes": [
+        "1000249995",
+        "4610002499953"
+      ],
+      "priceTagBarcodes": [
+        "2210002499957"
+      ],
+      "price": 99.99,
+      "loyaltyPrice": null,
+      "rest": 22.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000121020,
+      "groupId": 2,
+      "name": "НАПИТКИ ИЗ ЧЕРНОГОЛОВКИ Байкал 0,5л пл/бут (Аквалайф ПК):12",
+      "code": "1000121020",
+      "barcodes": [
+        "1000121020",
+        "4610001210207"
+      ],
+      "priceTagBarcodes": [
+        "2210001210201"
+      ],
+      "price": 75.99,
+      "loyaltyPrice": null,
+      "rest": 17.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000315356,
+      "groupId": 2,
+      "name": "BURN Нап энергет тропический микс 0,449л ж/б(Кока-кола):12",
+      "code": "1000315356",
+      "barcodes": [
+        "1000315356",
+        "4610003153564"
+      ],
+      "priceTagBarcodes": [
+        "2210003153568"
+      ],
+      "price": 119.99,
+      "loyaltyPrice": null,
+      "rest": 19.0,
+      "checkPrice": true,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000316760,
+      "groupId": 2,
+      "name": "J7 Сок Апельсиновый с мякотью 0,3л пл/бут(ПепсиКо):6",
+      "code": "1000316760",
+      "barcodes": [
+        "1000316760",
+        "4610003167608"
+      ],
+      "priceTagBarcodes": [
+        "2210003167602"
+      ],
+      "price": 105.99,
+      "loyaltyPrice": null,
+      "rest": 3.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000316762,
+      "groupId": 2,
+      "name": "J7 Сок Яблочный осветленный 0,3л пл/бут(ПепсиКо):6",
+      "code": "1000316762",
+      "barcodes": [
+        "1000316762",
+        "4610003167622"
+      ],
+      "priceTagBarcodes": [
+        "2210003167626"
+      ],
+      "price": 95.99,
+      "loyaltyPrice": null,
+      "rest": 13.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000206546,
+      "groupId": 2,
+      "name": "ЛЕГЕНДА ГОР АРХЫЗ Вода природ негаз 0,5л пл/бут(Аквалайн):12",
+      "code": "1000206546",
+      "barcodes": [
+        "1000206546",
+        "4610002065462"
+      ],
+      "priceTagBarcodes": [
+        "2210002065466"
+      ],
+      "price": 36.99,
+      "loyaltyPrice": null,
+      "rest": 60.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000320779,
+      "groupId": 2,
+      "name": "AQUA MINERALE Active Напиток без газа Лимон 0,5л пл/бут:12",
+      "code": "1000320779",
+      "barcodes": [
+        "1000320779",
+        "4610003207793"
+      ],
+      "priceTagBarcodes": [
+        "2210003207797"
+      ],
+      "price": 69.99,
+      "loyaltyPrice": null,
+      "rest": 1.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000256745,
+      "groupId": 2,
+      "name": "EVERVESS Напиток б/а с/г Индиан Тоник 1л пл/бут(Пепсико):12",
+      "code": "1000256745",
+      "barcodes": [
+        "1000256745",
+        "4610002567454"
+      ],
+      "priceTagBarcodes": [
+        "2210002567458"
+      ],
+      "price": 84.99,
+      "loyaltyPrice": null,
+      "rest": 4.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000338384,
+      "groupId": 2,
+      "name": "ЕССЕНТУКИ №4 Минеральная вода газ леч-стол 0,45л ст/бут:20",
+      "code": "1000338384",
+      "barcodes": [
+        "1000338384",
+        "4610003383848"
+      ],
+      "priceTagBarcodes": [
+        "2210003383842"
+      ],
+      "price": 98.99,
+      "loyaltyPrice": null,
+      "rest": 25.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000338385,
+      "groupId": 2,
+      "name": "ЕССЕНТУКИ №17 Минеральная вода газ лечеб 0,45л ст/бут:20",
+      "code": "1000338385",
+      "barcodes": [
+        "1000338385",
+        "4610003383855"
+      ],
+      "priceTagBarcodes": [
+        "2210003383859"
+      ],
+      "price": 103.99,
+      "loyaltyPrice": null,
+      "rest": 60.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000362993,
+      "groupId": 2,
+      "name": "GORILLA MANGO Энергетический напиток газ 0,45л ж/б(МПК):24",
+      "code": "1000362993",
+      "barcodes": [
+        "1000362993",
+        "4610003629939"
+      ],
+      "priceTagBarcodes": [
+        "2210003629933"
+      ],
+      "price": 95.99,
+      "loyaltyPrice": null,
+      "rest": 44.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000374937,
+      "groupId": 2,
+      "name": "САДЫ ПРИДОНЬЯ Сок из зеленых яблок 2л:6",
+      "code": "1000374937",
+      "barcodes": [
+        "1000374937",
+        "4610003749378"
+      ],
+      "priceTagBarcodes": [
+        "2210003749372"
+      ],
+      "price": 189.99,
+      "loyaltyPrice": null,
+      "rest": 22.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000261189,
+      "groupId": 2,
+      "name": "ЛЕГЕНДА ГОР АРХЫЗ Вода минер газ 0,5л пл/бут (Аквалайн):12",
+      "code": "1000261189",
+      "barcodes": [
+        "1000261189",
+        "4610002611898"
+      ],
+      "priceTagBarcodes": [
+        "2210002611892"
+      ],
+      "price": 36.99,
+      "loyaltyPrice": null,
+      "rest": 16.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000115129,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Нектар малиновый 1л т/п(Мултон):12",
+      "code": "1000115129",
+      "barcodes": [
+        "1000115129",
+        "4610001151296"
+      ],
+      "priceTagBarcodes": [
+        "2210001151290"
+      ],
+      "price": 134.99,
+      "loyaltyPrice": null,
+      "rest": 24.0,
+      "checkPrice": true,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000374935,
+      "groupId": 2,
+      "name": "САДЫ ПРИДОНЬЯ Сок яблоко/виноград 2л:6",
+      "code": "1000374935",
+      "barcodes": [
+        "1000374935",
+        "4610003749354"
+      ],
+      "priceTagBarcodes": [
+        "2210003749358"
+      ],
+      "price": 189.99,
+      "loyaltyPrice": null,
+      "rest": 13.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000165726,
+      "groupId": 2,
+      "name": "РУЧЕЕК Долина родников Вода питьевая газ 500мл:12",
+      "code": "1000165726",
+      "barcodes": [
+        "1000165726",
+        "4610001657262"
+      ],
+      "priceTagBarcodes": [
+        "2210001657266"
+      ],
+      "price": 28.99,
+      "loyaltyPrice": null,
+      "rest": 21.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000394942,
+      "groupId": 2,
+      "name": "ЧЕРНОГОЛОВКА Напиток Мандарин газ 2л пл/бут(Аквалайф):6",
+      "code": "1000394942",
+      "barcodes": [
+        "1000394942",
+        "4610003949426"
+      ],
+      "priceTagBarcodes": [
+        "2210003949420"
+      ],
+      "price": 139.99,
+      "loyaltyPrice": null,
+      "rest": 18.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000416895,
+      "groupId": 2,
+      "name": "FLASH UP Ultra energy Нап энерг витамин газ б/а 0,45л:12",
+      "code": "1000416895",
+      "barcodes": [
+        "1000416895",
+        "4610004168956"
+      ],
+      "priceTagBarcodes": [
+        "2210004168950"
+      ],
+      "price": 88.99,
+      "loyaltyPrice": null,
+      "rest": 24.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000324882,
+      "groupId": 2,
+      "name": "ЛЕГЕНДА ГОР АРХЫЗ Вода прир минер негаз 0,75л пл/б:6",
+      "code": "1000324882",
+      "barcodes": [
+        "1000324882",
+        "4610003248826"
+      ],
+      "priceTagBarcodes": [
+        "2210003248820"
+      ],
+      "price": 49.99,
+      "loyaltyPrice": null,
+      "rest": 8.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000395012,
+      "groupId": 2,
+      "name": "FRESH BAR Sparkling boom Напиток газ б/а 0,48л пл/бут:12",
+      "code": "1000395012",
+      "barcodes": [
+        "1000395012",
+        "4610003950125"
+      ],
+      "priceTagBarcodes": [
+        "2210003950129"
+      ],
+      "price": 68.99,
+      "loyaltyPrice": null,
+      "rest": 10.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000431577,
+      "groupId": 2,
+      "name": "ЧЕРНОГОЛОВКА Напит Кола б/а сил/газ пл/бут 2л:6",
+      "code": "1000431577",
+      "barcodes": [
+        "1000431577",
+        "4610004315770"
+      ],
+      "priceTagBarcodes": [
+        "2210004315774"
+      ],
+      "price": 139.99,
+      "loyaltyPrice": null,
+      "rest": 12.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000437519,
+      "groupId": 2,
+      "name": "COOL COLA Напиток безалк сильног 1,5л пл/бут (Очаково):6",
+      "code": "1000437519",
+      "barcodes": [
+        "1000437519",
+        "4610004375194"
+      ],
+      "priceTagBarcodes": [
+        "2210004375198"
+      ],
+      "price": 119.99,
+      "loyaltyPrice": null,
+      "rest": 6.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000256740,
+      "groupId": 2,
+      "name": "EVERVESS Напиток б/а с/г Биттер Лемон 1л пл/бут(Пепсико):12",
+      "code": "1000256740",
+      "barcodes": [
+        "1000256740",
+        "4610002567409"
+      ],
+      "priceTagBarcodes": [
+        "2210002567403"
+      ],
+      "price": 84.99,
+      "loyaltyPrice": null,
+      "rest": 13.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000439629,
+      "groupId": 2,
+      "name": "НАПИТКИ ИЗ ЧЕРНОГОЛОВКИ Кола Нап газ 0,5л пл/бут:12",
+      "code": "1000439629",
+      "barcodes": [
+        "1000439629",
+        "4610004396298"
+      ],
+      "priceTagBarcodes": [
+        "2210004396292"
+      ],
+      "price": 75.99,
+      "loyaltyPrice": null,
+      "rest": 15.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000425308,
+      "groupId": 2,
+      "name": "СВЯТОЙ ИСТОЧНИК Вода питьевая лимон 1,5л н/газ 1,5л:6",
+      "code": "1000425308",
+      "barcodes": [
+        "1000425308",
+        "4610004253089"
+      ],
+      "priceTagBarcodes": [
+        "2210004253083"
+      ],
+      "price": 93.99,
+      "loyaltyPrice": null,
+      "rest": 16.0,
+      "checkPrice": false,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000442857,
+      "groupId": 2,
+      "name": "ГОРЯЧИЙ КЛЮЧ №934 Вода Минеральная 0,5л ст/бут:12",
+      "code": "1000442857",
+      "barcodes": [
+        "1000442857",
+        "4610004428579"
+      ],
+      "priceTagBarcodes": [
+        "2210004428573"
+      ],
+      "price": 45.99,
+      "loyaltyPrice": null,
+      "rest": 16.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000438044,
+      "groupId": 2,
+      "name": "ADRENALINE RUSH Энерг нап без сахара 0,449л ж/б (ПепсиКо):12",
+      "code": "1000438044",
+      "barcodes": [
+        "1000438044",
+        "4610004380440"
+      ],
+      "priceTagBarcodes": [
+        "2210004380444"
+      ],
+      "price": 119.99,
+      "loyaltyPrice": null,
+      "rest": 13.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000450028,
+      "groupId": 2,
+      "name": "ЧЕРНОГОЛОВКА Напиток Кола сил/газ б/а 0,33л ж/б(Аквалайф):12",
+      "code": "1000450028",
+      "barcodes": [
+        "1000450028",
+        "4610004500282"
+      ],
+      "priceTagBarcodes": [
+        "2210004500286"
+      ],
+      "price": 69.99,
+      "loyaltyPrice": null,
+      "rest": 13.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000457196,
+      "groupId": 2,
+      "name": "RICH Напиток б/а сил/газ Битер-Лемон 1л пл/бут (Мултон):12",
+      "code": "1000457196",
+      "barcodes": [
+        "1000457196",
+        "4610004571961"
+      ],
+      "priceTagBarcodes": [
+        "2210004571965"
+      ],
+      "price": 119.99,
+      "loyaltyPrice": null,
+      "rest": 5.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000457195,
+      "groupId": 2,
+      "name": "RICH Напиток б/а сил/газ Индиан Тоник 0,33л ж/б (Мултон):12",
+      "code": "1000457195",
+      "barcodes": [
+        "1000457195",
+        "4610004571954"
+      ],
+      "priceTagBarcodes": [
+        "2210004571958"
+      ],
+      "price": 89.99,
+      "loyaltyPrice": null,
+      "rest": 24.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000456625,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Напиток б/а сил/газ лимон/лайм 0,5л пл/бут(Мултон):24",
+      "code": "1000456625",
+      "barcodes": [
+        "1000456625",
+        "4610004566257"
+      ],
+      "priceTagBarcodes": [
+        "2210004566251"
+      ],
+      "price": 84.99,
+      "loyaltyPrice": null,
+      "rest": 37.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000448678,
+      "groupId": 2,
+      "name": "ЛЮБИМЫЙ Нектар апельс с мякотью 0,97л т/пак(ПепсиКо):12",
+      "code": "1000448678",
+      "barcodes": [
+        "1000448678",
+        "4610004486784"
+      ],
+      "priceTagBarcodes": [
+        "2210004486788"
+      ],
+      "price": 179.99,
+      "loyaltyPrice": null,
+      "rest": 28.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000454958,
+      "groupId": 2,
+      "name": "COOL COLA ZERO Напиток б/а с/г 1,5л пл/бут (Очаково):6",
+      "code": "1000454958",
+      "barcodes": [
+        "1000454958",
+        "4610004549588"
+      ],
+      "priceTagBarcodes": [
+        "2210004549582"
+      ],
+      "price": 119.99,
+      "loyaltyPrice": null,
+      "rest": 1.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000453190,
+      "groupId": 2,
+      "name": "ЛЮБИМЫЙ Напиток яблоко 1,93л т/пак(Лебедянский):6",
+      "code": "1000453190",
+      "barcodes": [
+        "1000453190",
+        "4610004531903"
+      ],
+      "priceTagBarcodes": [
+        "2210004531907"
+      ],
+      "price": 179.99,
+      "loyaltyPrice": null,
+      "rest": 13.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000457199,
+      "groupId": 2,
+      "name": "RICH Напиток б/а сил/газ Гранат 0,33л ж/б(Мултон Партнер):12",
+      "code": "1000457199",
+      "barcodes": [
+        "1000457199",
+        "4610004571992"
+      ],
+      "priceTagBarcodes": [
+        "2210004571996"
+      ],
+      "price": 89.99,
+      "loyaltyPrice": null,
+      "rest": 10.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000456624,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Напиток б/а сил/газ лимон/лайм 0,33л ж/б(Мултон):12",
+      "code": "1000456624",
+      "barcodes": [
+        "1000456624",
+        "4610004566240"
+      ],
+      "priceTagBarcodes": [
+        "2210004566244"
+      ],
+      "price": 79.99,
+      "loyaltyPrice": null,
+      "rest": 18.0,
+      "checkPrice": true,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000457203,
+      "groupId": 2,
+      "name": "RICH Tea Напиток б/а Чай зеленый Манго 1л пл/бут(Мултон):12",
+      "code": "1000457203",
+      "barcodes": [
+        "1000457203",
+        "4610004572036"
+      ],
+      "priceTagBarcodes": [
+        "2210004572030"
+      ],
+      "price": 144.99,
+      "loyaltyPrice": null,
+      "rest": 14.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000456620,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Напиток б/а сил/газ манго/марак 0,33л ж/б(Мултон):12",
+      "code": "1000456620",
+      "barcodes": [
+        "1000456620",
+        "4610004566202"
+      ],
+      "priceTagBarcodes": [
+        "2210004566206"
+      ],
+      "price": 79.99,
+      "loyaltyPrice": null,
+      "rest": 9.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000457201,
+      "groupId": 2,
+      "name": "RICH Напиток б/а сил/газ Индиан Тоник 1л пл/бут (Мултон):12",
+      "code": "1000457201",
+      "barcodes": [
+        "1000457201",
+        "4610004572012"
+      ],
+      "priceTagBarcodes": [
+        "2210004572016"
+      ],
+      "price": 119.99,
+      "loyaltyPrice": null,
+      "rest": 6.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000456622,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Напиток б/а сил/газ манго/марак 1л пл/бут(Мултон):12",
+      "code": "1000456622",
+      "barcodes": [
+        "1000456622",
+        "4610004566226"
+      ],
+      "priceTagBarcodes": [
+        "2210004566220"
+      ],
+      "price": 109.99,
+      "loyaltyPrice": null,
+      "rest": 33.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000456617,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Напиток б/а сил/газ апелс 0,5л пл/бут(МултонПарт):24",
+      "code": "1000456617",
+      "barcodes": [
+        "1000456617",
+        "4610004566172"
+      ],
+      "priceTagBarcodes": [
+        "2210004566176"
+      ],
+      "price": 84.99,
+      "loyaltyPrice": null,
+      "rest": 39.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000456615,
+      "groupId": 2,
+      "name": "RICH Напиток б/а сил/газ Битер-Лемон 0,33л ж/б (Мултон):12",
+      "code": "1000456615",
+      "barcodes": [
+        "1000456615",
+        "4610004566158"
+      ],
+      "priceTagBarcodes": [
+        "2210004566152"
+      ],
+      "price": 89.99,
+      "loyaltyPrice": null,
+      "rest": 13.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000456616,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Напиток б/а сил/газ апельсин 0,33л ж/б(МултонПарт):12",
+      "code": "1000456616",
+      "barcodes": [
+        "1000456616",
+        "4610004566165"
+      ],
+      "priceTagBarcodes": [
+        "2210004566169"
+      ],
+      "price": 79.99,
+      "loyaltyPrice": null,
+      "rest": 14.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000456962,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Напиток Кола б/а с/г 0,5л пл/бут(Мултон Партнерс):24",
+      "code": "1000456962",
+      "barcodes": [
+        "1000456962",
+        "4610004569623"
+      ],
+      "priceTagBarcodes": [
+        "2210004569627"
+      ],
+      "price": 84.99,
+      "loyaltyPrice": null,
+      "rest": 32.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000457186,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Напиток б/а сил/газ лимон/лайм 1,5л пл/бут(Мултон):9",
+      "code": "1000457186",
+      "barcodes": [
+        "1000457186",
+        "4610004571862"
+      ],
+      "priceTagBarcodes": [
+        "2210004571866"
+      ],
+      "price": 129.99,
+      "loyaltyPrice": null,
+      "rest": 23.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000456965,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Напиток Кола б/а с/г пл/б 1,5л пл/бут(Мултон):9",
+      "code": "1000456965",
+      "barcodes": [
+        "1000456965",
+        "4610004569654"
+      ],
+      "priceTagBarcodes": [
+        "2210004569658"
+      ],
+      "price": 129.99,
+      "loyaltyPrice": null,
+      "rest": 18.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000456619,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Напиток б/а сил/газ апелс 1,5л пл/бут (МултонПарт):9",
+      "code": "1000456619",
+      "barcodes": [
+        "1000456619",
+        "4610004566196"
+      ],
+      "priceTagBarcodes": [
+        "2210004566190"
+      ],
+      "price": 129.99,
+      "loyaltyPrice": null,
+      "rest": 25.0,
+      "checkPrice": true,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000460470,
+      "groupId": 2,
+      "name": "ГОРЯЧИЙ КЛЮЧ №2000 Вода минер стол газ 1л пл/бут(Горячеключ)",
+      "code": "1000460470",
+      "barcodes": [
+        "1000460470",
+        "4610004604706"
+      ],
+      "priceTagBarcodes": [
+        "2210004604700"
+      ],
+      "price": 45.99,
+      "loyaltyPrice": null,
+      "rest": 17.8,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000453596,
+      "groupId": 2,
+      "name": "ТБАУ Премиум Вода мин природная питьевая негаз 0,5л ст/б:12",
+      "code": "1000453596",
+      "barcodes": [
+        "1000453596",
+        "4610004535963"
+      ],
+      "priceTagBarcodes": [
+        "2210004535967"
+      ],
+      "price": 59.99,
+      "loyaltyPrice": null,
+      "rest": 30.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000456966,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Напиток Кола б/сах б/а с/г 0,33л ж/б(Мултон):12",
+      "code": "1000456966",
+      "barcodes": [
+        "1000456966",
+        "4610004569661"
+      ],
+      "priceTagBarcodes": [
+        "2210004569665"
+      ],
+      "price": 79.99,
+      "loyaltyPrice": null,
+      "rest": 19.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000456967,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Напиток Кола б/сах б/а с/г 0,5л пл/бут(Мултон):24",
+      "code": "1000456967",
+      "barcodes": [
+        "1000456967",
+        "4610004569678"
+      ],
+      "priceTagBarcodes": [
+        "2210004569672"
+      ],
+      "price": 84.99,
+      "loyaltyPrice": null,
+      "rest": 28.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000449002,
+      "groupId": 2,
+      "name": "EVERVESS Напиток б/а с/г Манящ Гранада 1л пл/бут(ПепсиКо):12",
+      "code": "1000449002",
+      "barcodes": [
+        "1000449002",
+        "4610004490026"
+      ],
+      "priceTagBarcodes": [
+        "2210004490020"
+      ],
+      "price": 84.99,
+      "loyaltyPrice": null,
+      "rest": 8.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000484117,
+      "groupId": 2,
+      "name": "EVERVESS Напиток Кола б/а сил/газ 1л пл/бут(ПепсиКо):12",
+      "code": "1000484117",
+      "barcodes": [
+        "1000484117",
+        "4610004841170"
+      ],
+      "priceTagBarcodes": [
+        "2210004841174"
+      ],
+      "price": 99.99,
+      "loyaltyPrice": null,
+      "rest": 20.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000484115,
+      "groupId": 2,
+      "name": "EVERVESS Напиток Кола б/а сил/газ 0,33л ж/б с кл(ПепсиКо):12",
+      "code": "1000484115",
+      "barcodes": [
+        "1000484115",
+        "4610004841156"
+      ],
+      "priceTagBarcodes": [
+        "2210004841150"
+      ],
+      "price": 69.99,
+      "loyaltyPrice": null,
+      "rest": 14.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000369689,
+      "groupId": 2,
+      "name": "СВЯТОЙ ИСТОЧНИК Вода питьевая + лимон негаз 0,5л пл/б:12",
+      "code": "1000369689",
+      "barcodes": [
+        "1000369689",
+        "4610003696894"
+      ],
+      "priceTagBarcodes": [
+        "2210003696898"
+      ],
+      "price": 69.99,
+      "loyaltyPrice": null,
+      "rest": 16.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000497022,
+      "groupId": 2,
+      "name": "НАПИТКИ ИЗ ЧЕРНОГОЛОВКИ Нап б/а Кола сил/газ 1л пл/бут:12",
+      "code": "1000497022",
+      "barcodes": [
+        "1000497022",
+        "4610004970221"
+      ],
+      "priceTagBarcodes": [
+        "2210004970225"
+      ],
+      "price": 89.99,
+      "loyaltyPrice": null,
+      "rest": 1.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000475610,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Напиток Кола б/сах б/а с/г 1,5л пл/бут(Мултон):9",
+      "code": "1000475610",
+      "barcodes": [
+        "1000475610",
+        "4610004756108"
+      ],
+      "priceTagBarcodes": [
+        "2210004756102"
+      ],
+      "price": 129.99,
+      "loyaltyPrice": null,
+      "rest": 9.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000300468,
+      "groupId": 2,
+      "name": "НАПИТКИ ИЗ ЧЕРНОГОЛОВКИ Нап Тархун газ 0,5л пл/бут(Аквал):12",
+      "code": "1000300468",
+      "barcodes": [
+        "1000300468",
+        "4610003004682"
+      ],
+      "priceTagBarcodes": [
+        "2210003004686"
+      ],
+      "price": 75.99,
+      "loyaltyPrice": null,
+      "rest": 24.0,
+      "checkPrice": false,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000434766,
+      "groupId": 2,
+      "name": "FRESH BAR Напит б/а газ Magic skills0,48л пл/бут(Росинка):12",
+      "code": "1000434766",
+      "barcodes": [
+        "1000434766",
+        "4610004347665"
+      ],
+      "priceTagBarcodes": [
+        "2210004347669"
+      ],
+      "price": 68.99,
+      "loyaltyPrice": null,
+      "rest": 15.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000487837,
+      "groupId": 2,
+      "name": "ФРУТМОТИВ Напиток сок/содерж Апельсин негаз 1,5л ПЭТ:6",
+      "code": "1000487837",
+      "barcodes": [
+        "1000487837",
+        "4610004878374"
+      ],
+      "priceTagBarcodes": [
+        "2210004878378"
+      ],
+      "price": 119.99,
+      "loyaltyPrice": null,
+      "rest": 7.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000487841,
+      "groupId": 2,
+      "name": "ФРУТМОТИВ Напит сок/содерж Тропический микс негаз 1,5л ПЭТ:6",
+      "code": "1000487841",
+      "barcodes": [
+        "1000487841",
+        "4610004878411"
+      ],
+      "priceTagBarcodes": [
+        "2210004878415"
+      ],
+      "price": 119.99,
+      "loyaltyPrice": null,
+      "rest": 9.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000487838,
+      "groupId": 2,
+      "name": "ФРУТМОТИВ Напиток сок/содерж Арбуз/Клубника негаз 1,5л ПЭТ:6",
+      "code": "1000487838",
+      "barcodes": [
+        "1000487838",
+        "4610004878381"
+      ],
+      "priceTagBarcodes": [
+        "2210004878385"
+      ],
+      "price": 119.99,
+      "loyaltyPrice": null,
+      "rest": 7.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000459579,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Нектар мультифруктовый 0,3л пл/бут(Мултон):12",
+      "code": "1000459579",
+      "barcodes": [
+        "1000459579",
+        "4610004595790"
+      ],
+      "priceTagBarcodes": [
+        "2210004595794"
+      ],
+      "price": 69.99,
+      "loyaltyPrice": null,
+      "rest": 65.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000459581,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Сок яблочный 0,3л пл/бут(Мултон):12",
+      "code": "1000459581",
+      "barcodes": [
+        "1000459581",
+        "4610004595813"
+      ],
+      "priceTagBarcodes": [
+        "2210004595817"
+      ],
+      "price": 69.99,
+      "loyaltyPrice": null,
+      "rest": 11.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000459582,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Нектар томат с сахар/соль 0,3л пл/бут(Мултон):12",
+      "code": "1000459582",
+      "barcodes": [
+        "1000459582",
+        "4610004595820"
+      ],
+      "priceTagBarcodes": [
+        "2210004595824"
+      ],
+      "price": 69.99,
+      "loyaltyPrice": null,
+      "rest": 59.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000505393,
+      "groupId": 2,
+      "name": "BURN Напиток энергет сочн энерг 0,449л ж/б(Мултон Партн):12",
+      "code": "1000505393",
+      "barcodes": [
+        "1000505393",
+        "4610005053930"
+      ],
+      "priceTagBarcodes": [
+        "2210005053934"
+      ],
+      "price": 119.99,
+      "loyaltyPrice": null,
+      "rest": 52.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000562398,
+      "groupId": 2,
+      "name": "LIT ENERGY Нап энерг Blueberry черника 0,45л ж/б:12",
+      "code": "1000562398",
+      "barcodes": [
+        "1000562398",
+        "4610005623980"
+      ],
+      "priceTagBarcodes": [
+        "2210005623984"
+      ],
+      "price": 113.99,
+      "loyaltyPrice": null,
+      "rest": 7.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000493209,
+      "groupId": 2,
+      "name": "ДОБРЫЙ Напиток Кола Ваниль б/а с/г 0,5л пл/бут(Мултон):24",
+      "code": "1000493209",
+      "barcodes": [
+        "1000493209",
+        "4610004932090"
+      ],
+      "priceTagBarcodes": [
+        "2210004932094"
+      ],
+      "price": 84.99,
+      "loyaltyPrice": null,
+      "rest": 50.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000352341,
+      "groupId": 2,
+      "name": "LIPTON Холодный Чай Малина негаз 500мл пл/б(Пепси-Кола):12",
+      "code": "1000352341",
+      "barcodes": [
+        "1000352341",
+        "4610003523411"
+      ],
+      "priceTagBarcodes": [
+        "2210003523415"
+      ],
+      "price": 93.99,
+      "loyaltyPrice": null,
+      "rest": 24.0,
+      "checkPrice": true,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000547845,
+      "groupId": 2,
+      "name": "EVERVESS Напиток Кола б/сах б/а с/газ 1л пл/бут(ПепсиКо):12",
+      "code": "1000547845",
+      "barcodes": [
+        "1000547845",
+        "4610005478450"
+      ],
+      "priceTagBarcodes": [
+        "2210005478454"
+      ],
+      "price": 94.99,
+      "loyaltyPrice": null,
+      "rest": 22.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000582810,
+      "groupId": 2,
+      "name": "TORNADO Max Напиток энер Black б/а газ 0,45л ж/б(СНС):12",
+      "code": "1000582810",
+      "barcodes": [
+        "1000582810",
+        "4610005828101"
+      ],
+      "priceTagBarcodes": [
+        "2210005828105"
+      ],
+      "price": 88.99,
+      "loyaltyPrice": null,
+      "rest": 6.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000566916,
+      "groupId": 2,
+      "name": "ADRENALINE Extra Напиток энерг газ 0,449л ж/б(Пепси):12",
+      "code": "1000566916",
+      "barcodes": [
+        "1000566916",
+        "4610005669162"
+      ],
+      "priceTagBarcodes": [
+        "2210005669166"
+      ],
+      "price": 119.99,
+      "loyaltyPrice": null,
+      "rest": 11.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
+      "id": 1000557242,
+      "groupId": 2,
+      "name": "ЧЕРНОГОЛОВКА Напиток Дикий апельсин/юдзу сильногаз 1л п/б:12",
+      "code": "1000557242",
+      "barcodes": [
+        "1000557242",
+        "4610005572424"
+      ],
+      "priceTagBarcodes": [
+        "2210005572428"
+      ],
+      "price": 85.99,
+      "loyaltyPrice": null,
+      "rest": 16.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000585293,
+      "groupId": 2,
+      "name": "ЧЕРНОГОЛОВКА Напиток гранат б/а 1л пл/бут(Аквалайф):12",
+      "code": "1000585293",
+      "barcodes": [
+        "1000585293",
+        "4610005852939"
+      ],
+      "priceTagBarcodes": [
+        "2210005852933"
+      ],
+      "price": 85.99,
+      "loyaltyPrice": null,
+      "rest": 12.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000561935,
+      "groupId": 2,
+      "name": "ЧЕРНОГОЛОВ Напит б/а сил/газ Лимон/лайм/лемонг 1л пл/бут:12",
+      "code": "1000561935",
+      "barcodes": [
+        "1000561935",
+        "4610005619358"
+      ],
+      "priceTagBarcodes": [
+        "2210005619352"
+      ],
+      "price": 85.99,
+      "loyaltyPrice": null,
+      "rest": 4.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000585246,
+      "groupId": 2,
+      "name": "AQUA MINERALE Active Нап б/а Клубн мята н/газ 0,5л пл/бут:12",
+      "code": "1000585246",
+      "barcodes": [
+        "1000585246",
+        "4610005852465"
+      ],
+      "priceTagBarcodes": [
+        "2210005852469"
+      ],
+      "price": 73.99,
+      "loyaltyPrice": null,
+      "rest": 3.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000586283,
+      "groupId": 2,
+      "name": "АКВАЛАЙН Для Ляль Вода питьевая детская н/газ 0,5л пл/бут:12",
+      "code": "1000586283",
+      "barcodes": [
+        "1000586283",
+        "4610005862839"
+      ],
+      "priceTagBarcodes": [
+        "2210005862833"
+      ],
+      "price": 36.99,
+      "loyaltyPrice": null,
+      "rest": 12.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000586020,
+      "groupId": 2,
+      "name": "RED BULL the Sea Blue Edition Ирга Нап энер б/а 355мл ж/б:24",
+      "code": "1000586020",
+      "barcodes": [
+        "1000586020",
+        "4610005860200"
+      ],
+      "priceTagBarcodes": [
+        "2210005860204"
+      ],
+      "price": 189.99,
+      "loyaltyPrice": null,
+      "rest": 51.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000584736,
+      "groupId": 2,
+      "name": "RICH Напит Спритц Крас апельсин б/а с/г 0,33л ж/б(Мултон):12",
+      "code": "1000584736",
+      "barcodes": [
+        "1000584736",
+        "4610005847362"
+      ],
+      "priceTagBarcodes": [
+        "2210005847366"
+      ],
+      "price": 89.99,
+      "loyaltyPrice": null,
+      "rest": 19.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 1000569265,
+      "groupId": 2,
+      "name": "VINUT Напиток сок/содерж негаз кокосовое молоко 330мл ж/б:24",
+      "code": "1000569265",
+      "barcodes": [
+        "1000569265",
+        "4610005692658"
+      ],
+      "priceTagBarcodes": [
+        "2210005692652"
+      ],
+      "price": 179.99,
+      "loyaltyPrice": null,
+      "rest": 24.0,
+      "checkPrice": true,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 8000050658,
+      "groupId": 2,
+      "name": "SAC SAC COCO RICH Нап винограда с кус желе 0,28л пл/бут:24",
+      "code": "8000050658",
+      "barcodes": [
+        "8000050658",
+        "4680000506588"
+      ],
+      "priceTagBarcodes": [
+        "2280000506582"
+      ],
+      "price": 189.99,
+      "loyaltyPrice": null,
+      "rest": 15.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 8000072443,
+      "groupId": 2,
+      "name": "BASKIN ROBBINS Напиток газ персик 0,35л ж/б с кл (OKF):24",
+      "code": "8000072443",
+      "barcodes": [
+        "8000072443",
+        "4680000724432"
+      ],
+      "priceTagBarcodes": [
+        "2280000724436"
+      ],
+      "price": 179.99,
+      "loyaltyPrice": null,
+      "rest": 16.0,
+      "checkPrice": false,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
+      "id": 8000136346,
+      "groupId": 2,
+      "name": "FLASH UP Energy Game Mode XP Энерг напиток 0,45л ж/б:24",
+      "code": "8000136346",
+      "barcodes": [
+        "8000136346",
+        "4680001363463"
+      ],
+      "priceTagBarcodes": [
+        "2280001363467"
+      ],
+      "price": 76.99,
+      "loyaltyPrice": null,
+      "rest": 14.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": true
+    }
+  ]
+}

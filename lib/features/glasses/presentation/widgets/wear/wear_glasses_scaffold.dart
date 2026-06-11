@@ -10,8 +10,8 @@ class WearGlassesScaffold extends StatelessWidget {
 
   static const double designWidth = 640;
   static const double designHeight = 480;
-  static const Color backgroundColor = Colors.transparent;
   static const Color designBackgroundColor = Color(0xFF2A2828);
+  static const Color backgroundColor = designBackgroundColor;
   static const Color accentColor = Color(0xFF26BC00);
 
   @override

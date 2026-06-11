@@ -4,6 +4,7 @@ enum WearGlassesScreenType {
   printer,
   scan,
   productSelect,
+  availability,
   printing,
   status,
   help,
@@ -29,8 +30,11 @@ class WearGlassesPayload {
     this.isLoading = false,
     this.isError = false,
     this.items = const <String>[],
+    this.bodyLines = const <String>[],
+    this.checkLines = const <String>[],
     this.selectedIndex = 0,
     this.pageText,
+    this.footerText,
     this.primaryAction,
     this.secondaryAction,
     this.statusIcon,
@@ -75,7 +79,12 @@ class WearGlassesPayload {
       screenType: WearGlassesScreenType.menu,
       phase: WearGlassesPhase.idle,
       title: 'Выбор раздела',
-      items: const <String>['Печать ценников', 'Доступность', 'Справка'],
+      items: const <String>[
+        'Печать ценников',
+        'Доступность',
+        'Справка',
+        'Настройки',
+      ],
       selectedIndex: selectedIndex,
     );
   }
@@ -185,8 +194,11 @@ class WearGlassesPayload {
   final bool isLoading;
   final bool isError;
   final List<String> items;
+  final List<String> bodyLines;
+  final List<String> checkLines;
   final int selectedIndex;
   final String? pageText;
+  final String? footerText;
   final String? primaryAction;
   final String? secondaryAction;
   final String? statusIcon;
@@ -212,8 +224,11 @@ class WearGlassesPayload {
       isLoading: isLoading,
       isError: isError,
       items: items,
+      bodyLines: bodyLines,
+      checkLines: checkLines,
       selectedIndex: selectedIndex,
       pageText: pageText,
+      footerText: footerText,
       primaryAction: primaryAction,
       secondaryAction: secondaryAction,
       statusIcon: statusIcon,
@@ -235,8 +250,11 @@ class WearGlassesPayload {
       'isLoading': isLoading,
       'isError': isError,
       'items': items,
+      'bodyLines': bodyLines,
+      'checkLines': checkLines,
       'selectedIndex': selectedIndex,
       'pageText': pageText,
+      'footerText': footerText,
       'primaryAction': primaryAction,
       'secondaryAction': secondaryAction,
       'statusIcon': statusIcon,

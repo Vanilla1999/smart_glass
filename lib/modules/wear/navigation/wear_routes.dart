@@ -2,8 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
+import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_group.dart';
+import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
 import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_input_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/continue_scan/wear_continue_scan_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_check_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_direct_scan_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_fill_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_group_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_interaction_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_product_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/help/wear_help_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/wear_main_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/wear_scanner_connect_screen.dart';
@@ -12,6 +20,7 @@ import 'package:smart_glasses/modules/wear/presentation/screens/printers/wear_pr
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_product_select_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_scan_idle_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/db_settings_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/settings/wear_glasses_preview_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/wear_settings_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_screen.dart';
@@ -64,6 +73,12 @@ class WearRoute {
           },
         ),
         GoRoute(
+          path: WearGlassesPreviewScreen.route,
+          builder: (BuildContext context, GoRouterState state) {
+            return const WearGlassesPreviewScreen();
+          },
+        ),
+        GoRoute(
           path: WearPrinterSelectScreen.route,
           builder: (BuildContext context, GoRouterState state) {
             return const WearVoiceCommandOrchestrator(
@@ -100,6 +115,62 @@ class WearRoute {
           builder: (BuildContext context, GoRouterState state) {
             return WearVoiceCommandOrchestrator(
               child: WearPrintCodeInputScreen(args: state.extra),
+            );
+          },
+        ),
+        GoRoute(
+          path: WearAvailabilityInteractionScreen.route,
+          builder: (BuildContext context, GoRouterState state) {
+            return const WearVoiceCommandOrchestrator(
+              child: WearAvailabilityInteractionScreen(),
+            );
+          },
+        ),
+        GoRoute(
+          path: WearAvailabilityGroupScreen.route,
+          builder: (BuildContext context, GoRouterState state) {
+            return const WearVoiceCommandOrchestrator(
+              child: WearAvailabilityGroupScreen(),
+            );
+          },
+        ),
+        GoRoute(
+          path: WearAvailabilityDirectScanScreen.route,
+          builder: (BuildContext context, GoRouterState state) {
+            return const WearVoiceCommandOrchestrator(
+              child: WearAvailabilityDirectScanScreen(),
+            );
+          },
+        ),
+        GoRoute(
+          path: WearAvailabilityProductScreen.route,
+          builder: (BuildContext context, GoRouterState state) {
+            final WearAvailabilityGroup? group =
+                state.extra is WearAvailabilityGroup
+                    ? state.extra! as WearAvailabilityGroup
+                    : null;
+            return WearVoiceCommandOrchestrator(
+              child: WearAvailabilityProductScreen(group: group),
+            );
+          },
+        ),
+        GoRoute(
+          path: WearAvailabilityCheckScreen.route,
+          builder: (BuildContext context, GoRouterState state) {
+            final WearAvailabilityProduct? product =
+                state.extra is WearAvailabilityProduct
+                    ? state.extra! as WearAvailabilityProduct
+                    : null;
+            return WearVoiceCommandOrchestrator(
+              child: WearAvailabilityCheckScreen(product: product),
+            );
+          },
+        ),
+        GoRoute(
+          path: WearAvailabilityFillScreen.route,
+          builder: (BuildContext context, GoRouterState state) {
+            return const WearVoiceCommandOrchestrator(
+              child: WearAvailabilityFillScreen(),
             );
           },
         ),

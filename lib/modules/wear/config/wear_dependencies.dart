@@ -1,7 +1,11 @@
 import 'package:dio/dio.dart';
 import 'package:smart_glasses/modules/wear/data/auth/data_source/auth_data_source.dart';
 import 'package:smart_glasses/modules/wear/data/auth/data_source/auth_dio_client.dart';
+import 'package:smart_glasses/modules/wear/data/availability/local_wear_availability_repository.dart';
 import 'package:smart_glasses/modules/wear/data/bdto/data_source/bdto_datasource.dart';
+import 'package:smart_glasses/modules/wear/domain/availability/repository/wear_availability_repository.dart';
+import 'package:smart_glasses/modules/wear/domain/availability/use_case/wear_availability_catalog_fill_use_case.dart';
+import 'package:smart_glasses/modules/wear/domain/availability/use_case/wear_availability_flow_use_case.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/use_case/authenticate_user_use_case.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_control_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
@@ -48,6 +52,12 @@ class WearDependencies {
       speechRecognitionService: speechRecognitionService,
     );
   }
+
+  final WearAvailabilityRepository availabilityRepository =
+      LocalWearAvailabilityRepository();
+
+  late final WearAvailabilityFlowUseCase availabilityFlowUseCase =
+      WearAvailabilityFlowUseCase(availabilityRepository);
 
   Future<void>? _voiceTypingPrepareFuture;
 
@@ -97,6 +107,12 @@ class WearDependencies {
       GetAvailablePrintersUseCase(bdto);
 
   GetBarcodeInfoUseCase getBarcodeInfoUseCase() => GetBarcodeInfoUseCase(bdto);
+
+  WearAvailabilityCatalogFillUseCase availabilityCatalogFillUseCase() =>
+      WearAvailabilityCatalogFillUseCase(
+        getBarcodeInfoUseCase: getBarcodeInfoUseCase(),
+        repository: availabilityRepository,
+      );
 
   PrintPriceTagUseCase get printPriceTagUseCase => PrintPriceTagUseCase(bdto);
 }

@@ -10,8 +10,11 @@ class WearGlassesState {
     this.isLoading = false,
     this.isError = false,
     this.items = const <String>[],
+    this.bodyLines = const <String>[],
+    this.checkLines = const <String>[],
     this.selectedIndex = 0,
     this.pageText,
+    this.footerText,
     this.primaryAction,
     this.secondaryAction,
     this.statusIcon,
@@ -38,8 +41,11 @@ class WearGlassesState {
       isLoading: _bool(payload['isLoading']),
       isError: _bool(payload['isError']),
       items: _items(payload['items']),
+      bodyLines: _items(payload['bodyLines']),
+      checkLines: _items(payload['checkLines']),
       selectedIndex: _int(payload['selectedIndex']),
       pageText: _string(payload['pageText']),
+      footerText: _string(payload['footerText']),
       primaryAction: _string(payload['primaryAction']),
       secondaryAction: _string(payload['secondaryAction']),
       statusIcon: _string(payload['statusIcon']),
@@ -59,8 +65,11 @@ class WearGlassesState {
   final bool isLoading;
   final bool isError;
   final List<String> items;
+  final List<String> bodyLines;
+  final List<String> checkLines;
   final int selectedIndex;
   final String? pageText;
+  final String? footerText;
   final String? primaryAction;
   final String? secondaryAction;
   final String? statusIcon;

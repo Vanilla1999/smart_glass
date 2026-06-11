@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_fill_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/wear_main_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/db_settings_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/settings/wear_glasses_preview_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
@@ -38,22 +41,25 @@ class _WearSettingsScreenState extends ConsumerState<WearSettingsScreen> {
     if (!mounted) return;
     context.go(WearMainScreen.route);
   }
+
   Future<void> _switchDB() async {
     if (!mounted) return;
     context.go(DBSettingsScreen.route);
   }
 
+  Future<void> _openGlassesPreview() async {
+    if (!mounted) return;
+    context.push(WearGlassesPreviewScreen.route);
+  }
+
+  Future<void> _openAvailabilityFill() async {
+    if (!mounted) return;
+    context.push(WearAvailabilityFillScreen.route);
+  }
+
   void _connectRingScanner() {
     // TODO: remove stub dep
     // ref.read(bluetoothNotifierProvider.notifier).showBluetoothDialog();
-  }
-
-  String _asUiMessage(Object error) {
-    final String raw = error.toString();
-    if (raw.startsWith('Exception: ')) {
-      return raw.substring('Exception: '.length);
-    }
-    return raw;
   }
 
   @override
@@ -82,6 +88,18 @@ class _WearSettingsScreenState extends ConsumerState<WearSettingsScreen> {
         icon: WearImages.userSwitch,
         onTap: _switchDB,
       ),
+      if (kDebugMode)
+        WearPill(
+          title: 'Превью очков',
+          icon: WearImages.gear,
+          onTap: _openGlassesPreview,
+        ),
+      if (kDebugMode)
+        WearPill(
+          title: 'Наполнить базу',
+          icon: WearImages.database,
+          onTap: _openAvailabilityFill,
+        ),
       const SizedBox(
         height: 50,
       )
