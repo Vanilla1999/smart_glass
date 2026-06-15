@@ -25,12 +25,16 @@ class WearStatusScreen extends StatefulWidget {
   State<WearStatusScreen> createState() => _WearStatusScreenState();
 }
 
-class _WearStatusScreenState extends State<WearStatusScreen> {
+class _WearStatusScreenState extends State<WearStatusScreen>
+    with WidgetsBindingObserver {
   Timer? _timer;
+  bool _autoActionDone = false;
+  int? _autoDeadlineMillis;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     final WearStatusScreenArgs? a = widget.args;
     if (a == null) return;
@@ -61,26 +65,97 @@ class _WearStatusScreenState extends State<WearStatusScreen> {
 
     if (action == WearStatusAutoAction.none) return;
 
-    _timer = Timer(after, () {
-      if (!mounted) return;
+    _scheduleAutoAction(a, action, after);
+  }
 
-      if (action == WearStatusAutoAction.pop) {
-        context.pop();
-        return;
-      }
-
-      if (action == WearStatusAutoAction.go) {
-        final String? r = a.autoRoute;
-        if (r == null) return;
-        context.go(r, extra: a.autoExtra);
-      }
-    });
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    print(
+      '[BACK-DEBUG] WearStatusScreen.lifecycle state=$state '
+      'title=${widget.args?.title} autoDone=$_autoActionDone',
+    );
+    if (state == AppLifecycleState.resumed) {
+      _runAutoActionIfDue(source: 'lifecycle_resumed');
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
+  }
+
+  void _scheduleAutoAction(
+    WearStatusScreenArgs args,
+    WearStatusAutoAction action,
+    Duration after,
+  ) {
+    final int now = DateTime.now().millisecondsSinceEpoch;
+    final int startedAt = args.autoStartedAtMillis ?? now;
+    final int deadline = startedAt + after.inMilliseconds;
+    _autoDeadlineMillis = deadline;
+    final int remainingMs = deadline - now;
+    print(
+      '[BACK-DEBUG] WearStatusScreen: schedule auto action=$action '
+      'after=$after title=${args.title} now=$now startedAt=$startedAt '
+      'deadline=$deadline remainingMs=$remainingMs',
+    );
+
+    if (remainingMs <= 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _runAutoActionIfDue(source: 'post_frame_overdue');
+      });
+      return;
+    }
+
+    _timer = Timer(Duration(milliseconds: remainingMs), () {
+      _runAutoActionIfDue(source: 'timer');
+    });
+  }
+
+  void _runAutoActionIfDue({required String source}) {
+    if (_autoActionDone || !mounted) return;
+    final WearStatusScreenArgs? a = widget.args;
+    final Duration? after = a?.autoAfter;
+    if (a == null || after == null) return;
+
+    final WearStatusAutoAction action =
+        a.autoAction == WearStatusAutoAction.none
+            ? (a.autoRoute != null
+                ? WearStatusAutoAction.go
+                : WearStatusAutoAction.none)
+            : a.autoAction;
+    if (action == WearStatusAutoAction.none) return;
+
+    final int now = DateTime.now().millisecondsSinceEpoch;
+    final int deadline = _autoDeadlineMillis ??
+        ((a.autoStartedAtMillis ?? now) + after.inMilliseconds);
+    if (now < deadline) {
+      print(
+        '[BACK-DEBUG] WearStatusScreen: auto action not due source=$source '
+        'title=${a.title} now=$now deadline=$deadline remainingMs=${deadline - now}',
+      );
+      return;
+    }
+
+    _autoActionDone = true;
+    _timer?.cancel();
+    print(
+      '[BACK-DEBUG] WearStatusScreen: auto action source=$source '
+      'action=$action after=${a.autoAfter}, kind=${a.kind}, title=${a.title}',
+    );
+
+    if (action == WearStatusAutoAction.pop) {
+      context.pop();
+      return;
+    }
+
+    if (action == WearStatusAutoAction.go) {
+      final String? r = a.autoRoute;
+      if (r == null) return;
+      context.go(r, extra: a.autoExtra);
+    }
   }
 
   @override

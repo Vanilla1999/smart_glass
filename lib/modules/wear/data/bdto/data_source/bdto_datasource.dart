@@ -37,14 +37,14 @@ class BdtoDataSource {
       return;
     }
     print('BDTO opening connection...');
-    final String host = _getPref('DBTO_HOST', _requireEnv('DBTO_HOST'));
-    final String portValue = _getPref('DBTO_PORT', _requireEnv('DBTO_PORT'));
+    final String host = _getConfig('DBTO_HOST');
+    final String portValue = _getConfig('DBTO_PORT');
     final int port = int.tryParse(portValue) ??
         (throw StateError('DBTO_PORT is not a valid int: $portValue'));
-    final String database = _getPref('DBTO_PATH', _requireEnv('DBTO_PATH'));
-    final String user = _getPref('DBTO_USER', _requireEnv('DBTO_USER'));
-    final String password = _getPref('DBTO_PASSWORD', _requireEnv('DBTO_PASSWORD'));
-    final String role = _getPref('DBTO_ROLE', _requireEnv('DBTO_ROLE'));
+    final String database = _getConfig('DBTO_PATH');
+    final String user = _getConfig('DBTO_USER');
+    final String password = _getConfig('DBTO_PASSWORD');
+    final String role = _getConfig('DBTO_ROLE');
 
     _db = await FbDb.attach(
       host: host,
@@ -60,8 +60,13 @@ class BdtoDataSource {
     _db = null;
     await open();
   }
-  String _getPref(String key, String defaultValue) {
-    return _prefs?.getString(key) ?? defaultValue;
+
+  String _getConfig(String key) {
+    final String? value = _prefs?.getString(key);
+    if (value != null && value.isNotEmpty) {
+      return value;
+    }
+    return _requireEnv(key);
   }
 
   /// (`PPRINT_PRINTERSORT`)

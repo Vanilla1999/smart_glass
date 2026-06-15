@@ -8,7 +8,6 @@ import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_pay
 import 'package:smart_glasses/modules/wear/presentation/screens/printers/cubit/wear_printer_select_cubit.dart';
 
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_scan_idle_screen.dart';
-import 'package:smart_glasses/modules/wear/services/wear_voice_session.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
@@ -32,12 +31,11 @@ class _WearPrinterSelectScreenState
     extends ConsumerState<WearPrinterSelectScreen> {
   final ScrollController _scroll = ScrollController();
   int _focusedIndex = 0;
+  bool _isScanScreenOpen = false;
 
   @override
   void initState() {
     super.initState();
-    print('[PrinterSelect] initState - starting voice session');
-    WearVoiceSession.I.start();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _sendGlassesState(ref.read(wearPrinterSelectNotifierProvider));
     });
@@ -68,6 +66,10 @@ class _WearPrinterSelectScreenState
       }
       if (previous?.yellowPrinter != next.yellowPrinter &&
           next.yellowPrinter != null) {
+        print(
+          '[BACK-DEBUG] PrinterSelect.ref.listen: yellowPrinter changed, '
+          'calling _openScanScreen. _isScanScreenOpen=$_isScanScreenOpen',
+        );
         _openScanScreen(context, next);
       }
     });
@@ -263,13 +265,31 @@ class _WearPrinterSelectScreenState
     );
   }
 
-  void _openScanScreen(BuildContext context, WearPrinterSelectState state) {
+  Future<void> _openScanScreen(
+    BuildContext context,
+    WearPrinterSelectState state,
+  ) async {
+    if (_isScanScreenOpen) {
+      print(
+        '[BACK-DEBUG] PrinterSelect._openScanScreen: '
+        '_isScanScreenOpen already true, returning',
+      );
+      return;
+    }
     final WearPrinter? white = state.whitePrinter;
     final WearPrinter? yellow = state.yellowPrinter;
     if (white == null || yellow == null) {
+      print(
+        '[BACK-DEBUG] PrinterSelect._openScanScreen: '
+        'white=$white yellow=$yellow, returning',
+      );
       return;
     }
     if (white.id == yellow.id) {
+      print(
+        '[BACK-DEBUG] PrinterSelect._openScanScreen: '
+        'white.id==yellow.id, returning',
+      );
       return;
     }
     final WearPrinterSelection selection = WearPrinterSelection(
@@ -277,11 +297,38 @@ class _WearPrinterSelectScreenState
       yellowPrinter: yellow,
     );
     WearSession.setPrinterSelection(selection);
-    WearStatusIconReporter.I.refreshAndResend();
-    context.go(WearScanIdleScreen.route, extra: selection);
+    _isScanScreenOpen = true;
+    print('[BACK-DEBUG] PrinterSelect._openScanScreen: pushing scan screen');
+    await context.push(WearScanIdleScreen.route, extra: selection);
+    _isScanScreenOpen = false;
+    print(
+      '[BACK-DEBUG] PrinterSelect._openScanScreen: scan popped back, '
+      'mounted=$mounted, _isScanScreenOpen=$_isScanScreenOpen',
+    );
+
+    if (!mounted) {
+      return;
+    }
+    if (!_isCurrentRoute()) {
+      print(
+        '[BACK-DEBUG] PrinterSelect._openScanScreen: '
+        'screen is not current after scan pop, skip glasses update',
+      );
+      return;
+    }
+    _sendGlassesState(ref.read(wearPrinterSelectNotifierProvider));
   }
 
   void _sendGlassesState(WearPrinterSelectState state, {bool fast = false}) {
+    if (!mounted) return;
+    if (_isScanScreenOpen || !_isCurrentRoute()) {
+      print(
+        '[PrinterSelect] skip glasses update: '
+        '_isScanScreenOpen=$_isScanScreenOpen isCurrent=${_isCurrentRoute()}',
+      );
+      return;
+    }
+
     Future<void> Function(WearGlassesPayload) send = fast
         ? WearStatusIconReporter.I.sendFast
         : WearStatusIconReporter.I.send;
@@ -332,5 +379,10 @@ class _WearPrinterSelectScreenState
       if (!_scroll.hasClients) return;
       _scroll.jumpTo(0.0);
     });
+  }
+
+  bool _isCurrentRoute() {
+    final ModalRoute<dynamic>? route = ModalRoute.of(context);
+    return route == null || route.isCurrent;
   }
 }

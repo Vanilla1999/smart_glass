@@ -35,6 +35,7 @@ class WearScanIdleScreen extends ConsumerStatefulWidget {
 class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
   bool _isStatusRouteOpen = false;
   int _statusRouteSession = 0;
+  bool _isManualInputOpen = false;
 
   AutoDisposeStateNotifierProvider<WearScanNotifier, WearScanState>
       get _provider => wearScanNotifierProvider(widget.printers);
@@ -48,8 +49,31 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
   }
 
   Future<void> _onVoiceSelect() async {
+    final int t0 = DateTime.now().millisecondsSinceEpoch;
+    final bool isCurrent = ModalRoute.of(context)?.isCurrent ?? true;
+    print(
+      '[ScanIdle] _onVoiceSelect called at $t0 '
+      'mounted=$mounted isCurrent=$isCurrent '
+      '_isManualInputOpen=$_isManualInputOpen',
+    );
+    if (_isManualInputOpen) {
+      print('[ScanIdle] _onVoiceSelect ignored: manual input already open');
+      return;
+    }
+    if (!isCurrent) {
+      print('[ScanIdle] _onVoiceSelect ignored: route is not current');
+      return;
+    }
+    _isManualInputOpen = true;
     final String? code = await context.push<String>(
       WearPrintCodeInputScreen.route,
+    );
+    if (mounted) {
+      _isManualInputOpen = false;
+    }
+    print(
+      '[ScanIdle] manual input returned at '
+      '${DateTime.now().millisecondsSinceEpoch}: code=$code mounted=$mounted',
     );
     if (code == null || code.trim().isEmpty) {
       return;
@@ -133,7 +157,6 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
     });
 
     return WearVoiceCommandListener(
-      onSelect: _onVoiceSelect,
       child: WearScreenScaffold(
         showHomeButton: true,
         child: Stack(
@@ -161,6 +184,11 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
 
   Future<void> _openOrReplaceStatus(WearStatusScreenArgs args) async {
     final int session = ++_statusRouteSession;
+    final int statusStartedAt = DateTime.now().millisecondsSinceEpoch;
+    final WearStatusScreenArgs statusArgs =
+        args.autoStartedAtMillis == null
+            ? args.withAutoStartedAt(statusStartedAt)
+            : args;
     final bool scanScreenIsCurrent = ModalRoute.of(context)?.isCurrent ?? true;
 
     if (_isStatusRouteOpen && !scanScreenIsCurrent) {
@@ -175,7 +203,16 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
     }
 
     _isStatusRouteOpen = true;
-    await context.push(WearStatusScreen.route, extra: args);
+    print(
+      '[BACK-DEBUG] ScanIdle._openOrReplaceStatus: pushing status, '
+      'kind=${statusArgs.kind}, title=${statusArgs.title}, '
+      'autoAfter=${statusArgs.autoAfter}, startedAt=$statusStartedAt',
+    );
+    await context.push(WearStatusScreen.route, extra: statusArgs);
+    print(
+      '[BACK-DEBUG] ScanIdle._openOrReplaceStatus: status popped back, '
+      'session=$session, _statusRouteSession=$_statusRouteSession',
+    );
 
     if (!mounted) {
       return;
@@ -184,10 +221,19 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
       _isStatusRouteOpen = false;
     }
 
-    final bool isPrintSuccess = args.kind == WearStatusKind.success &&
-        args.title.toLowerCase().contains('ценник');
+    final bool isPrintSuccess = statusArgs.kind == WearStatusKind.success &&
+        statusArgs.title.toLowerCase().contains('ценник');
+    print(
+      '[BACK-DEBUG] ScanIdle._openOrReplaceStatus: isPrintSuccess=$isPrintSuccess, '
+      'mounted=$mounted',
+    );
     if (isPrintSuccess && mounted) {
-      await context.push<bool>(WearContinueScanScreen.route);
+      final bool? shouldContinue =
+          await context.push<bool>(WearContinueScanScreen.route);
+      if (shouldContinue == true && mounted) {
+        ref.read(_provider.notifier).allowRepeatLastBarcode();
+        WearStatusIconReporter.I.sendFast(WearGlassesPayload.scanWaiting());
+      }
     }
   }
 

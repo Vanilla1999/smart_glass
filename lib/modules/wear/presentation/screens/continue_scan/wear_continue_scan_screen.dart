@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/menu/wear_menu_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_svg_icon.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_voice_command_listener.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
+import 'package:smart_glasses/modules/wear/services/wear_voice_session.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
@@ -19,32 +21,112 @@ class WearContinueScanScreen extends StatefulWidget {
   State<WearContinueScanScreen> createState() => _WearContinueScanScreenState();
 }
 
-class _WearContinueScanScreenState extends State<WearContinueScanScreen> {
+class _WearContinueScanScreenState extends State<WearContinueScanScreen>
+    with WidgetsBindingObserver {
   int _selectedButtonIndex = 0;
+  bool _isActionInProgress = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      WearStatusIconReporter.I.send(WearGlassesPayload.continueScan());
+      _sendGlassesState();
+      WearVoiceSession.I.ensureHealthy(reason: 'continue_scan_enter');
     });
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    print(
+      '[ContinueScan] lifecycle state=$state '
+      'selectedIndex=$_selectedButtonIndex actionInProgress=$_isActionInProgress',
+    );
+    if (state == AppLifecycleState.resumed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _sendGlassesState(fast: true);
+        WearVoiceSession.I.ensureHealthy(reason: 'continue_scan_resumed');
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
   void _onVoiceUp() {
-    setState(() => _selectedButtonIndex = 0);
+    print(
+      '[ContinueScan] _onVoiceUp called, '
+      '_selectedButtonIndex=$_selectedButtonIndex',
+    );
+    _setFocusedButton(0);
   }
 
   void _onVoiceDown() {
-    setState(() => _selectedButtonIndex = 1);
+    print(
+      '[ContinueScan] _onVoiceDown called, '
+      '_selectedButtonIndex=$_selectedButtonIndex',
+    );
+    _setFocusedButton(1);
   }
 
   void _onVoiceSelect() {
+    print(
+      '[ContinueScan] _onVoiceSelect called, '
+      '_selectedButtonIndex=$_selectedButtonIndex, '
+      '_isActionInProgress=$_isActionInProgress',
+    );
+    if (_isActionInProgress) return;
     if (_selectedButtonIndex == 0) {
-      WearStatusIconReporter.I.send(WearGlassesPayload.scanWaiting());
-      context.pop(true);
+      _continueScanning();
     } else {
-      context.go(WearMenuScreen.route);
+      _finishScanning();
+    }
+  }
+
+  void _continueScanning() {
+    if (_isActionInProgress) return;
+    _isActionInProgress = true;
+    WearStatusIconReporter.I.sendFast(WearGlassesPayload.scanWaiting());
+    context.pop(true);
+  }
+
+  void _finishScanning() {
+    if (_isActionInProgress) return;
+    _isActionInProgress = true;
+    WearStatusIconReporter.I.sendFast(WearGlassesPayload.menu());
+    context.go(WearMenuScreen.route);
+  }
+
+  void _setFocusedButton(int index) {
+    print(
+      '[ContinueScan] _setFocusedButton index=$index, '
+      'current=$_selectedButtonIndex',
+    );
+    if (_selectedButtonIndex == index) {
+      _sendGlassesState(fast: true);
+      return;
+    }
+    setState(() => _selectedButtonIndex = index);
+    _sendGlassesState(fast: true);
+  }
+
+  void _sendGlassesState({bool fast = false}) {
+    print(
+      '[ContinueScan] _sendGlassesState selectedIndex=$_selectedButtonIndex, '
+      'fast=$fast mounted=$mounted actionInProgress=$_isActionInProgress',
+    );
+    final WearGlassesPayload payload = WearGlassesPayload.continueScan(
+      selectedIndex: _selectedButtonIndex,
+    );
+    if (fast) {
+      WearStatusIconReporter.I.sendFast(payload);
+    } else {
+      WearStatusIconReporter.I.send(payload);
     }
   }
 
@@ -81,22 +163,20 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    _ContinueButton(
-                      title: 'Продолжить',
-                      onTap: () {
-                        WearStatusIconReporter.I.send(
-                          WearGlassesPayload.scanWaiting(),
-                        );
-                        context.pop(true);
-                      },
-                      isFocused: _selectedButtonIndex == 0,
+                    SizedBox(
+                      width: 132,
+                      child: WearPill(
+                        title: 'Продолжить',
+                        onTap: _continueScanning,
+                      ),
                     ),
                     const SizedBox(width: 12),
-                    _ContinueButton(
-                      title: 'Завершить',
-                      onTap: () => context.go(WearMenuScreen.route),
-                      isSecondary: true,
-                      isFocused: _selectedButtonIndex == 1,
+                    SizedBox(
+                      width: 132,
+                      child: WearPill(
+                        title: 'Завершить',
+                        onTap: _finishScanning,
+                      ),
                     ),
                   ],
                 ),
@@ -126,58 +206,6 @@ class _ScanIconBubble extends StatelessWidget {
           WearImages.barcode,
           size: 22,
           color: WearColors.textDefault,
-        ),
-      ),
-    );
-  }
-}
-
-class _ContinueButton extends StatelessWidget {
-  const _ContinueButton({
-    required this.title,
-    required this.onTap,
-    this.isSecondary = false,
-    this.isFocused = false,
-  });
-
-  final String title;
-  final VoidCallback onTap;
-  final bool isSecondary;
-  final bool isFocused;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(33),
-        border: Border.all(
-          color: isFocused ? WearColors.buttonPrimary : Colors.transparent,
-          width: 2,
-        ),
-      ),
-      child: Material(
-        color:
-            isSecondary ? WearColors.buttonSecondaryDefault : WearColors.red1,
-        borderRadius: BorderRadius.circular(33),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: SizedBox(
-            width: 138,
-            height: 34,
-            child: Center(
-              child: Text(
-                title,
-                style: WearTypography.lable.copyWith(
-                  fontSize: 15,
-                  color:
-                      isSecondary ? WearColors.textDefault : WearColors.white,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
         ),
       ),
     );

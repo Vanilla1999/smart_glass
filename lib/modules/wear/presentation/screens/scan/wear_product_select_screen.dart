@@ -99,23 +99,9 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen> {
   void _onVoiceSelect() {
     final List<BarcodeProductInfo> products =
         widget.args?.products ?? <BarcodeProductInfo>[];
-    if (products.isEmpty || !_scroll.hasClients) return;
-    final double viewH = _scroll.position.viewportDimension;
-    const double paddingTop = 40;
-    const double edgeFracTop = 0.0;
-    const double itemExtent = 56;
-    final double topInset = paddingTop + viewH * edgeFracTop;
-    final int listIndex = WearScalingListView.computeFocusedListIndex(
-      offset: _scroll.offset,
-      viewportHeight: viewH,
-      topInset: topInset,
-      itemExtent: itemExtent,
-      itemCount: products.length + 2,
-    );
-    final int productIndex = listIndex - 1;
-    if (productIndex >= 0 && productIndex < products.length) {
-      context.pop(products[productIndex]);
-    }
+    if (products.isEmpty) return;
+    final int productIndex = _focusedIndex.clamp(0, products.length - 1);
+    context.pop(products[productIndex]);
   }
 
   @override
@@ -227,7 +213,6 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen> {
     BuildContext context,
     BarcodeProductInfo product,
   ) async {
-    final String details = _buildDetails(product);
     await showDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) {

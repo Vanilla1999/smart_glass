@@ -1,5 +1,7 @@
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
 import 'package:wifi_info_plugin_plus/wifi_info_plugin_plus.dart';
 
 class WearWifiStatus {
@@ -28,6 +30,17 @@ class WearWifiStatusService {
 
   Future<WearWifiStatus> getStatus() async {
     try {
+      if (WearMockConfig.isEnabled) {
+        return const WearWifiStatus(isAvailable: true, level: 3);
+      }
+
+      final AppLifecycleState? lifecycleState =
+          WidgetsBinding.instance.lifecycleState;
+      if (lifecycleState != null &&
+          lifecycleState != AppLifecycleState.resumed) {
+        return const WearWifiStatus(isAvailable: false, level: 0);
+      }
+
       final bool canReadWifiDetails = await _ensureWifiDetailsPermission();
       if (!canReadWifiDetails) {
         return const WearWifiStatus(isAvailable: false, level: 0);

@@ -21,16 +21,6 @@ class HomeCubit extends Cubit<HomeState> {
     await _methodChannelService.updateCounter(_counter);
   }
 
-  /// Show glasses with progress bar
-  Future<void> showGlasses() async {
-    await _methodChannelService.showGlasses(_counter);
-  }
-
-  /// Show glasses screen 2
-  Future<void> showGlassesScreen2() async {
-    await _methodChannelService.showGlassesScreen2(_counter);
-  }
-
   /// Save logs to file
   Future<void> saveLogs() async {
     await _methodChannelService.saveLogs();

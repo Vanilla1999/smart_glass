@@ -20,11 +20,9 @@ import 'package:smart_glasses/modules/wear/presentation/screens/printers/wear_pr
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_product_select_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_scan_idle_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/db_settings_screen.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/settings/wear_glasses_preview_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/wear_settings_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_screen.dart';
-import 'package:smart_glasses/modules/wear/presentation/widgets/wear_voice_command_listener.dart';
 
 class WearRoute {
   static String get initialRoute => _shouldSkipScannerConnect()
@@ -35,55 +33,37 @@ class WearRoute {
         GoRoute(
           path: WearScannerConnectScreen.route,
           builder: (BuildContext context, GoRouterState state) {
-            return const WearVoiceCommandOrchestrator(
-              child: WearScannerConnectScreen(),
-            );
+            return const WearScannerConnectScreen();
           },
         ),
         GoRoute(
           path: WearMainScreen.route,
           builder: (BuildContext context, GoRouterState state) {
-            return const WearVoiceCommandOrchestrator(
-              child: WearMainScreen(),
-            );
+            return const WearMainScreen();
           },
         ),
         GoRoute(
           path: WearMenuScreen.route,
           builder: (BuildContext context, GoRouterState state) {
-            return const WearVoiceCommandOrchestrator(
-              child: WearMenuScreen(),
-            );
+            return const WearMenuScreen();
           },
         ),
         GoRoute(
           path: WearSettingsScreen.route,
           builder: (BuildContext context, GoRouterState state) {
-            return const WearVoiceCommandOrchestrator(
-              child: WearSettingsScreen(),
-            );
+            return const WearSettingsScreen();
           },
         ),
         GoRoute(
           path: DBSettingsScreen.route,
           builder: (BuildContext context, GoRouterState state) {
-            return const WearVoiceCommandOrchestrator(
-              child: DBSettingsScreen(),
-            );
-          },
-        ),
-        GoRoute(
-          path: WearGlassesPreviewScreen.route,
-          builder: (BuildContext context, GoRouterState state) {
-            return const WearGlassesPreviewScreen();
+            return const DBSettingsScreen();
           },
         ),
         GoRoute(
           path: WearPrinterSelectScreen.route,
           builder: (BuildContext context, GoRouterState state) {
-            return const WearVoiceCommandOrchestrator(
-              child: WearPrinterSelectScreen(),
-            );
+            return const WearPrinterSelectScreen();
           },
         ),
         GoRoute(
@@ -93,9 +73,7 @@ class WearRoute {
                 state.extra is WearPrinterSelection
                     ? state.extra! as WearPrinterSelection
                     : null;
-            return WearVoiceCommandOrchestrator(
-              child: WearScanIdleScreen(printers: selection),
-            );
+            return WearScanIdleScreen(printers: selection);
           },
         ),
         GoRoute(
@@ -105,41 +83,31 @@ class WearRoute {
                 state.extra is WearProductSelectArgs
                     ? state.extra! as WearProductSelectArgs
                     : null;
-            return WearVoiceCommandOrchestrator(
-              child: WearProductSelectScreen(args: args),
-            );
+            return WearProductSelectScreen(args: args);
           },
         ),
         GoRoute(
           path: WearPrintCodeInputScreen.route,
           builder: (BuildContext context, GoRouterState state) {
-            return WearVoiceCommandOrchestrator(
-              child: WearPrintCodeInputScreen(args: state.extra),
-            );
+            return WearPrintCodeInputScreen(args: state.extra);
           },
         ),
         GoRoute(
           path: WearAvailabilityInteractionScreen.route,
           builder: (BuildContext context, GoRouterState state) {
-            return const WearVoiceCommandOrchestrator(
-              child: WearAvailabilityInteractionScreen(),
-            );
+            return const WearAvailabilityInteractionScreen();
           },
         ),
         GoRoute(
           path: WearAvailabilityGroupScreen.route,
           builder: (BuildContext context, GoRouterState state) {
-            return const WearVoiceCommandOrchestrator(
-              child: WearAvailabilityGroupScreen(),
-            );
+            return const WearAvailabilityGroupScreen();
           },
         ),
         GoRoute(
           path: WearAvailabilityDirectScanScreen.route,
           builder: (BuildContext context, GoRouterState state) {
-            return const WearVoiceCommandOrchestrator(
-              child: WearAvailabilityDirectScanScreen(),
-            );
+            return const WearAvailabilityDirectScanScreen();
           },
         ),
         GoRoute(
@@ -149,9 +117,7 @@ class WearRoute {
                 state.extra is WearAvailabilityGroup
                     ? state.extra! as WearAvailabilityGroup
                     : null;
-            return WearVoiceCommandOrchestrator(
-              child: WearAvailabilityProductScreen(group: group),
-            );
+            return WearAvailabilityProductScreen(group: group);
           },
         ),
         GoRoute(
@@ -161,33 +127,25 @@ class WearRoute {
                 state.extra is WearAvailabilityProduct
                     ? state.extra! as WearAvailabilityProduct
                     : null;
-            return WearVoiceCommandOrchestrator(
-              child: WearAvailabilityCheckScreen(product: product),
-            );
+            return WearAvailabilityCheckScreen(product: product);
           },
         ),
         GoRoute(
           path: WearAvailabilityFillScreen.route,
           builder: (BuildContext context, GoRouterState state) {
-            return const WearVoiceCommandOrchestrator(
-              child: WearAvailabilityFillScreen(),
-            );
+            return const WearAvailabilityFillScreen();
           },
         ),
         GoRoute(
           path: WearHelpScreen.route,
           builder: (BuildContext context, GoRouterState state) {
-            return const WearVoiceCommandOrchestrator(
-              child: WearHelpScreen(),
-            );
+            return const WearHelpScreen();
           },
         ),
         GoRoute(
           path: WearContinueScanScreen.route,
           builder: (BuildContext context, GoRouterState state) {
-            return const WearVoiceCommandOrchestrator(
-              child: WearContinueScanScreen(),
-            );
+            return const WearContinueScanScreen();
           },
         ),
         GoRoute(
@@ -197,9 +155,7 @@ class WearRoute {
                 state.extra is WearStatusScreenArgs
                     ? state.extra! as WearStatusScreenArgs
                     : null;
-            return WearVoiceCommandOrchestrator(
-              child: WearStatusScreen(args: args),
-            );
+            return WearStatusScreen(args: args);
           },
         ),
       ];

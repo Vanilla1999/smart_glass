@@ -15,6 +15,7 @@ class WearStatusScreenArgs {
     this.showHome = false,
     this.glassesStatusText,
     this.glassesStatusIcon,
+    this.autoStartedAtMillis,
   });
 
   factory WearStatusScreenArgs.userNotFound() {
@@ -44,4 +45,28 @@ class WearStatusScreenArgs {
 
   final String? glassesStatusText;
   final String? glassesStatusIcon;
+
+  /// Wall-clock timestamp for auto action deadline.
+  ///
+  /// Flutter timers can be delayed while the Android device is sleeping. Passing
+  /// the original event timestamp lets the status screen execute the action
+  /// immediately after wake if the deadline already passed.
+  final int? autoStartedAtMillis;
+
+  WearStatusScreenArgs withAutoStartedAt(int millis) {
+    return WearStatusScreenArgs(
+      kind: kind,
+      title: title,
+      message: message,
+      details: details,
+      autoAfter: autoAfter,
+      autoRoute: autoRoute,
+      autoExtra: autoExtra,
+      autoAction: autoAction,
+      showHome: showHome,
+      glassesStatusText: glassesStatusText,
+      glassesStatusIcon: glassesStatusIcon,
+      autoStartedAtMillis: millis,
+    );
+  }
 }

@@ -89,12 +89,14 @@ class WearGlassesPayload {
     );
   }
 
-  factory WearGlassesPayload.continueScan() {
-    return const WearGlassesPayload(
+  factory WearGlassesPayload.continueScan({int selectedIndex = 0}) {
+    return WearGlassesPayload(
       screenType: WearGlassesScreenType.continueScan,
       phase: WearGlassesPhase.idle,
       title: 'Сканирование товара',
       subtitle: 'Готовы продолжить?',
+      items: const <String>['Продолжить', 'Завершить'],
+      selectedIndex: selectedIndex,
       primaryAction: 'Продолжить',
       secondaryAction: 'Завершить',
     );

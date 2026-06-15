@@ -7,8 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthDioClient {
   Future<Dio> create() async {
-    final String host = await _getPref('AUTH_SERVICE_HOST', _requireEnv('AUTH_SERVICE_HOST'));
-    final String portValue = await _getPref('AUTH_SERVICE_PORT', _requireEnv('AUTH_SERVICE_PORT'));
+    final String host = await _getConfig('AUTH_SERVICE_HOST');
+    final String portValue = await _getConfig('AUTH_SERVICE_PORT');
     final int port = int.tryParse(portValue) ??
         (throw StateError(
             'AUTH_SERVICE_PORT не валидное значение: $portValue'));
@@ -55,9 +55,13 @@ class AuthDioClient {
     return _prefs!;
   }
 
-  Future<String> _getPref(String key, String defaultValue) async {
+  Future<String> _getConfig(String key) async {
     final prefs = await _preferences;
-    return prefs.getString(key) ?? defaultValue;
+    final String? value = prefs.getString(key);
+    if (value != null && value.isNotEmpty) {
+      return value;
+    }
+    return _requireEnv(key);
   }
 
   String _requireEnv(String key) {

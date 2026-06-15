@@ -53,7 +53,8 @@ class _TitleBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const Color color = WearGlassesScaffold.accentColor;
-    final bool isList = state.items.isNotEmpty;
+    final bool isList = state.items.isNotEmpty &&
+        state.screenType != WearGlassesScreenType.continueScan;
     final bool useDesignTitle =
         state.screenType == WearGlassesScreenType.availability ||
             state.screenType == WearGlassesScreenType.help;
@@ -100,6 +101,12 @@ class _Body extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (state.screenType == WearGlassesScreenType.continueScan) {
+      return Center(
+        child: _Actions(state: state),
+      );
+    }
+
     if (state.items.isNotEmpty) {
       if (state.screenType == WearGlassesScreenType.help) {
         return _HelpBody(state: state);
@@ -683,6 +690,8 @@ class _Actions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isContinueScan =
+        state.screenType == WearGlassesScreenType.continueScan;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: <Widget>[
@@ -690,10 +699,15 @@ class _Actions extends StatelessWidget {
           _ActionPill(
             state.primaryAction!,
             isSecondary: state.screenType == WearGlassesScreenType.help,
+            isSelected: isContinueScan ? state.selectedIndex == 0 : null,
           ),
         if (state.secondaryAction != null) ...<Widget>[
           const SizedBox(width: 12),
-          _ActionPill(state.secondaryAction!, isSecondary: true),
+          _ActionPill(
+            state.secondaryAction!,
+            isSecondary: true,
+            isSelected: isContinueScan ? state.selectedIndex == 1 : null,
+          ),
         ],
       ],
     );
@@ -701,17 +715,22 @@ class _Actions extends StatelessWidget {
 }
 
 class _ActionPill extends StatelessWidget {
-  const _ActionPill(this.text, {this.isSecondary = false});
+  const _ActionPill(
+    this.text, {
+    this.isSecondary = false,
+    this.isSelected,
+  });
 
   final String text;
   final bool isSecondary;
+  final bool? isSelected;
 
   @override
   Widget build(BuildContext context) {
+    final bool selected = isSelected ?? !isSecondary;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color:
-            isSecondary ? Colors.transparent : WearGlassesScaffold.accentColor,
+        color: selected ? WearGlassesScaffold.accentColor : Colors.transparent,
         border: Border.all(color: WearGlassesScaffold.accentColor, width: 2),
         borderRadius: BorderRadius.circular(999),
       ),
@@ -720,9 +739,9 @@ class _ActionPill extends StatelessWidget {
         child: Text(
           text,
           style: TextStyle(
-            color: isSecondary
-                ? WearGlassesScaffold.accentColor
-                : WearGlassesScaffold.designBackgroundColor,
+            color: selected
+                ? WearGlassesScaffold.designBackgroundColor
+                : WearGlassesScaffold.accentColor,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),

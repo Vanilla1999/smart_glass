@@ -14,12 +14,14 @@ class WearGlassesBridge {
 
   Future<void> show(WearGlassesPayload payload) async {
     if (!_isEnabled()) return;
-    await _methodChannelService.showWearGlasses(payload.toJson());
+    final Map<String, dynamic> json = payload.toJson();
+    await _methodChannelService.showWearGlasses(json);
   }
 
   Future<void> update(WearGlassesPayload payload) async {
     if (!_isEnabled()) return;
-    await _methodChannelService.updateWearGlasses(payload.toJson());
+    final Map<String, dynamic> json = payload.toJson();
+    await _methodChannelService.updateWearGlasses(json);
   }
 
   Future<void> hide() async {

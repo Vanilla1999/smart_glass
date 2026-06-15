@@ -5,6 +5,7 @@ import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/cubit/wear_auth_cubit.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/menu/wear_menu_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/db_settings_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_screen.dart';
@@ -34,6 +35,10 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
     WearDependencies.I.warmupVoiceTypingInBackground();
     WearStatusIconReporter.I.start();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (WearSession.isAuthorized) {
+        context.go(WearMenuScreen.route);
+        return;
+      }
       WearStatusIconReporter.I.show(WearGlassesPayload.authWaitingBarcode());
     });
   }
@@ -74,6 +79,12 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
 
     return PopScope(
       canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        print(
+          '[BACK-DEBUG] WearMainScreen.PopScope: '
+          'didPop=$didPop, result=$result',
+        );
+      },
       child: Scaffold(
         backgroundColor: Colors.white,
         body: _buildBody(state),
@@ -184,8 +195,10 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
       ),
       const SizedBox(height: 28),
       GestureDetector(
-        onTap: () => ref.read(wearAuthNotifierProvider.notifier).handleLogoTap(),
-        onLongPress: () => ref.read(wearAuthNotifierProvider.notifier).handleLogoLongPress(),
+        onTap: () =>
+            ref.read(wearAuthNotifierProvider.notifier).handleLogoTap(),
+        onLongPress: () =>
+            ref.read(wearAuthNotifierProvider.notifier).handleLogoLongPress(),
         child: SvgPicture.asset(WearImages.logo),
       ),
     ];
@@ -205,11 +218,29 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
     if (!mounted) return;
 
     _isStatusRouteOpen = true;
+    print(
+      '[BACK-DEBUG] MainScreen._openOrReplaceStatus: pushing status, '
+      'kind=${args.kind}, title=${args.title}',
+    );
     await context.push(WearStatusScreen.route, extra: args);
+    print(
+      '[BACK-DEBUG] MainScreen._openOrReplaceStatus: status popped back, '
+      'session=$session, _statusRouteSession=$_statusRouteSession, '
+      'kind=${args.kind}, isAuthorized=${WearSession.isAuthorized}',
+    );
 
     if (!mounted) return;
     if (session == _statusRouteSession) {
       _isStatusRouteOpen = false;
+    }
+    if (args.kind == WearStatusKind.success && WearSession.isAuthorized) {
+      if (!mounted) return;
+      print('[BACK-DEBUG] MainScreen: opening WearMenuScreen');
+      context.go(WearMenuScreen.route);
+    } else if (args.kind == WearStatusKind.error && !WearSession.isAuthorized) {
+      await WearStatusIconReporter.I.send(
+        WearGlassesPayload.authWaitingBarcode(),
+      );
     }
   }
 

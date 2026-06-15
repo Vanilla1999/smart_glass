@@ -10,6 +10,7 @@ import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dar
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
+import 'package:smart_glasses/modules/wear/presentation/widgets/wear_voice_command_listener.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
@@ -32,6 +33,7 @@ class WearAvailabilityProductScreen extends ConsumerStatefulWidget {
 class _WearAvailabilityProductScreenState
     extends ConsumerState<WearAvailabilityProductScreen> {
   final ScrollController _scroll = ScrollController();
+  int _focusedIndex = 0;
 
   @override
   void dispose() {
@@ -55,20 +57,25 @@ class _WearAvailabilityProductScreenState
       _sendGlassesState(group, value);
     });
 
-    return WearScreenScaffold(
-      showHomeButton: true,
-      scrollController: _scroll,
-      child: products.when(
-        data: (List<WearAvailabilityProduct> value) =>
-            _buildProducts(group, value),
-        loading: () {
-          _sendLoading(group);
-          return const Center(child: WearLoading());
-        },
-        error: (Object error, StackTrace _) {
-          _sendError(error);
-          return _buildMessage('Ошибка загрузки\n${_asUiMessage(error)}');
-        },
+    return WearVoiceCommandListener(
+      onUp: _onVoiceUp,
+      onDown: _onVoiceDown,
+      onSelect: _onVoiceSelect,
+      child: WearScreenScaffold(
+        showHomeButton: true,
+        scrollController: _scroll,
+        child: products.when(
+          data: (List<WearAvailabilityProduct> value) =>
+              _buildProducts(group, value),
+          loading: () {
+            _sendLoading(group);
+            return const Center(child: WearLoading());
+          },
+          error: (Object error, StackTrace _) {
+            _sendError(error);
+            return _buildMessage('Ошибка загрузки\n${_asUiMessage(error)}');
+          },
+        ),
       ),
     );
   }
@@ -122,7 +129,63 @@ class _WearAvailabilityProductScreenState
             ),
           );
         },
+        onFocusChanged: (int listIndex) {
+          final int itemIndex = (listIndex - 1).clamp(0, products.length - 1);
+          if (itemIndex == _focusedIndex) return;
+          _focusedIndex = itemIndex;
+          _sendGlassesState(group, products, fast: true);
+        },
       ),
+    );
+  }
+
+  void _onVoiceUp() {
+    final WearAvailabilityGroup? group = widget.group;
+    if (group == null) return;
+    final List<WearAvailabilityProduct>? products =
+        ref.read(wearAvailabilityProductsProvider(group)).valueOrNull;
+    if (products == null || products.isEmpty) return;
+    _focusedIndex = _focusedIndex.clamp(0, products.length - 1);
+    if (_focusedIndex <= 0) return;
+    _focusedIndex--;
+    _scrollToFocused();
+    _sendGlassesState(group, products, fast: true);
+  }
+
+  void _onVoiceDown() {
+    final WearAvailabilityGroup? group = widget.group;
+    if (group == null) return;
+    final List<WearAvailabilityProduct>? products =
+        ref.read(wearAvailabilityProductsProvider(group)).valueOrNull;
+    if (products == null || products.isEmpty) return;
+    _focusedIndex = _focusedIndex.clamp(0, products.length - 1);
+    if (_focusedIndex >= products.length - 1) return;
+    _focusedIndex++;
+    _scrollToFocused();
+    _sendGlassesState(group, products, fast: true);
+  }
+
+  void _onVoiceSelect() {
+    final WearAvailabilityGroup? group = widget.group;
+    if (group == null) return;
+    final List<WearAvailabilityProduct>? products =
+        ref.read(wearAvailabilityProductsProvider(group)).valueOrNull;
+    if (products == null || products.isEmpty) return;
+    final int productIndex = _focusedIndex.clamp(0, products.length - 1);
+    context.push(WearAvailabilityCheckScreen.route,
+        extra: products[productIndex]);
+  }
+
+  void _scrollToFocused() {
+    if (!_scroll.hasClients) return;
+    final double target = ((_focusedIndex + 1) * 56.0).clamp(
+      0.0,
+      _scroll.position.maxScrollExtent,
+    );
+    _scroll.animateTo(
+      target,
+      duration: const Duration(milliseconds: 150),
+      curve: Curves.easeOut,
     );
   }
 
@@ -138,15 +201,20 @@ class _WearAvailabilityProductScreenState
 
   void _sendGlassesState(
     WearAvailabilityGroup group,
-    List<WearAvailabilityProduct> products,
-  ) {
+    List<WearAvailabilityProduct> products, {
+    bool fast = false,
+  }) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      WearStatusIconReporter.I.send(
-        WearAvailabilityGlassesPayloads.products(
-          group: group,
-          products: products,
-        ),
+      final payload = WearAvailabilityGlassesPayloads.products(
+        group: group,
+        products: products,
+        selectedIndex: _focusedIndex,
       );
+      if (fast) {
+        WearStatusIconReporter.I.sendFast(payload);
+      } else {
+        WearStatusIconReporter.I.send(payload);
+      }
     });
   }
 

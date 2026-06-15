@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:multi_scanner/multi_scanner.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/use_case/authenticate_user_use_case.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/menu/wear_menu_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/presentation/utils/wear_feedback.dart';
 
@@ -72,7 +72,6 @@ class WearAuthNotifier extends StateNotifier<WearAuthState>
     super.dispose();
   }
 
-
   @override
   bool? onScanEvent(String payload) {
     print('[AUTH] onScanEvent called, payload: $payload');
@@ -123,8 +122,7 @@ class WearAuthNotifier extends StateNotifier<WearAuthState>
           title: 'Вошли как',
           message: _mockSkipUser.name,
           autoAfter: const Duration(seconds: 2),
-          autoAction: WearStatusAutoAction.go,
-          autoRoute: WearMenuScreen.route,
+          autoAction: WearStatusAutoAction.pop,
         ),
       );
     } catch (error) {
@@ -163,7 +161,7 @@ class WearAuthNotifier extends StateNotifier<WearAuthState>
     state = state.copyWith(phase: WearAuthPhase.loading);
 
     try {
-      if (WearMockConfig.isEnabled) {
+      if (WearMockConfig.isEnabled || await _isAuthMockEnabled()) {
         await _authorizeWithMockUser();
         return;
       }
@@ -182,7 +180,7 @@ class WearAuthNotifier extends StateNotifier<WearAuthState>
       print('[AUTH] User authorized: ${user.name}');
 
       await WearFeedback.play(WearStatusKind.success);
-      // 3) показываем статус и уходим в меню
+      // 3) показываем статус — pop вернёт на WearMainScreen, тот push-нет меню
       state = state.copyWith(
         phase: WearAuthPhase.idle,
         nav: WearStatusScreenArgs(
@@ -190,8 +188,7 @@ class WearAuthNotifier extends StateNotifier<WearAuthState>
           title: 'Вошли как',
           message: user.name,
           autoAfter: const Duration(seconds: 2),
-          autoAction: WearStatusAutoAction.go,
-          autoRoute: WearMenuScreen.route,
+          autoAction: WearStatusAutoAction.pop,
         ),
       );
     } catch (error) {
@@ -222,8 +219,7 @@ class WearAuthNotifier extends StateNotifier<WearAuthState>
         title: 'Вошли как',
         message: _mockSkipUser.name,
         autoAfter: const Duration(seconds: 2),
-        autoAction: WearStatusAutoAction.go,
-        autoRoute: WearMenuScreen.route,
+        autoAction: WearStatusAutoAction.pop,
       ),
     );
   }
@@ -246,5 +242,10 @@ class WearAuthNotifier extends StateNotifier<WearAuthState>
 
   bool _isMockLogoSkipAuthEnabled() {
     return dotenv.env['WEAR_MOCK_SKIP_AUTH_ON_LOGO'] == 'true';
+  }
+
+  Future<bool> _isAuthMockEnabled() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('WEAR_MOCK_AUTH') ?? false;
   }
 }

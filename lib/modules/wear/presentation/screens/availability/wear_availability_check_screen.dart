@@ -12,6 +12,7 @@ import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_stat
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
+import 'package:smart_glasses/modules/wear/presentation/widgets/wear_voice_command_listener.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
@@ -75,39 +76,97 @@ class _WearAvailabilityCheckScreenState
       }
     });
 
-    return WearScreenScaffold(
-      showHomeButton: true,
-      child: Stack(
-        children: <Widget>[
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(4.5),
-              child: _CheckContent(
-                state: state,
-                onYes: () =>
-                    ref.read(provider.notifier).answerProductAvailable(true),
-                onNo: () =>
-                    ref.read(provider.notifier).answerProductAvailable(false),
-                onManualInput: () => _manualInput(provider),
-                onPrint: () => ref.read(provider.notifier).printPriceTag(),
-                onPhoto: () => ref.read(provider.notifier).capturePhoto(),
-                onComplete: () => ref.read(provider.notifier).complete(),
-                onBackToList: () => context.pop(),
-              ),
-            ),
-          ),
-          if (state.isLoading)
-            Positioned.fill(
-              child: ColoredBox(
-                color: const Color(0xCCFFFFFF),
-                child: Center(
-                  child: _LoadingContent(state: state),
+    return WearVoiceCommandListener(
+      onUp: _onVoiceUp,
+      onDown: _onVoiceDown,
+      onSelect: () => _onVoiceSelect(provider),
+      child: WearScreenScaffold(
+        showHomeButton: true,
+        child: Stack(
+          children: <Widget>[
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(4.5),
+                child: _CheckContent(
+                  state: state,
+                  onYes: () =>
+                      ref.read(provider.notifier).answerProductAvailable(true),
+                  onNo: () =>
+                      ref.read(provider.notifier).answerProductAvailable(false),
+                  onManualInput: () => _manualInput(provider),
+                  onPrint: () => ref.read(provider.notifier).printPriceTag(),
+                  onPhoto: () => ref.read(provider.notifier).capturePhoto(),
+                  onComplete: () => ref.read(provider.notifier).complete(),
+                  onBackToList: () => context.pop(),
                 ),
               ),
             ),
-        ],
+            if (state.isLoading)
+              Positioned.fill(
+                child: ColoredBox(
+                  color: const Color(0xCCFFFFFF),
+                  child: Center(
+                    child: _LoadingContent(state: state),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
+  }
+
+  void _onVoiceUp() {
+    final WearAvailabilityProduct? product = widget.product;
+    if (product == null) return;
+    final provider = wearAvailabilityCheckNotifierProvider(product);
+    final WearAvailabilityCheckState state = ref.read(provider);
+    if (state.flow.step == WearAvailabilityFlowStep.productQuestion) {
+      ref.read(provider.notifier).answerProductAvailable(true);
+    }
+  }
+
+  void _onVoiceDown() {
+    final WearAvailabilityProduct? product = widget.product;
+    if (product == null) return;
+    final provider = wearAvailabilityCheckNotifierProvider(product);
+    final WearAvailabilityCheckState state = ref.read(provider);
+    if (state.flow.step == WearAvailabilityFlowStep.productQuestion) {
+      ref.read(provider.notifier).answerProductAvailable(false);
+    }
+  }
+
+  void _onVoiceSelect(
+    AutoDisposeStateNotifierProvider<WearAvailabilityCheckNotifier,
+            WearAvailabilityCheckState>
+        provider,
+  ) {
+    final WearAvailabilityCheckState state = ref.read(provider);
+    if (state.isLoading) return;
+    switch (state.flow.step) {
+      case WearAvailabilityFlowStep.productQuestion:
+        ref.read(provider.notifier).answerProductAvailable(true);
+        break;
+      case WearAvailabilityFlowStep.productScan:
+      case WearAvailabilityFlowStep.priceTagScan:
+        _manualInput(provider);
+        break;
+      case WearAvailabilityFlowStep.priceTagOutdated:
+        ref.read(provider.notifier).printPriceTag();
+        break;
+      case WearAvailabilityFlowStep.photoCapture:
+        ref.read(provider.notifier).capturePhoto();
+        break;
+      case WearAvailabilityFlowStep.readyToComplete:
+      case WearAvailabilityFlowStep.manualInventoryRequired:
+        ref.read(provider.notifier).complete();
+        break;
+      case WearAvailabilityFlowStep.completed:
+        context.pop();
+        break;
+      default:
+        break;
+    }
   }
 
   Future<void> _manualInput(

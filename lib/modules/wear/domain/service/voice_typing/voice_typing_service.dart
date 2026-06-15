@@ -63,9 +63,12 @@ class VoiceTypingService {
   }
 
   Future<void> dispose() async {
-    await stopSession();
-    await _recognitionSubscription?.cancel();
-    await _resultsController.close();
+    try {
+      await stopSession();
+    } finally {
+      await _recognitionSubscription?.cancel();
+      await _resultsController.close();
+    }
   }
 
   void _onAudioChunk(Uint8List bytes) {

@@ -1,6 +1,5 @@
 import 'package:flutter/services.dart';
 import 'package:smart_glasses/core/constants/app_constants.dart';
-import 'package:smart_glasses/modules/wear/presentation/widgets/glasses_preview/glasses_preview_provider.dart';
 
 /// Service for managing MethodChannel communication with native code
 class MethodChannelService {
@@ -9,18 +8,10 @@ class MethodChannelService {
   static final MethodChannelService _instance = MethodChannelService._();
   factory MethodChannelService() => _instance;
 
-  final MethodChannel _appChannel = const MethodChannel(AppConstants.appChannelName);
-  final MethodChannel _glassesChannel = const MethodChannel(AppConstants.glassesChannelName);
-
-  /// Show glasses with progress bar
-  Future<void> showGlasses(int counter) async {
-    try {
-      await _appChannel.invokeMethod('showGlasses', counter);
-    } catch (e) {
-      print('Error showing glasses: $e');
-      rethrow;
-    }
-  }
+  final MethodChannel _appChannel =
+      const MethodChannel(AppConstants.appChannelName);
+  final MethodChannel _glassesChannel =
+      const MethodChannel(AppConstants.glassesChannelName);
 
   /// Show glasses initialization screen
   Future<void> showGlassesInitialization() async {
@@ -40,16 +31,6 @@ class MethodChannelService {
       await _appChannel.invokeMethod('navigateGlassesToEmpty');
     } catch (e) {
       print('Error navigating to empty screen: $e');
-      rethrow;
-    }
-  }
-
-  /// Show glasses screen 2
-  Future<void> showGlassesScreen2(int counter) async {
-    try {
-      await _appChannel.invokeMethod('showGlassesScreen2', counter);
-    } catch (e) {
-      print('Error showing glasses screen 2: $e');
       rethrow;
     }
   }
@@ -79,7 +60,6 @@ class MethodChannelService {
   /// Show wear projection screen on glasses and send initial payload.
   Future<void> showWearGlasses(Map<String, dynamic> payload) async {
     try {
-      GlassesPreviewNotifier.I.updateFromPayload(payload);
       await _appChannel.invokeMethod('showWearGlasses', payload);
     } catch (e) {
       print('Error showing wear glasses: $e');
@@ -90,7 +70,6 @@ class MethodChannelService {
   /// Update current wear projection payload on glasses.
   Future<void> updateWearGlasses(Map<String, dynamic> payload) async {
     try {
-      GlassesPreviewNotifier.I.updateFromPayload(payload);
       await _appChannel.invokeMethod('updateWearGlasses', payload);
     } catch (e) {
       print('Error updating wear glasses: $e');
@@ -131,7 +110,8 @@ class MethodChannelService {
   /// Get initial counter value from glasses
   Future<int> getInitialCounter() async {
     try {
-      final int result = await _glassesChannel.invokeMethod('getInitialCounter');
+      final int result =
+          await _glassesChannel.invokeMethod('getInitialCounter');
       return result;
     } catch (e) {
       print('Error getting initial counter: $e');
@@ -140,7 +120,8 @@ class MethodChannelService {
   }
 
   /// Set method call handler for glasses channel
-  void setGlassesMethodCallHandler(Future<dynamic> Function(MethodCall call) handler) {
+  void setGlassesMethodCallHandler(
+      Future<dynamic> Function(MethodCall call) handler) {
     _glassesChannel.setMethodCallHandler(handler);
   }
 }

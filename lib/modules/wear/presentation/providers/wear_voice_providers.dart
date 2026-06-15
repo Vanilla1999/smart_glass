@@ -4,6 +4,5 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voi
 
 final wearVoiceCommandsProvider = StreamProvider<WearVoiceCommand>((Ref ref) {
   final service = WearDependencies.I.voiceControlService;
-  ref.onDispose(() => service.dispose());
   return service.commandStream;
 });

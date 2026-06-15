@@ -311,6 +311,10 @@ class WearScanNotifier extends StateNotifier<WearScanState>
     state = state.copyWith(clearNav: true);
   }
 
+  void allowRepeatLastBarcode() {
+    _lastAcceptedBarcode = null;
+  }
+
   void _emitStatus(WearStatusScreenArgs args) {
     state = state.copyWith(
       phase: WearScanPhase.idle,

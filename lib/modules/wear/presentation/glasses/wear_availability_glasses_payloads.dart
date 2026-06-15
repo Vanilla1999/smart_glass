@@ -32,8 +32,9 @@ class WearAvailabilityGlassesPayloads {
   }
 
   static WearGlassesPayload duplicates(
-    List<WearAvailabilityProduct> products,
-  ) {
+    List<WearAvailabilityProduct> products, {
+    int selectedIndex = 0,
+  }) {
     return WearGlassesPayload(
       screenType: WearGlassesScreenType.availability,
       phase: WearGlassesPhase.idle,
@@ -42,12 +43,15 @@ class WearAvailabilityGlassesPayloads {
       items: products
           .map((WearAvailabilityProduct product) => product.name)
           .toList(growable: false),
-      selectedIndex: 0,
+      selectedIndex: selectedIndex.clamp(0, products.length - 1),
       pageText: _pageText(products.length),
     );
   }
 
-  static WearGlassesPayload groups(List<WearAvailabilityGroup> groups) {
+  static WearGlassesPayload groups(
+    List<WearAvailabilityGroup> groups, {
+    int selectedIndex = 0,
+  }) {
     if (groups.isEmpty) {
       return const WearGlassesPayload(
         screenType: WearGlassesScreenType.availability,
@@ -65,7 +69,7 @@ class WearAvailabilityGlassesPayloads {
           .map((WearAvailabilityGroup group) =>
               '${group.name} · ${group.counter}')
           .toList(growable: false),
-      selectedIndex: 0,
+      selectedIndex: selectedIndex.clamp(0, groups.length - 1),
       pageText: _pageText(groups.length),
     );
   }
@@ -73,6 +77,7 @@ class WearAvailabilityGlassesPayloads {
   static WearGlassesPayload products({
     required WearAvailabilityGroup group,
     required List<WearAvailabilityProduct> products,
+    int selectedIndex = 0,
   }) {
     if (products.isEmpty) {
       return WearGlassesPayload(
@@ -94,7 +99,7 @@ class WearAvailabilityGlassesPayloads {
                 '${product.name} · ост. ${_rest(product.rest)}',
           )
           .toList(growable: false),
-      selectedIndex: 0,
+      selectedIndex: selectedIndex.clamp(0, products.length - 1),
       pageText: _pageText(products.length),
     );
   }

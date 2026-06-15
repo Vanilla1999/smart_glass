@@ -20,12 +20,17 @@ class AudioStreamService {
   StreamSubscription<Uint8List>? _audioSubscription;
   bool _isRunning = false;
   double _audioLevel = 0.0;
+  int _chunksReceived = 0;
+  int? _lastChunkAtMillis;
+  int? _startedAtMillis;
 
   final List<void Function(Uint8List)> _dataCallbacks = [];
   void Function(Object error, StackTrace stackTrace)? _errorCallback;
 
   bool get isRunning => _isRunning;
   double get audioLevel => _audioLevel;
+  int get chunksReceived => _chunksReceived;
+  int? get lastChunkAtMillis => _lastChunkAtMillis;
   Stream<double> get audioLevelStream => _audioLevelController.stream;
 
   void addDataCallback(void Function(Uint8List) callback) {
@@ -40,11 +45,30 @@ class AudioStreamService {
     return _audioRecorder.hasPermission();
   }
 
+  Future<String> diagnostics() async {
+    final bool isRecording = await _audioRecorder.isRecording();
+    final int now = DateTime.now().millisecondsSinceEpoch;
+    final int? lastChunkAgeMs = _lastChunkAtMillis == null
+        ? null
+        : now - _lastChunkAtMillis!;
+    final int? runningForMs = _startedAtMillis == null
+        ? null
+        : now - _startedAtMillis!;
+    return 'AudioStreamService{isRunning=$_isRunning, '
+        'recorderIsRecording=$isRecording, callbacks=${_dataCallbacks.length}, '
+        'chunks=$_chunksReceived, lastChunkAgeMs=$lastChunkAgeMs, '
+        'runningForMs=$runningForMs}';
+  }
+
   Future<void> start({
     void Function(Uint8List bytes)? onData,
     void Function(Object error, StackTrace stackTrace)? onError,
   }) async {
     if (_isRunning) {
+      print(
+        '[AudioStreamService] start called while running; '
+        'callbacks=${_dataCallbacks.length}',
+      );
       if (onData != null) {
         addDataCallback(onData);
       }
@@ -54,11 +78,22 @@ class AudioStreamService {
       return;
     }
 
+    _chunksReceived = 0;
+    _lastChunkAtMillis = null;
+    _startedAtMillis = DateTime.now().millisecondsSinceEpoch;
+    print('[AudioStreamService] startStream begin at $_startedAtMillis');
+
     final audioStream = await _audioRecorder.startStream(
       const RecordConfig(
         encoder: AudioEncoder.pcm16bits,
         sampleRate: 16000,
         numChannels: 1,
+        androidConfig: AndroidRecordConfig(
+          service: AndroidService(
+            title: 'Smart Glasses',
+            content: 'Голосовое управление активно',
+          ),
+        ),
       ),
     );
 
@@ -71,20 +106,38 @@ class AudioStreamService {
 
     _audioSubscription = audioStream.listen(
       (Uint8List bytes) {
+        _chunksReceived++;
+        _lastChunkAtMillis = DateTime.now().millisecondsSinceEpoch;
+        if (_chunksReceived == 1 || _chunksReceived % 200 == 0) {
+          final _PcmStats stats = _pcmStats(bytes);
+          print(
+            '[AudioStreamService] chunk#$_chunksReceived '
+            'bytes=${bytes.lengthInBytes} callbacks=${_dataCallbacks.length} '
+            'rms=${stats.rms.toStringAsFixed(5)} '
+            'peak=${stats.peak.toStringAsFixed(5)} '
+            'at=$_lastChunkAtMillis',
+          );
+        }
         // _publishAudioLevel(bytes);
-        for (final cb in _dataCallbacks) {
+        for (final cb in List<void Function(Uint8List)>.of(_dataCallbacks)) {
           cb(bytes);
         }
       },
       onError: (Object error, StackTrace stackTrace) {
+        print('[AudioStreamService] stream error: $error\n$stackTrace');
         _errorCallback?.call(error, stackTrace);
+      },
+      onDone: () {
+        print('[AudioStreamService] audio stream done');
       },
     );
 
     _isRunning = true;
+    print('[AudioStreamService] startStream done');
   }
 
   Future<void> stop() async {
+    print('[AudioStreamService] stop begin: ${await diagnostics()}');
     await _audioSubscription?.cancel();
     _audioSubscription = null;
 
@@ -95,10 +148,13 @@ class AudioStreamService {
     _dataCallbacks.clear();
     _errorCallback = null;
     _isRunning = false;
+    _startedAtMillis = null;
     _setAudioLevel(0.0);
+    print('[AudioStreamService] stop done');
   }
 
   Future<void> pauseCallbacks() async {
+    print('[AudioStreamService] pauseCallbacks callbacks=${_dataCallbacks.length}');
     _dataCallbacks.clear();
     _errorCallback = null;
   }
@@ -157,4 +213,33 @@ class AudioStreamService {
       _audioLevelController.add(value);
     }
   }
+
+  _PcmStats _pcmStats(Uint8List bytes) {
+    if (bytes.lengthInBytes < 2) {
+      return const _PcmStats(rms: 0, peak: 0);
+    }
+
+    final sampleCount = bytes.lengthInBytes ~/ 2;
+    final byteData = ByteData.sublistView(bytes, 0, sampleCount * 2);
+    var sumSquares = 0.0;
+    var peak = 0.0;
+    for (var i = 0; i < sampleCount; i++) {
+      final sample = byteData.getInt16(i * 2, Endian.little) / 32768.0;
+      final abs = sample.abs();
+      if (abs > peak) peak = abs;
+      sumSquares += sample * sample;
+    }
+
+    return _PcmStats(
+      rms: math.sqrt(sumSquares / sampleCount),
+      peak: peak,
+    );
+  }
+}
+
+class _PcmStats {
+  const _PcmStats({required this.rms, required this.peak});
+
+  final double rms;
+  final double peak;
 }

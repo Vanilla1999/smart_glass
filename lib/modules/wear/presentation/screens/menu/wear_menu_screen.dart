@@ -11,7 +11,6 @@ import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_lis
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_voice_command_listener.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
-import 'package:smart_glasses/modules/wear/services/wear_voice_session.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
@@ -24,8 +23,7 @@ class WearMenuScreen extends StatefulWidget {
   State<WearMenuScreen> createState() => _WearMenuScreenState();
 }
 
-class _WearMenuScreenState extends State<WearMenuScreen>
-    with WidgetsBindingObserver {
+class _WearMenuScreenState extends State<WearMenuScreen> {
   final ScrollController _scroll = ScrollController();
   int _focusedIndex = 0;
   static const int _menuItemCount = 4;
@@ -34,33 +32,13 @@ class _WearMenuScreenState extends State<WearMenuScreen>
   void initState() {
     super.initState();
     _focusedIndex = 0; // Сбрасываем при входе на экран
-    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      WearStatusIconReporter.I.send(
-        WearGlassesPayload.menu(selectedIndex: _focusedIndex),
-      );
-      print(
-        '[MenuScreen] starting voice session, _focusedIndex=$_focusedIndex...',
-      );
-      WearVoiceSession.I.start();
+      _sendMenuPayload();
     });
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.detached) {
-      print('[MenuScreen] app paused/detached, stopping voice session');
-      WearVoiceSession.I.stop();
-    } else if (state == AppLifecycleState.resumed) {
-      print('[MenuScreen] app resumed, restarting voice session');
-      WearVoiceSession.I.start();
-    }
-  }
-
-  @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _scroll.dispose();
     super.dispose();
   }
@@ -146,6 +124,18 @@ class _WearMenuScreenState extends State<WearMenuScreen>
     }
   }
 
+  void _sendMenuPayload() {
+    WearStatusIconReporter.I.send(
+      WearGlassesPayload.menu(selectedIndex: _focusedIndex),
+    );
+  }
+
+  Future<void> _pushAndRefreshMenu(String route) async {
+    await context.push(route);
+    if (!mounted) return;
+    _sendMenuPayload();
+  }
+
   void _onVoiceSelect() {
     print('[MenuScreen] ========== _onVoiceSelect START ==========');
     final t0 = DateTime.now().millisecondsSinceEpoch;
@@ -173,23 +163,22 @@ class _WearMenuScreenState extends State<WearMenuScreen>
       print('[MenuScreen] NAVIGATING TO: WearPrinterSelectScreen');
       final t1 = DateTime.now().millisecondsSinceEpoch;
       print('[MenuScreen] LATENCY: voice->action: ${t1 - t0}ms');
-      WearVoiceSession.I.start();
-      context.push(WearPrinterSelectScreen.route);
+      _pushAndRefreshMenu(WearPrinterSelectScreen.route);
     } else if (_focusedIndex == 1) {
       print('[MenuScreen] NAVIGATING TO: WearAvailabilityInteractionScreen');
       final t1 = DateTime.now().millisecondsSinceEpoch;
       print('[MenuScreen] LATENCY: voice->action: ${t1 - t0}ms');
-      context.push(WearAvailabilityInteractionScreen.route);
+      _pushAndRefreshMenu(WearAvailabilityInteractionScreen.route);
     } else if (_focusedIndex == 2) {
       print('[MenuScreen] NAVIGATING TO: WearHelpScreen');
       final t1 = DateTime.now().millisecondsSinceEpoch;
       print('[MenuScreen] LATENCY: voice->action: ${t1 - t0}ms');
-      context.push(WearHelpScreen.route);
+      _pushAndRefreshMenu(WearHelpScreen.route);
     } else if (_focusedIndex == 3) {
       print('[MenuScreen] NAVIGATING TO: WearSettingsScreen');
       final t1 = DateTime.now().millisecondsSinceEpoch;
       print('[MenuScreen] LATENCY: voice->action: ${t1 - t0}ms');
-      context.push(WearSettingsScreen.route);
+      _pushAndRefreshMenu(WearSettingsScreen.route);
     } else {
       print('[MenuScreen] _focusedIndex=$_focusedIndex is out of bounds!');
     }
@@ -219,22 +208,21 @@ class _WearMenuScreenState extends State<WearMenuScreen>
       WearPill(
         title: 'Печать ценника',
         onTap: () {
-          WearVoiceSession.I.start();
-          context.push(WearPrinterSelectScreen.route);
+          _pushAndRefreshMenu(WearPrinterSelectScreen.route);
         },
       ),
       WearPill(
         title: 'Доступность',
-        onTap: () => context.push(WearAvailabilityInteractionScreen.route),
+        onTap: () => _pushAndRefreshMenu(WearAvailabilityInteractionScreen.route),
       ),
       WearPill(
         title: 'Справка',
-        onTap: () => context.push(WearHelpScreen.route),
+        onTap: () => _pushAndRefreshMenu(WearHelpScreen.route),
       ),
       WearPill(
         title: 'Настройки',
         icon: WearImages.gear,
-        onTap: () => context.push(WearSettingsScreen.route),
+        onTap: () => _pushAndRefreshMenu(WearSettingsScreen.route),
       ),
       const SizedBox(
         height: 50,

@@ -13,7 +13,6 @@ import 'package:smart_glasses/features/scanner/presentation/cubit/scanner_cubit.
 import 'package:smart_glasses/features/scanner/presentation/cubit/scanner_state.dart';
 import 'package:smart_glasses/features/voice/presentation/cubit/voice_cubit.dart';
 import 'package:smart_glasses/features/voice/presentation/cubit/voice_state.dart';
-import 'package:smart_glasses/modules/wear/presentation/widgets/glasses_preview/wear_glasses_preview_overlay.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_module_app.dart';
 
 /// Home screen
@@ -43,23 +42,25 @@ class _HomeScreenContent extends StatefulWidget {
 }
 
 class _HomeScreenContentState extends State<_HomeScreenContent> {
-  bool _showGlassesOverlay = false;
+  Future<void> _openWearModule(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('WEAR_USE_MOCKS', true);
+    await prefs.setBool('WEAR_MOCK_AUTH', true);
 
-  void _toggleGlassesOverlay() {
-    setState(() {
-      _showGlassesOverlay = !_showGlassesOverlay;
-    });
-  }
-
-  void _openWearModule(BuildContext context) {
-    Navigator.push(
+    if (!context.mounted) {
+      return;
+    }
+    print('[STACK-DEBUG] HomeScreen: pushing WearModuleApp mock route');
+    await Navigator.push<void>(
       context,
       MaterialPageRoute(
+        settings: const RouteSettings(name: '/wear_module_mock'),
         builder: (_) => ProviderScope(
           child: const WearModuleApp(),
         ),
       ),
     );
+    print('[STACK-DEBUG] HomeScreen: WearModuleApp mock route popped');
   }
 
   Future<void> _openWearModuleReal(BuildContext context) async {
@@ -84,16 +85,20 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
     await prefs.setString('AUTH_SERVICE_PORT', result['auth_port']!);
     // Disable mocks for real mode
     await prefs.setBool('WEAR_USE_MOCKS', false);
+    await prefs.setBool('WEAR_MOCK_AUTH', false);
 
     if (context.mounted) {
-      Navigator.push(
+      print('[STACK-DEBUG] HomeScreen: pushing WearModuleApp real route');
+      await Navigator.push<void>(
         context,
         MaterialPageRoute(
+          settings: const RouteSettings(name: '/wear_module_real'),
           builder: (_) => ProviderScope(
             child: const WearModuleApp(),
           ),
         ),
       );
+      print('[STACK-DEBUG] HomeScreen: WearModuleApp real route popped');
     }
   }
 
@@ -117,18 +122,25 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
     // Auth Service
     await prefs.setString('AUTH_SERVICE_HOST', result['auth_host']!);
     await prefs.setString('AUTH_SERVICE_PORT', result['auth_port']!);
-    // Disable mocks for test mode
+    // Test mode uses the test DB/auth hosts, but still loads printers/products
+    // from the network instead of returning hardcoded mock data.
     await prefs.setBool('WEAR_USE_MOCKS', false);
+    // Auth service can be unavailable from the test network/PC, so test price
+    // label flow may mock authorization while keeping Firebird data real.
+    await prefs.setBool('WEAR_MOCK_AUTH', true);
 
     if (context.mounted) {
-      Navigator.push(
+      print('[STACK-DEBUG] HomeScreen: pushing WearModuleApp test route');
+      await Navigator.push<void>(
         context,
         MaterialPageRoute(
+          settings: const RouteSettings(name: '/wear_module_test'),
           builder: (_) => ProviderScope(
             child: const WearModuleApp(),
           ),
         ),
       );
+      print('[STACK-DEBUG] HomeScreen: WearModuleApp test route popped');
     }
   }
 
@@ -140,95 +152,87 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
           backgroundColor: Theme.of(context).colorScheme.inversePrimary,
           title: const Text('Smart Wear Test'),
         ),
-        body: Stack(
-          children: [
-            Center(
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    BlocBuilder<HomeCubit, HomeState>(
-                      builder: (context, state) {
-                        if (state is HomeLoaded) {
-                          return ControlButtons(
-                            onShowGlasses: () => context.read<HomeCubit>().showGlasses(),
-                            onShowGlassesScreen2: () => context.read<HomeCubit>().showGlassesScreen2(),
-                            onSaveLogs: () => context.read<HomeCubit>().saveLogs(),
-                            onClearLogs: () => context.read<HomeCubit>().clearLogs(),
-                            onIncrementCounter: () => context.read<HomeCubit>().incrementCounter(),
-                            onPrintTags: () => _openWearModule(context),
-                            onPrintTagsReal: () => _openWearModuleReal(context),
-                            onPrintTagsTest: () => _openWearModuleTest(context),
-                            onToggleGlassesOverlay: _toggleGlassesOverlay,
-                            showGlassesOverlay: _showGlassesOverlay,
-                          );
-                        }
-                        return const CircularProgressIndicator();
-                      },
-                    ),
-                    const SizedBox(height: 40),
-                    BlocBuilder<HomeCubit, HomeState>(
-                      builder: (context, state) {
-                        if (state is HomeLoaded) {
-                          return CounterDisplay(counter: state.counter);
-                        }
-                        return const CounterDisplay(counter: 0);
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    BlocBuilder<VoiceCubit, VoiceState>(
-                      builder: (context, state) {
-                        if (state is VoiceInitializing) {
-                          return Text(
-                            'Загрузка модели...',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          );
-                        } else if (state is VoiceRecognized) {
-                          return Text(
-                            'Распознано: ${state.text}',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          );
-                        } else if (state is VoiceError) {
-                          return Text(
-                            'Ошибка: ${state.message}',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.red),
-                          );
-                        }
-                        return Text(
-                          'Распознано: ',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    BlocBuilder<ScannerCubit, ScannerState>(
-                      builder: (context, state) {
-                        String barcode = '';
-                        if (state is ScannerScanned) {
-                          barcode = state.barcode;
-                        }
-                        return BarcodeDisplayCard(barcode: barcode);
-                      },
-                    ),
-                  ],
+        body: Center(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                BlocBuilder<HomeCubit, HomeState>(
+                  builder: (context, state) {
+                    if (state is HomeLoaded) {
+                      return ControlButtons(
+                        onSaveLogs: () => context.read<HomeCubit>().saveLogs(),
+                        onClearLogs: () =>
+                            context.read<HomeCubit>().clearLogs(),
+                        onIncrementCounter: () =>
+                            context.read<HomeCubit>().incrementCounter(),
+                        onPrintTags: () => _openWearModule(context),
+                        onPrintTagsReal: () => _openWearModuleReal(context),
+                        onPrintTagsTest: () => _openWearModuleTest(context),
+                      );
+                    }
+                    return const CircularProgressIndicator();
+                  },
                 ),
-              ),
+                const SizedBox(height: 40),
+                BlocBuilder<HomeCubit, HomeState>(
+                  builder: (context, state) {
+                    if (state is HomeLoaded) {
+                      return CounterDisplay(counter: state.counter);
+                    }
+                    return const CounterDisplay(counter: 0);
+                  },
+                ),
+                const SizedBox(height: 10),
+                BlocBuilder<VoiceCubit, VoiceState>(
+                  builder: (context, state) {
+                    if (state is VoiceInitializing) {
+                      return Text(
+                        'Загрузка модели...',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      );
+                    } else if (state is VoiceRecognized) {
+                      return Text(
+                        'Распознано: ${state.text}',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      );
+                    } else if (state is VoiceError) {
+                      return Text(
+                        'Ошибка: ${state.message}',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(color: Colors.red),
+                      );
+                    }
+                    return Text(
+                      'Распознано: ',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
+                BlocBuilder<ScannerCubit, ScannerState>(
+                  builder: (context, state) {
+                    String barcode = '';
+                    if (state is ScannerScanned) {
+                      barcode = state.barcode;
+                    }
+                    return BarcodeDisplayCard(barcode: barcode);
+                  },
+                ),
+              ],
             ),
-            if (_showGlassesOverlay)
-              Positioned.fill(
-                child: IgnorePointer(
-                  ignoring: false,
-                  child: WearGlassesPreviewOverlay(),
-                ),
-              ),
-          ],
+          ),
         ),
         floatingActionButton: Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
             BlocBuilder<VoiceCubit, VoiceState>(
               builder: (context, state) {
-                final isReady = state is VoiceReady || state is VoiceListening || state is VoiceRecognized;
+                final isReady = state is VoiceReady ||
+                    state is VoiceListening ||
+                    state is VoiceRecognized;
                 final isListening = state is VoiceListening;
 
                 return VoiceRecognitionButton(
@@ -291,17 +295,38 @@ class _RealModeDbDialogState extends State<_RealModeDbDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('--- DBTO (Firebird) ---', style: TextStyle(fontWeight: FontWeight.bold)),
-            TextField(controller: _dbtoHostController, decoration: const InputDecoration(labelText: 'DBTO_HOST')),
-            TextField(controller: _dbtoPortController, decoration: const InputDecoration(labelText: 'DBTO_PORT'), keyboardType: TextInputType.number),
-            TextField(controller: _dbtoPathController, decoration: const InputDecoration(labelText: 'DBTO_PATH')),
-            TextField(controller: _dbtoUserController, decoration: const InputDecoration(labelText: 'DBTO_USER')),
-            TextField(controller: _dbtoPasswordController, decoration: const InputDecoration(labelText: 'DBTO_PASSWORD'), obscureText: true),
-            TextField(controller: _dbtoRoleController, decoration: const InputDecoration(labelText: 'DBTO_ROLE')),
+            const Text('--- DBTO (Firebird) ---',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            TextField(
+                controller: _dbtoHostController,
+                decoration: const InputDecoration(labelText: 'DBTO_HOST')),
+            TextField(
+                controller: _dbtoPortController,
+                decoration: const InputDecoration(labelText: 'DBTO_PORT'),
+                keyboardType: TextInputType.number),
+            TextField(
+                controller: _dbtoPathController,
+                decoration: const InputDecoration(labelText: 'DBTO_PATH')),
+            TextField(
+                controller: _dbtoUserController,
+                decoration: const InputDecoration(labelText: 'DBTO_USER')),
+            TextField(
+                controller: _dbtoPasswordController,
+                decoration: const InputDecoration(labelText: 'DBTO_PASSWORD'),
+                obscureText: true),
+            TextField(
+                controller: _dbtoRoleController,
+                decoration: const InputDecoration(labelText: 'DBTO_ROLE')),
             const SizedBox(height: 16),
-            const Text('--- Auth Service ---', style: TextStyle(fontWeight: FontWeight.bold)),
-            TextField(controller: _authHostController, decoration: const InputDecoration(labelText: 'AUTH_HOST')),
-            TextField(controller: _authPortController, decoration: const InputDecoration(labelText: 'AUTH_PORT'), keyboardType: TextInputType.number),
+            const Text('--- Auth Service ---',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            TextField(
+                controller: _authHostController,
+                decoration: const InputDecoration(labelText: 'AUTH_HOST')),
+            TextField(
+                controller: _authPortController,
+                decoration: const InputDecoration(labelText: 'AUTH_PORT'),
+                keyboardType: TextInputType.number),
           ],
         ),
       ),
@@ -369,17 +394,38 @@ class _TestModeDbDialogState extends State<_TestModeDbDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('--- DBTO (Firebird) ---', style: TextStyle(fontWeight: FontWeight.bold)),
-            TextField(controller: _dbtoHostController, decoration: const InputDecoration(labelText: 'DBTO_HOST')),
-            TextField(controller: _dbtoPortController, decoration: const InputDecoration(labelText: 'DBTO_PORT'), keyboardType: TextInputType.number),
-            TextField(controller: _dbtoPathController, decoration: const InputDecoration(labelText: 'DBTO_PATH')),
-            TextField(controller: _dbtoUserController, decoration: const InputDecoration(labelText: 'DBTO_USER')),
-            TextField(controller: _dbtoPasswordController, decoration: const InputDecoration(labelText: 'DBTO_PASSWORD'), obscureText: true),
-            TextField(controller: _dbtoRoleController, decoration: const InputDecoration(labelText: 'DBTO_ROLE')),
+            const Text('--- DBTO (Firebird) ---',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            TextField(
+                controller: _dbtoHostController,
+                decoration: const InputDecoration(labelText: 'DBTO_HOST')),
+            TextField(
+                controller: _dbtoPortController,
+                decoration: const InputDecoration(labelText: 'DBTO_PORT'),
+                keyboardType: TextInputType.number),
+            TextField(
+                controller: _dbtoPathController,
+                decoration: const InputDecoration(labelText: 'DBTO_PATH')),
+            TextField(
+                controller: _dbtoUserController,
+                decoration: const InputDecoration(labelText: 'DBTO_USER')),
+            TextField(
+                controller: _dbtoPasswordController,
+                decoration: const InputDecoration(labelText: 'DBTO_PASSWORD'),
+                obscureText: true),
+            TextField(
+                controller: _dbtoRoleController,
+                decoration: const InputDecoration(labelText: 'DBTO_ROLE')),
             const SizedBox(height: 16),
-            const Text('--- Auth Service ---', style: TextStyle(fontWeight: FontWeight.bold)),
-            TextField(controller: _authHostController, decoration: const InputDecoration(labelText: 'AUTH_HOST')),
-            TextField(controller: _authPortController, decoration: const InputDecoration(labelText: 'AUTH_PORT'), keyboardType: TextInputType.number),
+            const Text('--- Auth Service ---',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            TextField(
+                controller: _authHostController,
+                decoration: const InputDecoration(labelText: 'AUTH_HOST')),
+            TextField(
+                controller: _authPortController,
+                decoration: const InputDecoration(labelText: 'AUTH_PORT'),
+                keyboardType: TextInputType.number),
           ],
         ),
       ),

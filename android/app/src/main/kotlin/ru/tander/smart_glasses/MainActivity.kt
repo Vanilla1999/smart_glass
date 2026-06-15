@@ -59,12 +59,6 @@ class MainActivity : FlutterFragmentActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app_channel")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
-                    "showGlasses" -> {
-                        Log.d("SmartWear", "showGlasses called with counter: $currentCounter")
-                        currentCounter = call.arguments as? Int ?: 0
-                        showGlasses()
-                        result.success(true)
-                    }
                     "showGlassesInitialization" -> {
                         Log.d("SmartWear", "showGlassesInitialization called")
                         showGlassesInitialization()
@@ -73,12 +67,6 @@ class MainActivity : FlutterFragmentActivity() {
                     "navigateGlassesToEmpty" -> {
                         Log.d("SmartWear", "navigateGlassesToEmpty called")
                         navigateGlassesToEmpty()
-                        result.success(true)
-                    }
-                    "showGlassesScreen2" -> {
-                        Log.d("SmartWear", "showGlassesScreen2 called with counter: $currentCounter")
-                        currentCounter = call.arguments as? Int ?: 0
-                        showGlassesScreen2()
                         result.success(true)
                     }
                     "updateCounter" -> {
@@ -130,29 +118,6 @@ class MainActivity : FlutterFragmentActivity() {
         logConnectedDisplays(this)
     }
 
-    private fun showGlasses() {
-        Log.d("SmartWear", "showGlasses() called, currentCounter=$currentCounter")
-        val displays = displayManager?.getDisplays()
-        if (displays != null && displays.size > 1) {
-            val secondaryDisplay = displays[displays.size - 1]
-
-            glassesPresentation?.dismiss()
-            currentWearGlassesPayload = null
-            // Engine is already pre-warmed, just create Presentation
-
-            if (glassesEngine != null) {
-                glassesPresentation = GlassesPresentation(this, secondaryDisplay, glassesEngine!!)
-                glassesPresentation?.show()
-                Log.d("SmartWear", "Glasses presentation shown, navigating to home")
-                glassesChannel?.invokeMethod("navigateToRoute", "/")
-                updateGlassesCounter(currentCounter)
-                updateGlassesRecognizedText(currentRecognizedText)
-            }
-        } else {
-            Log.d("SmartWear", "No secondary display found")
-        }
-    }
-
     private fun showGlassesInitialization() {
         Log.d("SmartWear", "showGlassesInitialization() called")
         val displays = displayManager?.getDisplays()
@@ -176,31 +141,6 @@ class MainActivity : FlutterFragmentActivity() {
     private fun navigateGlassesToEmpty() {
         Log.d("SmartWear", "navigateGlassesToEmpty() called")
         glassesChannel?.invokeMethod("navigateToRoute", "/empty")
-    }
-
-    private fun showGlassesScreen2() {
-        Log.d("SmartWear", "showGlassesScreen2() called, currentCounter=$currentCounter")
-        val displays = displayManager?.getDisplays()
-        if (displays != null && displays.size > 1) {
-            val secondaryDisplay = displays[displays.size - 1]
-
-            if (glassesPresentation == null && glassesEngine != null) {
-                glassesPresentation = GlassesPresentation(this, secondaryDisplay, glassesEngine!!)
-                glassesPresentation?.show()
-            }
-
-            Log.d("SmartWear", "Navigating to screen 2 on glasses")
-            val data = mapOf(
-                "route" to "/screen2",
-                "data" to mapOf(
-                    "counter" to currentCounter,
-                    "recognizedText" to currentRecognizedText
-                )
-            )
-            glassesChannel?.invokeMethod("navigateToScreen", data)
-        } else {
-            Log.d("SmartWear", "No secondary display found")
-        }
     }
 
     private fun showWearGlasses(payload: Map<*, *>) {
