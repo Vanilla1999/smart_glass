@@ -75,7 +75,9 @@ class WearAuthNotifier extends StateNotifier<WearAuthState>
 
   @override
   bool? onScanEvent(String payload) {
+    print('[AUTH] onScanEvent called, payload: $payload');
     if (WearSession.isAuthorized) {
+      print('[AUTH] Already authorized, ignoring');
       return true;
     }
     authorizeByBadgeBarcode(payload);
@@ -141,13 +143,22 @@ class WearAuthNotifier extends StateNotifier<WearAuthState>
   }
 
   Future<void> authorizeByBadgeBarcode(String barcode) async {
+    print('[AUTH] authorizeByBadgeBarcode called, barcode: $barcode');
     if (WearSession.isAuthorized) {
+      print('[AUTH] Already authorized, returning');
       return;
     }
-    if (state.isLoading) return;
+    if (state.isLoading) {
+      print('[AUTH] Already loading, returning');
+      return;
+    }
 
     final String trimmedBarcode = barcode.trim();
-    if (trimmedBarcode.isEmpty) return;
+    if (trimmedBarcode.isEmpty) {
+      print('[AUTH] Empty barcode, returning');
+      return;
+    }
+    print('[AUTH] Starting authorization...');
 
     state = state.copyWith(phase: WearAuthPhase.loading);
 
@@ -168,6 +179,7 @@ class WearAuthNotifier extends StateNotifier<WearAuthState>
 
       // 2) сохраняем сессию
       WearSession.setUser(user);
+      print('[AUTH] User authorized: ${user.name}');
 
       await WearFeedback.play(WearStatusKind.success);
       // 3) показываем статус и уходим в меню
@@ -183,6 +195,7 @@ class WearAuthNotifier extends StateNotifier<WearAuthState>
         ),
       );
     } catch (error) {
+      print('[AUTH] Authorization error: $error');
       await WearFeedback.play(WearStatusKind.error);
       state = state.copyWith(
         phase: WearAuthPhase.idle,

@@ -10,6 +10,9 @@ class ControlButtons extends StatelessWidget {
     required this.onIncrementCounter,
     required this.onPrintTags,
     required this.onPrintTagsReal,
+    required this.onPrintTagsTest,
+    required this.onToggleGlassesOverlay,
+    this.showGlassesOverlay = false,
     super.key,
   });
 
@@ -20,6 +23,9 @@ class ControlButtons extends StatelessWidget {
   final VoidCallback onIncrementCounter;
   final VoidCallback onPrintTags;
   final VoidCallback onPrintTagsReal;
+  final VoidCallback onPrintTagsTest;
+  final VoidCallback onToggleGlassesOverlay;
+  final bool showGlassesOverlay;
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +52,15 @@ class ControlButtons extends StatelessWidget {
         ),
         const SizedBox(height: 40),
         ElevatedButton(
+          onPressed: onToggleGlassesOverlay,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: showGlassesOverlay ? Colors.purple : Colors.grey,
+            foregroundColor: Colors.white,
+          ),
+          child: Text(showGlassesOverlay ? 'Скрыть очки' : 'Показать очки'),
+        ),
+        const SizedBox(height: 10),
+        ElevatedButton(
           onPressed: onPrintTags,
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.green,
@@ -61,6 +76,15 @@ class ControlButtons extends StatelessWidget {
             foregroundColor: Colors.white,
           ),
           child: const Text('Печать ценников (РЕАЛ)'),
+        ),
+        const SizedBox(height: 10),
+        ElevatedButton(
+          onPressed: onPrintTagsTest,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orange,
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Печать ценников (ТЕСТ)'),
         ),
         const SizedBox(height: 10),
         ElevatedButton(

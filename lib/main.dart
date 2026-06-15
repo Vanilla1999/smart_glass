@@ -33,7 +33,6 @@ void main() async {
     _debugLogLoadedEnv();
   }
 
-  // Create dependencies
   final dependencies = await DependenciesContainer.create();
 
   runApp(

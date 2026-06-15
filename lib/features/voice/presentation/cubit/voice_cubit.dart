@@ -30,20 +30,16 @@ class VoiceCubit extends Cubit<VoiceState> {
   Future<void> init() async {
     emit(const VoiceInitializing());
     try {
-      print('Initializing Vosk...');
       final modelPath = await vosk.ModelLoader().loadFromAssets(
         'assets/vosk-model-small-ru-0.22.zip',
       );
-      print('Vosk model loaded: $modelPath');
       _model = await _vosk.createModel(modelPath);
       _recognizer = await _vosk.createRecognizer(
         model: _model!,
         sampleRate: 16000,
       );
-      print('Vosk recognizer created');
       emit(const VoiceReady());
     } catch (e) {
-      print('Vosk init error: $e');
       emit(VoiceError(e.toString()));
     }
   }

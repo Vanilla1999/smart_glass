@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
+import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/cubit/wear_auth_cubit.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/db_settings_screen.dart';
@@ -39,9 +40,6 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
 
   @override
   void dispose() {
-    // Do not hide glasses projection here: this screen can be disposed during
-    // a normal transition to the next wear screen (for example after auth).
-    // Hide the projection only from explicit wear-flow exit actions.
     super.dispose();
   }
 
@@ -73,120 +71,124 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
     });
 
     final WearAuthState state = ref.watch(wearAuthNotifierProvider);
-    // TODO: remove stub dep
-    // final bool isScannerConnected =
-    //     ref.watch(connectedBTStateProvider).value != null;
 
     return PopScope(
       canPop: false,
       child: Scaffold(
         backgroundColor: Colors.white,
-        body: Stack(
-          children: <Widget>[
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(4.5),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    // if (!isScannerConnected) ...<Widget>[
-                    //   InkWell(
-                    //     borderRadius: BorderRadius.circular(999),
-                    //     onTap: () => context.go(WearScannerConnectScreen.route),
-                    //     child: Container(
-                    //       width: 32,
-                    //       height: 32,
-                    //       decoration: const BoxDecoration(
-                    //         color: WearColors.buttonSecondaryDefault,
-                    //         shape: BoxShape.circle,
-                    //       ),
-                    //       child: const Center(
-                    //         child: WearSvgIcon(
-                    //           WearImages.gear,
-                    //           size: 18,
-                    //           color: WearColors.textDefault,
-                    //         ),
-                    //       ),
-                    //     ),
-                    //   ),
-                    //   const SizedBox(height: 8),
-                    // ],
-                    InkWell(
-                      borderRadius: BorderRadius.circular(999),
-                      onTap: () => context.go(DBSettingsScreen.route),
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: const BoxDecoration(
-                          color: WearColors.buttonSecondaryDefault,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Center(
-                          child: WearSvgIcon(
-                            WearImages.database,
-                            size: 18,
-                            color: WearColors.textDefault,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Для входа используйте\nштрихкод вашего бейджа',
-                      style: WearTypography.lable,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 28),
-                    GestureDetector(
-                      onTap: () => ref
-                          .read(wearAuthNotifierProvider.notifier)
-                          .handleLogoTap(),
-                      onLongPress: () => ref
-                          .read(wearAuthNotifierProvider.notifier)
-                          .handleLogoLongPress(),
-                      child: SvgPicture.asset(WearImages.logo),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (state.isLoading)
-              const Positioned.fill(
-                child: ColoredBox(
-                  color: Color(0x66FFFFFF),
-                  child: Center(
-                    child: WearLoading(size: 44),
-                  ),
-                ),
-              ),
-            Align(
-              alignment: Alignment.topCenter,
-              child: Padding(
-                padding: const EdgeInsets.all(4.5),
-                child: IgnorePointer(
-                  child: Transform.translate(
-                    offset: const Offset(-60, 20),
-                    child: const WearScannerStatusIndicator(),
-                  ),
-                ),
-              ),
-            ),
-            Align(
-              alignment: Alignment.topCenter,
-              child: Padding(
-                padding: const EdgeInsets.all(4.5),
-                child: IgnorePointer(
-                  child: Transform.translate(
-                    offset: const Offset(78, 20),
-                    child: const WearStatusBar(),
-                  ),
-                ),
-              ),
-            ),
-          ],
+        body: _buildBody(state),
+      ),
+    );
+  }
+
+  Widget _buildBody(WearAuthState state) {
+    return Stack(
+      children: _getStackChildren(state),
+    );
+  }
+
+  List<Widget> _getStackChildren(WearAuthState state) {
+    final List<Widget> children = [];
+
+    children.add(
+      Center(
+        child: Padding(
+          padding: const EdgeInsets.all(4.5),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: _getCenterColumnChildren(state),
+          ),
         ),
       ),
     );
+
+    if (state.isLoading) {
+      children.add(
+        Positioned.fill(
+          child: ColoredBox(
+            color: const Color(0x66FFFFFF),
+            child: Center(
+              child: WearLoading(size: 44),
+            ),
+          ),
+        ),
+      );
+    }
+
+    children.add(
+      Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: const EdgeInsets.all(4.5),
+          child: IgnorePointer(
+            child: Transform.translate(
+              offset: const Offset(-60, 20),
+              child: const WearScannerStatusIndicator(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    children.add(
+      Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: const EdgeInsets.all(4.5),
+          child: IgnorePointer(
+            child: Transform.translate(
+              offset: const Offset(78, 20),
+              child: const WearStatusBar(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    return children;
+  }
+
+  List<Widget> _getCenterColumnChildren(WearAuthState state) {
+    return [
+      InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: () => context.go(DBSettingsScreen.route),
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: const BoxDecoration(
+            color: WearColors.buttonSecondaryDefault,
+            shape: BoxShape.circle,
+          ),
+          child: const Center(
+            child: WearSvgIcon(
+              WearImages.database,
+              size: 18,
+              color: WearColors.textDefault,
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 8),
+      InkWell(
+        onTap: () {
+          if (!WearSession.isAuthorized && !state.isLoading) {
+            ref.read(wearAuthNotifierProvider.notifier).handleLogoLongPress();
+          }
+        },
+        child: Text(
+          'Для входа используйте\nштрихкод вашего бейджа',
+          style: WearTypography.lable,
+          textAlign: TextAlign.center,
+        ),
+      ),
+      const SizedBox(height: 28),
+      GestureDetector(
+        onTap: () => ref.read(wearAuthNotifierProvider.notifier).handleLogoTap(),
+        onLongPress: () => ref.read(wearAuthNotifierProvider.notifier).handleLogoLongPress(),
+        child: SvgPicture.asset(WearImages.logo),
+      ),
+    ];
   }
 
   Future<void> _openOrReplaceStatus(WearStatusScreenArgs args) async {
