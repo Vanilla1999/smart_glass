@@ -1,42 +1,52 @@
 import 'dart:async';
 
-import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 
 class WearVoiceControlService {
   WearVoiceControlService({
     required SpeechRecognitionService speechRecognitionService,
-    VoiceCommandParserService? parser,
-  })  : _speechRecognitionService = speechRecognitionService,
-        _parser = parser ?? VoiceCommandParserService();
+  }) : _speechRecognitionService = speechRecognitionService {
+    _initStream();
+  }
 
   final SpeechRecognitionService _speechRecognitionService;
-  final VoiceCommandParserService _parser;
-  final StreamController<WearVoiceCommand> _commandsController =
+  final StreamController<WearVoiceCommand> _commandController =
       StreamController<WearVoiceCommand>.broadcast();
 
-  StreamSubscription<String>? _resultsSubscription;
+  Stream<WearVoiceCommand> get commandStream => _commandController.stream;
 
-  Stream<WearVoiceCommand> get commandStream {
-    _ensureSubscription();
-    return _commandsController.stream;
+  static const Map<String, WearVoiceCommand> _commandMap =
+      <String, WearVoiceCommand>{
+    'вверх': WearVoiceCommand.up,
+    'верх': WearVoiceCommand.up,
+    'вниз': WearVoiceCommand.down,
+    'выбрать': WearVoiceCommand.select,
+    'назад': WearVoiceCommand.back,
+    'выход': WearVoiceCommand.home,
+    'домой': WearVoiceCommand.home,
+  };
+
+  void _initStream() {
+    _speechRecognitionService.resultsStream.listen((text) {
+      final cmd = parseCommand(text);
+      if (cmd != null) {
+        _commandController.add(cmd);
+      }
+    });
+  }
+
+  WearVoiceCommand? parseCommand(String text) {
+    final String normalized = text
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-zа-яё\s]'), '')
+        .trim();
+    if (normalized.isEmpty) return null;
+    return _commandMap[normalized];
   }
 
   void dispose() {
-    _resultsSubscription?.cancel();
-    _resultsSubscription = null;
-  }
-
-  void _ensureSubscription() {
-    _resultsSubscription ??= _speechRecognitionService.resultsStream.listen(
-      _handleText,
-    );
-  }
-
-  void _handleText(String text) {
-    final WearVoiceCommand? command = _parser.parse(text);
-    if (command == null || _commandsController.isClosed) return;
-    _commandsController.add(command);
+    _commandController.close();
   }
 }

@@ -9,6 +9,7 @@ class ControlButtons extends StatelessWidget {
     required this.onClearLogs,
     required this.onIncrementCounter,
     required this.onPrintTags,
+    required this.onPrintTagsReal,
     super.key,
   });
 
@@ -18,6 +19,7 @@ class ControlButtons extends StatelessWidget {
   final VoidCallback onClearLogs;
   final VoidCallback onIncrementCounter;
   final VoidCallback onPrintTags;
+  final VoidCallback onPrintTagsReal;
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +51,16 @@ class ControlButtons extends StatelessWidget {
             backgroundColor: Colors.green,
             foregroundColor: Colors.white,
           ),
-          child: const Text('Печать ценников'),
+          child: const Text('Печать ценников (МОК)'),
+        ),
+        const SizedBox(height: 10),
+        ElevatedButton(
+          onPressed: onPrintTagsReal,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Печать ценников (РЕАЛ)'),
         ),
         const SizedBox(height: 10),
         ElevatedButton(

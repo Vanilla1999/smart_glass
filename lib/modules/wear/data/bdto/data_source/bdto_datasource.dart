@@ -42,9 +42,9 @@ class BdtoDataSource {
     final int port = int.tryParse(portValue) ??
         (throw StateError('DBTO_PORT is not a valid int: $portValue'));
     final String database = _getPref('DBTO_PATH', _requireEnv('DBTO_PATH'));
-    final String user = _requireEnv('DBTO_USER');
-    final String password = _requireEnv('DBTO_PASSWORD');
-    final String role = _requireEnv('DBTO_ROLE');
+    final String user = _getPref('DBTO_USER', _requireEnv('DBTO_USER'));
+    final String password = _getPref('DBTO_PASSWORD', _requireEnv('DBTO_PASSWORD'));
+    final String role = _getPref('DBTO_ROLE', _requireEnv('DBTO_ROLE'));
 
     _db = await FbDb.attach(
       host: host,

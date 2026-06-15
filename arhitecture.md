@@ -1,327 +1,235 @@
 # Architecture
 
+## Содержание
+
+1. [Назначение проекта](#назначение-проекта)
+2. [Технологический стек](#технологический-стек)
+3. [Архитектурные принципы](#архитектурные-принципы)
+   - [Separation of Concerns](#separation-of-concerns)
+   - [Unidirectional Data Flow](#unidirectional-data-flow)
+   - [Dependency Inversion](#dependency-inversion)
+4. [Структура каталогов](#структура-каталогов)
+5. [Слои приложения](#слои-приложения)
+   - [Presentation Layer](#presentation-layer)
+   - [Domain Layer](#domain-layer)
+   - [Data Layer](#data-layer)
+6. [Управление состоянием](#управление-состоянием)
+   - [BLoC/Cubit](#bloccubit)
+   - [Riverpod](#riverpod)
+   - [State Management Guidelines](#state-management-guidelines)
+7. [Dependency Injection](#dependency-injection)
+   - [Принципы DI](#принципы-di)
+   - [Provider Pattern](#provider-pattern)
+8. [Обработка ошибок](#обработка-ошибок)
+   - [Result Pattern](#result-pattern)
+   - [Error Handling Best Practices](#error-handling-best-practices)
+9. [Навигация](#навигация)
+   - [GoRouter](#gorouter)
+   - [Navigator](#navigator)
+10. [Native Bridge](#native-bridge)
+11. [Тестирование](#тестирование)
+    - [Unit Tests](#unit-tests)
+    - [Widget Tests](#widget-tests)
+    - [Integration Tests](#integration-tests)
+12. [Правила изменений](#правила-изменений)
+13. [Runtime-контуры](#runtime-контуры)
+14. [Архитектурные инварианты](#архитектурные-инварианты)
+
+---
+
 ## Назначение проекта
 
 `smart_glasses` - Flutter-приложение для Android с двумя runtime-контурами:
 
-- основной экран телефона;
-- отдельный экран для smart glasses, запускаемый через entrypoint `glassesMain`.
+- **Основной экран телефона** - управление очками, инициализация голоса и сканера
+- **Отдельный экран для smart glasses** - запуск через entrypoint `glassesMain`
 
-Приложение объединяет управление очками, offline-распознавание речи через Vosk, сканер штрихкодов через `multi_scanner` и связь с native Android через `MethodChannel`.
+Приложение объединяет:
+- Управление smart glasses
+- Offline-распознавание речи через Vosk
+- Сканер штрихкодов через `multi_scanner`
+- Связь с native Android через `MethodChannel`
+- Печать ценников (модуль Wear)
 
-## Текущий стек
+---
 
-| Зона | Решение |
-|---|---|
-| UI | Flutter Material |
-| State management | `flutter_bloc` / Cubit |
-| DI | Ручной контейнер `DependenciesContainer` + `AppScope` |
-| Native bridge | `MethodChannelService` |
-| Voice recognition | `vosk_flutter_service` + `record` |
-| Scanner | `multi_scanner` |
-| Assets | `assets/vosk-model-small-ru-0.22.zip` |
-| Wi‑Fi status | `wifi_info_plugin_plus` + `permission_handler` |
+## Технологический стек
+
+| Категория | Основное приложение | Модуль Wear |
+|-----------|-------------------|-------------|
+| **UI Framework** | Flutter Material | Flutter Material |
+| **State Management** | `flutter_bloc` / Cubit | `flutter_riverpod` (StateNotifierProvider) |
+| **Navigation** | Navigator (MaterialPageRoute) | `go_router` |
+| **DI** | DependenciesContainer + InheritedWidget | `WearDependencies` (ручной singleton) |
+| **Voice Recognition** | `vosk_flutter_service` + `record` | Vosk через WearDependencies |
+| **Scanner** | `multi_scanner` | `multi_scanner` |
+| **Database** | - | `fbdb` (Firebird через REST) |
+| **Network** | `dio` | `dio` |
+| **Immutable Models** | `freezed` | `freezed` |
+| **Native Bridge** | `MethodChannelService` | - |
+
+---
+
+## Архитектурные принципы
+
+### Separation of Concerns
+
+Согласно [Flutter Architecture Guide](https://github.com/flutter/website/blob/main/sites/docs/src/content/app-architecture/recommendations.md), приложение должно быть разделено на слои, где каждый компонент имеет **distinct responsibilities**, **well-defined interface**, **boundaries**, и **dependencies**.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Presentation Layer                        │
+│  (Widgets, Screens, Cubits/ViewModels, State Management)     │
+├─────────────────────────────────────────────────────────────┤
+│                      Domain Layer                            │
+│  (Use Cases, Entities, Repository Interfaces)               │
+├─────────────────────────────────────────────────────────────┤
+│                       Data Layer                             │
+│  (Repository Implementations, Data Sources, DTOs)            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Unidirectional Data Flow
+
+```
+User Action → Event → Business Logic → State Update → UI Re-render
+```
+
+Каждый слой взаимодействует только с соседними слоями:
+- **Presentation** → вызывает use cases
+- **Domain** → содержит business logic, не зависит от фреймворков
+- **Data** → реализует repository interfaces
+
+### Dependency Inversion
+
+```
+┌─────────────────┐         ┌─────────────────┐
+│  Presentation   │────────▶│     Domain      │
+│                 │         │                 │
+│  зависит от    │         │  НЕ зависит от │
+│  Domain         │         │  Presentation   │
+└─────────────────┘         └─────────────────┘
+         │                           ▲
+         │                           │
+         ▼                           │
+┌─────────────────┐         ┌─────────────────┐
+│      Data       │────────▶│     Domain      │
+│                 │         │                 │
+│  реализует     │         │  определяет    │
+│  interfaces    │         │  interfaces    │
+└─────────────────┘         └─────────────────┘
+```
+
+---
 
 ## Структура каталогов
 
-```text
+```
 lib/
-├── main.dart
+├── main.dart                      # Entry point телефона
 ├── app/
-│   ├── app.dart
-│   ├── di/
+│   ├── app.dart                   # MyApp widget
+│   ├── data/
+│   │   └── network/              # Network layer
+│   │       └── network_requests/
+│   │           └── api_request.dart
+│   ├── di/                       # Dependency Injection
 │   │   ├── app_scope.dart
 │   │   └── dependencies_container.dart
-│   └── glasses/
+│   └── glasses/                  # Glasses runtime
 │       ├── glasses_runtime_app.dart
 │       ├── glasses_coordinator_cubit.dart
 │       └── glasses_coordinator_state.dart
-├── core/
+├── core/                         # Shared infrastructure
 │   ├── constants/
 │   │   └── app_constants.dart
 │   ├── services/
 │   │   └── method_channel_service.dart
 │   └── utils/
 │       └── inherited_extension.dart
-└── features/
-    ├── initialization/
-    ├── home/
-    ├── scanner/
-    ├── voice/
-    └── glasses/
+├── features/                     # Feature-first modules
+│   ├── initialization/
+│   │   └── presentation/
+│   │       ├── cubit/
+│   │       │   ├── initialization_cubit.dart
+│   │       │   └── initialization_state.dart
+│   │       └── screens/
+│   │           └── initialization_screen.dart
+│   ├── home/
+│   │   └── presentation/
+│   │       ├── cubit/
+│   │       ├── screens/
+│   │       └── widgets/
+│   ├── scanner/
+│   │   └── presentation/
+│   │       └── cubit/
+│   ├── voice/
+│   │   └── presentation/
+│   │       └── cubit/
+│   └── glasses/
+│       └── presentation/
+│           ├── cubit/
+│           ├── screens/
+│           └── widgets/
+└── modules/                      # Standalone modules
+    └── wear/                      # Price tag printing module
+        ├── config/                # DI & session
+        ├── data/                  # Data sources & DTOs
+        │   ├── auth/
+        │   ├── bdto/
+        │   └── printer/
+        ├── domain/                # Business logic
+        │   ├── auth/
+        │   │   ├── model/
+        │   │   └── use_case/
+        │   ├── price_tag_print/
+        │   │   ├── model/
+        │   │   └── use_case/
+        │   └── service/           # Domain services
+        │       ├── voice_typing/
+        │       └── voice_command/
+        ├── presentation/         # UI layer
+        │   ├── cubit/            # BLoC/Cubit
+        │   ├── providers/         # Riverpod providers
+        │   ├── screens/
+        │   └── widgets/
+        ├── navigation/            # GoRouter config
+        └── theme/                 # Colors, typography, images
 ```
 
-Проект использует Feature-First подход. Общие инфраструктурные вещи живут в `app/` и `core/`, пользовательские сценарии - в `features/`.
-
-## Runtime-Контуры
-
-### Основное приложение
-
-Основной entrypoint - `main()` в `lib/main.dart`.
-
-Порядок запуска:
-
-1. `WidgetsFlutterBinding.ensureInitialized()`.
-2. Создание `DependenciesContainer`.
-3. Оборачивание приложения в `AppScope`.
-4. Запуск `MyApp`.
-5. Стартовый экран - `InitializationScreen`.
-
-Основной flow:
-
-```text
-main()
-  -> DependenciesContainer.create()
-  -> AppScope
-  -> MyApp
-  -> InitializationScreen
-  -> HomeScreen
-```
-
-### Glasses runtime
-
-Отдельный entrypoint - `glassesMain()` в `lib/main.dart`.
-
-Он запускает `GlassesRuntimeApp`, который:
-
-- создает собственные Cubit'ы для экранов очков;
-- создает `GlassesCoordinatorCubit`;
-- слушает команды из native через `MethodChannelService`;
-- управляет локальным `Navigator` для экранов очков.
-
-Flow очков:
-
-```text
-glassesMain()
-  -> GlassesRuntimeApp
-  -> GlassesCoordinatorCubit
-  -> MethodChannel handler
-  -> Navigator
-  -> GlassesInitializationScreen / GlassesEmptyScreen / GlassesScreen / GlassesScreen2
-```
-
-## Зависимости И DI
-
-Глобальные зависимости создаются в `DependenciesContainer.create()`:
-
-- `MethodChannelService`;
-- `ScannerCubit`;
-- `VoiceCubit`;
-- `HomeCubit`.
-
-`AppScope` передает контейнер вниз по дереву через `InheritedWidget`. Экраны получают зависимости через `AppScope.of(context)` и подключают Cubit'ы через `BlocProvider.value`.
-
-Правила:
-
-- не создавать второй экземпляр глобального Cubit'а внутри экрана, если он уже есть в `DependenciesContainer`;
-- закрывать глобальные Cubit'ы только в `DependenciesContainer.dispose()`;
-- для локальных Cubit'ов, созданных экраном через `BlocProvider(create: ...)`, lifecycle принадлежит экрану;
-- `MethodChannelService` является singleton-фасадом над каналами `app_channel` и `glasses_channel`.
-
-## State Management
-
-Основной паттерн состояния - Cubit + sealed-like state classes.
-
-Зоны ответственности:
-
-| Cubit | Ответственность |
-|---|---|
-| `InitializationCubit` | Инициализация scanner/voice, прогресс запуска, переход на `HomeScreen` |
-| `HomeCubit` | Счетчик, команды показа экранов очков, сохранение/очистка логов |
-| `ScannerCubit` | Подключение к `multi_scanner`, обработка scan/error events |
-| `VoiceCubit` | Загрузка Vosk, запись аудио, распознавание, throttling, отправка текста на очки |
-| `GlassesCoordinatorCubit` | Прием MethodChannel-событий в runtime очков, маршрутизация данных на активный экран |
-| `GlassesScreenCubit` | State первого экрана очков: счетчик и распознанный текст |
-| `GlassesScreen2Cubit` | State второго экрана очков: распознанный текст |
-
-Правила:
-
-- UI не должен напрямую вызывать native `MethodChannel`, для этого используется `MethodChannelService`;
-- бизнес-события и side effects должны проходить через Cubit;
-- Cubit не должен зависеть от Flutter widget tree, кроме случаев передачи callback'ов навигации в coordinator;
-- асинхронные подписки должны отменяться в `close()`.
-
-## Native Bridge
-
-`MethodChannelService` инкапсулирует два канала:
-
-- `app_channel` - команды из Flutter main runtime в native Android;
-- `glasses_channel` - команды и данные для glasses runtime.
-
-Основные команды:
-
-| Метод | Назначение |
-|---|---|
-| `showGlasses` | Показать основной экран очков со счетчиком |
-| `showGlassesInitialization` | Показать экран инициализации очков |
-| `navigateGlassesToEmpty` | Перевести очки на empty screen |
-| `showGlassesScreen2` | Показать второй экран очков |
-| `updateCounter` | Передать счетчик на очки |
-| `updateRecognizedText` | Передать распознанный текст на очки |
-| `saveLogs` | Запросить сохранение логов native-слоем |
-| `clearLogs` | Запросить очистку логов native-слоем |
-| `getInitialCounter` | Получить начальное значение счетчика в glasses runtime |
-
-Правила изменения bridge:
-
-- добавляя новый native method, обновлять Flutter service и Android handler одновременно;
-- имена методов держать стабильными и строково совпадающими между Flutter и Android;
-- ошибки native bridge не глотать молча: минимум логировать и возвращать управляемое состояние в Cubit;
-- не вызывать `MethodChannel` напрямую из widgets.
-
-## Initialization Flow
-
-`InitializationScreen` создает `InitializationCubit`, который:
-
-1. Просит native показать initialization screen на очках.
-2. Подписывается на `ScannerCubit` и `VoiceCubit`.
-3. Запускает инициализацию scanner и voice.
-4. Ждет voice до 30 секунд.
-5. Ждет scanner до 10 секунд.
-6. Обновляет прогресс.
-7. При готовности voice переводит очки на empty screen.
-8. После полной готовности переводит телефон на `HomeScreen`.
-
-Scanner считается важным, но более мягким компонентом: timeout scanner короче, а voice является обязательным для финального перехода очков на empty screen.
-
-## Voice Flow
-
-`VoiceCubit` отвечает за offline speech recognition:
-
-```text
-VoiceCubit.init()
-  -> load Vosk model from assets
-  -> create model
-  -> create recognizer(sampleRate: 16000)
-  -> VoiceReady
-
-startListening()
-  -> check microphone permission
-  -> record.startStream(PCM 16 bit, 16 kHz, mono)
-  -> recognizer.acceptWaveformBytes(chunk)
-  -> parse result/partial
-  -> emit VoiceRecognized
-  -> MethodChannelService.updateRecognizedText
-```
-
-Важные инварианты:
-
-- sample rate должен оставаться согласованным между `RecordConfig` и Vosk recognizer;
-- аудио chunks обрабатываются с backpressure через `_isProcessingAudioChunk`;
-- UI updates и отправка на очки throttled через константы в `AppConstants`;
-- Vosk model asset должен быть объявлен в `pubspec.yaml`.
-
-## Scanner Flow
-
-`ScannerCubit` реализует `MultiScannerDelegate`.
-
-Flow:
-
-```text
-ScannerCubit.init()
-  -> _scanner.addDelegate(this)
-  -> _baseController.init()
-  -> _baseController.setRecomendedSettings()
-  -> listen isServiceConnected
-  -> ScannerReady
-
-onScanEvent(payload)
-  -> ScannerScanned(payload)
-
-onErrorScan(error)
-  -> ScannerError(error.toString())
-```
-
-Правила:
-
-- delegate добавляется при init и удаляется в `close()`;
-- подписка `_serviceSub` отменяется в `close()`;
-- UI читает результат сканирования только через `ScannerState`.
-
-## Glasses Navigation
-
-Навигация очков управляется `GlassesRuntimeApp` и `GlassesCoordinatorCubit`.
-
-Поддерживаемые route:
-
-| Route | Экран |
-|---|---|
-| `/` или `/screen1` | `GlassesScreen` |
-| `/initialization` | `GlassesInitializationScreen` |
-| `/empty` | `GlassesEmptyScreen` |
-| `/screen2` | `GlassesScreen2` |
-
-`GlassesCoordinatorCubit` принимает события:
-
-- `navigateToScreen`;
-- `navigateToRoute`;
-- `updateCounter`;
-- `updateRecognizedText`.
-
-Данные маршрутизируются на активный экран:
-
-- counter идет только на screen1;
-- recognized text идет на screen1 или screen2 в зависимости от `_currentRoute`.
-
-Правила добавления нового экрана очков:
-
-1. Добавить state и Cubit в `features/glasses/presentation/cubit/...`.
-2. Добавить screen в `features/glasses/presentation/screens/...`.
-3. Создать Cubit в `GlassesRuntimeApp.initState()`.
-4. Добавить `BlocProvider.value` в `MultiBlocProvider`.
-5. Добавить route в `_buildScreen()`.
-6. Закрыть Cubit в `dispose()`.
-7. При необходимости добавить callback в `GlassesCoordinatorCubit`.
-8. Обновить native Android route/method mapping.
-
-## Модуль Wear (Печать ценников)
-
-Модуль `wear` портирован из проекта `nbo` (ветка `MDVTM-4425/voice-test`) и реализует flow печати ценников: авторизация сотрудника → выбор принтера → сканирование товаров → голосовой ввод → печать.
-
-### Отличия стека
-
-Модуль использует собственный набор технологий, независимый от основного приложения:
-
-| Зона | Основное приложение | Модуль Wear |
-|---|---|---|
-| State management | `flutter_bloc` / Cubit | `flutter_riverpod` (StateNotifierProvider) |
-| Navigation | `Navigator` (MaterialPageRoute) | `go_router` |
-| DB | нет | `fbdb` (Firebird через REST) |
-| DI | `DependenciesContainer` + InheritedWidget | `WearDependencies` (ручной singleton) |
-| Voice | `vosk_flutter_service` напрямую | `WearDependencies` + `VoiceTypingService` |
-
-Сосуществование двух state management-подходов в одном приложении допустимо: Bloc работает в основном дереве виджетов, а Riverpod — внутри изолированного `ProviderScope`, создаваемого при входе в wear-модуль.
-
-### Структура каталогов
+### Структура модуля Wear (Clean Architecture)
 
 ```
-lib/modules/wear/
+modules/wear/
 ├── config/
-│   ├── wear_dependencies.dart       # Singleton-контейнер зависимостей
-│   └── wear_session.dart            # Текущая сессия (пользователь)
-├── data/
+│   ├── wear_dependencies.dart     # DI container
+│   └── wear_session.dart          # Session state
+├── data/                          # Data Layer
 │   ├── auth/
 │   │   ├── data_source/
-│   │   │   ├── auth_data_source.dart    # HTTP-запросы к API аутентификации
-│   │   │   └── auth_dio_client.dart     # Настройка Dio-клиента
+│   │   │   ├── auth_data_source.dart
+│   │   │   └── auth_dio_client.dart
 │   │   └── model/
-│   │       └── auth_response.dart
-│   ├── bdto/
+│   │       └── auth_user.dart
+│   ├── bdto/                      # Backend DTOs
 │   │   ├── data_source/
-│   │   │   ├── bdto_datasource.dart     # Firebird-запросы через fbdb
-│   │   │   └── fbdb_error_handler.dart  # Обработка ошибок fbdb
+│   │   │   ├── bdto_datasource.dart
+│   │   │   └── fbdb_error_handler.dart
 │   │   └── model/
-│   │       └── db_models.dart
+│   │       ├── enum/
+│   │       └── *.dart
 │   └── printer/
 │       └── data_source/
-│           └── printer_datasource.dart
-├── domain/
+├── domain/                        # Domain Layer
 │   ├── auth/
 │   │   ├── model/
 │   │   │   └── authenticated_user.dart
 │   │   └── use_case/
 │   │       └── authenticate_user_use_case.dart
 │   ├── price_tag_print/
+│   │   ├── model/
+│   │   │   ├── available_printer.dart
+│   │   │   └── barcode_product_info.dart
 │   │   └── use_case/
 │   │       ├── get_available_printers_use_case.dart
 │   │       ├── get_barcode_info_use_case.dart
@@ -333,325 +241,836 @@ lib/modules/wear/
 │           ├── speech_recognition_service.dart
 │           ├── tokenizer.dart
 │           └── voice_typing_service.dart
-├── models/
-│   └── wear_printer_selection.dart
-├── navigation/
-│   └── wear_routes.dart            # GoRouter-конфигурация (10 роутов)
-├── services/
-│   ├── wear_wifi_status_service.dart      # Реальный Wi‑Fi статус через wifi_info_plugin_plus
-│   ├── wear_printer_status_service.dart   # Статус выбранного принтера (доступен/нет)
-│   └── wear_status_icon_reporter.dart     # Реактивная отправка статуса на очки (polling 2s)
-├── presentation/
-│   ├── input/
-│   │   ├── cubit/
-│   │   │   └── ear_print_code_input_cubit.dart
-│   │   └── wear_print_code_input_screen.dart
+├── presentation/                   # Presentation Layer
+│   ├── cubit/
+│   ├── providers/
 │   ├── screens/
-│   │   ├── main/
-│   │   │   ├── cubit/
-│   │   │   │   └── wear_auth_cubit.dart
-│   │   │   ├── wear_main_screen.dart         # Экран авторизации (вход по бейджу)
-│   │   │   └── wear_scanner_connect_screen.dart
-│   │   ├── menu/
-│   │   │   └── wear_menu_screen.dart         # Главное меню после входа
-│   │   ├── printers/
-│   │   │   └── wear_printer_select_screen.dart
-│   │   ├── scan/
-│   │   │   ├── cubit/
-│   │   │   │   └── wear_scan_cubit.dart
-│   │   │   ├── wear_product_select_screen.dart
-│   │   │   └── wear_scan_idle_screen.dart
-│   │   ├── settings/
-│   │   │   ├── wear_settings_screen.dart
-│   │   │   └── db_settings_screen.dart
-│   │   └── status/
-│   │       ├── cubit/
-│   │       │   └── wear_status_cubit.dart
-│   │       ├── wear_status_args.dart
-│   │       └── wear_status_screen.dart
-│   ├── utils/
-│   │   └── wear_feedback.dart
-│   └── widgets/
-│       ├── wear_loading.dart
-│       ├── wear_mode_toggle.dart
-│       ├── wear_pill.dart
-│       ├── wear_position_indicator.dart
-│       ├── wear_scanner_status_indicator.dart
-│       ├── wear_screen_scaffold.dart          # Общая обёртка экранов (статус-бар + сканер-индикатор)
-│       ├── wear_status_bar.dart              # Device-side Wi‑Fi / printer status icons (polling 10s)
-│       └── wear_svg_icon.dart
-└── theme/
-    ├── wear_colors.dart
-    ├── wear_images.dart
-    └── wear_typography.dart
+│   ├── widgets/
+│   └── utils/
+└── navigation/
+    └── wear_routes.dart
 ```
 
-### Навигационный Flow
+---
 
-```
-Телефон (HomeScreen)
-  └─ кнопка "Печать ценников"
-     └─ WearMainScreen (авторизация по штрихкоду бейджа)
-        └─ WearStatusScreen (успех/ошибка)
-           └─ WearMenuScreen (главное меню)
-              ├─ WearPrinterSelectScreen (выбор принтера)
-              │  └─ WearScanIdleScreen (сканирование товаров)
-              │     ├─ WearProductSelectScreen (выбор из списка)
-              │     └─ WearPrintCodeInputScreen (голосовой ввод кол-ва)
-              ├─ WearSettingsScreen (настройки)
-              └─ DBSettingsScreen (настройки БД)
-```
+## Слои приложения
 
-### Ключевые экраны
+### Presentation Layer
 
-| Экран | Маршрут | Назначение |
-|---|---|---|
-| `WearMainScreen` | `/wear_main_screen` | Авторизация сотрудника по бейджу (mock logo-tap для dev) |
-| `WearScannerConnectScreen` | `/wear_scanner_connect` | Подключение Bluetooth-сканера (опционально, через env) |
-| `WearStatusScreen` | `/wear_status` | Универсальный статус (успех/ошибка) с auto-dismiss |
-| `WearMenuScreen` | `/wear_menu` | Главное меню: печать, настройки, выход |
-| `WearScanIdleScreen` | `/wear_scan_idle` | Сканирование товаров, отображение результата |
-| `WearPrinterSelectScreen` | `/wear_printer_select` | Выбор принтера из списка |
-| `WearProductSelectScreen` | `/wear_product_select` | Выбор товара при множественных результатах |
-| `WearPrintCodeInputScreen` | `/wear_print_code_input` | Голосовой ввод количества (ear-print code) |
-| `WearSettingsScreen` | `/wear_settings` | Экран настроек |
-| `DBSettingsScreen` | `/db_settings` | Настройки подключения к Firebird |
+**Ответственность**: Отображение UI, обработка пользовательского ввода, управление состоянием виджетов.
 
-#### Дизайн-конвенции статусных иконок
+**Компоненты**:
+- `Screens` - полноэкранные виджеты
+- `Widgets` - переиспользуемые UI компоненты
+- `Cubits/StateNotifiers` - управление состоянием экрана
+- `Providers` - Riverpod провайдеры состояния
 
-Очки нормально воспринимают только один цвет, поэтому:
+**Принципы**:
+- UI компоненты не содержат бизнес-логику
+- Состояние управляется через State Management
+- Widgets получают данные через конструктор или Provider
+- Нет прямых вызовов к native platform (использовать Service)
 
-- все статусные иконки (Wi‑Fi, принтер) отображаются зелёным;
-- offline-состояние показывается не цветом, а перечёркиванием (slash-линия);
-- Wi‑Fi иконка рисуется через `CustomPainter` (3 уровня сигнала + точка);
-- принтер — SVG-ассет `WearImages.printer`.
-
-### Dependencies
-
-`WearDependencies` — ручной singleton с ленивой инициализацией:
-
-- `BdtoDataSource` — Firebird-запросы (создаётся сразу);
-- `VoiceTypingService` — Vosk-распознавание (warmup в фоне при старте `WearMainScreen`);
-- `AuthenticateUserUseCase` — создаётся лениво при первой авторизации (Dio + AuthDataSource).
-
-Riverpod-провайдеры создаются через `autoDispose` и живут в пределах `ProviderScope`:
-
-| Провайдер | Тип | Назначение |
-|---|---|---|
-| `wearAuthNotifierProvider` | StateNotifierProvider | Состояние авторизации, навигационные команды |
-| `wearPrinterSelectControllerProvider` | — | Выбор принтера |
-| `wearScanCubitProvider` | — | Сканирование и печать |
-
-#### Сервисы статусных иконок
-
-`WearStatusIconReporter` — singleton, который:
-
-- каждые 2 секунды опрашивает `WearWifiStatusService` и `WearPrinterStatusService`;
-- сравнивает snapshot статуса с предыдущим;
-- при изменении пересылает на очки новый payload с полями `showWifiIcon`, `wifiAvailable`, `wifiLevel`, `showPrinterIcon`, `printerAvailable`;
-- используется всеми экранами вместо прямого вызова `wearGlassesBridge`.
-
-`WearWifiStatusService`:
-
-- вызывает `WifiInfoPlugin.wifiDetails`;
-- проверяет `Permission.locationWhenInUse` (запрашивает при необходимости);
-- определяет доступность через `connectionType`, `ssid`, `ipAddress`, `networkId`, `signalStrength`;
-- маппит `signalStrength` (0..9 от `calculateSignalLevel(rssi, 10)`) в уровни 1..3.
-
-`WearPrinterStatusService`:
-
-- читает выбранные принтеры из `WearSession.printerSelectionOrNull`;
-- в реальном режиме сверяет их с `GetAvailablePrintersUseCase`;
-- в mock-режиме возвращает доступность, если выбор принтера существует.
-
-#### Барьер повторного ШК
-
-В `WearScanNotifier` добавлена блокировка: одинаковый ШК подряд (`_lastAcceptedBarcode`) не уходит в печать повторно.
-
-### Внешние заглушки
-
-Некоторые зависимости nbo недоступны в текущем окружении и заменены заглушками:
-
-| Заглушка | Реальный источник |
-|---|---|
-| `packages/pole_base_kit/` | GitLab: `coderepo.corp.tander.ru/...` (PBTextStyles, PBIcon) |
-| `lib/app/data/network/network_requests/api_request.dart` | `package:nbo/...` (базовый HTTP-клиент) |
-
-`pole_base_kit` — временный локальный path-пакет, экспортирующий только то, что используется в wear (PBTextStyles, PBIcon, PBIconData). При появлении доступа к GitLab заменяется на git-ссылку.
-
-### Интеграция с телефоном
-
-Модуль открывается из HomeScreen через `Navigator.push` с `ProviderScope + MaterialApp.router`:
+**Пример структуры экрана**:
 
 ```dart
+// presentation/screens/example_screen.dart
+class ExampleScreen extends StatelessWidget {
+  const ExampleScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<ExampleCubit, ExampleState>(
+      builder: (context, state) {
+        return switch (state) {
+          ExampleInitial() => const ExampleInitialWidget(),
+          ExampleLoading() => const ExampleLoadingWidget(),
+          ExampleLoaded(data: final data) => ExampleLoadedWidget(data: data),
+          ExampleError(message: final message) => ExampleErrorWidget(message: message),
+        };
+      },
+    );
+  }
+}
+```
+
+### Domain Layer
+
+**Ответственность**: Business logic, правила предметной области, contracts для data layer.
+
+**Компоненты**:
+- `Entities` - бизнес-объекты (не зависят от фреймворков)
+- `Use Cases` - описывают действия пользователя
+- `Repository Interfaces` - абстракции для доступа к данным
+- `Domain Services` - бизнес-логика, не принадлежащая конкретной entity
+
+**Принципы**:
+- Не зависит от Flutter или других framework-specific библиотек
+- Entities - plain Dart classes
+- Use Cases содержат один метод `call()`
+- Repository - абстрактный класс/интерфейс
+
+**Пример Use Case**:
+
+```dart
+// domain/auth/use_case/authenticate_user_use_case.dart
+class AuthenticateUserUseCase {
+  final AuthRepository _repository;
+
+  AuthenticateUserUseCase(this._repository);
+
+  Future<Result<AuthenticatedUser>> call(String badgeBarcode) async {
+    if (badgeBarcode.isEmpty) {
+      return Result.error(AuthException('Badge barcode cannot be empty'));
+    }
+    return _repository.authenticate(badgeBarcode);
+  }
+}
+```
+
+**Пример Entity**:
+
+```dart
+// domain/price_tag_print/model/available_printer.dart
+@freezed
+class AvailablePrinter with _$AvailablePrinter {
+  const factory AvailablePrinter({
+    required String id,
+    required String name,
+    required PrinterKind kind,
+    required PrinterMobilityType mobility,
+    required bool isAvailable,
+  }) = _AvailablePrinter;
+
+  const AvailablePrinter._();
+}
+```
+
+### Data Layer
+
+**Ответственность**: Реализация repository interfaces, доступ к внешним источникам данных.
+
+**Компоненты**:
+- `Repository Implementations` - реализуют domain repository interfaces
+- `Data Sources` - абстракции над источниками данных (API, DB, local storage)
+- `DTOs` - Data Transfer Objects для сериализации
+- `Mappers` - конвертация DTO → Domain Entity
+
+**Принципы**:
+- Зависит только от domain layer interfaces
+- Data sources инкапсулируют работу с external APIs/BaaS
+- DTOs соответствуют структуре API/BaaS responses
+- Mappers выполняют преобразование DTO → Entity
+
+**Пример Data Source**:
+
+```dart
+// data/auth/data_source/auth_data_source.dart
+class AuthDataSource {
+  final AuthDioClient _client;
+
+  AuthDataSource(this._client);
+
+  Future<AuthUserDto> authenticate(String badgeBarcode) async {
+    final response = await _client.authenticate({'badge': badgeBarcode});
+    return AuthUserDto.fromJson(response.data);
+  }
+}
+```
+
+**Пример Repository Implementation**:
+
+```dart
+// Реализация в domain использует abstract class
+// data/auth/repository/auth_repository_impl.dart
+class AuthRepositoryImpl implements AuthRepository {
+  final AuthDataSource _dataSource;
+
+  AuthRepositoryImpl(this._dataSource);
+
+  @override
+  Future<Result<AuthenticatedUser>> authenticate(String badgeBarcode) async {
+    try {
+      final dto = await _dataSource.authenticate(badgeBarcode);
+      return Result.ok(AuthenticatedUserMapper.fromDto(dto));
+    } on AuthException catch (e) {
+      return Result.error(e);
+    }
+  }
+}
+```
+
+---
+
+## Управление состоянием
+
+### BLoC/Cubit
+
+**Основное приложение** использует BLoC/Cubit паттерн.
+
+**Принципы** (согласно [Flutter BLoC best practices](https://bloclibrary.dev/)):
+
+```dart
+// State - immutable
+@freezed
+class ScannerState with _$ScannerState {
+  const factory ScannerState.initial() = ScannerInitial;
+  const factory ScannerState.connecting() = ScannerConnecting;
+  const factory ScannerState.ready() = ScannerReady;
+  const factory ScannerState.scanned(String barcode) = ScannerScanned;
+  const factory ScannerState.error(String message) = ScannerError;
+}
+
+// Cubit - управляет состоянием
+class ScannerCubit extends Cubit<ScannerState> {
+  final MultiScanner _scanner;
+
+  ScannerCubit(this._scanner) : super(const ScannerState.initial());
+
+  Future<void> init() async {
+    emit(const ScannerState.connecting());
+    try {
+      _scanner.addDelegate(this);
+      await _scanner.init();
+      emit(const ScannerState.ready());
+    } catch (e) {
+      emit(ScannerState.error(e.toString()));
+    }
+  }
+
+  @override
+  Future<void> close() {
+    _scanner.removeDelegate(this);
+    return super.close();
+  }
+}
+```
+
+**Правила**:
+- Использовать sealed classes для states
+- Каждый screen имеет свой Cubit
+- Глобальные Cubits создаются в DependenciesContainer
+- Локальные Cubits создаются через `BlocProvider(create: ...)`
+- Asynchronous subscriptions отменяются в `close()`
+
+### Riverpod
+
+**Модуль Wear** использует Riverpod.
+
+```dart
+// presentation/providers/wear_voice_providers.dart
+@riverpod
+class WearVoiceNotifier extends _$WearVoiceNotifier {
+  @override
+  FutureOr<VoiceState> build() => const VoiceState.idle();
+
+  Future<void> startListening() async {
+    state = const AsyncValue.loading();
+    try {
+      await _service.start();
+      state = const AsyncValue.data(VoiceState.listening());
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
+  }
+}
+```
+
+### State Management Guidelines
+
+| Ситуация | Рекомендация |
+|----------|-------------|
+| Простой screen без сложной логики | Stateless widget с данными через конструктор |
+| Screen с async операциями | Cubit/StateNotifier |
+| Shared state между несколькими screens | Глобальный Cubit в DependenciesContainer |
+| Complex state с множеством полей | Freezed immutable state |
+| Real-time updates | Stream/Flow + Riverpod StreamProvider |
+| Computed derived state | Selector или Provider family |
+
+---
+
+## Dependency Injection
+
+### Принципы DI
+
+**Цель**: Создание объектов в одном месте и передача в компоненты, которые их используют.
+
+**Преимущества**:
+- Loose coupling между компонентами
+- Легкость тестирования (подмена зависимостей)
+- Single source of truth для dependencies
+- Lifecycle management объектов
+
+### Provider Pattern
+
+**Рекомендация**: Использовать `package:provider` согласно [Flutter DI Guide](https://github.com/flutter/website/blob/main/sites/docs/src/content/app-architecture/case-study/dependency-injection.md).
+
+```dart
+// Основное приложение: ручной DI container
+class DependenciesContainer {
+  late final MethodChannelService _methodChannelService;
+  late final ScannerCubit _scannerCubit;
+  late final VoiceCubit _voiceCubit;
+  late final HomeCubit _homeCubit;
+
+  static DependenciesContainer create() {
+    final container = DependenciesContainer._();
+    container._methodChannelService = MethodChannelService();
+    container._scannerCubit = ScannerCubit();
+    container._voiceCubit = VoiceCubit();
+    container._homeCubit = HomeCubit();
+    return container;
+  }
+}
+```
+
+**Дополнительно**: При необходимости использовать `get_it` или `injectable` для более сложных сценариев.
+
+---
+
+## Обработка ошибок
+
+### Result Pattern
+
+Согласно [Flutter Result Pattern](https://github.com/flutter/website/blob/main/sites/docs/src/content/app-architecture/design-patterns/result.md), вместо exceptions использовать `Result<T>` sealed class:
+
+```dart
+// Sealed Result class - явная обработка успеха и ошибки
+sealed class Result<T> {
+  const Result();
+
+  factory Result.ok(T value) => Ok(value);
+  factory Result.error(Exception error) => Error(error);
+}
+
+final class Ok<T> extends Result<T> {
+  final T value;
+  const Ok(this.value);
+}
+
+final class Error<T> extends Result<T> {
+  final Exception error;
+  const Error(this.error);
+}
+```
+
+**Пример использования**:
+
+```dart
+// В Use Case
+Future<Result<AuthenticatedUser>> call(String badgeBarcode) async {
+  if (badgeBarcode.isEmpty) {
+    return Result.error(AuthException('Badge barcode cannot be empty'));
+  }
+  return _repository.authenticate(badgeBarcode);
+}
+
+// В Presentation (Cubit)
+Future<void> authenticate(String badgeBarcode) async {
+  emit(state.copyWith(isLoading: true));
+  final result = await _authenticateUserUseCase(badgeBarcode);
+  switch (result) {
+    case Ok(value: final user):
+      emit(AuthState.authenticated(user));
+    case Error(error: final error):
+      emit(AuthState.error(error.message));
+  }
+}
+```
+
+### Error Handling Best Practices
+
+1. **Явная обработка ошибок**: Использовать `Result<T>` вместо exceptions
+2. **Domain-specific errors**: Создавать специфичные exceptions (`AuthException`, `NetworkException`)
+3. **Логирование**: Логировать ошибки на уровне Data Source
+4. **User-friendly messages**: Преобразовывать технические ошибки в понятные пользователю
+5. **Не глотать ошибки**: Всегда обрабатывать или пробрасывать
+
+---
+
+## Навигация
+
+### GoRouter
+
+**Модуль Wear** использует `go_router` для declarative routing:
+
+```dart
+// navigation/wear_routes.dart
+final GoRouter wearRouter = GoRouter(
+  initialLocation: '/wear_main_screen',
+  routes: [
+    GoRoute(
+      path: '/wear_main_screen',
+      builder: (context, state) => const WearMainScreen(),
+    ),
+    GoRoute(
+      path: '/wear_menu',
+      builder: (context, state) => const WearMenuScreen(),
+    ),
+    // ... другие routes
+  ],
+);
+```
+
+### Navigator
+
+**Основное приложение** использует классический Navigator:
+
+```dart
+// Из HomeScreen в Wear module
 Navigator.push(
   context,
   MaterialPageRoute(
     builder: (_) => ProviderScope(
       child: MaterialApp.router(
-        routerConfig: GoRouter(
-          initialLocation: '/wear_main_screen',
-          routes: WearRoute.goRouteWear,
-        ),
+        routerConfig: wearRouter,
       ),
     ),
   ),
 );
 ```
 
-Весь модуль работает в изолированном контуре: собственный GoRouter, собственный ProviderScope, собственный DI.
+---
 
-### Известный технический долг
+## Native Bridge
 
-- `deprecated_member_use` в `bdto_datasource.dart` (методы fbdb);
-- `pole_base_kit` как локальный path-пакет вместо git-зависимости;
-- Закомментированные импорты Bluetooth/Scanner-зависимостей, которые были в оригинальном nbo;
-- Отсутствие `ProviderScope` на уровне корневого `MaterialApp` (создаётся динамически при входе в модуль).
-- `assets/develop.env` объявлен в `pubspec.yaml`, но игнорируется `.gitignore` — свежий checkout/CI без него упадёт на сборке assets.
-- `dart analyze` на большом наборе файлов может лагать и виснуть — рекомендуется запускать по 1–2 файлам за раз.
+`MethodChannelService` инкапсулирует взаимодействие с native Android:
 
-## Правила Изменений
+```dart
+// core/services/method_channel_service.dart
+class MethodChannelService {
+  static const _appChannel = MethodChannel('com.smart_glasses/app_channel');
+  static const _glassesChannel = MethodChannel('com.smart_glasses/glasses_channel');
+
+  Future<void> showGlasses() async {
+    try {
+      await _appChannel.invokeMethod('showGlasses');
+    } on PlatformException catch (e) {
+      log('showGlasses failed: ${e.message}');
+    }
+  }
+}
+```
+
+**Правила**:
+- Все MethodChannel вызовы через `MethodChannelService`
+- Имена методов должны совпадать между Flutter и Android
+- Ошибки логировать и преобразовывать в state
+- Не вызывать из widgets напрямую
+
+---
+
+## Тестирование
+
+Согласно [Flutter Testing Guide](https://github.com/flutter/website/blob/main/sites/docs/src/content/testing/overview.md), автоматизированное тестирование делится на три категории:
+
+### Unit Tests
+
+Тестируют одну функцию, метод или класс.
+
+```dart
+// unit test для UseCase
+void main() {
+  group('AuthenticateUserUseCase', () {
+    late AuthenticateUserUseCase useCase;
+    late MockAuthRepository mockRepository;
+
+    setUp(() {
+      mockRepository = MockAuthRepository();
+      useCase = AuthenticateUserUseCase(mockRepository);
+    });
+
+    test('returns error for empty badge barcode', () async {
+      final result = await useCase('');
+      expect(result, isA<Error>());
+    });
+
+    test('returns user for valid badge', () async {
+      when(() => mockRepository.authenticate(any()))
+          .thenAnswer((_) async => Result.ok(testUser));
+
+      final result = await useCase('valid_badge');
+
+      expect(result, isA<Ok>());
+      expect(result.value.id, equals(testUser.id));
+    });
+  });
+}
+```
+
+### Widget Tests
+
+Тестируют один widget изолированно.
+
+```dart
+void main() {
+  group('WearStatusBar Widget', () {
+    testWidgets('shows wifi icon when connected', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: WearStatusBar(wifiAvailable: true, wifiLevel: 3),
+        ),
+      );
+
+      expect(find.byIcon(Icons.wifi), findsOneWidget);
+    });
+  });
+}
+```
+
+### Integration Tests
+
+Тестируют_complete приложение или значимую часть.
+
+```dart
+// integration_test/app_test.dart
+void main() {
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  group('Wear flow', () {
+    testWidgets('complete authentication flow', (tester) async {
+      await tester.pumpWidget(const SmartGlassesApp());
+      await tester.pumpAndSettle();
+
+      // Tap on wear button
+      await tester.tap(find.byKey(const ValueKey('wear_button')));
+      await tester.pumpAndSettle();
+
+      // Enter badge barcode
+      await tester.enterText(find.byKey(const ValueKey('badge_input')), '123456');
+      await tester.tap(find.byKey(const ValueKey('auth_button')));
+      await tester.pumpAndSettle();
+
+      // Verify menu screen
+      expect(find.text('Меню'), findsOneWidget);
+    });
+  });
+}
+```
+
+**Правила тестирования**:
+- Использовать Fake/Mock repositories для unit тестов
+- Тестировать business logic в domain layer
+- Widget tests для UI компонентов
+- Integration tests для critical user flows
+- Стремиться к высокому code coverage
+
+---
+
+## Правила изменений
 
 ### Минимальный scope
 
-- Менять только файлы, относящиеся к задаче.
-- Не переносить проект на другой state management без отдельного решения.
-- Не вводить domain/data слои формально, пока нет реальной бизнес-логики или внешних источников данных.
-- Если feature растет, сначала выделять понятные Cubit/state/widgets внутри текущей структуры.
+- Менять только файлы, относящиеся к задаче
+- Не переносить проект на другой state management без отдельного решения
+- Если feature растет, сначала выделять понятные Cubit/state/widgets внутри текущей структуры
 
-### Когда добавлять слой
+### Когда добавлять domain/data слои
 
-Сейчас проект фактически presentation-heavy: Cubit'ы напрямую координируют services/plugins. Это допустимо для текущего размера.
+Добавлять отдельные слои стоит если появляется хотя бы одно условие:
 
-Добавлять `domain/` и `data/` внутри feature стоит только если появляется хотя бы одно условие:
+- Несколько источников данных
+- Сложные правила обработки, требующие отдельного тестирования
+- Один сценарий используется несколькими Cubits
+- Требуется стабильный контракт результата
+- Появляются persistency, network или repository abstractions
 
-- несколько источников данных;
-- сложные правила обработки, которые нужно тестировать отдельно от Flutter;
-- один сценарий используется несколькими Cubit'ами;
-- требуется стабильный контракт результата между plugin/native и UI;
-- появляются persistency, network или repository abstractions.
+### Направление зависимостей
 
-Если слой добавлен, направление зависимостей должно быть таким:
-
-```text
+```
 presentation -> domain -> data
 ```
 
 Обратные импорты запрещены.
 
-### Ошибки
+---
 
-- Plugin/native ошибки переводить в state (`VoiceError`, `ScannerError` или отдельное состояние feature).
-- Не оставлять критичные ошибки только в `print`.
-- Для новых user-facing ошибок показывать понятное сообщение в UI.
+## Runtime-контуры
 
-### Логи
+### Основное приложение (Phone)
 
-Сейчас в проекте используются `print`. Для production-кода это технический долг.
+```
+main()
+  -> DependenciesContainer.create()
+  -> AppScope
+  -> MyApp
+  -> InitializationScreen
+  -> HomeScreen
+```
 
-Правило для новых изменений:
+### Glasses runtime
 
-- не увеличивать хаотичное использование `print`;
-- если добавляется значимый лог, помечать место как кандидат на общий logging service;
-- для высокочастотных событий, например audio chunks, не логировать каждый event.
+```
+glassesMain()
+  -> GlassesRuntimeApp
+  -> GlassesCoordinatorCubit
+  -> MethodChannel handler
+  -> Navigator
+  -> Glasses screens
+```
+
+### Wear module (Isolated)
+
+```
+Phone HomeScreen
+  -> Navigator.push(ProviderScope + MaterialApp.router)
+  -> WearRouter
+  -> WearProviders
+```
+
+---
+
+## Communication Flow: Phone → Glasses
+
+### Архитектурный принцип
+
+**Очки - это "тупой" дисплей**. Они не содержат бизнес-логики, не принимают решений, не валидируют данные. Очки только:
+- Отображают полученный payload
+- Отправляют raw events обратно (нажатия кнопок, голосовые команды)
+
+**Вся логика находится на телефоне**. Phone runtime:
+- Формирует payload для очков
+- Принимает events от очков
+- Обрабатывает события и принимает решения
+- Обновляет payload на очках
+
+### Схема взаимодействия
+
+```
+┌─────────────────────────┐                      ┌─────────────────────────┐
+│       PHONE RUNTIME     │                      │     GLASSES RUNTIME     │
+│                         │                      │                         │
+│  ┌─────────────────┐   │     MethodChannel    │   ┌─────────────────┐  │
+│  │  Phone Cubit    │────┼────────────────────────▶│  WearGlassesCubit│  │
+│  │  (логика +     │   │   showWearGlasses()   │   │  (просто storage)│  │
+│  │   формирование  │   │   updateWearGlasses() │   └────────┬────────┘  │
+│  │   payload)     │   │                      │            │            │
+│  └─────────────────┘   │                      │   ┌────────▼────────┐  │
+│         │              │                      │   │ WearGlassesScreen│  │
+│         ▼              │                      │   │  (только UI,     │  │
+│  ┌─────────────────┐   │                      │   │   Stateless)    │  │
+│  │ WearGlassesBridge│──┼────────────────────────▶│                  │  │
+│  │                 │   │                      │   └─────────────────┘  │
+│  └─────────────────┘   │                      │                         │
+│         │              │     Events ◀──────────│──────── raw events      │
+│         ▼              │   onScan, onVoice     │   (без обработки)       │
+│  ┌─────────────────┐   │                      │                         │
+│  │MethodChannelSvc │───┼────────────────────────▶                         │
+│  └─────────────────┘   │                      │                         │
+└─────────────────────────┘                      └─────────────────────────┘
+```
+
+### Компоненты
+
+#### 1. WearGlassesPayload (Phone side)
+
+Модель данных для очков - единый контракт между телефоном и очками:
+
+```dart
+class WearGlassesPayload {
+  final WearGlassesScreenType screenType;  // auth, menu, scan, status, etc.
+  final WearGlassesPhase phase;            // idle, loading, scanning, success, error
+  final String title;
+  final String? subtitle;
+  final String? statusText;
+  final bool isLoading;
+  final List<String> items;                  // для экранов со списками
+  final int selectedIndex;
+  // ... status icons, wifi, printer
+}
+```
+
+**Factory методы** для типичных состояний:
+```dart
+WearGlassesPayload.authWaitingBarcode()
+WearGlassesPayload.scanLoading()
+WearGlassesPayload.menu(selectedIndex: 0)
+WearGlassesPayload.status(isError: false, title: 'Успех')
+```
+
+#### 2. WearGlassesBridge (Phone side)
+
+Обёртка над `MethodChannelService` для отправки на очки:
+
+```dart
+class WearGlassesBridge {
+  Future<void> show(WearGlassesPayload payload) async {
+    await _methodChannelService.showWearGlasses(payload.toJson());
+  }
+
+  Future<void> update(WearGlassesPayload payload) async {
+    await _methodChannelService.updateWearGlasses(payload.toJson());
+  }
+
+  Future<void> hide() async {
+    await _methodChannelService.hideWearGlasses();
+  }
+}
+```
+
+#### 3. GlassesCoordinatorCubit (Glasses side)
+
+Принимает MethodChannel вызовы и маршрутизирует на соответствующие cubits:
+
+```dart
+Future<dynamic> _handleMethodCall(MethodCall call) async {
+  switch (call.method) {
+    case 'updateWearGlasses':
+      _handleUpdateWearGlasses(call.arguments);  // -> WearGlassesCubit
+      break;
+    // другие методы...
+  }
+}
+```
+
+#### 4. WearGlassesCubit (Glasses side)
+
+**Просто хранит состояние** - никакой логики:
+
+```dart
+class WearGlassesCubit extends Cubit<WearGlassesState> {
+  void updateFromPayload(Map<String, dynamic> payload) {
+    emit(WearGlassesState.fromPayload(payload));  // Просто сохраняет данные
+  }
+}
+```
+
+#### 5. WearGlassesScreen (Glasses side)
+
+**Stateless презентационный компонент** - только рисует UI:
+
+```dart
+class WearGlassesScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<WearGlassesCubit, WearGlassesState>(
+      builder: (context, state) {
+        // Только отображение - никакой логики
+        return WearGlassesScaffold(
+          child: Column(
+            children: [
+              _TitleBlock(state: state),
+              _Body(state: state),
+              _StatusBar(state: state),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+```
+
+### Пример: Отображение меню на очках
+
+**Phone side (в Cubit):**
+```dart
+void _onMenuEntered() {
+  // 1. Phone формирует payload (вся логика здесь)
+  final payload = WearGlassesPayload.menu(selectedIndex: _selectedIndex);
+  
+  // 2. Phone отправляет на очки
+  wearGlassesBridge.show(payload);
+}
+
+void _onItemSelected(int index) {
+  // 3. Phone обрабатывает событие
+  _selectedIndex = index;
+  
+  // 4. Phone обновляет очки новым состоянием
+  final payload = WearGlassesPayload.menu(selectedIndex: _selectedIndex);
+  wearGlassesBridge.update(payload);
+}
+```
+
+**Glasses side (только отображение):**
+```dart
+// Никакой логики, просто показывает что дали
+class _WearList extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    // Отображает items из state, selectedIndex из state
+    // Клик по item -> отправляет event обратно на phone
+  }
+}
+```
+
+### Правила
+
+1. **Payload формируется на телефоне** - очки не знают о бизнес-логике
+2. **Очки Stateless** - только отображение полученного состояния
+3. **Events возвращаются как есть** - phone сам решает что делать
+4. **Единый payload contract** - `WearGlassesPayload` определеяет все возможные состояния
+5. **Никакой логики на очках** - только render и event forwarding
+
+### MethodChannel контракт
+
+| Метод | Направление | Payload |
+|-------|------------|---------|
+| `showWearGlasses` | Phone → Glasses | Полный payload экрана |
+| `updateWearGlasses` | Phone → Glasses | Частичное обновление payload |
+| `hideWearGlasses` | Phone → Glasses | Скрыть экран очков |
+| `onGlassesEvent` | Glasses → Phone | `{event: 'scan', data: '...}` |
+
+---
+
+## Архитектурные инварианты
+
+1. **`main()`** запускает phone runtime, **`glassesMain()`** запускает glasses runtime
+2. **Phone UI** не управляет Navigator очков напрямую; связь через native bridge и coordinator
+3. **`MethodChannelService`** - единственная точка Flutter-вызовов к native channels
+4. **Глобальные Cubits** создаются в `DependenciesContainer` и передаются через `AppScope`
+5. **Локальные Cubits** glasses runtime создаются и закрываются внутри `GlassesRuntimeApp`
+6. **Voice recognition** работает offline через Vosk asset
+7. **Scanner lifecycle** обязан добавлять и удалять delegate симметрично
+8. **Любой новый route** должен быть согласован между Flutter и Android
+9. **Dependency direction**: только presentation → domain → data
+10. **Очки - stateless display**: WearGlassesScreen и WearGlassesCubit не содержат бизнес-логики, только отображение
+11. **Вся логика на телефоне**: Phone формирует WearGlassesPayload и принимает решения
+12. **Единый payload contract**: WearGlassesPayload - единственный способ передачи данных на очки
+
+---
 
 ## Проверки
 
-Базовые команды перед завершением задачи:
+Перед завершением изменений:
 
 ```bash
 flutter analyze
 flutter test
-```
 
-Если используется FVM в текущем окружении, предпочтительно запускать:
-
-```bash
+# При использовании FVM:
 fvm flutter analyze
 fvm flutter test
 ```
 
-Для изменений Android/native bridge дополнительно проверять запуск на устройстве или эмуляторе, потому что часть ошибок `MethodChannel` не ловится статическим анализом Dart.
+Для Android/native bridge изменений обязательна runtime-проверка на устройстве.
 
-## OpenCode Workflow По Отчету
+---
 
-Файл `/home/viadmin/Загрузки/deep-research-report.md` рекомендует не держать один огромный контекст для всех задач. Для этого проекта применяем risk-based workflow.
+## Рекомендации по улучшению
 
-### Роли моделей
+### Краткосрочные улучшения
 
-| Задача | Модель по умолчанию | Причина |
-|---|---|---|
-| Поиск файлов, чтение структуры, grep | слабая | дешево, read-only, низкая цена ошибки |
-| Первый план изменений | слабая | модель выступает как планировщик и компрессор контекста |
-| Суммаризация diff/test output | слабая | это сжатие фактов, не архитектурный суд |
-| Локальная правка одного widget/Cubit | слабая или средняя | scope ограничен |
-| Изменение MethodChannel, Android bridge, glasses flow | сильная review-модель | высокий интеграционный риск |
-| Изменение DI/lifecycle глобальных Cubit'ов | сильная review-модель | высокий риск утечек и double-dispose |
-| Финальное архитектурное ревью PR | сильная review-модель | нужна проверка глобальных инвариантов |
+1. **Замена print() на structured logging** - использовать `logging` или `dart:developer`
+2. **Unified state management** - рассмотреть миграцию модуля Wear на BLoC для консистентности
+3. **Error handling** - внедрить Result pattern в domain layer
+4. **Repository pattern** - добавить абстракции там, где есть прямые вызовы data sources
 
-### Триггеры эскалации
+### Долгосрочные улучшения
 
-Звать сильную модель или делать ручной архитектурный review, если задача затрагивает:
+1. **Пакетная структура** - при росте выделить отдельные пакеты для shared code
+2. **Golden tests** - добавить snapshot testing для UI компонентов
+3. **Performance monitoring** - интегрировать metrics для анализа производительности
+4. **Feature flags** - добавить систему для A/B тестирования и gradual rollouts
 
-- `MethodChannelService` и Android native handlers;
-- `glassesMain`, `GlassesRuntimeApp`, `GlassesCoordinatorCubit`;
-- lifecycle Cubit'ов и `DependenciesContainer`;
-- voice audio pipeline, sample rate, throttling или Vosk model asset;
-- scanner delegate lifecycle;
-- navigation между phone runtime и glasses runtime;
-- несколько features одновременно;
-- добавление нового слоя `domain/` или `data/`;
-- падение `analyze`, `test` или runtime-проверки на устройстве.
+---
 
-### Контракт плана
+## Ссылки
 
-Перед крупной правкой полезно фиксировать короткий plan:
-
-```json
-{
-  "task_type": "bugfix|feature|refactor|analysis",
-  "assumptions": ["..."],
-  "affected_scope": {
-    "features": ["home", "voice", "scanner", "glasses", "initialization"],
-    "files": ["..."]
-  },
-  "architecture_checks": ["MethodChannel contract", "Cubit lifecycle", "glasses route mapping"],
-  "plan_steps": [
-    {"step": "...", "why": "...", "verify": "..."}
-  ],
-  "verification_commands": ["flutter analyze", "flutter test"],
-  "risk_level": "low|medium|high",
-  "escalate_to_strong": true
-}
-```
-
-### Контракт review
-
-Для review передавать не весь диалог, а короткий контекст:
-
-- plan JSON;
-- список измененных файлов;
-- summary diff;
-- результаты `analyze`/`test`;
-- релевантные фрагменты этого файла.
-
-Review должен отвечать на вопросы:
-
-- не сломан ли dual-runtime flow;
-- не нарушен ли lifecycle Cubit'ов и подписок;
-- совпадают ли MethodChannel method names с native частью;
-- не добавлен ли лишний глобальный state;
-- достаточны ли проверки;
-- можно ли уменьшить scope.
-
-## Архитектурные Инварианты
-
-- `main()` запускает phone runtime, `glassesMain()` запускает glasses runtime.
-- Phone UI не управляет Navigator очков напрямую; связь идет через native bridge и coordinator.
-- `MethodChannelService` - единственная точка Flutter-вызовов к native channels.
-- Глобальные Cubit'ы создаются в `DependenciesContainer` и передаются через `AppScope`.
-- Локальные Cubit'ы glasses runtime создаются и закрываются внутри `GlassesRuntimeApp`.
-- Voice recognition работает offline через Vosk asset, объявленный в `pubspec.yaml`.
-- Scanner lifecycle обязан добавлять и удалять delegate симметрично.
-- Любой новый route очков должен быть согласован в Flutter runtime и native Android mapping.
-- Перед завершением изменений нужно запускать `analyze`; для логики Cubit/widget желательно добавлять или запускать tests.
+- [Flutter App Architecture Guide](https://github.com/flutter/website/blob/main/sites/docs/src/content/app-architecture/index.md)
+- [Flutter BLoC Library](https://bloclibrary.dev/)
+- [Riverpod Documentation](https://riverpod.dev/)
+- [GoRouter Documentation](https://gorouter.dev/)
+- [Flutter Testing Overview](https://github.com/flutter/website/blob/main/sites/docs/src/content/testing/overview.md)
+- [Clean Architecture in Flutter](https://blog.codemagic.io/clean-architecture-in-flutter/)

@@ -6,6 +6,7 @@ import 'package:smart_glasses/app/app.dart';
 import 'package:smart_glasses/app/di/app_scope.dart';
 import 'package:smart_glasses/app/di/dependencies_container.dart';
 import 'package:smart_glasses/app/glasses/glasses_runtime_app.dart';
+import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
 
 @pragma('vm:entry-point')
 void glassesMain() {
@@ -23,6 +24,8 @@ void main() async {
     fileName: 'assets/develop.env',
     isOptional: true,
   );
+
+  await WearMockConfig.init();
 
   _applyDefaultEnvValues();
 
