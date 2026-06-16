@@ -79,6 +79,10 @@ class WearDependencies {
     return _authenticateUserUseCase ??= _createAuthenticateUserUseCase();
   }
 
+  void resetAuthDependencies() {
+    _authenticateUserUseCase = null;
+  }
+
   Future<AuthenticateUserUseCase> _createAuthenticateUserUseCase() async {
     final Dio dio = await AuthDioClient().create();
     final AuthDataSource dataSource = AuthDataSource(dio);
@@ -88,14 +92,19 @@ class WearDependencies {
   Future<void> ensureVoiceTypingPrepared() {
     final Future<void>? inFlight = _voiceTypingPrepareFuture;
     if (inFlight != null) {
+      print('WearDependencies: VOSK warmup reused in-flight future');
       return inFlight;
     }
 
+    print('WearDependencies: VOSK warmup start');
     final Future<void> prepareFuture = voiceTypingService.prepare();
     _voiceTypingPrepareFuture = prepareFuture.then<void>(
-      (_) {},
-      onError: (Object error, StackTrace _) {
+      (_) {
+        print('WearDependencies: VOSK warmup done');
+      },
+      onError: (Object error, StackTrace stackTrace) {
         _voiceTypingPrepareFuture = null;
+        print('WearDependencies: VOSK warmup error: $error\n$stackTrace');
         throw Exception(error.toString());
       },
     );

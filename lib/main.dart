@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -10,10 +12,23 @@ import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
 
 @pragma('vm:entry-point')
 void glassesMain() {
-  runApp(const GlassesRuntimeApp());
+  _runGuarded(
+    entryPointName: 'glassesMain',
+    body: () async {
+      WidgetsFlutterBinding.ensureInitialized();
+      runApp(const GlassesRuntimeApp());
+    },
+  );
 }
 
-void main() async {
+void main() {
+  _runGuarded(
+    entryPointName: 'main',
+    body: _main,
+  );
+}
+
+Future<void> _main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   if (kDebugMode) {
@@ -41,6 +56,41 @@ void main() async {
       child: const MyApp(),
     ),
   );
+}
+
+void _runGuarded({
+  required String entryPointName,
+  required Future<void> Function() body,
+}) {
+  runZonedGuarded<void>(
+    () async {
+      FlutterError.onError = (FlutterErrorDetails details) {
+        FlutterError.presentError(details);
+        _logUnhandledError(
+          '$entryPointName FlutterError',
+          details.exception,
+          details.stack,
+        );
+      };
+
+      PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+        _logUnhandledError('$entryPointName PlatformDispatcher', error, stack);
+        return true;
+      };
+
+      await body();
+    },
+    (Object error, StackTrace stack) {
+      _logUnhandledError('$entryPointName runZonedGuarded', error, stack);
+    },
+  );
+}
+
+void _logUnhandledError(String source, Object error, StackTrace? stackTrace) {
+  print('[APP-ERROR][$source] $error');
+  if (stackTrace != null) {
+    print('[APP-ERROR][$source] stackTrace=$stackTrace');
+  }
 }
 
 void _applyDefaultEnvValues() {

@@ -12,7 +12,6 @@ class GetAvailablePrintersUseCase {
   Future<List<AvailablePrinter>> call() async {
     final List<PrinterListItem> result =
         await _bdtoDataSource.getPrinterList(kind: PrinterKind.mobile);
-    await _bdtoDataSource.close();
     return result
         .map((PrinterListItem item) => AvailablePrinter(
               name: item.name,

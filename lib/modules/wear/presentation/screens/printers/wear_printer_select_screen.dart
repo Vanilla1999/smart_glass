@@ -5,6 +5,7 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
+import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
@@ -20,9 +21,11 @@ import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
 class WearPrinterSelectScreen extends ConsumerStatefulWidget {
-  const WearPrinterSelectScreen({super.key});
+  const WearPrinterSelectScreen({super.key, this.flowController});
 
   static const String route = '/wear_printer_select';
+
+  final WearFlowController? flowController;
 
   @override
   ConsumerState<WearPrinterSelectScreen> createState() =>
@@ -30,17 +33,20 @@ class WearPrinterSelectScreen extends ConsumerStatefulWidget {
 }
 
 class _WearPrinterSelectScreenState
-    extends ConsumerState<WearPrinterSelectScreen> {
+    extends ConsumerState<WearPrinterSelectScreen>
+    with ScreenLifecycleLogging<WearPrinterSelectScreen> {
   final ScrollController _scroll = ScrollController();
   int _focusedIndex = 0;
   bool _isScanScreenOpen = false;
 
+  WearFlowController get _flowController =>
+      widget.flowController ?? WearDependencies.I.wearFlowController;
+
   @override
   void initState() {
     super.initState();
-    WearDependencies.I.wearFlowController
-        .enterScreen(WearScreenId.printerSelect);
-    WearDependencies.I.wearFlowController.registerScreenActions(
+    _flowController.enterScreen(WearScreenId.printerSelect);
+    _flowController.registerScreenActions(
       WearScreenId.printerSelect,
       WearScreenActionHandler(
         onUp: _onVoiceUp,
@@ -55,7 +61,7 @@ class _WearPrinterSelectScreenState
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController.unregisterScreenActions(
+    _flowController.unregisterScreenActions(
       WearScreenId.printerSelect,
     );
     _scroll.dispose();
@@ -219,6 +225,13 @@ class _WearPrinterSelectScreenState
       ref
           .read(wearPrinterSelectNotifierProvider.notifier)
           .selectPrinter(printers[_focusedIndex]);
+    }
+    // If both printers are already selected, open scan directly even if
+    // the same printer was re-selected (no state change → ref.listen won't fire).
+    final WearPrinterSelectState updated =
+        ref.read(wearPrinterSelectNotifierProvider);
+    if (updated.whitePrinter != null && updated.yellowPrinter != null) {
+      _openScanScreen(context, updated);
     }
   }
 

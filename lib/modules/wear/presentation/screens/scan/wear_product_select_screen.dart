@@ -4,6 +4,7 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
+import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
@@ -33,7 +34,8 @@ class WearProductSelectScreen extends StatefulWidget {
       _WearProductSelectScreenState();
 }
 
-class _WearProductSelectScreenState extends State<WearProductSelectScreen> {
+class _WearProductSelectScreenState extends State<WearProductSelectScreen>
+    with ScreenLifecycleLogging<WearProductSelectScreen> {
   final ScrollController _scroll = ScrollController();
   int _focusedIndex = 0;
 

@@ -45,15 +45,21 @@ class SpeechRecognitionService {
   }
 
   Future<void> prepare() async {
+    print('[SpeechRecognitionService] prepare begin isPrepared=$isPrepared');
     await _ensureModelInitialized();
     if (_recognizer == null) {
+      print('[SpeechRecognitionService] prepare create recognizer begin');
       await _createRecognizer();
+      print('[SpeechRecognitionService] prepare create recognizer done');
     } else {
+      print('[SpeechRecognitionService] prepare recognizer reset begin');
       await _recognizer!.reset();
+      print('[SpeechRecognitionService] prepare recognizer reset done');
     }
 
     _isSessionActive = false;
     _partialText = '';
+    print('[SpeechRecognitionService] prepare done');
   }
 
   Future<void> startSession() async {
@@ -250,11 +256,16 @@ class SpeechRecognitionService {
 
   Future<void> _ensureModelInitialized() async {
     if (_model != null) {
+      print('[SpeechRecognitionService] model already initialized');
       return;
     }
 
+    print('[SpeechRecognitionService] load model asset begin path=$_modelAssetPath');
     final modelPath = await _modelLoader.loadFromAssets(_modelAssetPath);
+    print('[SpeechRecognitionService] load model asset done path=$modelPath');
+    print('[SpeechRecognitionService] create model begin');
     _model = await _vosk.createModel(modelPath);
+    print('[SpeechRecognitionService] create model done');
   }
 
   Future<void> _createRecognizer() async {

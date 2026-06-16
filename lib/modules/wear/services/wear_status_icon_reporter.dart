@@ -51,7 +51,7 @@ class WearStatusIconReporter {
     final WearWifiStatus wifi = await _wifiStatusService.getStatus();
     final bool showPrinter = WearSession.hasPrinterSelection;
     final bool printerAvailable =
-        showPrinter && await _printerStatusService.isSelectedPrinterAvailable();
+        showPrinter && WearSession.isAuthorized && await _printerStatusService.isSelectedPrinterAvailable();
     _snapshot = WearStatusIconSnapshot(
       wifi: wifi,
       showPrinter: showPrinter,

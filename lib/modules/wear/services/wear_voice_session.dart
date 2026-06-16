@@ -5,7 +5,8 @@ class WearVoiceSession {
 
   static final WearVoiceSession I = WearVoiceSession._();
 
-  bool get isListening => WearDependencies.I.speechRecognitionService.isListening;
+  bool get isListening =>
+      WearDependencies.I.speechRecognitionService.isListening;
 
   Future<String> diagnostics() {
     return WearDependencies.I.speechRecognitionService.diagnostics();
@@ -18,6 +19,7 @@ class WearVoiceSession {
       return;
     }
     try {
+      await WearDependencies.I.ensureVoiceTypingPrepared();
       await WearDependencies.I.speechRecognitionService.startListening();
       print('[WearVoiceSession] started: ${await diagnostics()}');
     } catch (error, stackTrace) {
@@ -42,6 +44,7 @@ class WearVoiceSession {
   Future<void> restart({required String reason}) async {
     print('[WearVoiceSession] restart requested reason=$reason');
     try {
+      await WearDependencies.I.ensureVoiceTypingPrepared();
       await WearDependencies.I.speechRecognitionService
           .restartListening(reason: reason);
       print('[WearVoiceSession] restarted: ${await diagnostics()}');

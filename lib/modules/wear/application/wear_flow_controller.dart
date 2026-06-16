@@ -48,6 +48,8 @@ class WearFlowController {
       StreamController<WearFlowState>.broadcast();
   final Map<WearScreenId, WearScreenActionHandler> _screenActions =
       <WearScreenId, WearScreenActionHandler>{};
+  final List<WearVoiceCommand> _commandQueue = <WearVoiceCommand>[];
+  bool _isProcessingCommand = false;
 
   WearFlowState get state => _state;
 
@@ -122,29 +124,41 @@ class WearFlowController {
   }
 
   Future<void> handleVoiceCommand(WearVoiceCommand command) async {
-    try {
-      print('[WearFlowController] command=$command state=$_state');
-      switch (command) {
-        case WearVoiceCommand.up:
-          await _handleUp();
-          break;
-        case WearVoiceCommand.down:
-          await _handleDown();
-          break;
-        case WearVoiceCommand.select:
-          await _handleSelect();
-          break;
-        case WearVoiceCommand.back:
-          await _handleBack();
-          break;
-        case WearVoiceCommand.home:
-          await _handleHome();
-          break;
-      }
-    } catch (error, stackTrace) {
-      print('[WearFlowController] command error=$error\n$stackTrace');
-      _setState(_state.copyWith(error: error.toString()));
+    _commandQueue.add(command);
+    if (!_isProcessingCommand) {
+      await _drainCommandQueue();
     }
+  }
+
+  Future<void> _drainCommandQueue() async {
+    _isProcessingCommand = true;
+    while (_commandQueue.isNotEmpty) {
+      final WearVoiceCommand command = _commandQueue.removeAt(0);
+      try {
+        print('[WearFlowController] command=$command state=$_state');
+        switch (command) {
+          case WearVoiceCommand.up:
+            await _handleUp();
+            break;
+          case WearVoiceCommand.down:
+            await _handleDown();
+            break;
+          case WearVoiceCommand.select:
+            await _handleSelect();
+            break;
+          case WearVoiceCommand.back:
+            await _handleBack();
+            break;
+          case WearVoiceCommand.home:
+            await _handleHome();
+            break;
+        }
+      } catch (error, stackTrace) {
+        print('[WearFlowController] command error=$error\n$stackTrace');
+        _setState(_state.copyWith(error: error.toString()));
+      }
+    }
+    _isProcessingCommand = false;
   }
 
   Future<void> flushPendingNavigation() async {
@@ -152,7 +166,7 @@ class WearFlowController {
     if (request == null || _uiLifecycle != WearUiLifecycle.active) return;
     print('[WearFlowController] ui active flush pendingNavigation=$request');
     _setState(_state.copyWith(clearPendingNavigation: true));
-    await _navigationOutput.goTo(request.screen, extra: request.extra);
+    unawaited(_navigationOutput.goTo(request.screen, extra: request.extra));
   }
 
   Future<void> _handleUp() async {
@@ -253,7 +267,7 @@ class WearFlowController {
       if (replaceCurrent) {
         await _navigationOutput.home();
       } else {
-        await _navigationOutput.goTo(target, extra: extra);
+        unawaited(_navigationOutput.goTo(target, extra: extra));
       }
       return;
     }

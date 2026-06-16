@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
+import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
@@ -28,7 +29,7 @@ class WearStatusScreen extends StatefulWidget {
 }
 
 class _WearStatusScreenState extends State<WearStatusScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, ScreenLifecycleLogging<WearStatusScreen> {
   Timer? _timer;
   bool _autoActionDone = false;
   int? _autoDeadlineMillis;

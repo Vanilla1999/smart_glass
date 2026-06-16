@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
+import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
@@ -20,7 +21,8 @@ class WearMenuScreen extends StatefulWidget {
   State<WearMenuScreen> createState() => _WearMenuScreenState();
 }
 
-class _WearMenuScreenState extends State<WearMenuScreen> {
+class _WearMenuScreenState extends State<WearMenuScreen>
+    with ScreenLifecycleLogging<WearMenuScreen> {
   final ScrollController _scroll = ScrollController();
   final _flow = WearDependencies.I.wearFlowController;
   StreamSubscription<WearFlowState>? _flowSub;

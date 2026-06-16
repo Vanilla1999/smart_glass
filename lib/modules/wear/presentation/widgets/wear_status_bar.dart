@@ -61,9 +61,16 @@ class _WearStatusBarState extends State<WearStatusBar> {
   }
 
   Future<void> _refresh() async {
+    print('[WearStatusBar] refresh begin');
     final WearWifiStatus wifi = await widget.wifiStatusService.getStatus();
     final bool printerAvailable = WearSession.hasPrinterSelection &&
+        WearSession.isAuthorized &&
         await widget.printerStatusService.isSelectedPrinterAvailable();
+    print(
+      '[WearStatusBar] refresh done '
+      'wifiAvailable=${wifi.isAvailable} wifiLevel=${wifi.level} '
+      'printerAvailable=$printerAvailable',
+    );
     if (!mounted) return;
     setState(() {
       _wifi = wifi;

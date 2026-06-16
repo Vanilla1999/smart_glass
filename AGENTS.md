@@ -246,7 +246,7 @@ A response is correct if:
 - **main** (`main.dart`): основной экран телефона
 - **glasses** (`glassesMain`): отдельный экран для smart glasses, управляемый через MethodChannel
 
-Проект объединяет управление очками, offline Vosk-распознавание, barcode scanner (`multi_scanner`) и связь с native Android.
+Проект объединяет управление очками, offline Vosk-распознавание, barcode scanner (`multi_scanner`), wear-сценарий печати/проверки товара и связь с native Android.
 
 ## Текущий стек
 
@@ -288,7 +288,7 @@ lib/
     ├── home/                    # HomeScreen, HomeCubit
     ├── scanner/                 # ScannerCubit, MultiScannerDelegate
     ├── voice/                   # VoiceCubit, Vosk + record
-    └── glasses/                 # Экраны очков (GlassesScreen, GlassesScreen2)
+    └── glasses/                 # Экраны очков: main, screen2, init, empty, wear
 ```
 
 Feature-First подход. Общие инфраструктурные вещи — `app/` и `core/`, сценарии — `features/`.
@@ -297,16 +297,21 @@ Feature-First подход. Общие инфраструктурные вещи
 
 ```
 lib/modules/wear/
+├── application/                 # WearFlowController, ports, navigation requests
 ├── config/                      # DI (WearDependencies singleton) + сессия
 ├── data/                        # auth/ (dio) + bdto/ (fbdb), model/ (freezed)
 ├── domain/                      # use cases, сервисы (voice_typing pipeline)
+├── infrastructure/              # Flutter/Noop adapters for wear outputs
 ├── models/                      # plain Dart модели
-├── navigation/wear_routes.dart  # GoRouter (10 роутов)
+├── navigation/wear_routes.dart  # GoRouter wear-модуля
 ├── presentation/                # screens + cubits/notifiers + widgets
+├── services/                    # voice session, wifi/printer/status services
 └── theme/                       # colors, images, typography
 ```
 
-Слои: `presentation → domain → data` (обратные импорты запрещены). domain не знает о Flutter.
+Слои: `presentation → application/domain → data/infrastructure` (обратные импорты запрещены). `domain` не знает о Flutter.
+
+`WearModuleApp` открывается из `HomeScreen` через `Navigator.push` в изолированном `ProviderScope`. Wear-модуль имеет собственный `MaterialApp.router`, `GoRouter`, lifecycle голосовой сессии и отправляет состояние на runtime очков через `WearGlassesBridge`/`WearFlowController`.
 
 ## Cubits (основное приложение)
 
@@ -319,6 +324,7 @@ lib/modules/wear/
 | `GlassesCoordinatorCubit` | MethodChannel → маршрутизация на активный экран очков |
 | `GlassesScreenCubit` | 1-й экран: счетчик + текст |
 | `GlassesScreen2Cubit` | 2-й экран: текст |
+| `WearGlassesCubit` | Wear-экран очков: состояние из `WearGlassesPayload` |
 
 ## Правила разработки
 
@@ -331,10 +337,24 @@ lib/modules/wear/
 - Ошибки native bridge не глотать — минимум логировать
 - Vosk model asset объявлен в pubspec.yaml
 - sample rate согласован между RecordConfig и Vosk (16kHz)
+- Wear voice services используют общий `AudioStreamService`/`SpeechRecognitionService`; не создавать параллельные recorder/recognizer без явной причины
+- Env загружается из `assets/develop.env`, затем применяются безопасные defaults в `main.dart`
+
+## Env defaults
+
+Если ключ не задан в `assets/develop.env`, `main.dart` выставляет:
+
+| Key | Default |
+|---|---|
+| `WEAR_GLASSES_ENABLED` | `true` |
+| `WEAR_USE_MOCKS` | `false` |
+| `WEAR_MOCK_AUTH_ON_LOGO` | `false` |
+| `WEAR_MOCK_SKIP_AUTH_ON_LOGO` | `false` |
+| `WEAR_SKIP_SCANNER_CONNECT_SCREEN` | `false` |
 
 ## Навигация (основное приложение)
 
-Очки: `GlassesRuntimeApp` + `GlassesCoordinatorCubit`. Routes: `/`/`/screen1` (GlassesScreen), `/screen2`, `/empty`, `/initialization`.
+Очки: `GlassesRuntimeApp` + `GlassesCoordinatorCubit`. Routes: `/`/`/screen1` (GlassesScreen), `/screen2`, `/empty`, `/initialization`, `/wear` (WearGlassesScreen).
 
 ## Бизнес-процесс wear
 

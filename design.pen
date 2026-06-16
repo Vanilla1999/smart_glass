@@ -9480,22 +9480,19 @@
                   "id": "T5D8n",
                   "name": "Авторизация",
                   "fill": "#26bc00ff",
-                  "content": "Продолжить \nпечать ценников?",
-                  "lineHeight": 1.4,
+                  "content": "Сканирование товара",
+                  "lineHeight": 1.1111111111111112,
                   "textAlign": "center",
                   "fontFamily": "Inter",
-                  "fontSize": 40,
+                  "fontSize": 36,
                   "fontWeight": "500"
                 },
                 {
                   "type": "text",
                   "id": "XVfBZ",
-                  "x": 1,
-                  "y": 48,
                   "name": "Наведите камеру на штрих-код",
-                  "enabled": false,
                   "fill": "#26bc00ff",
-                  "content": "Длинное наименование товара Цена: 1 000,00 ₽",
+                  "content": "Готовы продолжить?",
                   "lineHeight": 1.4,
                   "textAlign": "center",
                   "fontFamily": "Inter",
@@ -9515,12 +9512,15 @@
                   "id": "c764e1",
                   "name": "button",
                   "fill": "#26bc000d",
-                  "cornerRadius": 4,
+                  "cornerRadius": 999,
                   "stroke": "#000000ff",
                   "strokeWidth": 1,
                   "strokeAlignment": "inner",
                   "gap": 4,
-                  "padding": 8,
+                  "padding": [
+                    22,
+                    10
+                  ],
                   "justifyContent": "center",
                   "alignItems": "center",
                   "children": [
@@ -9588,9 +9588,12 @@
                   "type": "frame",
                   "id": "skupL",
                   "name": "button",
-                  "cornerRadius": 4,
+                  "cornerRadius": 999,
                   "gap": 4,
-                  "padding": 8,
+                  "padding": [
+                    22,
+                    10
+                  ],
                   "justifyContent": "center",
                   "alignItems": "center",
                   "children": [

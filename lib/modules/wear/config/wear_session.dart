@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 
@@ -6,10 +8,15 @@ class WearSession {
 
   static AuthenticatedUser? _user;
   static WearPrinterSelection? _printerSelection;
+  static final StreamController<AuthenticatedUser> _authorizedController =
+      StreamController<AuthenticatedUser>.broadcast();
 
   static bool get isAuthorized => _user != null;
 
   static AuthenticatedUser? get userOrNull => _user;
+
+  static Stream<AuthenticatedUser> get authorizedStream =>
+      _authorizedController.stream;
 
   static WearPrinterSelection? get printerSelectionOrNull => _printerSelection;
 
@@ -20,6 +27,9 @@ class WearSession {
 
   static void setUser(AuthenticatedUser user) {
     _user = user;
+    if (!_authorizedController.isClosed) {
+      _authorizedController.add(user);
+    }
   }
 
   static void setPrinterSelection(WearPrinterSelection selection) {

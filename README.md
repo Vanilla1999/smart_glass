@@ -1,26 +1,71 @@
 # Smart Glasses
 FLUTTER 3.41.6 !
 
-Flutter-приложение для Android с dual-screen (телефон + очки).
+Flutter-приложение для Android с dual-screen: основной экран телефона + отдельный runtime для smart glasses.
 
 ## Архитектура
 
-Feature-First + Cubit (BLoC)
+Feature-First. Основное приложение использует Cubit/BLoC, wear-модуль использует Riverpod/Notifier и собственный `GoRouter`.
 
 ```
 lib/
-├── app/           # DI, приложение, glasses runtime
-├── core/          # Константы, services
-└── features/      # home, glasses, initialization, scanner, voice
+├── app/             # DI, приложение, glasses runtime
+├── core/            # constants, services, utils
+├── features/        # home, glasses, initialization, scanner, voice
+└── modules/wear/    # сценарий печати/проверки товара
 ```
+
+Два entrypoint:
+
+- `main()` — основной runtime телефона.
+- `glassesMain()` — runtime очков (`GlassesRuntimeApp`).
+
+Связь с native Android идет через `MethodChannelService`. UI не вызывает MethodChannel напрямую.
 
 ## Реализовано
 
 - Home Screen с управлением и отображением
 - Offline voice recognition (Vosk)
 - Barcode scanner (multi_scanner)
-- 2 экрана для очков с анимацией
+- Runtime очков: main, screen2, empty, initialization, wear
 - MethodChannel связь Main ↔ Glasses
+- Wear-модуль: авторизация, выбор принтера, сканирование, голосовой/цифровой ввод, печать ценника
+- Wear glasses output через `WearGlassesBridge` / `WearFlowController`
+
+## Wear module
+
+`WearModuleApp` открывается из `HomeScreen` через `Navigator.push` в отдельном `ProviderScope`.
+
+Основные части:
+
+- `application/` — `WearFlowController`, ports, navigation requests
+- `config/` — `WearDependencies`, `WearSession`, mock/env config
+- `data/` — auth через `dio`, Firebird REST-client через `fbdb`
+- `domain/` — use cases, voice typing, voice commands
+- `infrastructure/` — Flutter/Noop adapters
+- `navigation/wear_routes.dart` — маршруты wear-модуля
+- `presentation/` — screens, cubits/notifiers, widgets
+- `services/` — voice session, wifi/printer/status services
+
+Голосовые сервисы wear используют общий `AudioStreamService` и `SpeechRecognitionService`.
+
+## Env
+
+Env загружается из `assets/develop.env`. Если ключ не задан, `main.dart` применяет defaults:
+
+| Key | Default |
+|---|---|
+| `WEAR_GLASSES_ENABLED` | `true` |
+| `WEAR_USE_MOCKS` | `false` |
+| `WEAR_MOCK_AUTH_ON_LOGO` | `false` |
+| `WEAR_MOCK_SKIP_AUTH_ON_LOGO` | `false` |
+| `WEAR_SKIP_SCANNER_CONNECT_SCREEN` | `false` |
+
+## Документация
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) — основная архитектура проекта
+- [docs/wear_ARCHITECTURE.md](docs/wear_ARCHITECTURE.md) — архитектура wear-модуля
+- [docs/INDEX.md](docs/INDEX.md) — индекс документации
 
 ## Добавление экрана в очки
 

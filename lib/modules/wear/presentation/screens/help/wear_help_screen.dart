@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
+import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
@@ -19,7 +20,8 @@ class WearHelpScreen extends StatefulWidget {
   State<WearHelpScreen> createState() => _WearHelpScreenState();
 }
 
-class _WearHelpScreenState extends State<WearHelpScreen> {
+class _WearHelpScreenState extends State<WearHelpScreen>
+    with ScreenLifecycleLogging<WearHelpScreen> {
   final ScrollController _scroll = ScrollController();
 
   @override

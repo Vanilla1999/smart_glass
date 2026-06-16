@@ -60,6 +60,8 @@ class WearAuthNotifier extends StateNotifier<WearAuthState>
 
   static const String _mockLogoBarcode =
       '{"uuid": "be9f894e-bebe-11f0-ccaf-00e04c1521d1", "kiscode": "mmmkakoikiss", "version": 2}';
+  static const String _realLogoBarcode =
+      '{"uuid": "ee5a9032-4731-467b-af02-3becca71f0e8", "kiscode": "CN0-119184", "version": 1}';
   static final AuthenticatedUser _mockSkipUser = AuthenticatedUser(
     idUser: 872,
     idEmployee: 2157,
@@ -90,12 +92,22 @@ class WearAuthNotifier extends StateNotifier<WearAuthState>
 
   Future<void> handleLogoTap() async {
     if (WearSession.isAuthorized) {
+      print('[AUTH] handleLogoTap ignored: already authorized');
+      return;
+    }
+    final bool useAuthMock = WearMockConfig.isEnabled || await _isAuthMockEnabled();
+    print('[AUTH] handleLogoTap useAuthMock=$useAuthMock');
+    if (!useAuthMock) {
+      print('[AUTH] handleLogoTap using real logo barcode');
+      await authorizeByBadgeBarcode(_realLogoBarcode);
       return;
     }
     if (_isMockLogoAuthEnabled()) {
+      print('[AUTH] handleLogoTap using mock logo barcode');
       await authorizeByBadgeBarcode(_mockLogoBarcode);
       return;
     }
+    print('[AUTH] handleLogoTap no action');
   }
 
   Future<void> handleLogoLongPress() async {
@@ -162,9 +174,12 @@ class WearAuthNotifier extends StateNotifier<WearAuthState>
 
     try {
       if (WearMockConfig.isEnabled || await _isAuthMockEnabled()) {
+        print('[AUTH] Using mock authorization');
         await _authorizeWithMockUser();
         return;
       }
+
+      print('[AUTH] Using real authorization');
 
       // 0) поднимаем соединение с БД объекта сразу
       // await WearDependencies.I.ensureBdtoOpened();

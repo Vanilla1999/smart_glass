@@ -5,6 +5,7 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
+import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_input_screen.dart';
@@ -34,7 +35,8 @@ class WearScanIdleScreen extends ConsumerStatefulWidget {
   ConsumerState<WearScanIdleScreen> createState() => _WearScanIdleScreenState();
 }
 
-class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
+class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen>
+    with ScreenLifecycleLogging<WearScanIdleScreen> {
   bool _isStatusRouteOpen = false;
   int _statusRouteSession = 0;
   bool _isManualInputOpen = false;
@@ -45,7 +47,10 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
   @override
   void initState() {
     super.initState();
-    WearDependencies.I.wearFlowController.enterScreen(WearScreenId.scanIdle);
+    WearDependencies.I.wearFlowController.enterScreen(
+      WearScreenId.scanIdle,
+      extra: widget.printers,
+    );
     WearDependencies.I.wearFlowController.registerScreenActions(
       WearScreenId.scanIdle,
       WearScreenActionHandler(onSelect: _onVoiceSelect),

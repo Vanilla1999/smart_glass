@@ -50,6 +50,32 @@ class FlutterWearNavigationOutput implements WearNavigationOutput {
     _router.go(WearMenuScreen.route);
   }
 
+  static WearScreenId? screenIdForRoute(String route) {
+    return switch (route) {
+      WearScannerConnectScreen.route => WearScreenId.scannerConnect,
+      WearMainScreen.route => WearScreenId.main,
+      WearStatusScreen.route => WearScreenId.status,
+      WearMenuScreen.route => WearScreenId.menu,
+      WearPrinterSelectScreen.route => WearScreenId.printerSelect,
+      WearScanIdleScreen.route => WearScreenId.scanIdle,
+      WearProductSelectScreen.route => WearScreenId.productSelect,
+      WearPrintCodeInputScreen.route => WearScreenId.printCodeInput,
+      WearAvailabilityInteractionScreen.route =>
+        WearScreenId.availabilityInteraction,
+      WearAvailabilityGroupScreen.route => WearScreenId.availabilityGroup,
+      WearAvailabilityProductScreen.route => WearScreenId.availabilityProduct,
+      WearAvailabilityDirectScanScreen.route =>
+        WearScreenId.availabilityDirectScan,
+      WearAvailabilityCheckScreen.route => WearScreenId.availabilityCheck,
+      WearAvailabilityFillScreen.route => WearScreenId.availabilityFill,
+      WearContinueScanScreen.route => WearScreenId.continueScan,
+      WearHelpScreen.route => WearScreenId.help,
+      WearSettingsScreen.route => WearScreenId.settings,
+      DBSettingsScreen.route => WearScreenId.dbSettings,
+      _ => null,
+    };
+  }
+
   bool _shouldReplace(WearScreenId screen) {
     return switch (screen) {
       WearScreenId.scannerConnect ||

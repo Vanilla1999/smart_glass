@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +15,7 @@ import 'package:smart_glasses/features/scanner/presentation/cubit/scanner_cubit.
 import 'package:smart_glasses/features/scanner/presentation/cubit/scanner_state.dart';
 import 'package:smart_glasses/features/voice/presentation/cubit/voice_cubit.dart';
 import 'package:smart_glasses/features/voice/presentation/cubit/voice_state.dart';
+import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_module_app.dart';
 
 /// Home screen
@@ -46,6 +49,8 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('WEAR_USE_MOCKS', true);
     await prefs.setBool('WEAR_MOCK_AUTH', true);
+    WearDependencies.I.resetAuthDependencies();
+    unawaited(WearDependencies.I.ensureVoiceTypingPrepared());
 
     if (!context.mounted) {
       return;
@@ -86,8 +91,10 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
     // Disable mocks for real mode
     await prefs.setBool('WEAR_USE_MOCKS', false);
     await prefs.setBool('WEAR_MOCK_AUTH', false);
+    WearDependencies.I.resetAuthDependencies();
 
     if (context.mounted) {
+      unawaited(WearDependencies.I.ensureVoiceTypingPrepared());
       print('[STACK-DEBUG] HomeScreen: pushing WearModuleApp real route');
       await Navigator.push<void>(
         context,
@@ -128,8 +135,10 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
     // Auth service can be unavailable from the test network/PC, so test price
     // label flow may mock authorization while keeping Firebird data real.
     await prefs.setBool('WEAR_MOCK_AUTH', true);
+    WearDependencies.I.resetAuthDependencies();
 
     if (context.mounted) {
+      unawaited(WearDependencies.I.ensureVoiceTypingPrepared());
       print('[STACK-DEBUG] HomeScreen: pushing WearModuleApp test route');
       await Navigator.push<void>(
         context,

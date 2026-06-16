@@ -62,7 +62,6 @@ class PrintPriceTagUseCase {
       throw Exception(
           'Не удалось отправить на печать, причина: ${addResult.message}');
     }
-    await _bdtoDataSource.close();
     return printerName;
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer';
 
 import 'package:smart_glasses/modules/wear/data/auth/data_source/auth_data_source.dart';
 import 'package:smart_glasses/modules/wear/data/auth/model/auth_user.dart';
@@ -14,6 +15,8 @@ class AuthenticateUserUseCase {
   /// При ошибках аутентификации выбрасывает исключения с сообщением для UI.
   Future<AuthenticatedUser> call(String barcode) async {
     final String uuid = _getAuthUuid(barcode);
+    log('barcode=$barcode', name: 'AuthenticateUserUseCase');
+    log('uuid=$uuid', name: 'AuthenticateUserUseCase');
     final AuthUser user = await _authDataSource.authenticate(badgeUuid: uuid);
     return AuthenticatedUser(
       idUser: user.idUser,
@@ -43,6 +46,8 @@ class AuthenticateUserUseCase {
       final String rawUuid = map['uuid'] as String;
       return rawUuid.replaceAll('-', '').toUpperCase();
     } catch (e) {
+      log('failed to parse badge barcode=$barcode error=$e',
+          name: 'AuthenticateUserUseCase');
       throw Exception('Отсканирован неверный QR-код. '
           'Необходимо отсканировать QR-код сотрудника.');
     }

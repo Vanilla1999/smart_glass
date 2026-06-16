@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:developer';
 
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
@@ -28,7 +29,35 @@ class AuthDioClient {
       responseType: ResponseType.json,
     );
 
+    log('Auth baseUrl=${baseUri.toString()}', name: 'AuthDioClient');
+
     final Dio dio = Dio(options);
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+          log(
+            '${options.method} ${options.uri} data=${options.data}',
+            name: 'AuthDioClient',
+          );
+          handler.next(options);
+        },
+        onResponse: (Response<dynamic> response, ResponseInterceptorHandler handler) {
+          log(
+            'response ${response.statusCode} ${response.requestOptions.uri} data=${response.data}',
+            name: 'AuthDioClient',
+          );
+          handler.next(response);
+        },
+        onError: (DioException error, ErrorInterceptorHandler handler) {
+          log(
+            'error type=${error.type} uri=${error.requestOptions.uri} '
+            'message=${error.message} response=${error.response?.data}',
+            name: 'AuthDioClient',
+          );
+          handler.next(error);
+        },
+      ),
+    );
 
     dio.httpClientAdapter = IOHttpClientAdapter()
       ..createHttpClient = () {

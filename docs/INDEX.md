@@ -15,4 +15,4 @@ This file indexes all reviewable documentation for the `smart_glasses` project.
 
 ## Roadmap
 
-- [wear_headless_voice_roadmap_INDEX.md](roadmap/wear_headless_voice_roadmap_INDEX.md) — Step-by-step plan for full headless-friendly Wear voice control slice
+No active roadmap documents are currently present in `docs/roadmap/`.

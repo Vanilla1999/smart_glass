@@ -42,7 +42,6 @@ class GetBarcodeInfoUseCase {
         ),
       );
     }
-    await _bdtoDataSource.close();
     return products;
   }
 }
