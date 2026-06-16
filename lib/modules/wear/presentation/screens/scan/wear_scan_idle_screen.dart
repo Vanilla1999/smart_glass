@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
@@ -12,7 +15,6 @@ import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_stat
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_svg_icon.dart';
-import 'package:smart_glasses/modules/wear/presentation/widgets/wear_voice_command_listener.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
@@ -43,9 +45,22 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
   @override
   void initState() {
     super.initState();
+    WearDependencies.I.wearFlowController.enterScreen(WearScreenId.scanIdle);
+    WearDependencies.I.wearFlowController.registerScreenActions(
+      WearScreenId.scanIdle,
+      WearScreenActionHandler(onSelect: _onVoiceSelect),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       WearStatusIconReporter.I.send(WearGlassesPayload.scanWaiting());
     });
+  }
+
+  @override
+  void dispose() {
+    WearDependencies.I.wearFlowController.unregisterScreenActions(
+      WearScreenId.scanIdle,
+    );
+    super.dispose();
   }
 
   Future<void> _onVoiceSelect() async {
@@ -156,28 +171,26 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
       }
     });
 
-    return WearVoiceCommandListener(
-      child: WearScreenScaffold(
-        showHomeButton: true,
-        child: Stack(
-          children: <Widget>[
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(4.5),
-                child: _ScanWaitingContent(
-                  onManualInput: _onVoiceSelect,
-                ),
+    return WearScreenScaffold(
+      showHomeButton: true,
+      child: Stack(
+        children: <Widget>[
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(4.5),
+              child: _ScanWaitingContent(
+                onManualInput: _onVoiceSelect,
               ),
             ),
-            if (state.isLoading)
-              Positioned.fill(
-                child: _ScanLoadingView(
-                  statusText: state.loadingText,
-                  icon: state.loadingIcon,
-                ),
+          ),
+          if (state.isLoading)
+            Positioned.fill(
+              child: _ScanLoadingView(
+                statusText: state.loadingText,
+                icon: state.loadingIcon,
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -185,10 +198,9 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen> {
   Future<void> _openOrReplaceStatus(WearStatusScreenArgs args) async {
     final int session = ++_statusRouteSession;
     final int statusStartedAt = DateTime.now().millisecondsSinceEpoch;
-    final WearStatusScreenArgs statusArgs =
-        args.autoStartedAtMillis == null
-            ? args.withAutoStartedAt(statusStartedAt)
-            : args;
+    final WearStatusScreenArgs statusArgs = args.autoStartedAtMillis == null
+        ? args.withAutoStartedAt(statusStartedAt)
+        : args;
     final bool scanScreenIsCurrent = ModalRoute.of(context)?.isCurrent ?? true;
 
     if (_isStatusRouteOpen && !scanScreenIsCurrent) {

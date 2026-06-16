@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_flow_state.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availability_glasses_payloads.dart';
@@ -12,7 +15,6 @@ import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_stat
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
-import 'package:smart_glasses/modules/wear/presentation/widgets/wear_voice_command_listener.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
@@ -37,6 +39,31 @@ class _WearAvailabilityCheckScreenState
     extends ConsumerState<WearAvailabilityCheckScreen> {
   bool _isStatusRouteOpen = false;
   int _statusRouteSession = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WearDependencies.I.wearFlowController.enterScreen(
+      WearScreenId.availabilityCheck,
+      extra: widget.product,
+    );
+    WearDependencies.I.wearFlowController.registerScreenActions(
+      WearScreenId.availabilityCheck,
+      WearScreenActionHandler(
+        onUp: _onVoiceUp,
+        onDown: _onVoiceDown,
+        onSelect: _onVoiceSelectForCurrentProduct,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    WearDependencies.I.wearFlowController.unregisterScreenActions(
+      WearScreenId.availabilityCheck,
+    );
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,42 +103,37 @@ class _WearAvailabilityCheckScreenState
       }
     });
 
-    return WearVoiceCommandListener(
-      onUp: _onVoiceUp,
-      onDown: _onVoiceDown,
-      onSelect: () => _onVoiceSelect(provider),
-      child: WearScreenScaffold(
-        showHomeButton: true,
-        child: Stack(
-          children: <Widget>[
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(4.5),
-                child: _CheckContent(
-                  state: state,
-                  onYes: () =>
-                      ref.read(provider.notifier).answerProductAvailable(true),
-                  onNo: () =>
-                      ref.read(provider.notifier).answerProductAvailable(false),
-                  onManualInput: () => _manualInput(provider),
-                  onPrint: () => ref.read(provider.notifier).printPriceTag(),
-                  onPhoto: () => ref.read(provider.notifier).capturePhoto(),
-                  onComplete: () => ref.read(provider.notifier).complete(),
-                  onBackToList: () => context.pop(),
+    return WearScreenScaffold(
+      showHomeButton: true,
+      child: Stack(
+        children: <Widget>[
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(4.5),
+              child: _CheckContent(
+                state: state,
+                onYes: () =>
+                    ref.read(provider.notifier).answerProductAvailable(true),
+                onNo: () =>
+                    ref.read(provider.notifier).answerProductAvailable(false),
+                onManualInput: () => _manualInput(provider),
+                onPrint: () => ref.read(provider.notifier).printPriceTag(),
+                onPhoto: () => ref.read(provider.notifier).capturePhoto(),
+                onComplete: () => ref.read(provider.notifier).complete(),
+                onBackToList: () => context.pop(),
+              ),
+            ),
+          ),
+          if (state.isLoading)
+            Positioned.fill(
+              child: ColoredBox(
+                color: const Color(0xCCFFFFFF),
+                child: Center(
+                  child: _LoadingContent(state: state),
                 ),
               ),
             ),
-            if (state.isLoading)
-              Positioned.fill(
-                child: ColoredBox(
-                  color: const Color(0xCCFFFFFF),
-                  child: Center(
-                    child: _LoadingContent(state: state),
-                  ),
-                ),
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -167,6 +189,12 @@ class _WearAvailabilityCheckScreenState
       default:
         break;
     }
+  }
+
+  void _onVoiceSelectForCurrentProduct() {
+    final WearAvailabilityProduct? product = widget.product;
+    if (product == null) return;
+    _onVoiceSelect(wearAvailabilityCheckNotifierProvider(product));
   }
 
   Future<void> _manualInput(

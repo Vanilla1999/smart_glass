@@ -1,0 +1,133 @@
+# Docmancer documentation manifest for smart_glasses
+# Prefetch dependency docs for key libraries
+
+version: 1
+
+targets:
+  - library: flutter_bloc
+    ecosystem: pub
+    version: 8.1.6
+    docs_url_template: https://pub.dev/documentation/{library}/{version}/
+    allowed_domains:
+      - pub.dev
+    seed_urls:
+      - https://pub.dev/documentation/flutter_bloc/8.1.6/flutter_bloc/BlocProvider-class.html
+      - https://pub.dev/documentation/flutter_bloc/8.1.6/flutter_bloc/BlocBuilder-class.html
+      - https://pub.dev/documentation/flutter_bloc/8.1.6/flutter_bloc/BlocListener-class.html
+
+  - library: flutter_riverpod
+    ecosystem: pub
+    version: 2.6.1
+    docs_url_template: https://pub.dev/documentation/{library}/{version}/
+    allowed_domains:
+      - pub.dev
+    seed_urls:
+      - https://pub.dev/documentation/flutter_riverpod/2.6.1/flutter_riverpod/Consumer-class.html
+      - https://pub.dev/documentation/flutter_riverpod/2.6.1/flutter_riverpod/ConsumerWidget-class.html
+
+  - library: go_router
+    ecosystem: pub
+    version: 14.8.1
+    docs_url_template: https://pub.dev/documentation/{library}/{version}/
+    allowed_domains:
+      - pub.dev
+    seed_urls:
+      - https://pub.dev/documentation/go_router/14.8.1/go_router/GoRouter-class.html
+      - https://pub.dev/documentation/go_router/14.8.1/go_router/GoRouterState-class.html
+
+  - library: dio
+    ecosystem: pub
+    version: 5.9.2
+    docs_url_template: https://pub.dev/documentation/{library}/{version}/
+    allowed_domains:
+      - pub.dev
+    seed_urls:
+      - https://pub.dev/documentation/dio/5.9.2/dio/Dio-class.html
+      - https://pub.dev/documentation/dio/5.9.2/dio/Response-class.html
+      - https://pub.dev/documentation/dio/5.9.2/dio/Interceptor-class.html
+
+  - library: fbdb
+    ecosystem: pub
+    version: 1.6.0
+    docs_url_template: https://pub.dev/documentation/{library}/{version}/
+    allowed_domains:
+      - pub.dev
+    seed_urls:
+      - https://pub.dev/documentation/fbdb/1.6.0/fbdb/Fbdb-class.html
+
+  - library: freezed
+    ecosystem: pub
+    version: 2.5.8
+    docs_url_template: https://pub.dev/documentation/{library}/{version}/
+    allowed_domains:
+      - pub.dev
+
+  - library: freezed_annotation
+    ecosystem: pub
+    version: 2.4.4
+    docs_url_template: https://pub.dev/documentation/{library}/{version}/
+    allowed_domains:
+      - pub.dev
+
+  - library: vosk_flutter_service
+    ecosystem: pub
+    version: 0.1.1
+    docs_url_template: https://pub.dev/documentation/{library}/{version}/
+    allowed_domains:
+      - pub.dev
+
+  - library: multi_scanner
+    ecosystem: pub
+    version: 3.13.4
+    docs_url_template: https://pub.dev/documentation/{library}/{version}/
+    allowed_domains:
+      - pub.dev
+
+  - library: record
+    ecosystem: pub
+    version: 6.2.0
+    docs_url_template: https://pub.dev/documentation/{library}/{version}/
+    allowed_domains:
+      - pub.dev
+
+  - library: flutter_dotenv
+    ecosystem: pub
+    version: 5.2.1
+    docs_url_template: https://pub.dev/documentation/{library}/{version}/
+    allowed_domains:
+      - pub.dev
+
+  - library: shared_preferences
+    ecosystem: pub
+    version: 2.5.5
+    docs_url_template: https://pub.dev/documentation/{library}/{version}/
+    allowed_domains:
+      - pub.dev
+
+  - library: flutter_svg
+    ecosystem: pub
+    version: 2.3.0
+    docs_url_template: https://pub.dev/documentation/{library}/{version}/
+    allowed_domains:
+      - pub.dev
+
+  - library: permission_handler
+    ecosystem: pub
+    version: 12.0.1
+    docs_url_template: https://pub.dev/documentation/{library}/{version}/
+    allowed_domains:
+      - pub.dev
+
+  - library: uuid
+    ecosystem: pub
+    version: 4.5.3
+    docs_url_template: https://pub.dev/documentation/{library}/{version}/
+    allowed_domains:
+      - pub.dev
+
+  - library: json_annotation
+    ecosystem: pub
+    version: 4.11.0
+    docs_url_template: https://pub.dev/documentation/{library}/{version}/
+    allowed_domains:
+      - pub.dev

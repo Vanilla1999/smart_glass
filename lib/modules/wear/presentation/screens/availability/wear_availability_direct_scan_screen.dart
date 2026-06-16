@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availability_glasses_payloads.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
@@ -11,7 +14,6 @@ import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dar
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
-import 'package:smart_glasses/modules/wear/presentation/widgets/wear_voice_command_listener.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
@@ -35,6 +37,17 @@ class _WearAvailabilityDirectScanScreenState
   @override
   void initState() {
     super.initState();
+    WearDependencies.I.wearFlowController.enterScreen(
+      WearScreenId.availabilityDirectScan,
+    );
+    WearDependencies.I.wearFlowController.registerScreenActions(
+      WearScreenId.availabilityDirectScan,
+      WearScreenActionHandler(
+        onUp: _onVoiceUp,
+        onDown: _onVoiceDown,
+        onSelect: _onVoiceSelect,
+      ),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       WearStatusIconReporter.I.send(
         WearAvailabilityGlassesPayloads.directScanWaiting(),
@@ -44,6 +57,9 @@ class _WearAvailabilityDirectScanScreenState
 
   @override
   void dispose() {
+    WearDependencies.I.wearFlowController.unregisterScreenActions(
+      WearScreenId.availabilityDirectScan,
+    );
     _scroll.dispose();
     super.dispose();
   }
@@ -71,50 +87,45 @@ class _WearAvailabilityDirectScanScreenState
       },
     );
 
-    return WearVoiceCommandListener(
-      onUp: _onVoiceUp,
-      onDown: _onVoiceDown,
-      onSelect: _onVoiceSelect,
-      child: WearScreenScaffold(
-        showHomeButton: true,
-        scrollController: _scroll,
-        child: Stack(
-          children: <Widget>[
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(4.5),
-                child: state.duplicateProducts.isEmpty
-                    ? _DirectScanContent(
-                        message: state.message,
-                        onManualInput: _manualInput,
-                      )
-                    : _DuplicateProductsContent(
-                        scroll: _scroll,
-                        products: state.duplicateProducts,
-                        selectedIndex: _focusedIndex,
-                        onFocusChanged: (int index) {
-                          if (index == _focusedIndex) return;
-                          _focusedIndex = index;
-                          _sendGlassesState(
-                            ref.read(wearAvailabilityDirectScanProvider),
-                            fast: true,
-                          );
-                        },
-                        onSelect: _openCheck,
-                      ),
-              ),
+    return WearScreenScaffold(
+      showHomeButton: true,
+      scrollController: _scroll,
+      child: Stack(
+        children: <Widget>[
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(4.5),
+              child: state.duplicateProducts.isEmpty
+                  ? _DirectScanContent(
+                      message: state.message,
+                      onManualInput: _manualInput,
+                    )
+                  : _DuplicateProductsContent(
+                      scroll: _scroll,
+                      products: state.duplicateProducts,
+                      selectedIndex: _focusedIndex,
+                      onFocusChanged: (int index) {
+                        if (index == _focusedIndex) return;
+                        _focusedIndex = index;
+                        _sendGlassesState(
+                          ref.read(wearAvailabilityDirectScanProvider),
+                          fast: true,
+                        );
+                      },
+                      onSelect: _openCheck,
+                    ),
             ),
-            if (state.isLoading)
-              Positioned.fill(
-                child: ColoredBox(
-                  color: const Color(0xCCFFFFFF),
-                  child: Center(
-                    child: _LoadingContent(state: state),
-                  ),
+          ),
+          if (state.isLoading)
+            Positioned.fill(
+              child: ColoredBox(
+                color: const Color(0xCCFFFFFF),
+                child: Center(
+                  child: _LoadingContent(state: state),
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }

@@ -1,0 +1,59 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
+
+void main() {
+  group('VoiceCommandParserService', () {
+    late VoiceCommandParserService parser;
+
+    setUp(() {
+      parser = VoiceCommandParserService();
+    });
+
+    test('parses exact Russian command aliases', () {
+      const Map<String, WearVoiceCommand> cases = <String, WearVoiceCommand>{
+        'вверх': WearVoiceCommand.up,
+        'на верх': WearVoiceCommand.up,
+        'выше': WearVoiceCommand.up,
+        'вниз': WearVoiceCommand.down,
+        'в низ': WearVoiceCommand.down,
+        'ниже': WearVoiceCommand.down,
+        'выбери': WearVoiceCommand.select,
+        'окей': WearVoiceCommand.select,
+        'да': WearVoiceCommand.select,
+        'назад': WearVoiceCommand.back,
+        'домой': WearVoiceCommand.home,
+        'дом': WearVoiceCommand.home,
+      };
+
+      for (final MapEntry<String, WearVoiceCommand> entry in cases.entries) {
+        expect(parser.parse(entry.key), entry.value, reason: entry.key);
+      }
+    });
+
+    test('normalizes case and punctuation', () {
+      expect(parser.parse('  ВЫБЕРИ! '), WearVoiceCommand.select);
+      expect(parser.parse('Назад.'), WearVoiceCommand.back);
+      expect(parser.parse('Окей,'), WearVoiceCommand.select);
+    });
+
+    test('parses command token inside short recognition phrase', () {
+      expect(parser.parse('иди вверх'), WearVoiceCommand.up);
+      expect(parser.parse('листай вниз пожалуйста'), WearVoiceCommand.down);
+      expect(parser.parse('можно выбрать'), WearVoiceCommand.select);
+      expect(parser.parse('перейти домой'), WearVoiceCommand.home);
+    });
+
+    test('does not parse partial words as commands', () {
+      expect(parser.parse('сверхновая'), isNull);
+      expect(parser.parse('домовой'), isNull);
+      expect(parser.parse('выбирать'), isNull);
+    });
+
+    test('returns null for empty or unknown text', () {
+      expect(parser.parse(''), isNull);
+      expect(parser.parse('   '), isNull);
+      expect(parser.parse('привет мир'), isNull);
+    });
+  });
+}

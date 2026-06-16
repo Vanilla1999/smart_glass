@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
-import 'package:smart_glasses/modules/wear/presentation/widgets/wear_voice_command_listener.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
@@ -23,6 +25,11 @@ class _WearHelpScreenState extends State<WearHelpScreen> {
   @override
   void initState() {
     super.initState();
+    WearDependencies.I.wearFlowController.enterScreen(WearScreenId.help);
+    WearDependencies.I.wearFlowController.registerScreenActions(
+      WearScreenId.help,
+      WearScreenActionHandler(onSelect: _onVoiceSelect),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       WearStatusIconReporter.I.send(WearGlassesPayload.help());
     });
@@ -30,6 +37,9 @@ class _WearHelpScreenState extends State<WearHelpScreen> {
 
   @override
   void dispose() {
+    WearDependencies.I.wearFlowController.unregisterScreenActions(
+      WearScreenId.help,
+    );
     _scroll.dispose();
     super.dispose();
   }
@@ -41,46 +51,43 @@ class _WearHelpScreenState extends State<WearHelpScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WearVoiceCommandListener(
-      onSelect: _onVoiceSelect,
-      child: WearScreenScaffold(
-        scrollController: _scroll,
-        showStatusBar: false,
-        child: ListView(
-          controller: _scroll,
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 20),
-          children: <Widget>[
-            Text(
-              'Справка',
-              style: WearTypography.lable,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            const _HelpSection(
-              title: 'Дистанция сканирования',
-              body: 'до 50 см',
-            ),
-            const SizedBox(height: 8),
-            const _HelpSection(
-              title: 'Голосовые команды',
-              body: '«Вверх», «Вниз», «Выбрать», «Назад», «Домой»',
-            ),
-            const SizedBox(height: 8),
-            const _HelpSection(
-              title: 'Кнопки',
-              body:
-                  '↑ - Вверх\n↓ - Вниз\nОк - Выбрать\nУдержание Ок - Домой\nУдержание ↓ - Назад',
-            ),
-            const SizedBox(height: 12),
-            _OutlinedButton(
-              title: 'Начать работу',
-              onTap: () {
-                WearStatusIconReporter.I.send(WearGlassesPayload.menu());
-                context.pop();
-              },
-            ),
-          ],
-        ),
+    return WearScreenScaffold(
+      scrollController: _scroll,
+      showStatusBar: false,
+      child: ListView(
+        controller: _scroll,
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 20),
+        children: <Widget>[
+          Text(
+            'Справка',
+            style: WearTypography.lable,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          const _HelpSection(
+            title: 'Дистанция сканирования',
+            body: 'до 50 см',
+          ),
+          const SizedBox(height: 8),
+          const _HelpSection(
+            title: 'Голосовые команды',
+            body: '«Вверх», «Вниз», «Выбрать», «Назад», «Домой»',
+          ),
+          const SizedBox(height: 8),
+          const _HelpSection(
+            title: 'Кнопки',
+            body:
+                '↑ - Вверх\n↓ - Вниз\nОк - Выбрать\nУдержание Ок - Домой\nУдержание ↓ - Назад',
+          ),
+          const SizedBox(height: 12),
+          _OutlinedButton(
+            title: 'Начать работу',
+            onTap: () {
+              WearStatusIconReporter.I.send(WearGlassesPayload.menu());
+              context.pop();
+            },
+          ),
+        ],
       ),
     );
   }

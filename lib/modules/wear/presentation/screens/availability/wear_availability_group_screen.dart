@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_group.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availability_glasses_payloads.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/availability/cubit/wear_availability_list_providers.dart';
@@ -9,7 +12,6 @@ import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dar
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
-import 'package:smart_glasses/modules/wear/presentation/widgets/wear_voice_command_listener.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
@@ -30,7 +32,26 @@ class _WearAvailabilityGroupScreenState
   int _focusedIndex = 0;
 
   @override
+  void initState() {
+    super.initState();
+    WearDependencies.I.wearFlowController.enterScreen(
+      WearScreenId.availabilityGroup,
+    );
+    WearDependencies.I.wearFlowController.registerScreenActions(
+      WearScreenId.availabilityGroup,
+      WearScreenActionHandler(
+        onUp: _onVoiceUp,
+        onDown: _onVoiceDown,
+        onSelect: _onVoiceSelect,
+      ),
+    );
+  }
+
+  @override
   void dispose() {
+    WearDependencies.I.wearFlowController.unregisterScreenActions(
+      WearScreenId.availabilityGroup,
+    );
     _scroll.dispose();
     super.dispose();
   }
@@ -41,24 +62,19 @@ class _WearAvailabilityGroupScreenState
         ref.watch(wearAvailabilityGroupsProvider);
     groups.whenData(_sendGlassesState);
 
-    return WearVoiceCommandListener(
-      onUp: _onVoiceUp,
-      onDown: _onVoiceDown,
-      onSelect: _onVoiceSelect,
-      child: WearScreenScaffold(
-        showHomeButton: true,
-        scrollController: _scroll,
-        child: groups.when(
-          data: _buildGroups,
-          loading: () {
-            _sendLoading();
-            return const Center(child: WearLoading());
-          },
-          error: (Object error, StackTrace _) {
-            _sendError(error);
-            return _buildMessage('Ошибка загрузки\n${_asUiMessage(error)}');
-          },
-        ),
+    return WearScreenScaffold(
+      showHomeButton: true,
+      scrollController: _scroll,
+      child: groups.when(
+        data: _buildGroups,
+        loading: () {
+          _sendLoading();
+          return const Center(child: WearLoading());
+        },
+        error: (Object error, StackTrace _) {
+          _sendError(error);
+          return _buildMessage('Ошибка загрузки\n${_asUiMessage(error)}');
+        },
       ),
     );
   }

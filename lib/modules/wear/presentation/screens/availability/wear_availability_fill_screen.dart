@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:multi_scanner/multi_scanner.dart';
+import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
@@ -8,7 +10,6 @@ import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_in
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
-import 'package:smart_glasses/modules/wear/presentation/widgets/wear_voice_command_listener.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
@@ -36,6 +37,16 @@ class _WearAvailabilityFillScreenState extends State<WearAvailabilityFillScreen>
   void initState() {
     super.initState();
     _scanner.addDelegate(this);
+    WearDependencies.I.wearFlowController.enterScreen(
+      WearScreenId.availabilityFill,
+    );
+    WearDependencies.I.wearFlowController.registerScreenActions(
+      WearScreenId.availabilityFill,
+      WearScreenActionHandler(
+        onSelect: _manualInput,
+        onDown: _reset,
+      ),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _sendGlassesState();
     });
@@ -43,6 +54,9 @@ class _WearAvailabilityFillScreenState extends State<WearAvailabilityFillScreen>
 
   @override
   void dispose() {
+    WearDependencies.I.wearFlowController.unregisterScreenActions(
+      WearScreenId.availabilityFill,
+    );
     _scanner.removeDelegate(this);
     super.dispose();
   }
@@ -60,61 +74,57 @@ class _WearAvailabilityFillScreenState extends State<WearAvailabilityFillScreen>
 
   @override
   Widget build(BuildContext context) {
-    return WearVoiceCommandListener(
-      onSelect: _manualInput,
-      onDown: _reset,
-      child: WearScreenScaffold(
-        showHomeButton: true,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 28, 14, 16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Text(
-                'Наполнение базы',
-                style: WearTypography.lable18,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              if (_isLoading) const WearLoading(size: 44),
-              if (_isLoading) const SizedBox(height: 12),
-              Text(
-                _message,
-                style: WearTypography.bodysml,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Добавлено: $_savedCount',
-                style: WearTypography.bodyxsm,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                alignment: WrapAlignment.center,
-                children: <Widget>[
-                  SizedBox(
-                    width: 150,
-                    child: WearPill(
-                      title: 'Ручной ввод',
-                      icon: WearImages.barcode,
-                      onTap: _manualInput,
-                    ),
+    return WearScreenScaffold(
+      showHomeButton: true,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 28, 14, 16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Text(
+              'Наполнение базы',
+              style: WearTypography.lable18,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            if (_isLoading) const WearLoading(size: 44),
+            if (_isLoading) const SizedBox(height: 12),
+            Text(
+              _message,
+              style: WearTypography.bodysml,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Добавлено: $_savedCount',
+              style: WearTypography.bodyxsm,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: <Widget>[
+                SizedBox(
+                  width: 150,
+                  child: WearPill(
+                    title: 'Ручной ввод',
+                    icon: WearImages.barcode,
+                    onTap: _manualInput,
                   ),
-                  SizedBox(
-                    width: 150,
-                    child: WearPill(
-                      title: 'Очистить',
-                      icon: WearImages.clear,
-                      onTap: _reset,
-                    ),
+                ),
+                SizedBox(
+                  width: 150,
+                  child: WearPill(
+                    title: 'Очистить',
+                    icon: WearImages.clear,
+                    onTap: _reset,
                   ),
-                ],
-              ),
-            ],
-          ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

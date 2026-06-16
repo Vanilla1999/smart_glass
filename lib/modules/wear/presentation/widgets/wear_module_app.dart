@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
+import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
+import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_navigation_output.dart';
+import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/navigation/wear_routes.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/menu/wear_menu_screen.dart';
 import 'package:smart_glasses/modules/wear/services/wear_voice_session.dart';
-import 'package:smart_glasses/modules/wear/presentation/widgets/wear_voice_command_listener.dart';
 
 class WearModuleApp extends StatefulWidget {
   const WearModuleApp({super.key});
@@ -15,6 +20,7 @@ class WearModuleApp extends StatefulWidget {
 class _WearModuleAppState extends State<WearModuleApp>
     with WidgetsBindingObserver {
   late final GoRouter _router;
+  StreamSubscription<WearVoiceCommand>? _voiceSub;
 
   @override
   void initState() {
@@ -27,6 +33,15 @@ class _WearModuleAppState extends State<WearModuleApp>
         _WearNavigatorObserver(),
       ],
     );
+    final flow = WearDependencies.I.wearFlowController;
+    flow.setNavigationOutput(FlutterWearNavigationOutput(router: _router));
+    flow.setUiLifecycle(WearUiLifecycle.active);
+    _voiceSub = WearDependencies.I.voiceControlService.commandStream.listen(
+      flow.handleVoiceCommand,
+      onError: (Object error, StackTrace stackTrace) {
+        print('[WearModuleApp] voice command stream error=$error\n$stackTrace');
+      },
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       print('[WearModuleApp] post-frame voice start');
       WearVoiceSession.I.start();
@@ -37,13 +52,22 @@ class _WearModuleAppState extends State<WearModuleApp>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     print('[WearModuleApp] lifecycle state=$state');
     if (state == AppLifecycleState.detached) {
+      WearDependencies.I.wearFlowController.setUiLifecycle(
+        WearUiLifecycle.inactive,
+      );
       WearVoiceSession.I.stop();
       return;
     }
     if (state == AppLifecycleState.resumed) {
+      WearDependencies.I.wearFlowController.setUiLifecycle(
+        WearUiLifecycle.active,
+      );
       WearVoiceSession.I.restart(reason: 'app_lifecycle_resumed');
       return;
     }
+    WearDependencies.I.wearFlowController.setUiLifecycle(
+      WearUiLifecycle.inactive,
+    );
     WearVoiceSession.I.diagnostics().then(
           (String diagnostics) => print(
             '[WearModuleApp] lifecycle diagnostics state=$state $diagnostics',
@@ -54,6 +78,13 @@ class _WearModuleAppState extends State<WearModuleApp>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _voiceSub?.cancel();
+    WearDependencies.I.wearFlowController.setNavigationOutput(
+      NoopWearNavigationOutput(),
+    );
+    WearDependencies.I.wearFlowController.setUiLifecycle(
+      WearUiLifecycle.inactive,
+    );
     WearVoiceSession.I.stop();
     _router.dispose();
     super.dispose();
@@ -82,29 +113,8 @@ class _WearModuleAppState extends State<WearModuleApp>
       },
       child: MaterialApp.router(
         routerConfig: _router,
-        builder: (BuildContext context, Widget? child) {
-          return WearVoiceCommandOrchestrator(
-            onBack: _handleVoiceBack,
-            onHome: _handleVoiceHome,
-            child: child ?? const SizedBox.shrink(),
-          );
-        },
       ),
     );
-  }
-
-  void _handleVoiceBack() {
-    if (_router.canPop()) {
-      print('[VoiceCommandOrchestrator] popping inner GoRouter');
-      _router.pop();
-      return;
-    }
-    print('[VoiceCommandOrchestrator] cannot pop, no back history');
-  }
-
-  void _handleVoiceHome() {
-    print('[VoiceCommandOrchestrator] going home');
-    _router.go(WearMenuScreen.route);
   }
 }
 

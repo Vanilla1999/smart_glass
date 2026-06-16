@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:smart_glasses/modules/wear/data/auth/data_source/auth_data_source.dart';
 import 'package:smart_glasses/modules/wear/data/auth/data_source/auth_dio_client.dart';
+import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/data/availability/local_wear_availability_repository.dart';
 import 'package:smart_glasses/modules/wear/data/bdto/data_source/bdto_datasource.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/repository/wear_availability_repository.dart';
@@ -11,6 +12,8 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voi
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_typing_service.dart';
+import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_glasses_output.dart';
+import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_navigation_output.dart';
 
 // На следующих этапах пригодится, поэтому можно сразу оставить импорты
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/use_case/get_available_printers_use_case.dart';
@@ -36,6 +39,8 @@ class WearDependencies {
 
   late final WearVoiceControlService voiceControlService;
 
+  late final WearFlowController wearFlowController;
+
   /// Shared audio stream — один на оба голосовых сервиса.
   late final AudioStreamService audioStreamService;
 
@@ -50,6 +55,10 @@ class WearDependencies {
     );
     voiceControlService = WearVoiceControlService(
       speechRecognitionService: speechRecognitionService,
+    );
+    wearFlowController = WearFlowController(
+      glassesOutput: FlutterWearGlassesOutput(),
+      navigationOutput: NoopWearNavigationOutput(),
     );
   }
 

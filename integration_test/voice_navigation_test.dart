@@ -1,25 +1,24 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 
 /// Test to verify voice command routing logic
-/// 
-/// This test verifies that voice commands are correctly routed to the 
+///
+/// This test verifies that voice commands are correctly routed to the
 /// active screen only, and that focusedIndex state management works correctly.
 ///
 /// Expected flow:
 /// 1. Menu Screen (index 0 = "Печать ценника", index 1 = "Справка", index 2 = "Настройки")
 /// 2. Voice "вниз" -> index becomes 1
-/// 3. Voice "вниз" -> index becomes 2  
+/// 3. Voice "вниз" -> index becomes 2
 /// 4. Voice "вверх" -> index becomes 1
 /// 5. Voice "вниз" -> index becomes 2
 /// 6. Voice "выбрать" -> navigate to screen for index 2 (Настройки)
 ///
 /// Problem observed:
 /// - When navigating to PrinterSelect via push(), BOTH MenuScreen and PrinterSelect
-///   receive voice commands because WearVoiceCommandListener exists on both screens
+///   used to receive voice commands because screen-level voice listeners existed
 /// - This causes MenuScreen to update _focusedIndex even though it's not visible
 void main() {
   group('Voice Navigation Logic Tests', () {
@@ -98,14 +97,15 @@ void main() {
       expect(navigatedTo, 'WearSettingsScreen');
     });
 
-    test('BUG: Both screens receive voice commands - problem demonstration', () async {
+    test('BUG: Both screens receive voice commands - problem demonstration',
+        () async {
       // This test demonstrates the bug where both screens receive commands
-      
+
       final commandsController = StreamController<WearVoiceCommand>.broadcast();
-      
+
       int menuFocusedIndex = 0;
       int printerFocusedIndex = 0;
-      
+
       bool menuReceivedCommand = false;
       bool printerReceivedCommand = false;
 
@@ -117,7 +117,7 @@ void main() {
         }
       });
 
-      // PrinterSelect listener (overlaid screen)  
+      // PrinterSelect listener (overlaid screen)
       final printerSubscription = commandsController.stream.listen((cmd) {
         printerReceivedCommand = true;
         if (cmd == WearVoiceCommand.down) {
@@ -127,17 +127,20 @@ void main() {
 
       // Emit a command
       commandsController.add(WearVoiceCommand.down);
-      
+
       await Future.delayed(Duration.zero);
-      
+
       // BUG: Both listeners received the command!
-      expect(menuReceivedCommand, true, reason: 'MenuScreen should receive command');
-      expect(printerReceivedCommand, true, reason: 'PrinterSelect ALSO receives command (BUG!)');
-      
+      expect(menuReceivedCommand, true,
+          reason: 'MenuScreen should receive command');
+      expect(printerReceivedCommand, true,
+          reason: 'PrinterSelect ALSO receives command (BUG!)');
+
       // This causes MenuScreen to update its focusedIndex even though it's not visible
-      expect(menuFocusedIndex, 1, reason: 'MenuScreen updated even though PrinterSelect is shown');
+      expect(menuFocusedIndex, 1,
+          reason: 'MenuScreen updated even though PrinterSelect is shown');
       expect(printerFocusedIndex, 1);
-      
+
       await menuSubscription.cancel();
       await printerSubscription.cancel();
       await commandsController.close();
@@ -145,13 +148,13 @@ void main() {
 
     test('SOLUTION: Only active screen should receive commands', () async {
       // This test demonstrates the correct behavior
-      
+
       final commandsController = StreamController<WearVoiceCommand>.broadcast();
-      
+
       int currentScreenIndex = 0; // 0 = MenuScreen, 1 = PrinterSelect
       int menuFocusedIndex = 0;
       int printerFocusedIndex = 0;
-      
+
       // Global listener that routes to active screen only
       final globalSubscription = commandsController.stream.listen((cmd) {
         switch (currentScreenIndex) {
@@ -176,17 +179,19 @@ void main() {
       currentScreenIndex = 0;
       commandsController.add(WearVoiceCommand.down);
       await Future.delayed(Duration.zero);
-      
+
       expect(menuFocusedIndex, 1, reason: 'MenuScreen should receive command');
-      expect(printerFocusedIndex, 0, reason: 'PrinterSelect should NOT receive command');
+      expect(printerFocusedIndex, 0,
+          reason: 'PrinterSelect should NOT receive command');
 
       // Navigate to PrinterSelect
       currentScreenIndex = 1;
       commandsController.add(WearVoiceCommand.down);
       await Future.delayed(Duration.zero);
-      
+
       expect(menuFocusedIndex, 1, reason: 'MenuScreen should not change');
-      expect(printerFocusedIndex, 1, reason: 'PrinterSelect should receive command');
+      expect(printerFocusedIndex, 1,
+          reason: 'PrinterSelect should receive command');
 
       await globalSubscription.cancel();
       await commandsController.close();

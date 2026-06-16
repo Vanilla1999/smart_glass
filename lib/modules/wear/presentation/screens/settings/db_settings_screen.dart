@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/wear_main_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
@@ -54,7 +56,7 @@ class DBSettingsField extends StatelessWidget {
                 borderSide: BorderSide.none,
               ),
               contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             ),
           ),
         ],
@@ -109,6 +111,7 @@ class _WearSettingsScreenState extends ConsumerState<DBSettingsScreen> {
   @override
   void initState() {
     super.initState();
+    WearDependencies.I.wearFlowController.enterScreen(WearScreenId.dbSettings);
     _initControllers();
     _loadSavedSettings();
   }
@@ -122,9 +125,12 @@ class _WearSettingsScreenState extends ConsumerState<DBSettingsScreen> {
   Future<void> _loadSavedSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _hostController.text = prefs.getString(_keyHost) ?? dotenv.env['DBTO_HOST'] ?? '';
-      _portController.text = prefs.getString(_keyPort) ?? dotenv.env['DBTO_PORT']?? '';
-      _pathController.text = prefs.getString(_keyPath) ?? dotenv.env['DBTO_PATH']?? '';
+      _hostController.text =
+          prefs.getString(_keyHost) ?? dotenv.env['DBTO_HOST'] ?? '';
+      _portController.text =
+          prefs.getString(_keyPort) ?? dotenv.env['DBTO_PORT'] ?? '';
+      _pathController.text =
+          prefs.getString(_keyPath) ?? dotenv.env['DBTO_PATH'] ?? '';
     });
   }
 

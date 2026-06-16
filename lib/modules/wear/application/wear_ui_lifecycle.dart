@@ -1,0 +1,4 @@
+enum WearUiLifecycle {
+  active,
+  inactive,
+}

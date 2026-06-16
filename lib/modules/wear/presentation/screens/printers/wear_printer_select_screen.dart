@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
@@ -12,7 +15,6 @@ import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dar
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
-import 'package:smart_glasses/modules/wear/presentation/widgets/wear_voice_command_listener.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
@@ -36,6 +38,16 @@ class _WearPrinterSelectScreenState
   @override
   void initState() {
     super.initState();
+    WearDependencies.I.wearFlowController
+        .enterScreen(WearScreenId.printerSelect);
+    WearDependencies.I.wearFlowController.registerScreenActions(
+      WearScreenId.printerSelect,
+      WearScreenActionHandler(
+        onUp: _onVoiceUp,
+        onDown: _onVoiceDown,
+        onSelect: _onVoiceSelect,
+      ),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _sendGlassesState(ref.read(wearPrinterSelectNotifierProvider));
     });
@@ -43,6 +55,9 @@ class _WearPrinterSelectScreenState
 
   @override
   void dispose() {
+    WearDependencies.I.wearFlowController.unregisterScreenActions(
+      WearScreenId.printerSelect,
+    );
     _scroll.dispose();
     super.dispose();
   }
@@ -74,15 +89,10 @@ class _WearPrinterSelectScreenState
       }
     });
 
-    return WearVoiceCommandListener(
-      onUp: _onVoiceUp,
-      onDown: _onVoiceDown,
-      onSelect: _onVoiceSelect,
-      child: WearScreenScaffold(
-        showHomeButton: true,
-        scrollController: _scroll,
-        child: _buildContent(context, state),
-      ),
+    return WearScreenScaffold(
+      showHomeButton: true,
+      scrollController: _scroll,
+      child: _buildContent(context, state),
     );
   }
 
