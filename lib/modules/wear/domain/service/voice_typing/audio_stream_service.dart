@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:record/record.dart';
 
 class AudioStreamService {
+  static const double _liveGainMultiplier = 3.0;
   static const double _dbMin = -2.0;
   static const double _dbMax = 10.0;
   static const double _noiseFloor = 0.03;
@@ -89,6 +90,7 @@ class AudioStreamService {
         sampleRate: 16000,
         numChannels: 1,
         androidConfig: AndroidRecordConfig(
+          audioSource: AndroidAudioSource.mic,
           service: AndroidService(
             title: 'Smart Glasses',
             content: 'Голосовое управление активно',
@@ -106,21 +108,22 @@ class AudioStreamService {
 
     _audioSubscription = audioStream.listen(
       (Uint8List bytes) {
+        final boostedBytes = _boostPcm16(bytes);
         _chunksReceived++;
         _lastChunkAtMillis = DateTime.now().millisecondsSinceEpoch;
         if (_chunksReceived == 1 || _chunksReceived % 200 == 0) {
-          final _PcmStats stats = _pcmStats(bytes);
+          final _PcmStats stats = _pcmStats(boostedBytes);
           print(
             '[AudioStreamService] chunk#$_chunksReceived '
-            'bytes=${bytes.lengthInBytes} callbacks=${_dataCallbacks.length} '
+            'bytes=${boostedBytes.lengthInBytes} callbacks=${_dataCallbacks.length} '
             'rms=${stats.rms.toStringAsFixed(5)} '
             'peak=${stats.peak.toStringAsFixed(5)} '
             'at=$_lastChunkAtMillis',
           );
         }
-        // _publishAudioLevel(bytes);
+        // _publishAudioLevel(boostedBytes);
         for (final cb in List<void Function(Uint8List)>.of(_dataCallbacks)) {
-          cb(bytes);
+          cb(boostedBytes);
         }
       },
       onError: (Object error, StackTrace stackTrace) {
@@ -212,6 +215,27 @@ class AudioStreamService {
     if (!_audioLevelController.isClosed) {
       _audioLevelController.add(value);
     }
+  }
+
+  Uint8List _boostPcm16(Uint8List bytes) {
+    if (bytes.lengthInBytes < 2) {
+      return bytes;
+    }
+
+    final boosted = Uint8List.fromList(bytes);
+    final sampleCount = boosted.lengthInBytes ~/ 2;
+    final byteData = ByteData.sublistView(boosted, 0, sampleCount * 2);
+
+    for (var i = 0; i < sampleCount; i++) {
+      final offset = i * 2;
+      final sample = byteData.getInt16(offset, Endian.little);
+      final amplified = (sample * _liveGainMultiplier)
+          .round()
+          .clamp(-32768, 32767);
+      byteData.setInt16(offset, amplified, Endian.little);
+    }
+
+    return boosted;
   }
 
   _PcmStats _pcmStats(Uint8List bytes) {

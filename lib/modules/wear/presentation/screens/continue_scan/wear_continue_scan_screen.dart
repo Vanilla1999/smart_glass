@@ -129,6 +129,7 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen>
   void _finishScanning() {
     if (_isActionInProgress) return;
     _isActionInProgress = true;
+    _flow.enterScreen(WearScreenId.menu);
     WearStatusIconReporter.I.sendFast(WearGlassesPayload.menu());
     context.go(WearMenuScreen.route);
   }

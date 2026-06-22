@@ -15,6 +15,8 @@ import 'package:smart_glasses/features/scanner/presentation/cubit/scanner_cubit.
 import 'package:smart_glasses/features/scanner/presentation/cubit/scanner_state.dart';
 import 'package:smart_glasses/features/voice/presentation/cubit/voice_cubit.dart';
 import 'package:smart_glasses/features/voice/presentation/cubit/voice_state.dart';
+import 'package:smart_glasses/features/voice_memo/presentation/cubit/voice_memo_cubit.dart';
+import 'package:smart_glasses/features/voice_memo/presentation/cubit/voice_memo_state.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_module_app.dart';
 
@@ -31,6 +33,7 @@ class HomeScreen extends StatelessWidget {
         BlocProvider.value(value: dependencies.homeCubit),
         BlocProvider.value(value: dependencies.scannerCubit),
         BlocProvider.value(value: dependencies.voiceCubit),
+        BlocProvider.value(value: dependencies.voiceMemoCubit),
       ],
       child: const _HomeScreenContent(),
     );
@@ -237,6 +240,61 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
         floatingActionButton: Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
+            BlocBuilder<VoiceMemoCubit, VoiceMemoState>(
+              builder: (context, state) {
+                final isRecording = state is VoiceMemoRecording;
+                final isSaved = state is VoiceMemoSaved;
+
+                return FloatingActionButton.small(
+                  heroTag: 'voice_memo',
+                  backgroundColor: isRecording
+                      ? Colors.red
+                      : isSaved
+                          ? Colors.green
+                          : Theme.of(context).colorScheme.secondaryContainer,
+                  onPressed: () async {
+                    final cubit = context.read<VoiceMemoCubit>();
+                    if (isRecording) {
+                      await cubit.stopAndSave();
+                      final newState = cubit.state;
+                      if (newState is VoiceMemoSaved) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Сохранено: ${newState.filePath.split('/').last}',
+                              ),
+                              action: SnackBarAction(
+                                label: 'OK',
+                                onPressed: () => cubit.reset(),
+                              ),
+                            ),
+                          );
+                        }
+                      } else if (newState is VoiceMemoError) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Ошибка: ${newState.message}'),
+                            ),
+                          );
+                        }
+                      }
+                    } else {
+                      await cubit.startRecording();
+                    }
+                  },
+                  child: Icon(
+                    isRecording
+                        ? Icons.stop
+                        : isSaved
+                            ? Icons.check
+                            : Icons.mic,
+                  ),
+                );
+              },
+            ),
+            const SizedBox(width: 10),
             BlocBuilder<VoiceCubit, VoiceState>(
               builder: (context, state) {
                 final isReady = state is VoiceReady ||

@@ -15,4 +15,4 @@ This file indexes all reviewable documentation for the `smart_glasses` project.
 
 ## Roadmap
 
-No active roadmap documents are currently present in `docs/roadmap/`.
+No active roadmap documents.

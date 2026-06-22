@@ -59,6 +59,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    WearDependencies.I.warmupVoiceTypingInBackground();
     _router = GoRouter(
       initialLocation: widget.initialLocation ?? WearRoute.initialRoute,
       routes: widget.routes ?? WearRoute.goRouteWear,
