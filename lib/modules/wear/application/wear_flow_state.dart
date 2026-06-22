@@ -8,6 +8,8 @@ class WearFlowState {
     this.isLoading = false,
     this.error,
     this.pendingNavigation,
+    this.homeConfirmReturnScreen = WearScreenId.menu,
+    this.homeConfirmFocusedIndex = 0,
     this.menuFocusedIndex = 0,
     this.printerFocusedIndex = 0,
     this.productFocusedIndex = 0,
@@ -33,6 +35,8 @@ class WearFlowState {
   final bool isLoading;
   final String? error;
   final WearNavigationRequest? pendingNavigation;
+  final WearScreenId homeConfirmReturnScreen;
+  final int homeConfirmFocusedIndex;
   final int menuFocusedIndex;
   final int printerFocusedIndex;
   final int productFocusedIndex;
@@ -56,6 +60,8 @@ class WearFlowState {
     bool clearError = false,
     WearNavigationRequest? pendingNavigation,
     bool clearPendingNavigation = false,
+    WearScreenId? homeConfirmReturnScreen,
+    int? homeConfirmFocusedIndex,
     int? menuFocusedIndex,
     int? printerFocusedIndex,
     int? productFocusedIndex,
@@ -79,6 +85,10 @@ class WearFlowState {
       pendingNavigation: clearPendingNavigation
           ? null
           : pendingNavigation ?? this.pendingNavigation,
+      homeConfirmReturnScreen:
+          homeConfirmReturnScreen ?? this.homeConfirmReturnScreen,
+      homeConfirmFocusedIndex:
+          homeConfirmFocusedIndex ?? this.homeConfirmFocusedIndex,
       menuFocusedIndex: menuFocusedIndex ?? this.menuFocusedIndex,
       printerFocusedIndex: printerFocusedIndex ?? this.printerFocusedIndex,
       productFocusedIndex: productFocusedIndex ?? this.productFocusedIndex,

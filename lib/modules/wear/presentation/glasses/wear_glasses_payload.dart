@@ -102,6 +102,19 @@ class WearGlassesPayload {
     );
   }
 
+  factory WearGlassesPayload.homeConfirm({int selectedIndex = 0}) {
+    return WearGlassesPayload(
+      screenType: WearGlassesScreenType.menu,
+      phase: WearGlassesPhase.idle,
+      title: 'Вернуться домой',
+      subtitle: 'Домой - в меню после авторизации',
+      items: const <String>['Домой', 'Отмена'],
+      selectedIndex: selectedIndex,
+      primaryAction: 'Домой',
+      secondaryAction: 'Отмена',
+    );
+  }
+
   factory WearGlassesPayload.help() {
     return const WearGlassesPayload(
       screenType: WearGlassesScreenType.help,

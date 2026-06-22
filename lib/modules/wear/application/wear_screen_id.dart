@@ -2,6 +2,7 @@ enum WearScreenId {
   scannerConnect,
   main,
   status,
+  homeConfirm,
   menu,
   printerSelect,
   scanIdle,

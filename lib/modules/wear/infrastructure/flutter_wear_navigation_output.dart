@@ -10,6 +10,7 @@ import 'package:smart_glasses/modules/wear/presentation/screens/availability/wea
 import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_product_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/continue_scan/wear_continue_scan_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/help/wear_help_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/home/wear_home_confirm_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/wear_main_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/wear_scanner_connect_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/menu/wear_menu_screen.dart';
@@ -55,6 +56,7 @@ class FlutterWearNavigationOutput implements WearNavigationOutput {
       WearScannerConnectScreen.route => WearScreenId.scannerConnect,
       WearMainScreen.route => WearScreenId.main,
       WearStatusScreen.route => WearScreenId.status,
+      WearHomeConfirmScreen.route => WearScreenId.homeConfirm,
       WearMenuScreen.route => WearScreenId.menu,
       WearPrinterSelectScreen.route => WearScreenId.printerSelect,
       WearScanIdleScreen.route => WearScreenId.scanIdle,
@@ -91,6 +93,7 @@ class FlutterWearNavigationOutput implements WearNavigationOutput {
       WearScreenId.scannerConnect => WearScannerConnectScreen.route,
       WearScreenId.main => WearMainScreen.route,
       WearScreenId.status => WearStatusScreen.route,
+      WearScreenId.homeConfirm => WearHomeConfirmScreen.route,
       WearScreenId.menu => WearMenuScreen.route,
       WearScreenId.printerSelect => WearPrinterSelectScreen.route,
       WearScreenId.scanIdle => WearScanIdleScreen.route,

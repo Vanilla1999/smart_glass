@@ -137,7 +137,9 @@ void main() {
 
       expect(controller.state.menuFocusedIndex, 3);
       expect(
-        states.where((s) => s.screen == WearScreenId.menu).map((s) => s.menuFocusedIndex),
+        states
+            .where((s) => s.screen == WearScreenId.menu)
+            .map((s) => s.menuFocusedIndex),
         containsAllInOrder(<int>[0, 1, 2, 3]),
       );
     });
@@ -215,7 +217,7 @@ void main() {
       expect(navigation.backCalls, 0);
     });
 
-    test('home while inactive stores pending menu navigation', () async {
+    test('home while inactive stores pending confirm navigation', () async {
       final _FakeNavigationOutput navigation = _FakeNavigationOutput();
       final WearFlowController controller = WearFlowController(
         glassesOutput: _FakeGlassesOutput(),
@@ -226,13 +228,68 @@ void main() {
       controller.enterScreen(WearScreenId.printerSelect);
       await controller.handleVoiceCommand(WearVoiceCommand.home);
 
-      expect(controller.state.pendingNavigation?.screen, WearScreenId.menu);
-      expect(controller.state.screen, WearScreenId.menu);
+      expect(
+        controller.state.pendingNavigation?.screen,
+        WearScreenId.homeConfirm,
+      );
+      expect(controller.state.screen, WearScreenId.homeConfirm);
       expect(navigation.homeCalls, 0);
     });
 
-    test('mixed up/down/select sequence reaches correct final state',
-        () async {
+    test('home on home confirm does not push duplicate route', () async {
+      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: navigation,
+      );
+
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.printerSelect);
+      await controller.handleVoiceCommand(WearVoiceCommand.home);
+      await controller.handleVoiceCommand(WearVoiceCommand.home);
+
+      expect(controller.state.screen, WearScreenId.homeConfirm);
+      expect(navigation.goToCalls, <WearScreenId>[WearScreenId.homeConfirm]);
+    });
+
+    test('home confirm selects home with replace navigation', () async {
+      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: navigation,
+      );
+
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.printerSelect);
+      await controller.handleVoiceCommand(WearVoiceCommand.home);
+      await controller.handleVoiceCommand(WearVoiceCommand.select);
+
+      expect(controller.state.screen, WearScreenId.menu);
+      expect(navigation.homeCalls, 1);
+    });
+
+    test('home confirm cancel while inactive restores return screen', () async {
+      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: navigation,
+      );
+
+      controller.setUiLifecycle(WearUiLifecycle.inactive);
+      controller.enterScreen(WearScreenId.printerSelect);
+      await controller.handleVoiceCommand(WearVoiceCommand.home);
+      await controller.handleVoiceCommand(WearVoiceCommand.down);
+      await controller.handleVoiceCommand(WearVoiceCommand.select);
+
+      expect(controller.state.screen, WearScreenId.printerSelect);
+      expect(
+        controller.state.pendingNavigation?.screen,
+        WearScreenId.printerSelect,
+      );
+      expect(navigation.backCalls, 0);
+    });
+
+    test('mixed up/down/select sequence reaches correct final state', () async {
       final _FakeNavigationOutput navigation = _FakeNavigationOutput();
       final WearFlowController controller = WearFlowController(
         glassesOutput: _FakeGlassesOutput(),
@@ -499,7 +556,8 @@ void main() {
       );
     });
 
-    test('back from help delegates to navigation and menu is restored on enterScreen',
+    test(
+        'back from help delegates to navigation and menu is restored on enterScreen',
         () async {
       final glasses = _FakeGlassesOutput();
       final nav = _FakeNavigationOutput();
@@ -572,11 +630,9 @@ void main() {
       expect(nav.backCalls, 2);
     });
 
-    test(
-        'queue does not block when goTo is pending after menu select',
+    test('queue does not block when goTo is pending after menu select',
         () async {
-      final _BlockingNavigationOutput navigation =
-          _BlockingNavigationOutput();
+      final _BlockingNavigationOutput navigation = _BlockingNavigationOutput();
       final WearFlowController controller = WearFlowController(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: navigation,
@@ -597,8 +653,8 @@ void main() {
       controller.handleVoiceCommand(WearVoiceCommand.home);
       await Future<void>.delayed(Duration.zero);
 
-      expect(controller.state.screen, WearScreenId.menu);
-      expect(navigation.homeCalls, 1);
+      expect(controller.state.screen, WearScreenId.homeConfirm);
+      expect(navigation.goToCalls.last, WearScreenId.homeConfirm);
     });
   });
 }

@@ -37,6 +37,7 @@ class WearFlowController {
         _navigationOutput = navigationOutput;
 
   static const int _menuItemCount = 4;
+  static const int _homeConfirmItemCount = 2;
   static const int _availabilityInteractionItemCount = 2;
   static const int _continueScanItemCount = 2;
 
@@ -108,6 +109,10 @@ class WearFlowController {
   Future<void> selectMenuIndex(int index) async {
     setMenuFocusedIndex(index);
     await _selectFromMenu();
+  }
+
+  void setHomeConfirmFocusedIndex(int index) {
+    _setHomeConfirmFocus(index);
   }
 
   void setAvailabilityInteractionFocusedIndex(int index) {
@@ -237,20 +242,13 @@ class WearFlowController {
   }
 
   Future<void> _handleHome() async {
+    if (_state.screen == WearScreenId.homeConfirm) return;
+    final WearScreenId returnScreen = _state.screen;
     if (_uiLifecycle == WearUiLifecycle.active) {
       await _invokeScreenAction(_state.screen, (handler) => handler.onHome);
     }
-    _setState(_state.copyWith(screen: WearScreenId.menu, clearError: true));
-    await _renderGlasses();
-    if (_uiLifecycle == WearUiLifecycle.active) {
-      print('[WearFlowController] request navigation home');
-      await _navigationOutput.home();
-      return;
-    }
-    final WearNavigationRequest request =
-        const WearNavigationRequest(screen: WearScreenId.menu);
-    print('[WearFlowController] ui inactive pendingNavigation=$request');
-    _setState(_state.copyWith(pendingNavigation: request));
+    _setState(_state.copyWith(homeConfirmReturnScreen: returnScreen));
+    await _navigateTo(WearScreenId.homeConfirm);
   }
 
   Future<void> _navigateTo(
@@ -280,6 +278,11 @@ class WearFlowController {
       WearScreenId.menu => _state.copyWith(
           screen: screen,
           focusedIndex: _state.menuFocusedIndex,
+          clearError: true,
+        ),
+      WearScreenId.homeConfirm => _state.copyWith(
+          screen: screen,
+          focusedIndex: _state.homeConfirmFocusedIndex,
           clearError: true,
         ),
       WearScreenId.availabilityInteraction => _state.copyWith(
@@ -332,6 +335,11 @@ class WearFlowController {
           math.max(0, _state.availabilityInteractionFocusedIndex - 1),
         );
         return true;
+      case WearScreenId.homeConfirm:
+        _setHomeConfirmFocus(
+          math.max(0, _state.homeConfirmFocusedIndex - 1),
+        );
+        return true;
       case WearScreenId.continueScan:
         _setContinueScanFocus(
           math.max(0, _state.continueScanFocusedIndex - 1),
@@ -354,6 +362,12 @@ class WearFlowController {
           ),
         );
         return true;
+      case WearScreenId.homeConfirm:
+        _setHomeConfirmFocus(
+          math.min(
+              _homeConfirmItemCount - 1, _state.homeConfirmFocusedIndex + 1),
+        );
+        return true;
       case WearScreenId.continueScan:
         _setContinueScanFocus(
           math.min(
@@ -371,6 +385,9 @@ class WearFlowController {
     switch (_state.screen) {
       case WearScreenId.availabilityInteraction:
         await _selectAvailabilityInteraction();
+        return true;
+      case WearScreenId.homeConfirm:
+        await _selectHomeConfirm();
         return true;
       case WearScreenId.continueScan:
         if (_uiLifecycle == WearUiLifecycle.active) return false;
@@ -401,6 +418,18 @@ class WearFlowController {
     unawaited(_renderGlasses());
   }
 
+  void _setHomeConfirmFocus(int index) {
+    final int next = index.clamp(0, _homeConfirmItemCount - 1);
+    _setState(
+      _state.copyWith(
+        focusedIndex: next,
+        homeConfirmFocusedIndex: next,
+        clearError: true,
+      ),
+    );
+    unawaited(_renderGlasses());
+  }
+
   void _setContinueScanFocus(int index) {
     final int next = index.clamp(0, _continueScanItemCount - 1);
     _setState(
@@ -418,6 +447,18 @@ class WearFlowController {
         ? WearScreenId.availabilityGroup
         : WearScreenId.availabilityDirectScan;
     await _navigateTo(target);
+  }
+
+  Future<void> _selectHomeConfirm() async {
+    if (_state.homeConfirmFocusedIndex == 0) {
+      await _navigateTo(WearScreenId.menu, replaceCurrent: true);
+      return;
+    }
+    if (_uiLifecycle == WearUiLifecycle.active) {
+      await _navigationOutput.back();
+      return;
+    }
+    await _navigateTo(_state.homeConfirmReturnScreen, replaceCurrent: true);
   }
 
   Future<bool> _invokeScreenAction(
@@ -446,6 +487,9 @@ class WearFlowController {
     return switch (state.screen) {
       WearScreenId.menu =>
         WearGlassesPayload.menu(selectedIndex: state.menuFocusedIndex),
+      WearScreenId.homeConfirm => WearGlassesPayload.homeConfirm(
+          selectedIndex: state.homeConfirmFocusedIndex,
+        ),
       WearScreenId.help => WearGlassesPayload.help(),
       WearScreenId.scanIdle => WearGlassesPayload.scanWaiting(),
       WearScreenId.continueScan => WearGlassesPayload.continueScan(

@@ -13,6 +13,7 @@ import 'package:smart_glasses/modules/wear/presentation/screens/availability/wea
 import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_interaction_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_product_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/help/wear_help_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/home/wear_home_confirm_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/wear_main_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/wear_scanner_connect_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/menu/wear_menu_screen.dart';
@@ -40,6 +41,12 @@ class WearRoute {
           path: WearMainScreen.route,
           builder: (BuildContext context, GoRouterState state) {
             return const WearMainScreen();
+          },
+        ),
+        GoRoute(
+          path: WearHomeConfirmScreen.route,
+          builder: (BuildContext context, GoRouterState state) {
+            return const WearHomeConfirmScreen();
           },
         ),
         GoRoute(
