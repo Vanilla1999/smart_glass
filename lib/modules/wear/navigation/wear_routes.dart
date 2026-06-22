@@ -21,7 +21,9 @@ import 'package:smart_glasses/modules/wear/presentation/screens/printers/wear_pr
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_product_select_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_scan_idle_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/db_settings_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/settings/wear_printer_settings_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/wear_settings_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/settings/wear_wifi_settings_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_screen.dart';
 
@@ -65,6 +67,18 @@ class WearRoute {
           path: DBSettingsScreen.route,
           builder: (BuildContext context, GoRouterState state) {
             return const DBSettingsScreen();
+          },
+        ),
+        GoRoute(
+          path: WearWifiSettingsScreen.route,
+          builder: (BuildContext context, GoRouterState state) {
+            return const WearWifiSettingsScreen();
+          },
+        ),
+        GoRoute(
+          path: WearPrinterSettingsScreen.route,
+          builder: (BuildContext context, GoRouterState state) {
+            return const WearPrinterSettingsScreen();
           },
         ),
         GoRoute(

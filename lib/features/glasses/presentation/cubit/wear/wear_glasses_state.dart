@@ -51,7 +51,7 @@ class WearGlassesState {
       statusIcon: _string(payload['statusIcon']),
       showWifiIcon: _bool(payload['showWifiIcon'], fallback: true),
       wifiAvailable: _bool(payload['wifiAvailable']),
-      wifiLevel: _int(payload['wifiLevel'], fallback: 3).clamp(1, 3),
+      wifiLevel: _int(payload['wifiLevel'], fallback: 3).clamp(0, 3),
       showPrinterIcon: _bool(payload['showPrinterIcon']),
       printerAvailable: _bool(payload['printerAvailable']),
     );

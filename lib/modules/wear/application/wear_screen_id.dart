@@ -18,4 +18,6 @@ enum WearScreenId {
   help,
   settings,
   dbSettings,
+  wifiSettings,
+  printerSettings,
 }

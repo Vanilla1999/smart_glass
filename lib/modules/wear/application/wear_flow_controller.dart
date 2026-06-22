@@ -124,6 +124,14 @@ class WearFlowController {
     await _selectAvailabilityInteraction();
   }
 
+  Future<void> requestNavigation(
+    WearScreenId target, {
+    Object? extra,
+    bool replaceCurrent = false,
+  }) async {
+    await _navigateTo(target, extra: extra, replaceCurrent: replaceCurrent);
+  }
+
   void setContinueScanFocusedIndex(int index) {
     _setContinueScanFocus(index);
   }
@@ -527,7 +535,9 @@ class WearFlowController {
           statusText: 'Открываем экран...',
         ),
       WearScreenId.settings ||
-      WearScreenId.dbSettings =>
+      WearScreenId.dbSettings ||
+      WearScreenId.wifiSettings ||
+      WearScreenId.printerSettings =>
         WearGlassesPayload.status(
           isError: false,
           title: 'Настройки',

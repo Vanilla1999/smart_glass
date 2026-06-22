@@ -18,7 +18,9 @@ import 'package:smart_glasses/modules/wear/presentation/screens/printers/wear_pr
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_product_select_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_scan_idle_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/db_settings_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/settings/wear_printer_settings_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/wear_settings_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/settings/wear_wifi_settings_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_screen.dart';
 
 class FlutterWearNavigationOutput implements WearNavigationOutput {
@@ -74,6 +76,8 @@ class FlutterWearNavigationOutput implements WearNavigationOutput {
       WearHelpScreen.route => WearScreenId.help,
       WearSettingsScreen.route => WearScreenId.settings,
       DBSettingsScreen.route => WearScreenId.dbSettings,
+      WearWifiSettingsScreen.route => WearScreenId.wifiSettings,
+      WearPrinterSettingsScreen.route => WearScreenId.printerSettings,
       _ => null,
     };
   }
@@ -111,6 +115,8 @@ class FlutterWearNavigationOutput implements WearNavigationOutput {
       WearScreenId.help => WearHelpScreen.route,
       WearScreenId.settings => WearSettingsScreen.route,
       WearScreenId.dbSettings => DBSettingsScreen.route,
+      WearScreenId.wifiSettings => WearWifiSettingsScreen.route,
+      WearScreenId.printerSettings => WearPrinterSettingsScreen.route,
     };
   }
 }

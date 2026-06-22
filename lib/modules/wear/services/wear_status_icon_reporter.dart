@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_bridge.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/services/wear_printer_status_service.dart';
@@ -35,6 +37,8 @@ class WearStatusIconReporter {
   );
   WearGlassesPayload? _lastPayload;
   Timer? _timer;
+  bool _wasWifiAvailable = true;
+  bool _wasPrinterAvailable = true;
 
   WearStatusIconSnapshot get snapshot => _snapshot;
   WearGlassesPayload? get lastPayload => _lastPayload;
@@ -50,14 +54,50 @@ class WearStatusIconReporter {
   Future<WearStatusIconSnapshot> refresh() async {
     final WearWifiStatus wifi = await _wifiStatusService.getStatus();
     final bool showPrinter = WearSession.hasPrinterSelection;
-    final bool printerAvailable =
-        showPrinter && WearSession.isAuthorized && await _printerStatusService.isSelectedPrinterAvailable();
+    final bool printerAvailable = showPrinter &&
+        WearSession.isAuthorized &&
+        await _printerStatusService.isSelectedPrinterAvailable();
     _snapshot = WearStatusIconSnapshot(
       wifi: wifi,
       showPrinter: showPrinter,
       printerAvailable: printerAvailable,
     );
+    _openSettingsIfNeeded(_snapshot);
     return _snapshot;
+  }
+
+  void _openSettingsIfNeeded(WearStatusIconSnapshot snapshot) {
+    final WearScreenId current =
+        WearDependencies.I.wearFlowController.state.screen;
+    final bool onWifiSettingsScreen = current == WearScreenId.wifiSettings;
+    final bool onPrinterSettingsScreen =
+        current == WearScreenId.printerSettings;
+
+    if (!snapshot.wifi.isAvailable &&
+        _wasWifiAvailable &&
+        !onWifiSettingsScreen) {
+      unawaited(
+        WearDependencies.I.wearFlowController.requestNavigation(
+          WearScreenId.wifiSettings,
+        ),
+      );
+    }
+
+    if (snapshot.showPrinter &&
+        !snapshot.printerAvailable &&
+        _wasPrinterAvailable &&
+        snapshot.wifi.isAvailable &&
+        !onWifiSettingsScreen &&
+        !onPrinterSettingsScreen) {
+      unawaited(
+        WearDependencies.I.wearFlowController.requestNavigation(
+          WearScreenId.printerSettings,
+        ),
+      );
+    }
+
+    _wasWifiAvailable = snapshot.wifi.isAvailable;
+    _wasPrinterAvailable = !snapshot.showPrinter || snapshot.printerAvailable;
   }
 
   Future<void> send(WearGlassesPayload payload) async {

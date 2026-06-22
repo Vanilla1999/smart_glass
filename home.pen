@@ -1,0 +1,1344 @@
+{
+  "version": "2.13",
+  "children": [
+    {
+      "type": "frame",
+      "id": "bi8Au",
+      "x": -632,
+      "y": -77,
+      "name": "Frame",
+      "clip": true,
+      "width": 2487,
+      "height": 1810,
+      "fill": "#FFFFFF",
+      "layout": "none",
+      "children": [
+        {
+          "type": "frame",
+          "id": "lcrNh",
+          "x": 34,
+          "y": 665,
+          "name": "Сканирование товара_Дубль ШК",
+          "clip": true,
+          "width": 640,
+          "height": 480,
+          "fill": "#2a2828ff",
+          "layout": "vertical",
+          "gap": 20,
+          "padding": [
+            20,
+            30,
+            80,
+            30
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "GG65I",
+              "name": "Frame 3",
+              "width": 558,
+              "height": 340,
+              "layout": "vertical",
+              "gap": 20,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "XNcGA",
+                  "name": "Title+Subtitle",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "CDql9",
+                      "name": "Авторизация",
+                      "fill": "#26bc00ff",
+                      "content": "Дубль ШК",
+                      "lineHeight": 1.4,
+                      "fontFamily": "Inter",
+                      "fontSize": 40,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "OApeJ",
+                      "name": "Наведите камеру на штрих-код",
+                      "fill": "#26bc00ff",
+                      "content": "Выберите из писка нужный товар для печати ценника",
+                      "lineHeight": 1.4,
+                      "textAlign": "center",
+                      "fontFamily": "Inter",
+                      "fontSize": 20,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Vh62j",
+                  "name": "List",
+                  "width": 403,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "justifyContent": "end",
+                  "alignItems": "end",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "dk8eA",
+                      "name": "Frame 7",
+                      "width": "fill_container",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "FIVVM",
+                          "name": "Frame 6",
+                          "width": "fill_container",
+                          "height": 188,
+                          "layout": "vertical",
+                          "gap": 4,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "GvduR",
+                              "name": ".list-item",
+                              "width": "fill_container",
+                              "fill": "#26bc000d",
+                              "cornerRadius": 4,
+                              "stroke": "#26bc00ff",
+                              "strokeWidth": 1,
+                              "strokeAlignment": "inner",
+                              "gap": 4,
+                              "padding": 8,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "O7OVgG",
+                                  "name": "icon",
+                                  "clip": true,
+                                  "width": 20,
+                                  "height": 20,
+                                  "fill": {
+                                    "type": "color",
+                                    "color": "#ffffffff",
+                                    "enabled": false
+                                  },
+                                  "layout": "none",
+                                  "children": [
+                                    {
+                                      "type": "path",
+                                      "id": "dI2H8",
+                                      "x": 7.5,
+                                      "y": 5,
+                                      "name": "Vector",
+                                      "geometry": "M0 12l6-6-6-6",
+                                      "width": 5,
+                                      "height": 10,
+                                      "stroke": "#26bc00ff",
+                                      "strokeWidth": 2,
+                                      "strokeLinejoin": "round",
+                                      "strokeLinecap": "round"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "s7IfaZ",
+                                  "name": "Печать ценников",
+                                  "fill": "#ffffffff",
+                                  "content": "Название товара_1",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "Inter",
+                                  "fontSize": 20,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "x99fD",
+                              "name": ".list-item",
+                              "width": "fill_container",
+                              "cornerRadius": 4,
+                              "gap": 4,
+                              "padding": 8,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "DFG5F",
+                                  "name": "Печать ценников",
+                                  "fill": "#26bc00ff",
+                                  "content": "Название товара_2",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "Inter",
+                                  "fontSize": 20,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "iFpTT",
+                              "name": ".list-item",
+                              "width": "fill_container",
+                              "cornerRadius": 4,
+                              "gap": 4,
+                              "padding": 8,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "PXCNk",
+                                  "name": "Печать ценников",
+                                  "fill": "#26bc00ff",
+                                  "content": "Название товара_3",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "Inter",
+                                  "fontSize": 20,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "gxYH5",
+                              "name": ".list-item",
+                              "width": "fill_container",
+                              "cornerRadius": 4,
+                              "gap": 4,
+                              "padding": 8,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "wUU1P",
+                                  "name": "Печать ценников",
+                                  "fill": "#26bc00ff",
+                                  "content": "Название товара_4",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "Inter",
+                                  "fontSize": 20,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "JHnqs",
+                          "name": "Scroll Bar",
+                          "height": "fill_container",
+                          "layout": "vertical",
+                          "gap": 17,
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "hzjpH",
+                              "name": "Frame",
+                              "clip": true,
+                              "width": 16,
+                              "height": 16,
+                              "fill": {
+                                "type": "color",
+                                "color": "#ffffffff",
+                                "enabled": false
+                              },
+                              "layout": "none",
+                              "children": [
+                                {
+                                  "type": "path",
+                                  "id": "Vevnl",
+                                  "x": 4,
+                                  "y": 6,
+                                  "name": "Vector",
+                                  "geometry": "M12 6l-6-6-6 6",
+                                  "width": 8,
+                                  "height": 4,
+                                  "stroke": "#26bc00ff",
+                                  "strokeWidth": 1.3333333730697632,
+                                  "strokeLinejoin": "round",
+                                  "strokeLinecap": "round"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "BVlp6",
+                              "name": "Frame 9",
+                              "height": "fill_container",
+                              "gap": 10,
+                              "padding": [
+                                8,
+                                0,
+                                0,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "cornerRadius": 2,
+                                  "id": "gehuj",
+                                  "name": "Rectangle 1",
+                                  "fill": "#26bc00ff",
+                                  "width": 4,
+                                  "height": 71
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "f4r3hl",
+                              "name": "Frame",
+                              "rotation": 179.99999499104388,
+                              "clip": true,
+                              "width": 16.000001907348633,
+                              "height": 15.999999046325684,
+                              "fill": {
+                                "type": "color",
+                                "color": "#ffffffff",
+                                "enabled": false
+                              },
+                              "layout": "none",
+                              "children": [
+                                {
+                                  "type": "path",
+                                  "id": "iv30q",
+                                  "x": 4.000000476837158,
+                                  "y": 5.999999523162842,
+                                  "name": "Vector",
+                                  "geometry": "M12 6l-6-6-6 6",
+                                  "width": 8.000000953674316,
+                                  "height": 3.999999761581421,
+                                  "stroke": "#26bc00ff",
+                                  "strokeWidth": 1.3333333730697632,
+                                  "strokeLinejoin": "round",
+                                  "strokeLinecap": "round"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "ZgtTS",
+                      "name": "Страница: 1 из 2",
+                      "fill": "#26bc00ff",
+                      "content": "Страница: 1 из 2",
+                      "lineHeight": 1.8666666666666667,
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "DUXiT",
+              "layoutPosition": "absolute",
+              "x": 564,
+              "y": 16,
+              "name": "status bar",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "w3fn0r",
+                  "name": "icon",
+                  "clip": true,
+                  "width": 20,
+                  "height": 20,
+                  "fill": {
+                    "type": "color",
+                    "color": "#ffffffff",
+                    "enabled": false
+                  },
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "path",
+                      "id": "UaSwS",
+                      "x": 10,
+                      "y": 16.66666603088379,
+                      "name": "Vector",
+                      "geometry": "M0 0l0.01 0",
+                      "width": 0.008333523757755756,
+                      "height": 0,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    },
+                    {
+                      "type": "path",
+                      "id": "uRVvr",
+                      "x": 1.6666666269302368,
+                      "y": 4.166950225830078,
+                      "name": "Vector",
+                      "geometry": "M0 3.81966c2.75011-2.45977 6.31034-3.81966 10-3.81966 3.68966 0 7.24989 1.35989 10 3.81966",
+                      "width": 16.66666603088379,
+                      "height": 3.1830496788024902,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    },
+                    {
+                      "type": "path",
+                      "id": "IgS1P",
+                      "x": 4.166666507720947,
+                      "y": 8.333690643310547,
+                      "name": "Vector",
+                      "geometry": "M0 2.85857c1.86929-1.83227 4.38247-2.85857 7-2.85857 2.61753 0 5.13071 1.0263 7 2.85857",
+                      "width": 11.666666984558105,
+                      "height": 2.382143259048462,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    },
+                    {
+                      "type": "path",
+                      "id": "WeGpw",
+                      "x": 7.083333492279053,
+                      "y": 12.499761581420898,
+                      "name": "Vector",
+                      "geometry": "M0 1.19107c0.77887-0.76345 1.82603-1.19107 2.91667-1.19107 1.09064 0 2.1378 0.42763 2.91666 1.19107",
+                      "width": 5.833333492279053,
+                      "height": 1.1910724639892578,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "zAeSP",
+                  "name": "icon",
+                  "clip": true,
+                  "width": 20,
+                  "height": 20,
+                  "fill": {
+                    "type": "color",
+                    "color": "#ffffffff",
+                    "enabled": false
+                  },
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "path",
+                      "id": "CEI7T",
+                      "x": 1.6666663885116577,
+                      "y": 7.5,
+                      "name": "Vector",
+                      "geometry": "M4 9l-2 0c-0.53043 0-1.03914-0.21071-1.41421-0.58579-0.37507-0.37507-0.58579-0.88378-0.58579-1.41421l0-5c0-0.53043 0.21071-1.03914 0.58579-1.41421 0.37507-0.37507 0.88378-0.58579 1.41421-0.58579l16 0c0.53043 0 1.03914 0.21071 1.41421 0.58579 0.37507 0.37507 0.58579 0.88378 0.58579 1.41421l0 5c0 0.53043-0.21071 1.03914-0.58579 1.41421-0.37507 0.37507-0.88378 0.58579-1.41421 0.58579l-2 0",
+                      "width": 16.666667938232422,
+                      "height": 7.5,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    },
+                    {
+                      "type": "path",
+                      "id": "VB6s7",
+                      "x": 5,
+                      "y": 1.6666663885116577,
+                      "name": "Vector",
+                      "geometry": "M0 7l0-6c0-0.26522 0.10536-0.51957 0.29289-0.70711 0.18754-0.18754 0.44189-0.29289 0.70711-0.29289l10 0c0.26522 0 0.51957 0.10536 0.70711 0.29289 0.18754 0.18754 0.29289 0.44189 0.29289 0.70711l0 6",
+                      "width": 10,
+                      "height": 5.833333969116211,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    },
+                    {
+                      "type": "path",
+                      "id": "IqIHw",
+                      "x": 5,
+                      "y": 11.666666030883789,
+                      "name": "Vector",
+                      "geometry": "M1 0l10 0c0.55228 0 1 0.44772 1 1l0 6c0 0.55228-0.44772 1-1 1l-10 0c-0.55228 0-1-0.44772-1-1l0-6c0-0.55228 0.44772-1 1-1z",
+                      "width": 10,
+                      "height": 6.6666669845581055,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "CsrPX",
+          "x": 941,
+          "y": 665,
+          "name": "Сканирование товара_Вернуться домой",
+          "clip": true,
+          "width": 640,
+          "height": 480,
+          "fill": "#2a2828ff",
+          "layout": "vertical",
+          "gap": 20,
+          "padding": [
+            20,
+            30,
+            80,
+            30
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "RkHXM",
+              "name": "Frame 3",
+              "height": 340,
+              "layout": "vertical",
+              "gap": 56,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "SodeW",
+                  "name": "Title+Subtitle",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "lfdL6",
+                      "name": "Авторизация",
+                      "fill": "#26bc00ff",
+                      "content": "Вернуться домой?",
+                      "lineHeight": 1.4,
+                      "textAlign": "center",
+                      "fontFamily": "Inter",
+                      "fontSize": 40,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ageGc",
+                      "name": "Наведите камеру на штрих-код",
+                      "fill": "#26bc00ff",
+                      "content": "Задание будет прервано",
+                      "lineHeight": 1.4,
+                      "textAlign": "center",
+                      "fontFamily": "Inter",
+                      "fontSize": 20,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "kjAtx",
+                  "name": "Frame 15",
+                  "gap": 16,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "gJx7q",
+                      "name": "button",
+                      "fill": "#26bc000d",
+                      "cornerRadius": 4,
+                      "stroke": "#26bc00ff",
+                      "strokeWidth": 1,
+                      "strokeAlignment": "inner",
+                      "gap": 4,
+                      "padding": 8,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "rAfOv",
+                          "x": 8,
+                          "y": 8,
+                          "name": "icon",
+                          "enabled": false,
+                          "clip": true,
+                          "width": 24,
+                          "height": 24,
+                          "fill": {
+                            "type": "color",
+                            "color": "#ffffffff",
+                            "enabled": false
+                          },
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "path",
+                              "id": "H5E2HD",
+                              "x": 9,
+                              "y": 12,
+                              "name": "Vector",
+                              "geometry": "M6 9l0-8c0-0.26522-0.10536-0.51957-0.29289-0.70711-0.18754-0.18754-0.44189-0.29289-0.70711-0.29289l-4 0c-0.26522 0-0.51957 0.10536-0.70711 0.29289-0.18754 0.18754-0.29289 0.44189-0.29289 0.70711l0 8",
+                              "width": 6,
+                              "height": 9,
+                              "stroke": "#26bc00ff",
+                              "strokeWidth": 2,
+                              "strokeLinejoin": "round",
+                              "strokeLinecap": "round"
+                            },
+                            {
+                              "type": "path",
+                              "id": "ynRka",
+                              "x": 3,
+                              "y": 1.9995205402374268,
+                              "name": "Vector",
+                              "geometry": "M0 8.00048c-0.00007-0.29093 0.06333-0.57838 0.18579-0.84228 0.12245-0.26391 0.30101-0.49792 0.52321-0.68572l7-6c0.36099-0.30509 0.81836-0.47248 1.291-0.47248 0.47264 0 0.93001 0.16739 1.291 0.47248l7 6c0.2222 0.1878 0.40076 0.42181 0.52321 0.68572 0.12245 0.26391 0.18586 0.55135 0.18579 0.84228l0 9c0 0.53043-0.21071 1.03914-0.58579 1.41421-0.37507 0.37507-0.88378 0.58579-1.41421 0.58579l-14 0c-0.53043 0-1.03914-0.21071-1.41421-0.58579-0.37507-0.37507-0.58579-0.88378-0.58579-1.41421l0-9z",
+                              "width": 18,
+                              "height": 19.000478744506836,
+                              "stroke": "#26bc00ff",
+                              "strokeWidth": 2,
+                              "strokeLinejoin": "round",
+                              "strokeLinecap": "round"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "nGjc9",
+                          "name": "Домой",
+                          "fill": "#26bc00ff",
+                          "content": "Домой",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 16,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "F6AZcO",
+                      "name": "button",
+                      "cornerRadius": 4,
+                      "gap": 4,
+                      "padding": 8,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "l95XE",
+                          "x": 8,
+                          "y": 8,
+                          "name": "icon",
+                          "enabled": false,
+                          "clip": true,
+                          "width": 24,
+                          "height": 24,
+                          "fill": {
+                            "type": "color",
+                            "color": "#ffffffff",
+                            "enabled": false
+                          },
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "path",
+                              "id": "ySrWw",
+                              "x": 9,
+                              "y": 12,
+                              "name": "Vector",
+                              "geometry": "M6 9l0-8c0-0.26522-0.10536-0.51957-0.29289-0.70711-0.18754-0.18754-0.44189-0.29289-0.70711-0.29289l-4 0c-0.26522 0-0.51957 0.10536-0.70711 0.29289-0.18754 0.18754-0.29289 0.44189-0.29289 0.70711l0 8",
+                              "width": 6,
+                              "height": 9,
+                              "stroke": "#26bc00ff",
+                              "strokeWidth": 2,
+                              "strokeLinejoin": "round",
+                              "strokeLinecap": "round"
+                            },
+                            {
+                              "type": "path",
+                              "id": "T3txxu",
+                              "x": 3,
+                              "y": 1.9995205402374268,
+                              "name": "Vector",
+                              "geometry": "M0 8.00048c-0.00007-0.29093 0.06333-0.57838 0.18579-0.84228 0.12245-0.26391 0.30101-0.49792 0.52321-0.68572l7-6c0.36099-0.30509 0.81836-0.47248 1.291-0.47248 0.47264 0 0.93001 0.16739 1.291 0.47248l7 6c0.2222 0.1878 0.40076 0.42181 0.52321 0.68572 0.12245 0.26391 0.18586 0.55135 0.18579 0.84228l0 9c0 0.53043-0.21071 1.03914-0.58579 1.41421-0.37507 0.37507-0.88378 0.58579-1.41421 0.58579l-14 0c-0.53043 0-1.03914-0.21071-1.41421-0.58579-0.37507-0.37507-0.58579-0.88378-0.58579-1.41421l0-9z",
+                              "width": 18,
+                              "height": 19.000478744506836,
+                              "stroke": "#26bc00ff",
+                              "strokeWidth": 2,
+                              "strokeLinejoin": "round",
+                              "strokeLinecap": "round"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "H6Ibhm",
+                          "name": "Домой",
+                          "fill": "#26bc00ff",
+                          "content": "Отмена",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 16,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ui0cQ",
+              "layoutPosition": "absolute",
+              "x": 564,
+              "y": 16,
+              "name": "status bar",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "x741p",
+                  "name": "icon",
+                  "clip": true,
+                  "width": 20,
+                  "height": 20,
+                  "fill": {
+                    "type": "color",
+                    "color": "#ffffffff",
+                    "enabled": false
+                  },
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "path",
+                      "id": "XzFdU",
+                      "x": 10,
+                      "y": 16.66666603088379,
+                      "name": "Vector",
+                      "geometry": "M0 0l0.01 0",
+                      "width": 0.008333523757755756,
+                      "height": 0,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    },
+                    {
+                      "type": "path",
+                      "id": "I55mm",
+                      "x": 1.6666666269302368,
+                      "y": 4.166950225830078,
+                      "name": "Vector",
+                      "geometry": "M0 3.81966c2.75011-2.45977 6.31034-3.81966 10-3.81966 3.68966 0 7.24989 1.35989 10 3.81966",
+                      "width": 16.66666603088379,
+                      "height": 3.1830496788024902,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    },
+                    {
+                      "type": "path",
+                      "id": "XNltp",
+                      "x": 4.166666507720947,
+                      "y": 8.333690643310547,
+                      "name": "Vector",
+                      "geometry": "M0 2.85857c1.86929-1.83227 4.38247-2.85857 7-2.85857 2.61753 0 5.13071 1.0263 7 2.85857",
+                      "width": 11.666666984558105,
+                      "height": 2.382143259048462,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    },
+                    {
+                      "type": "path",
+                      "id": "RXc1J",
+                      "x": 7.083333492279053,
+                      "y": 12.499761581420898,
+                      "name": "Vector",
+                      "geometry": "M0 1.19107c0.77887-0.76345 1.82603-1.19107 2.91667-1.19107 1.09064 0 2.1378 0.42763 2.91666 1.19107",
+                      "width": 5.833333492279053,
+                      "height": 1.1910724639892578,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "VScK2",
+                  "name": "icon",
+                  "clip": true,
+                  "width": 20,
+                  "height": 20,
+                  "fill": {
+                    "type": "color",
+                    "color": "#ffffffff",
+                    "enabled": false
+                  },
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "path",
+                      "id": "p9bwGy",
+                      "x": 1.6666663885116577,
+                      "y": 7.5,
+                      "name": "Vector",
+                      "geometry": "M4 9l-2 0c-0.53043 0-1.03914-0.21071-1.41421-0.58579-0.37507-0.37507-0.58579-0.88378-0.58579-1.41421l0-5c0-0.53043 0.21071-1.03914 0.58579-1.41421 0.37507-0.37507 0.88378-0.58579 1.41421-0.58579l16 0c0.53043 0 1.03914 0.21071 1.41421 0.58579 0.37507 0.37507 0.58579 0.88378 0.58579 1.41421l0 5c0 0.53043-0.21071 1.03914-0.58579 1.41421-0.37507 0.37507-0.88378 0.58579-1.41421 0.58579l-2 0",
+                      "width": 16.666667938232422,
+                      "height": 7.5,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    },
+                    {
+                      "type": "path",
+                      "id": "Wpoq0",
+                      "x": 5,
+                      "y": 1.6666663885116577,
+                      "name": "Vector",
+                      "geometry": "M0 7l0-6c0-0.26522 0.10536-0.51957 0.29289-0.70711 0.18754-0.18754 0.44189-0.29289 0.70711-0.29289l10 0c0.26522 0 0.51957 0.10536 0.70711 0.29289 0.18754 0.18754 0.29289 0.44189 0.29289 0.70711l0 6",
+                      "width": 10,
+                      "height": 5.833333969116211,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    },
+                    {
+                      "type": "path",
+                      "id": "VnZaC",
+                      "x": 5,
+                      "y": 11.666666030883789,
+                      "name": "Vector",
+                      "geometry": "M1 0l10 0c0.55228 0 1 0.44772 1 1l0 6c0 0.55228-0.44772 1-1 1l-10 0c-0.55228 0-1-0.44772-1-1l0-6c0-0.55228 0.44772-1 1-1z",
+                      "width": 10,
+                      "height": 6.6666669845581055,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "j3u7Op",
+          "x": 1814,
+          "y": 665,
+          "name": "Выбор раздела_Список",
+          "clip": true,
+          "width": 640,
+          "height": 480,
+          "fill": "#2a2828ff",
+          "layout": "vertical",
+          "gap": 20,
+          "padding": [
+            20,
+            30,
+            80,
+            30
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "oHi62",
+              "name": "Content",
+              "height": 340,
+              "layout": "vertical",
+              "gap": 24,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "dw9vf",
+                  "name": "Title+Subtitle",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "G5dNYQ",
+                      "name": "Авторизация",
+                      "fill": "#26bc00ff",
+                      "content": "Выбор раздела",
+                      "lineHeight": 1.4,
+                      "fontFamily": "Inter",
+                      "fontSize": 40,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "MpSnO",
+                      "x": 155,
+                      "y": 48,
+                      "name": "Наведите камеру на штрих-код",
+                      "enabled": false,
+                      "fill": "#26bc00ff",
+                      "lineHeight": 1.4,
+                      "textAlign": "center",
+                      "fontFamily": "Inter",
+                      "fontSize": 20,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "fGxFy",
+                  "name": "List",
+                  "width": 403,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "justifyContent": "end",
+                  "alignItems": "end",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Bx8da",
+                      "name": "Frame 7",
+                      "width": "fill_container",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Bu4ig",
+                          "name": "Frame 6",
+                          "width": "fill_container",
+                          "height": 188,
+                          "layout": "vertical",
+                          "gap": 4,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "pKraV",
+                              "name": ".list-item",
+                              "width": "fill_container",
+                              "fill": "#26bc000d",
+                              "cornerRadius": 4,
+                              "stroke": "#26bc00ff",
+                              "strokeWidth": 1,
+                              "strokeAlignment": "inner",
+                              "gap": 4,
+                              "padding": 8,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "G18zPr",
+                                  "name": "icon",
+                                  "clip": true,
+                                  "width": 20,
+                                  "height": 20,
+                                  "fill": {
+                                    "type": "color",
+                                    "color": "#ffffffff",
+                                    "enabled": false
+                                  },
+                                  "layout": "none",
+                                  "children": [
+                                    {
+                                      "type": "path",
+                                      "id": "G6Ymf",
+                                      "x": 7.5,
+                                      "y": 5,
+                                      "name": "Vector",
+                                      "geometry": "M0 12l6-6-6-6",
+                                      "width": 5,
+                                      "height": 10,
+                                      "stroke": "#26bc00ff",
+                                      "strokeWidth": 2,
+                                      "strokeLinejoin": "round",
+                                      "strokeLinecap": "round"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "qfDcG",
+                                  "name": "Печать ценников",
+                                  "fill": "#26bc00ff",
+                                  "content": "Печать ценников",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "Inter",
+                                  "fontSize": 20,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Vo10A",
+                              "name": ".list-item",
+                              "width": "fill_container",
+                              "cornerRadius": 4,
+                              "gap": 4,
+                              "padding": 8,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "WoVuT",
+                                  "name": "Печать ценников",
+                                  "fill": "#26bc00ff",
+                                  "content": "Доступность",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "Inter",
+                                  "fontSize": 20,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "jZmr9",
+                              "x": 0,
+                              "y": 96,
+                              "name": ".list-item",
+                              "enabled": false,
+                              "width": "fill_container(383)",
+                              "cornerRadius": 4,
+                              "gap": 4,
+                              "padding": 8,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "tFsCg",
+                                  "name": "Печать ценников",
+                                  "fill": "#26bc00ff",
+                                  "content": "Печать ценников",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "Inter",
+                                  "fontSize": 20,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "yOncU",
+                              "x": 0,
+                              "y": 144,
+                              "name": ".list-item",
+                              "enabled": false,
+                              "width": "fill_container(383)",
+                              "cornerRadius": 4,
+                              "gap": 4,
+                              "padding": 8,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "TwkyO",
+                                  "name": "Печать ценников",
+                                  "fill": "#26bc00ff",
+                                  "content": "Печать ценников",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "Inter",
+                                  "fontSize": 20,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "zQBo9",
+                          "x": 387,
+                          "y": 0,
+                          "name": "Scroll Bar",
+                          "enabled": false,
+                          "height": "fill_container(188)",
+                          "layout": "vertical",
+                          "gap": 17,
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "H7mMD7",
+                              "name": "Frame",
+                              "clip": true,
+                              "width": 16,
+                              "height": 16,
+                              "fill": {
+                                "type": "color",
+                                "color": "#ffffffff",
+                                "enabled": false
+                              },
+                              "layout": "none",
+                              "children": [
+                                {
+                                  "type": "path",
+                                  "id": "WXmEq",
+                                  "x": 4,
+                                  "y": 6,
+                                  "name": "Vector",
+                                  "geometry": "M12 6l-6-6-6 6",
+                                  "width": 8,
+                                  "height": 4,
+                                  "stroke": "#26bc00ff",
+                                  "strokeWidth": 1.3333333730697632,
+                                  "strokeLinejoin": "round",
+                                  "strokeLinecap": "round"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "yeWsv",
+                              "name": "Frame 9",
+                              "height": "fill_container",
+                              "gap": 10,
+                              "padding": [
+                                8,
+                                0,
+                                0,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "cornerRadius": 2,
+                                  "id": "J93HxA",
+                                  "name": "Rectangle 1",
+                                  "fill": "#26bc00ff",
+                                  "width": 4,
+                                  "height": 71
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "WjEcP",
+                              "name": "Frame",
+                              "rotation": 179.99999499104388,
+                              "clip": true,
+                              "width": 16.000001907348633,
+                              "height": 15.999999046325684,
+                              "fill": {
+                                "type": "color",
+                                "color": "#ffffffff",
+                                "enabled": false
+                              },
+                              "layout": "none",
+                              "children": [
+                                {
+                                  "type": "path",
+                                  "id": "gwTXz",
+                                  "x": 4.000000476837158,
+                                  "y": 5.999999523162842,
+                                  "name": "Vector",
+                                  "geometry": "M12 6l-6-6-6 6",
+                                  "width": 8.000000953674316,
+                                  "height": 3.999999761581421,
+                                  "stroke": "#26bc00ff",
+                                  "strokeWidth": 1.3333333730697632,
+                                  "strokeLinejoin": "round",
+                                  "strokeLinecap": "round"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "ZdWPZ",
+                      "x": 281,
+                      "y": 196,
+                      "name": "Страница: 1 из 2",
+                      "enabled": false,
+                      "fill": "#26bc00ff",
+                      "content": "Страница: 1 из 2",
+                      "lineHeight": 1.8666666666666667,
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "nlIjg",
+              "layoutPosition": "absolute",
+              "x": 564,
+              "y": 16,
+              "name": "status bar",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "FIwG6",
+                  "name": "icon",
+                  "clip": true,
+                  "width": 20,
+                  "height": 20,
+                  "fill": {
+                    "type": "color",
+                    "color": "#ffffffff",
+                    "enabled": false
+                  },
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "path",
+                      "id": "kEMa5",
+                      "x": 10,
+                      "y": 16.66666603088379,
+                      "name": "Vector",
+                      "geometry": "M0 0l0.01 0",
+                      "width": 0.008333523757755756,
+                      "height": 0,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    },
+                    {
+                      "type": "path",
+                      "id": "EfN6N",
+                      "x": 1.6666666269302368,
+                      "y": 4.166950225830078,
+                      "name": "Vector",
+                      "geometry": "M0 3.81966c2.75011-2.45977 6.31034-3.81966 10-3.81966 3.68966 0 7.24989 1.35989 10 3.81966",
+                      "width": 16.66666603088379,
+                      "height": 3.1830496788024902,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    },
+                    {
+                      "type": "path",
+                      "id": "SMrhj",
+                      "x": 4.166666507720947,
+                      "y": 8.333690643310547,
+                      "name": "Vector",
+                      "geometry": "M0 2.85857c1.86929-1.83227 4.38247-2.85857 7-2.85857 2.61753 0 5.13071 1.0263 7 2.85857",
+                      "width": 11.666666984558105,
+                      "height": 2.382143259048462,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    },
+                    {
+                      "type": "path",
+                      "id": "kRYv2",
+                      "x": 7.083333492279053,
+                      "y": 12.499761581420898,
+                      "name": "Vector",
+                      "geometry": "M0 1.19107c0.77887-0.76345 1.82603-1.19107 2.91667-1.19107 1.09064 0 2.1378 0.42763 2.91666 1.19107",
+                      "width": 5.833333492279053,
+                      "height": 1.1910724639892578,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "O3EHUc",
+                  "name": "icon",
+                  "clip": true,
+                  "width": 20,
+                  "height": 20,
+                  "fill": {
+                    "type": "color",
+                    "color": "#ffffffff",
+                    "enabled": false
+                  },
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "path",
+                      "id": "OL0g1",
+                      "x": 1.6666663885116577,
+                      "y": 7.5,
+                      "name": "Vector",
+                      "geometry": "M4 9l-2 0c-0.53043 0-1.03914-0.21071-1.41421-0.58579-0.37507-0.37507-0.58579-0.88378-0.58579-1.41421l0-5c0-0.53043 0.21071-1.03914 0.58579-1.41421 0.37507-0.37507 0.88378-0.58579 1.41421-0.58579l16 0c0.53043 0 1.03914 0.21071 1.41421 0.58579 0.37507 0.37507 0.58579 0.88378 0.58579 1.41421l0 5c0 0.53043-0.21071 1.03914-0.58579 1.41421-0.37507 0.37507-0.88378 0.58579-1.41421 0.58579l-2 0",
+                      "width": 16.666667938232422,
+                      "height": 7.5,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    },
+                    {
+                      "type": "path",
+                      "id": "uKdCL",
+                      "x": 5,
+                      "y": 1.6666663885116577,
+                      "name": "Vector",
+                      "geometry": "M0 7l0-6c0-0.26522 0.10536-0.51957 0.29289-0.70711 0.18754-0.18754 0.44189-0.29289 0.70711-0.29289l10 0c0.26522 0 0.51957 0.10536 0.70711 0.29289 0.18754 0.18754 0.29289 0.44189 0.29289 0.70711l0 6",
+                      "width": 10,
+                      "height": 5.833333969116211,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    },
+                    {
+                      "type": "path",
+                      "id": "SHyg5",
+                      "x": 5,
+                      "y": 11.666666030883789,
+                      "name": "Vector",
+                      "geometry": "M1 0l10 0c0.55228 0 1 0.44772 1 1l0 6c0 0.55228-0.44772 1-1 1l-10 0c-0.55228 0-1-0.44772-1-1l0-6c0-0.55228 0.44772-1 1-1z",
+                      "width": 10,
+                      "height": 6.6666669845581055,
+                      "stroke": "#000000ff",
+                      "strokeWidth": 2,
+                      "strokeLinejoin": "round",
+                      "strokeLinecap": "round"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
