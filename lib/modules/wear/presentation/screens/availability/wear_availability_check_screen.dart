@@ -4,12 +4,15 @@ import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
+import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_flow_state.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
+import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availability_glasses_payloads.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_input_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/availability/cubit/wear_availability_check_cubit.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/printers/wear_printer_select_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
@@ -117,7 +120,7 @@ class _WearAvailabilityCheckScreenState
                 onNo: () =>
                     ref.read(provider.notifier).answerProductAvailable(false),
                 onManualInput: () => _manualInput(provider),
-                onPrint: () => ref.read(provider.notifier).printPriceTag(),
+                onPrint: () => _printPriceTag(provider),
                 onPhoto: () => ref.read(provider.notifier).capturePhoto(),
                 onComplete: () => ref.read(provider.notifier).complete(),
                 onBackToList: () => context.pop(),
@@ -174,7 +177,7 @@ class _WearAvailabilityCheckScreenState
         _manualInput(provider);
         break;
       case WearAvailabilityFlowStep.priceTagOutdated:
-        ref.read(provider.notifier).printPriceTag();
+        _printPriceTag(provider);
         break;
       case WearAvailabilityFlowStep.photoCapture:
         ref.read(provider.notifier).capturePhoto();
@@ -207,6 +210,21 @@ class _WearAvailabilityCheckScreenState
     );
     if (code == null || code.trim().isEmpty) return;
     ref.read(provider.notifier).handleBarcode(code.trim());
+  }
+
+  Future<void> _printPriceTag(
+    AutoDisposeStateNotifierProvider<WearAvailabilityCheckNotifier,
+            WearAvailabilityCheckState>
+        provider,
+  ) async {
+    final WearPrinterSelection? selection =
+        await context.push<WearPrinterSelection>(
+      WearPrinterSelectScreen.route,
+      extra: true,
+    );
+    if (!mounted || selection == null) return;
+    WearSession.setPrinterSelection(selection);
+    ref.read(provider.notifier).printPriceTag();
   }
 
   Widget _buildMessage(String message) {

@@ -84,7 +84,9 @@ class WearRoute {
         GoRoute(
           path: WearPrinterSelectScreen.route,
           builder: (BuildContext context, GoRouterState state) {
-            return const WearPrinterSelectScreen();
+            return WearPrinterSelectScreen(
+              returnSelection: state.extra == true,
+            );
           },
         ),
         GoRoute(

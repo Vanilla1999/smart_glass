@@ -512,15 +512,24 @@ class WearFlowController {
         WearAvailabilityGlassesPayloads.interactionTypes(
           selectedIndex: state.availabilityInteractionFocusedIndex,
         ),
-      WearScreenId.availabilityGroup ||
-      WearScreenId.availabilityProduct ||
-      WearScreenId.availabilityDirectScan ||
-      WearScreenId.availabilityCheck ||
-      WearScreenId.availabilityFill =>
-        WearGlassesPayload.loading(
-          screenType: WearGlassesScreenType.availability,
-          title: 'Доступность',
-          statusText: 'Открываем раздел...',
+      WearScreenId.availabilityGroup => WearAvailabilityGlassesPayloads.loading(
+          title: 'Товарная группа',
+          statusText: 'Загружаем...',
+        ),
+      WearScreenId.availabilityProduct =>
+        WearAvailabilityGlassesPayloads.loading(
+          title: 'Товарная позиция',
+          statusText: 'Загружаем...',
+        ),
+      WearScreenId.availabilityDirectScan =>
+        WearAvailabilityGlassesPayloads.directScanWaiting(),
+      WearScreenId.availabilityCheck => WearAvailabilityGlassesPayloads.loading(
+          title: 'Проверка товара',
+          statusText: 'Загружаем...',
+        ),
+      WearScreenId.availabilityFill => WearAvailabilityGlassesPayloads.loading(
+          title: 'Наполнение базы',
+          statusText: 'Загружаем...',
         ),
       WearScreenId.productSelect => WearGlassesPayload.loading(
           screenType: WearGlassesScreenType.productSelect,

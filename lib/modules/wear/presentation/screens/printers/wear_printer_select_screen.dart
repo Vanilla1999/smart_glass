@@ -21,11 +21,16 @@ import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
 class WearPrinterSelectScreen extends ConsumerStatefulWidget {
-  const WearPrinterSelectScreen({super.key, this.flowController});
+  const WearPrinterSelectScreen({
+    super.key,
+    this.flowController,
+    this.returnSelection = false,
+  });
 
   static const String route = '/wear_printer_select';
 
   final WearFlowController? flowController;
+  final bool returnSelection;
 
   @override
   ConsumerState<WearPrinterSelectScreen> createState() =>
@@ -322,6 +327,11 @@ class _WearPrinterSelectScreenState
     WearSession.setPrinterSelection(selection);
     _isScanScreenOpen = true;
     print('[BACK-DEBUG] PrinterSelect._openScanScreen: pushing scan screen');
+    if (widget.returnSelection) {
+      context.pop(selection);
+      return;
+    }
+
     await context.push(WearScanIdleScreen.route, extra: selection);
     _isScanScreenOpen = false;
     print(
