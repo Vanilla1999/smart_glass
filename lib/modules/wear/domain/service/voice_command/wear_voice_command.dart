@@ -4,4 +4,6 @@ enum WearVoiceCommand {
   select,
   back,
   home,
+  finish,
+  flashlight,
 }

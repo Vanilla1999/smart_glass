@@ -59,6 +59,9 @@ class _WearPrinterSelectScreenState
         onSelect: _onVoiceSelect,
       ),
     );
+    if (widget.returnSelection) {
+      ref.read(wearPrinterSelectNotifierProvider.notifier).resetSelection();
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _sendGlassesState(ref.read(wearPrinterSelectNotifierProvider));
     });

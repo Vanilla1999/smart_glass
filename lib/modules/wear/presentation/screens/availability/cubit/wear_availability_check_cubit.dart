@@ -30,6 +30,8 @@ final AutoDisposeStateNotifierProviderFamily<
 
 enum WearAvailabilityCheckPhase { idle, loading }
 
+enum WearAvailabilityPhotoPhase { ready, taking, saving }
+
 class WearAvailabilityCheckState {
   const WearAvailabilityCheckState({
     required this.phase,
@@ -37,6 +39,7 @@ class WearAvailabilityCheckState {
     required this.navStatus,
     required this.loadingText,
     required this.loadingIcon,
+    required this.photoPhase,
   });
 
   factory WearAvailabilityCheckState.initial(
@@ -55,6 +58,7 @@ class WearAvailabilityCheckState {
       navStatus: null,
       loadingText: 'Обрабатываем...',
       loadingIcon: WearImages.barcode,
+      photoPhase: WearAvailabilityPhotoPhase.ready,
     );
   }
 
@@ -63,6 +67,7 @@ class WearAvailabilityCheckState {
   final WearStatusScreenArgs? navStatus;
   final String loadingText;
   final String loadingIcon;
+  final WearAvailabilityPhotoPhase photoPhase;
 
   bool get isLoading => phase == WearAvailabilityCheckPhase.loading;
 
@@ -72,6 +77,7 @@ class WearAvailabilityCheckState {
     WearStatusScreenArgs? navStatus,
     String? loadingText,
     String? loadingIcon,
+    WearAvailabilityPhotoPhase? photoPhase,
     bool clearNav = false,
   }) {
     return WearAvailabilityCheckState(
@@ -80,6 +86,7 @@ class WearAvailabilityCheckState {
       navStatus: clearNav ? null : navStatus ?? this.navStatus,
       loadingText: loadingText ?? this.loadingText,
       loadingIcon: loadingIcon ?? this.loadingIcon,
+      photoPhase: photoPhase ?? this.photoPhase,
     );
   }
 }
@@ -150,8 +157,7 @@ class WearAvailabilityCheckNotifier
       );
       return;
     }
-    if (flow.step == WearAvailabilityFlowStep.priceTagScan ||
-        flow.step == WearAvailabilityFlowStep.priceTagOutdated) {
+    if (flow.step == WearAvailabilityFlowStep.priceTagScan) {
       state = state.copyWith(
         flow: _flowUseCase.scanPriceTagBarcode(
           state: flow,
@@ -256,12 +262,22 @@ class WearAvailabilityCheckNotifier
     );
   }
 
-  void capturePhoto() {
+  Future<void> capturePhoto() async {
     if (state.isLoading) return;
     final WearAvailabilityFlowState flow = state.flow;
     if (flow.step != WearAvailabilityFlowStep.photoCapture) return;
     state = state.copyWith(
+      photoPhase: WearAvailabilityPhotoPhase.taking,
+      clearNav: true,
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    if (!mounted) return;
+    state = state.copyWith(photoPhase: WearAvailabilityPhotoPhase.saving);
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    if (!mounted) return;
+    state = state.copyWith(
       flow: _flowUseCase.capturePhoto(flow),
+      photoPhase: WearAvailabilityPhotoPhase.ready,
       clearNav: true,
     );
   }

@@ -656,6 +656,44 @@ void main() {
       expect(controller.state.screen, WearScreenId.homeConfirm);
       expect(navigation.goToCalls.last, WearScreenId.homeConfirm);
     });
+
+    test('flashlight command toggles scanner flashlight action', () async {
+      int flashlightCalls = 0;
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+        flashlightToggle: () async {
+          flashlightCalls++;
+        },
+      );
+
+      await controller.handleVoiceCommand(WearVoiceCommand.flashlight);
+      await controller.handleVoiceCommand(WearVoiceCommand.flashlight);
+
+      expect(flashlightCalls, 2);
+    });
+
+    test('finish command invokes current screen select action', () async {
+      int selectCalls = 0;
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.availabilityCheck);
+      controller.registerScreenActions(
+        WearScreenId.availabilityCheck,
+        WearScreenActionHandler(
+          onSelect: () {
+            selectCalls++;
+          },
+        ),
+      );
+
+      await controller.handleVoiceCommand(WearVoiceCommand.finish);
+
+      expect(selectCalls, 1);
+    });
   });
 }
 

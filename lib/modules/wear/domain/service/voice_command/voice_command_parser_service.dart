@@ -22,6 +22,10 @@ class VoiceCommandParserService {
     'выход': WearVoiceCommand.home,
     'домой': WearVoiceCommand.home,
     'дом': WearVoiceCommand.home,
+    'завершить': WearVoiceCommand.finish,
+    'закончить': WearVoiceCommand.finish,
+    'готово': WearVoiceCommand.finish,
+    'фонарик': WearVoiceCommand.flashlight,
   };
 
   static const Map<WearVoiceCommand, List<String>> _commandTokens =
@@ -31,6 +35,8 @@ class VoiceCommandParserService {
     WearVoiceCommand.select: <String>['выбрать', 'выбери', 'ок', 'окей'],
     WearVoiceCommand.back: <String>['назад'],
     WearVoiceCommand.home: <String>['домой', 'выход'],
+    WearVoiceCommand.finish: <String>['завершить', 'закончить', 'готово'],
+    WearVoiceCommand.flashlight: <String>['фонарик'],
   };
 
   WearVoiceCommand? parse(String text) {

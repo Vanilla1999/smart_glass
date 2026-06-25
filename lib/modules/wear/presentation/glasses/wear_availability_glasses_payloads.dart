@@ -179,11 +179,11 @@ class WearAvailabilityGlassesPayloads {
       WearAvailabilityFlowStep.photoCapture => WearGlassesPayload(
           screenType: WearGlassesScreenType.availability,
           phase: WearGlassesPhase.idle,
-          title: 'Фотофиксация',
+          title: 'Фотоконтроль',
           bodyLines: productLines,
           checkLines: checkLines,
-          statusText: flow.message ?? 'Сделайте фото выкладки',
-          primaryAction: 'Фото сделано',
+          statusText: flow.message ?? 'Сделайте фотографию товара',
+          primaryAction: 'Сделать фото',
         ),
       WearAvailabilityFlowStep.readyToComplete => WearGlassesPayload(
           screenType: WearGlassesScreenType.availability,

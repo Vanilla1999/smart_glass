@@ -73,7 +73,8 @@ class _WearHelpScreenState extends State<WearHelpScreen>
           const SizedBox(height: 8),
           const _HelpSection(
             title: 'Голосовые команды',
-            body: '«Вверх», «Вниз», «Выбрать», «Назад», «Домой»',
+            body:
+                '«Вверх», «Вниз», «Выбрать», «Назад», «Домой»\n«Завершить», «Закончить», «Готово», «Фонарик»',
           ),
           const SizedBox(height: 8),
           const _HelpSection(

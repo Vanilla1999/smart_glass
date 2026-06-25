@@ -86,7 +86,8 @@ class _WearAvailabilityCheckScreenState
             WearAvailabilityCheckState next) {
       if (previous?.flow != next.flow ||
           previous?.phase != next.phase ||
-          previous?.loadingText != next.loadingText) {
+          previous?.loadingText != next.loadingText ||
+          previous?.photoPhase != next.photoPhase) {
         _sendGlassesState(next);
       }
       if (previous?.navStatus != next.navStatus && next.navStatus != null) {
@@ -252,9 +253,24 @@ class _WearAvailabilityCheckScreenState
         return;
       }
       WearStatusIconReporter.I.send(
-        WearAvailabilityGlassesPayloads.fromFlow(flow),
+        _glassesPayload(state),
       );
     });
+  }
+
+  WearGlassesPayload _glassesPayload(WearAvailabilityCheckState state) {
+    final WearAvailabilityFlowState flow = state.flow;
+    if (flow.step != WearAvailabilityFlowStep.photoCapture) {
+      return WearAvailabilityGlassesPayloads.fromFlow(flow);
+    }
+    final String statusText = switch (state.photoPhase) {
+      WearAvailabilityPhotoPhase.ready => 'Сделайте фотографию товара',
+      WearAvailabilityPhotoPhase.taking => 'Снимаю...',
+      WearAvailabilityPhotoPhase.saving => 'Сохраняю...',
+    };
+    return WearAvailabilityGlassesPayloads.fromFlow(
+      flow.copyWith(message: statusText),
+    );
   }
 
   Future<void> _openOrReplaceStatus(WearStatusScreenArgs args) async {
@@ -310,7 +326,7 @@ class _CheckContent extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         Text(
-          _screenTitle(flow.step),
+          _screenTitle(state),
           style: WearTypography.lable18,
           textAlign: TextAlign.center,
         ),
@@ -333,7 +349,7 @@ class _CheckContent extends StatelessWidget {
           ),
         const SizedBox(height: 16),
         Text(
-          flow.message ?? _defaultMessage(flow.step),
+          _message(state),
           style: WearTypography.bodysml.copyWith(
             color: flow.step == WearAvailabilityFlowStep.manualInventoryRequired
                 ? WearColors.buttonPrimary
@@ -356,17 +372,28 @@ class _CheckContent extends StatelessWidget {
     );
   }
 
-  String _screenTitle(WearAvailabilityFlowStep step) {
-    return switch (step) {
+  String _screenTitle(WearAvailabilityCheckState state) {
+    return switch (state.flow.step) {
       WearAvailabilityFlowStep.productQuestion => 'Товар есть на полке?',
       WearAvailabilityFlowStep.productScan => 'Сканирование товара',
       WearAvailabilityFlowStep.priceTagScan => 'Проверка ценника',
       WearAvailabilityFlowStep.priceTagOutdated => 'Ценник неактуален',
-      WearAvailabilityFlowStep.photoCapture => 'Фотофиксация',
+      WearAvailabilityFlowStep.photoCapture => 'Фотоконтроль',
       WearAvailabilityFlowStep.readyToComplete => 'Завершение проверки',
       WearAvailabilityFlowStep.manualInventoryRequired => 'Требуется действие',
       WearAvailabilityFlowStep.completed => 'Проверка завершена',
       _ => 'Доступность',
+    };
+  }
+
+  String _message(WearAvailabilityCheckState state) {
+    if (state.flow.step != WearAvailabilityFlowStep.photoCapture) {
+      return state.flow.message ?? _defaultMessage(state.flow.step);
+    }
+    return switch (state.photoPhase) {
+      WearAvailabilityPhotoPhase.ready => 'Сделайте фотографию товара',
+      WearAvailabilityPhotoPhase.taking => 'Снимаю...',
+      WearAvailabilityPhotoPhase.saving => 'Сохраняю...',
     };
   }
 
@@ -375,7 +402,7 @@ class _CheckContent extends StatelessWidget {
       WearAvailabilityFlowStep.productScan => 'Отсканируйте ШК товара',
       WearAvailabilityFlowStep.priceTagScan => 'Отсканируйте ценник',
       WearAvailabilityFlowStep.priceTagOutdated => 'Напечатайте новый ценник',
-      WearAvailabilityFlowStep.photoCapture => 'Сделайте фото выкладки',
+      WearAvailabilityFlowStep.photoCapture => 'Сделайте фотографию товара',
       WearAvailabilityFlowStep.readyToComplete => 'Можно завершить проверку',
       _ => '',
     };
@@ -450,7 +477,7 @@ class _Actions extends StatelessWidget {
       WearAvailabilityFlowStep.photoCapture => SizedBox(
           width: 150,
           child: WearPill(
-            title: 'Фото сделано',
+            title: 'Сделать фото',
             onTap: onPhoto,
           ),
         ),

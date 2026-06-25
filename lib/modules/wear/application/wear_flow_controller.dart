@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:multi_scanner/multi_scanner.dart';
 import 'package:smart_glasses/modules/wear/application/ports/wear_glasses_output.dart';
 import 'package:smart_glasses/modules/wear/application/ports/wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
@@ -12,6 +13,7 @@ import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availabilit
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 
 typedef WearFlowAction = FutureOr<void> Function();
+typedef WearFlashlightToggle = Future<void> Function();
 
 class WearScreenActionHandler {
   const WearScreenActionHandler({
@@ -33,8 +35,10 @@ class WearFlowController {
   WearFlowController({
     required WearGlassesOutput glassesOutput,
     required WearNavigationOutput navigationOutput,
+    WearFlashlightToggle? flashlightToggle,
   })  : _glassesOutput = glassesOutput,
-        _navigationOutput = navigationOutput;
+        _navigationOutput = navigationOutput,
+        _flashlightToggle = flashlightToggle ?? _toggleScannerFlashlight;
 
   static const int _menuItemCount = 4;
   static const int _homeConfirmItemCount = 2;
@@ -50,6 +54,7 @@ class WearFlowController {
   final Map<WearScreenId, WearScreenActionHandler> _screenActions =
       <WearScreenId, WearScreenActionHandler>{};
   final List<WearVoiceCommand> _commandQueue = <WearVoiceCommand>[];
+  final WearFlashlightToggle _flashlightToggle;
   bool _isProcessingCommand = false;
 
   WearFlowState get state => _state;
@@ -165,6 +170,12 @@ class WearFlowController {
           case WearVoiceCommand.home:
             await _handleHome();
             break;
+          case WearVoiceCommand.finish:
+            await _handleFinish();
+            break;
+          case WearVoiceCommand.flashlight:
+            await _flashlightToggle();
+            break;
         }
       } catch (error, stackTrace) {
         print('[WearFlowController] command error=$error\n$stackTrace');
@@ -257,6 +268,17 @@ class WearFlowController {
     }
     _setState(_state.copyWith(homeConfirmReturnScreen: returnScreen));
     await _navigateTo(WearScreenId.homeConfirm);
+  }
+
+  Future<void> _handleFinish() async {
+    if (_uiLifecycle == WearUiLifecycle.inactive) return;
+    await _invokeScreenAction(_state.screen, (handler) => handler.onSelect);
+  }
+
+  static Future<void> _toggleScannerFlashlight() async {
+    final dynamic controller = MultiScannerController();
+    final int currentState = await controller.getFlashlightState();
+    await controller.setFlashlight(currentState == 1 ? 0 : 1);
   }
 
   Future<void> _navigateTo(

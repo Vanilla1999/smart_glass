@@ -24,6 +24,10 @@ void main() {
         'назад': WearVoiceCommand.back,
         'домой': WearVoiceCommand.home,
         'дом': WearVoiceCommand.home,
+        'завершить': WearVoiceCommand.finish,
+        'закончить': WearVoiceCommand.finish,
+        'готово': WearVoiceCommand.finish,
+        'фонарик': WearVoiceCommand.flashlight,
       };
 
       for (final MapEntry<String, WearVoiceCommand> entry in cases.entries) {
@@ -35,6 +39,7 @@ void main() {
       expect(parser.parse('  ВЫБЕРИ! '), WearVoiceCommand.select);
       expect(parser.parse('Назад.'), WearVoiceCommand.back);
       expect(parser.parse('Окей,'), WearVoiceCommand.select);
+      expect(parser.parse('Фонарик.'), WearVoiceCommand.flashlight);
     });
 
     test('parses command token inside short recognition phrase', () {
@@ -42,6 +47,9 @@ void main() {
       expect(parser.parse('листай вниз пожалуйста'), WearVoiceCommand.down);
       expect(parser.parse('можно выбрать'), WearVoiceCommand.select);
       expect(parser.parse('перейти домой'), WearVoiceCommand.home);
+      expect(parser.parse('включи фонарик пожалуйста'),
+          WearVoiceCommand.flashlight);
+      expect(parser.parse('можно завершить'), WearVoiceCommand.finish);
     });
 
     test('does not parse partial words as commands', () {

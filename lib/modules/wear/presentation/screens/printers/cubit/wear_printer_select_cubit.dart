@@ -55,13 +55,17 @@ class WearPrinterSelectState {
     WearPrinter? yellowPrinter,
     WearPrinterSelectStep? step,
     bool clearError = false,
+    bool clearWhitePrinter = false,
+    bool clearYellowPrinter = false,
   }) {
     return WearPrinterSelectState(
       phase: phase ?? this.phase,
       printers: printers ?? this.printers,
       error: clearError ? null : (error ?? this.error),
-      whitePrinter: whitePrinter ?? this.whitePrinter,
-      yellowPrinter: yellowPrinter ?? this.yellowPrinter,
+      whitePrinter:
+          clearWhitePrinter ? null : (whitePrinter ?? this.whitePrinter),
+      yellowPrinter:
+          clearYellowPrinter ? null : (yellowPrinter ?? this.yellowPrinter),
       step: step ?? this.step,
     );
   }
@@ -134,6 +138,14 @@ class WearPrinterSelectNotifier extends StateNotifier<WearPrinterSelectState> {
       return;
     }
     state = state.copyWith(yellowPrinter: printer);
+  }
+
+  void resetSelection() {
+    state = state.copyWith(
+      clearWhitePrinter: true,
+      clearYellowPrinter: true,
+      step: WearPrinterSelectStep.white,
+    );
   }
 
   String _asUiMessage(Object error) {

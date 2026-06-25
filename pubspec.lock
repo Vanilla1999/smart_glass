@@ -547,11 +547,11 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: "3.13.4-service"
-      resolved-ref: a8dac32bd327b381af78ab9f0a70f0febe70e331
+      ref: "3.16.1-service"
+      resolved-ref: "4d3fbad7b5c708323bdb7aebc143dea37505de1b"
       url: "https://coderepo.corp.tander.ru/rmr_team/libraries/multiscanner.git"
     source: git
-    version: "3.13.4"
+    version: "3.16.1"
   native_toolchain_c:
     dependency: transitive
     description:
