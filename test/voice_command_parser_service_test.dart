@@ -20,7 +20,9 @@ void main() {
         'ниже': WearVoiceCommand.down,
         'выбери': WearVoiceCommand.select,
         'окей': WearVoiceCommand.select,
-        'да': WearVoiceCommand.select,
+        'да': WearVoiceCommand.yes,
+        'ага': WearVoiceCommand.yes,
+        'нет': WearVoiceCommand.no,
         'назад': WearVoiceCommand.back,
         'домой': WearVoiceCommand.home,
         'дом': WearVoiceCommand.home,
@@ -39,6 +41,8 @@ void main() {
       expect(parser.parse('  ВЫБЕРИ! '), WearVoiceCommand.select);
       expect(parser.parse('Назад.'), WearVoiceCommand.back);
       expect(parser.parse('Окей,'), WearVoiceCommand.select);
+      expect(parser.parse('Да.'), WearVoiceCommand.yes);
+      expect(parser.parse('Нет,'), WearVoiceCommand.no);
       expect(parser.parse('Фонарик.'), WearVoiceCommand.flashlight);
     });
 
@@ -46,6 +50,8 @@ void main() {
       expect(parser.parse('иди вверх'), WearVoiceCommand.up);
       expect(parser.parse('листай вниз пожалуйста'), WearVoiceCommand.down);
       expect(parser.parse('можно выбрать'), WearVoiceCommand.select);
+      expect(parser.parse('да можно'), WearVoiceCommand.yes);
+      expect(parser.parse('нет нельзя'), WearVoiceCommand.no);
       expect(parser.parse('перейти домой'), WearVoiceCommand.home);
       expect(parser.parse('включи фонарик пожалуйста'),
           WearVoiceCommand.flashlight);

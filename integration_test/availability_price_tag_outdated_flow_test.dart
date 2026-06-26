@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:smart_glasses/core/constants/app_constants.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
@@ -18,8 +20,22 @@ import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_stat
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
+  const MethodChannel appChannel = MethodChannel(AppConstants.appChannelName);
+  final List<Map<String, dynamic>> glassesPayloads = <Map<String, dynamic>>[];
+
   setUp(() {
-    dotenv.testLoad(fileInput: 'WEAR_USE_MOCKS=true');
+    dotenv.testLoad(
+      fileInput: 'WEAR_USE_MOCKS=true\nWEAR_GLASSES_ENABLED=true',
+    );
+    glassesPayloads.clear();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(appChannel, (MethodCall call) async {
+      if (call.method == 'updateWearGlasses' ||
+          call.method == 'showWearGlasses') {
+        glassesPayloads.add(Map<String, dynamic>.from(call.arguments as Map));
+      }
+      return null;
+    });
     WearSession.clear();
     WearSession.setUser(
       AuthenticatedUser(
@@ -37,6 +53,8 @@ void main() {
   });
 
   tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(appChannel, null);
     WearSession.clear();
     dotenv.clean();
   });
@@ -75,6 +93,15 @@ void main() {
 
       expect(find.text('Ценник неактуален'), findsWidgets);
       expect(find.text('Напечатать'), findsWidgets);
+      final Map<String, dynamic> outdatedPayload = await _pumpUntilPayload(
+        tester,
+        glassesPayloads,
+        (Map<String, dynamic> payload) =>
+            payload['title'] == 'Ценник не актуален' &&
+            payload['primaryAction'] == 'Напечатать',
+      );
+      expect(outdatedPayload['screenType'], 'availability');
+      expect(outdatedPayload['statusText'], 'Ценник неактуален');
 
       await tester.tap(find.text('Напечатать'));
       await tester.pump(const Duration(milliseconds: 300));
@@ -114,6 +141,24 @@ Future<void> _pumpUntilFound(
     }
   }
   expect(finder, findsOneWidget);
+}
+
+Future<Map<String, dynamic>> _pumpUntilPayload(
+  WidgetTester tester,
+  List<Map<String, dynamic>> payloads,
+  bool Function(Map<String, dynamic> payload) matches, {
+  Duration timeout = const Duration(seconds: 5),
+}) async {
+  final DateTime end = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(end)) {
+    await tester.pump(const Duration(milliseconds: 100));
+    for (final Map<String, dynamic> payload in payloads.reversed) {
+      if (matches(payload)) {
+        return payload;
+      }
+    }
+  }
+  fail('Expected glasses payload was not sent. Payloads: $payloads');
 }
 
 GoRouter _router(WearAvailabilityProduct product) {

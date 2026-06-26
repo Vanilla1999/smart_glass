@@ -48,6 +48,18 @@ class _WearAvailabilityGroupScreenState
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final List<WearAvailabilityGroup>? groups =
+          ref.read(wearAvailabilityGroupsProvider).valueOrNull;
+      if (groups == null) return;
+      _sendGlassesState(groups, fast: true);
+    });
+  }
+
+  @override
   void dispose() {
     WearDependencies.I.wearFlowController.unregisterScreenActions(
       WearScreenId.availabilityGroup,
@@ -197,17 +209,28 @@ class _WearAvailabilityGroupScreenState
         groups,
         selectedIndex: _focusedIndex,
       );
+      WearDependencies.I.wearFlowController.rememberScreenPayload(
+        WearScreenId.availabilityGroup,
+        payload,
+      );
       if (fast) {
-        WearStatusIconReporter.I.sendFast(payload);
+        WearStatusIconReporter.I.sendFastForScreen(
+          WearScreenId.availabilityGroup,
+          payload,
+        );
       } else {
-        WearStatusIconReporter.I.send(payload);
+        WearStatusIconReporter.I.sendForScreen(
+          WearScreenId.availabilityGroup,
+          payload,
+        );
       }
     });
   }
 
   void _sendLoading() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      WearStatusIconReporter.I.send(
+      WearStatusIconReporter.I.sendForScreen(
+        WearScreenId.availabilityGroup,
         WearAvailabilityGlassesPayloads.loading(
           title: 'Доступность',
           statusText: 'Загружаем...',
@@ -219,7 +242,8 @@ class _WearAvailabilityGroupScreenState
 
   void _sendError(Object error) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      WearStatusIconReporter.I.send(
+      WearStatusIconReporter.I.sendForScreen(
+        WearScreenId.availabilityGroup,
         WearAvailabilityGlassesPayloads.error(
           title: 'Ошибка доступности',
           message: _asUiMessage(error),

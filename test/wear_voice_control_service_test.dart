@@ -199,6 +199,9 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   @override
   int? get lastAudioChunkAtMillis => null;
 
+  @override
+  int? get lastNonSilentAudioChunkAtMillis => null;
+
   void emitResult(String text) {
     _resultsController.add(text);
   }

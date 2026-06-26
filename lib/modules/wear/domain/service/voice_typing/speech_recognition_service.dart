@@ -8,8 +8,7 @@ import 'package:vosk_flutter_service/vosk_flutter.dart' as vosk;
 
 class SpeechRecognitionService {
   static const int _sampleRate = 16000;
-  static const String _modelAssetPath =
-      'assets/vosk-model-small-ru-0.22.zip';
+  static const String _modelAssetPath = 'assets/vosk-model-small-ru-0.22.zip';
 
   final vosk.VoskFlutterPlugin _vosk = vosk.VoskFlutterPlugin.instance();
   final vosk.ModelLoader _modelLoader = vosk.ModelLoader();
@@ -39,6 +38,8 @@ class SpeechRecognitionService {
   bool get isSessionActive => _isSessionActive;
   bool get isListening => _isListening;
   int? get lastAudioChunkAtMillis => _audioStream.lastChunkAtMillis;
+  int? get lastNonSilentAudioChunkAtMillis =>
+      _audioStream.lastNonSilentChunkAtMillis;
 
   Future<bool> requestMicrophonePermission() {
     return _audioStream.requestPermission();
@@ -105,7 +106,8 @@ class SpeechRecognitionService {
       await operation();
       print('[SpeechRecognitionService] lifecycle operation done: $label');
     });
-    _lifecycleOperation = next.catchError((Object error, StackTrace stackTrace) {
+    _lifecycleOperation =
+        next.catchError((Object error, StackTrace stackTrace) {
       print(
         '[SpeechRecognitionService] lifecycle operation failed: '
         '$label error=$error\n$stackTrace',
@@ -162,7 +164,8 @@ class SpeechRecognitionService {
     await _audioStream.stop();
     await stopSession();
     _isListening = false;
-    print('[SpeechRecognitionService] stopped listening: ${await diagnostics()}');
+    print(
+        '[SpeechRecognitionService] stopped listening: ${await diagnostics()}');
   }
 
   Future<String> diagnostics() async {
@@ -231,7 +234,7 @@ class SpeechRecognitionService {
       ]);
       if (resultText.isNotEmpty) {
         final t1 = DateTime.now().millisecondsSinceEpoch;
-        print('[VOSK][FINAL] $resultText at $t1 (vosk_latency: ${t1-t0}ms)');
+        print('[VOSK][FINAL] $resultText at $t1 (vosk_latency: ${t1 - t0}ms)');
         if (!_resultsController.isClosed) {
           _resultsController.add(resultText);
         }
@@ -260,7 +263,8 @@ class SpeechRecognitionService {
       return;
     }
 
-    print('[SpeechRecognitionService] load model asset begin path=$_modelAssetPath');
+    print(
+        '[SpeechRecognitionService] load model asset begin path=$_modelAssetPath');
     final modelPath = await _modelLoader.loadFromAssets(_modelAssetPath);
     print('[SpeechRecognitionService] load model asset done path=$modelPath');
     print('[SpeechRecognitionService] create model begin');

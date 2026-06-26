@@ -41,6 +41,7 @@ class WearVoiceControlService {
   WearVoiceCommand? _lastEmittedPartialCommand;
   int _lastEmittedPartialCommandAt = 0;
   int _recognitionEventSeq = 0;
+  int _emittedCommandSeq = 0;
 
   static const int _duplicatePartialMs = 1200;
   static const int _matchingFinalSuppressMs = 1500;
@@ -63,7 +64,8 @@ class WearVoiceControlService {
     if (_isMatchingFinalForRecentPartial(cmd, t0)) {
       print(
         '[WearVoiceControlService] skip final matching emitted partial: '
-        '$cmd seq=$seq age=${t0 - _lastEmittedPartialCommandAt}ms',
+        '$cmd seq=$seq age=${t0 - _lastEmittedPartialCommandAt}ms '
+        'suppressWindowMs=$_matchingFinalSuppressMs',
       );
       return;
     }
@@ -87,7 +89,11 @@ class WearVoiceControlService {
       return;
     }
     if (_isDuplicatePartialCommand(cmd, t0)) {
-      print('[WearVoiceControlService] skip duplicate partial command: $cmd');
+      print(
+        '[WearVoiceControlService] skip duplicate partial command: $cmd '
+        'seq=$seq age=${t0 - _lastPartialCommandAt}ms '
+        'duplicateWindowMs=$_duplicatePartialMs',
+      );
       return;
     }
     _lastPartialCommand = cmd;
@@ -114,9 +120,11 @@ class WearVoiceControlService {
   }) {
     if (!_commandController.isClosed) {
       final t1 = _now();
+      final int emitSeq = ++_emittedCommandSeq;
       print(
-        '[WearVoiceControlService] emitting $source command: $cmd at $t1 '
-        '(parse_latency: ${t1 - startedAt}ms)',
+        '[WearVoiceControlService] emitting#$emitSeq $source command: $cmd '
+        'at=$t1 parseLatencyMs=${t1 - startedAt} '
+        'hasListener=${_commandController.hasListener}',
       );
       _commandController.add(cmd);
     }

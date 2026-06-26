@@ -35,16 +35,23 @@ class WearAvailabilityGlassesPayloads {
     List<WearAvailabilityProduct> products, {
     int selectedIndex = 0,
   }) {
+    final int selected = selectedIndex.clamp(0, products.length - 1);
+    final int start = _pageStart(selected);
+    final List<WearAvailabilityProduct> visibleProducts = products
+        .skip(start)
+        .take(_visibleListItemCount)
+        .toList(growable: false);
+
     return WearGlassesPayload(
       screenType: WearGlassesScreenType.availability,
       phase: WearGlassesPhase.idle,
       title: 'Дубль ШК',
       subtitle: 'Выберите товар',
-      items: products
+      items: visibleProducts
           .map((WearAvailabilityProduct product) => product.name)
           .toList(growable: false),
-      selectedIndex: selectedIndex.clamp(0, products.length - 1),
-      pageText: _pageText(products.length),
+      selectedIndex: selected - start,
+      pageText: _pageText(products.length, selected),
     );
   }
 
@@ -61,16 +68,21 @@ class WearAvailabilityGlassesPayloads {
       );
     }
 
+    final int selected = selectedIndex.clamp(0, groups.length - 1);
+    final int start = _pageStart(selected);
+    final List<WearAvailabilityGroup> visibleGroups =
+        groups.skip(start).take(_visibleListItemCount).toList(growable: false);
+
     return WearGlassesPayload(
       screenType: WearGlassesScreenType.availability,
       phase: WearGlassesPhase.idle,
       title: 'Товарная группа',
-      items: groups
+      items: visibleGroups
           .map((WearAvailabilityGroup group) =>
               '${group.name} · ${group.counter}')
           .toList(growable: false),
-      selectedIndex: selectedIndex.clamp(0, groups.length - 1),
-      pageText: _pageText(groups.length),
+      selectedIndex: selected - start,
+      pageText: _pageText(groups.length, selected),
     );
   }
 
@@ -88,19 +100,26 @@ class WearAvailabilityGlassesPayloads {
       );
     }
 
+    final int selected = selectedIndex.clamp(0, products.length - 1);
+    final int start = _pageStart(selected);
+    final List<WearAvailabilityProduct> visibleProducts = products
+        .skip(start)
+        .take(_visibleListItemCount)
+        .toList(growable: false);
+
     return WearGlassesPayload(
       screenType: WearGlassesScreenType.availability,
       phase: WearGlassesPhase.idle,
       title: 'Товарная позиция',
       subtitle: group.name,
-      items: products
+      items: visibleProducts
           .map(
             (WearAvailabilityProduct product) =>
                 '${product.name} · ост. ${_rest(product.rest)}',
           )
           .toList(growable: false),
-      selectedIndex: selectedIndex.clamp(0, products.length - 1),
-      pageText: _pageText(products.length),
+      selectedIndex: selected - start,
+      pageText: _pageText(products.length, selected),
     );
   }
 
@@ -141,10 +160,10 @@ class WearAvailabilityGlassesPayloads {
       WearAvailabilityFlowStep.productQuestion => WearGlassesPayload(
           screenType: WearGlassesScreenType.availability,
           phase: WearGlassesPhase.idle,
-          title: 'Проверка товарной позиции',
-          bodyLines: productLines,
-          checkLines: checkLines,
-          statusText: 'Товар есть на полке?',
+          title: 'Товар есть на полке?',
+          subtitle: product == null
+              ? null
+              : '${product.name}\nЦена: ${_price(product)}',
           primaryAction: 'Да',
           secondaryAction: 'Нет',
         ),
@@ -208,7 +227,7 @@ class WearAvailabilityGlassesPayloads {
       WearAvailabilityFlowStep.completed => WearGlassesPayload(
           screenType: WearGlassesScreenType.availability,
           phase: WearGlassesPhase.success,
-          title: 'Готово',
+          title: 'Проверка завершена',
           bodyLines: productLines,
           checkLines: checkLines,
           statusText: flow.message ?? 'Проверка товара завершена',
@@ -269,8 +288,16 @@ class WearAvailabilityGlassesPayloads {
     return '${value.toStringAsFixed(2).replaceAll('.', ',')} ₽';
   }
 
-  static String? _pageText(int itemCount) {
-    if (itemCount <= 4) return null;
-    return 'Страница: 1 из ${((itemCount - 1) ~/ 4) + 1}';
+  static const int _visibleListItemCount = 4;
+
+  static int _pageStart(int selectedIndex) {
+    return (selectedIndex ~/ _visibleListItemCount) * _visibleListItemCount;
+  }
+
+  static String? _pageText(int itemCount, int selectedIndex) {
+    if (itemCount <= _visibleListItemCount) return null;
+    final int page = (selectedIndex ~/ _visibleListItemCount) + 1;
+    final int pageCount = ((itemCount - 1) ~/ _visibleListItemCount) + 1;
+    return 'Страница: $page из $pageCount';
   }
 }

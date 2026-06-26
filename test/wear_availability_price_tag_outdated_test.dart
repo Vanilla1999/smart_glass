@@ -7,6 +7,7 @@ import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availa
 import 'package:smart_glasses/modules/wear/domain/availability/repository/wear_availability_repository.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/use_case/wear_availability_flow_use_case.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
+import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availability_glasses_payloads.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/printers/cubit/wear_printer_select_cubit.dart';
 
 void main() {
@@ -64,6 +65,21 @@ void main() {
     expect(notifier.state.whitePrinter, isNull);
     expect(notifier.state.yellowPrinter, isNull);
     expect(notifier.state.step, WearPrinterSelectStep.white);
+  });
+
+  test('product question glasses payload matches shelf question design', () {
+    final payload = WearAvailabilityGlassesPayloads.fromFlow(
+      const WearAvailabilityFlowState(
+        step: WearAvailabilityFlowStep.productQuestion,
+        check: WearAvailabilityProductCheck(product: _outdatedProduct),
+      ),
+    );
+
+    expect(payload.title, 'Товар есть на полке?');
+    expect(payload.subtitle, 'Тестовый товар\nЦена: 99,90 ₽');
+    expect(payload.primaryAction, 'Да');
+    expect(payload.secondaryAction, 'Нет');
+    expect(payload.statusText, isNull);
   });
 }
 

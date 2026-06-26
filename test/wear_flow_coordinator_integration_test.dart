@@ -22,6 +22,7 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
+import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_glasses_output.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
@@ -32,6 +33,7 @@ import 'package:smart_glasses/modules/wear/presentation/screens/printers/wear_pr
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_product_select_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_scan_idle_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_module_app.dart';
+import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Bridges WearGlassesOutput → MethodChannel → GlassesCoordinatorCubit
@@ -74,6 +76,7 @@ Future<void> simulateIncomingMethodCall(
 
 void main() {
   late MethodChannel channel;
+  late MethodChannel appChannel;
   late _CoordinatorBridgeOutput bridgeOutput;
   late _FakeNavigationOutput navigation;
   late WearFlowController flowController;
@@ -84,6 +87,7 @@ void main() {
     TestWidgetsFlutterBinding.ensureInitialized();
 
     channel = MethodChannel(AppConstants.glassesChannelName);
+    appChannel = MethodChannel(AppConstants.appChannelName);
     bridgeOutput = _CoordinatorBridgeOutput(channel);
     navigation = _FakeNavigationOutput();
     lastWearPayload = <String, dynamic>{};
@@ -97,6 +101,11 @@ void main() {
         }
         return null;
       },
+    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      appChannel,
+      (_) async => null,
     );
 
     flowController = WearFlowController(
@@ -118,9 +127,13 @@ void main() {
   });
 
   tearDown(() {
+    WearStatusIconReporter.I.endVoiceStartup();
+    WearStatusIconReporter.I.debugSetCurrentScreenProviderForTesting(null);
     coordinator.close();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(appChannel, null);
   });
 
   group('WearFlowController → GlassesCoordinatorCubit integration', () {
@@ -473,6 +486,202 @@ void main() {
       expect(startVoiceCalls, 1);
     });
 
+    testWidgets('voice startup loader stays until voice start completes',
+        (WidgetTester tester) async {
+      WearSession.clear();
+      final Completer<void> startVoiceCompleter = Completer<void>();
+      final WearFlowController routerFlow = WearFlowController(
+        glassesOutput: FlutterWearGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+
+      await tester.pumpWidget(
+        WearModuleApp(
+          flowController: routerFlow,
+          voiceCommandStream: const Stream<WearVoiceCommand>.empty(),
+          routes: _testRoutes,
+          initialLocation: WearMainScreen.route,
+          onStartVoice: () => startVoiceCompleter.future,
+          onStopVoice: () async {},
+          onRestartVoice: (_) async {},
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      WearSession.setUser(AuthenticatedUser(
+        idUser: 2,
+        idEmployee: 2,
+        name: 'Authorized User',
+      ));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Подготовка голосового\nуправления'), findsOneWidget);
+
+      startVoiceCompleter.complete();
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pump();
+
+      expect(find.text('Подготовка голосового\nуправления'), findsNothing);
+    });
+
+    testWidgets('voice startup loader stays at least five seconds',
+        (WidgetTester tester) async {
+      WearSession.clear();
+      final WearFlowController routerFlow = WearFlowController(
+        glassesOutput: _TestGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+
+      await tester.pumpWidget(
+        WearModuleApp(
+          flowController: routerFlow,
+          voiceCommandStream: const Stream<WearVoiceCommand>.empty(),
+          routes: _testRoutes,
+          initialLocation: WearMainScreen.route,
+          onStartVoice: () async {},
+          onStopVoice: () async {},
+          onRestartVoice: (_) async {},
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      WearSession.setUser(AuthenticatedUser(
+        idUser: 2,
+        idEmployee: 2,
+        name: 'Authorized User',
+      ));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Подготовка голосового\nуправления'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 4, milliseconds: 999));
+      expect(find.text('Подготовка голосового\nуправления'), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 1));
+      await tester.pump();
+      expect(find.text('Подготовка голосового\nуправления'), findsNothing);
+    });
+
+    testWidgets(
+        'voice startup success does not overwrite current glasses screen',
+        (WidgetTester tester) async {
+      WearSession.clear();
+      final Completer<void> startVoiceCompleter = Completer<void>();
+      final _TestGlassesOutput glassesOutput = _TestGlassesOutput();
+      final WearFlowController routerFlow = WearFlowController(
+        glassesOutput: glassesOutput,
+        navigationOutput: _FakeNavigationOutput(),
+      );
+
+      await tester.pumpWidget(
+        WearModuleApp(
+          flowController: routerFlow,
+          voiceCommandStream: const Stream<WearVoiceCommand>.empty(),
+          routes: _testRoutes,
+          initialLocation: WearMainScreen.route,
+          onStartVoice: () => startVoiceCompleter.future,
+          onStopVoice: () async {},
+          onRestartVoice: (_) async {},
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      WearSession.setUser(AuthenticatedUser(
+        idUser: 2,
+        idEmployee: 2,
+        name: 'Authorized User',
+      ));
+      await tester.pump();
+      routerFlow.enterScreen(WearScreenId.menu);
+      await tester.pump();
+
+      expect(
+          glassesOutput.payloads.last.screenType, WearGlassesScreenType.menu);
+
+      startVoiceCompleter.complete();
+      await tester.pumpAndSettle();
+
+      expect(
+          glassesOutput.payloads.last.screenType, WearGlassesScreenType.menu);
+      expect(glassesOutput.payloads.last.title, 'Выбор раздела');
+    });
+
+    test('voice startup loader is not overwritten by auth status', () async {
+      WearStatusIconReporter.I.beginVoiceStartup();
+      addTearDown(WearStatusIconReporter.I.endVoiceStartup);
+
+      await WearStatusIconReporter.I.sendFast(
+        WearGlassesPayload.loading(
+          screenType: WearGlassesScreenType.status,
+          title: 'Голосовое управление',
+          statusText: 'Запускаем голос...',
+          subtitle: 'Пожалуйста, подождите',
+        ),
+      );
+
+      expect(
+          WearStatusIconReporter.I.lastPayload?.title, 'Голосовое управление');
+      expect(WearStatusIconReporter.I.lastPayload?.statusText,
+          'Запускаем голос...');
+
+      await WearStatusIconReporter.I.send(
+        WearGlassesPayload.status(
+          isError: false,
+          title: 'Вошли как',
+          subtitle: 'Колиус',
+          statusText: 'Успешно',
+        ),
+      );
+      await WearStatusIconReporter.I.sendFast(WearGlassesPayload.menu());
+
+      expect(
+          WearStatusIconReporter.I.lastPayload?.title, 'Голосовое управление');
+      expect(WearStatusIconReporter.I.lastPayload?.statusText,
+          'Запускаем голос...');
+
+      WearStatusIconReporter.I.endVoiceStartup();
+      await WearStatusIconReporter.I.sendFast(WearGlassesPayload.menu());
+
+      expect(WearStatusIconReporter.I.lastPayload?.title, 'Выбор раздела');
+    });
+
+    test(
+        'sendFastForScreen drops stale product payload after check becomes current',
+        () async {
+      WearStatusIconReporter.I.debugSetCurrentScreenProviderForTesting(
+        () => WearScreenId.availabilityCheck,
+      );
+      addTearDown(
+        () => WearStatusIconReporter.I.debugSetCurrentScreenProviderForTesting(
+          null,
+        ),
+      );
+
+      await WearStatusIconReporter.I.sendFastForScreen(
+        WearScreenId.availabilityProduct,
+        WearGlassesPayload.loading(
+          screenType: WearGlassesScreenType.availability,
+          title: 'Товарная позиция',
+          statusText: 'Устаревший список',
+        ),
+      );
+      await WearStatusIconReporter.I.sendFastForScreen(
+        WearScreenId.availabilityCheck,
+        const WearGlassesPayload(
+          screenType: WearGlassesScreenType.availability,
+          phase: WearGlassesPhase.idle,
+          title: 'Товар есть на полке?',
+          subtitle: 'Товар\nЦена: 99,90 ₽',
+          primaryAction: 'Да',
+          secondaryAction: 'Нет',
+        ),
+      );
+
+      expect(
+          WearStatusIconReporter.I.lastPayload?.title, 'Товар есть на полке?');
+    });
+
     testWidgets(
         'ASR partial flows through WearVoiceControlService and WearModuleApp to flow',
         (WidgetTester tester) async {
@@ -686,6 +895,9 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
 
   @override
   int? get lastAudioChunkAtMillis => null;
+
+  @override
+  int? get lastNonSilentAudioChunkAtMillis => null;
 
   void emitPartial(String text) {
     _partialController.add(text);

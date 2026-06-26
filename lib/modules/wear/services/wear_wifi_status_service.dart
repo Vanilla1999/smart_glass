@@ -30,9 +30,7 @@ class WearWifiStatusService {
 
   Future<WearWifiStatus> getStatus() async {
     try {
-      print('[WearWifiStatusService] getStatus begin');
       if (WearMockConfig.isEnabled) {
-        print('[WearWifiStatusService] mock status returned');
         return const WearWifiStatus(isAvailable: true, level: 3);
       }
 
@@ -40,19 +38,15 @@ class WearWifiStatusService {
           WidgetsBinding.instance.lifecycleState;
       if (lifecycleState != null &&
           lifecycleState != AppLifecycleState.resumed) {
-        print('[WearWifiStatusService] skipped: lifecycleState=$lifecycleState');
         return const WearWifiStatus(isAvailable: false, level: 0);
       }
 
       final bool canReadWifiDetails = await _ensureWifiDetailsPermission();
       if (!canReadWifiDetails) {
-        print('[WearWifiStatusService] wifi details unavailable, using fallback');
         return const WearWifiStatus(isAvailable: true, level: 1);
       }
 
-      print('[WearWifiStatusService] wifiDetails begin');
       final WifiInfoWrapper? details = await WifiInfoPlugin.wifiDetails;
-      print('[WearWifiStatusService] wifiDetails done detailsNull=${details == null}');
       if (details == null) {
         return const WearWifiStatus(isAvailable: false, level: 0);
       }
@@ -118,26 +112,22 @@ class WearWifiStatusService {
   }
 
   Future<bool> _ensureWifiDetailsPermission() async {
-    final ServiceStatus serviceStatus = await Permission.locationWhenInUse.serviceStatus;
+    final ServiceStatus serviceStatus =
+        await Permission.locationWhenInUse.serviceStatus;
     if (!serviceStatus.isEnabled) {
-      print('[WearWifiStatusService] location service disabled');
       return false;
     }
 
     final PermissionStatus status = await Permission.locationWhenInUse.status;
     if (status.isGranted || status.isLimited) {
-      print('[WearWifiStatusService] location permission already granted');
       return true;
     }
     if (status.isPermanentlyDenied || status.isRestricted) {
-      print('[WearWifiStatusService] location permission unavailable: $status');
       return false;
     }
 
-    print('[WearWifiStatusService] location permission request begin');
     final PermissionStatus requested =
         await Permission.locationWhenInUse.request();
-    print('[WearWifiStatusService] location permission request result=$requested');
     return requested.isGranted || requested.isLimited;
   }
 }

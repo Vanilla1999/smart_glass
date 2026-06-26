@@ -11,6 +11,26 @@
   ],
   "products": [
     {
+      "id": 9000000001,
+      "groupId": 1,
+      "name": "ТЕСТ Молоко ценник не актуален 1л",
+      "code": "9000000001",
+      "barcodes": [
+        "9000000001",
+        "4600000000015"
+      ],
+      "priceTagBarcodes": [
+        "2900000000018"
+      ],
+      "price": 99.99,
+      "loyaltyPrice": null,
+      "rest": 10.0,
+      "checkPrice": true,
+      "photoControl": false,
+      "unpackaged": false,
+      "priceTagActual": false
+    },
+    {
       "id": 3010420008,
       "groupId": 1,
       "name": "ЧУДО Коктейль молочный жид.шоколад 3% 0,2л ТБА(ВБД):27",

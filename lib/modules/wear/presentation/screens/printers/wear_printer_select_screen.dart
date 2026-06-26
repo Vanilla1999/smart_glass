@@ -59,10 +59,11 @@ class _WearPrinterSelectScreenState
         onSelect: _onVoiceSelect,
       ),
     );
-    if (widget.returnSelection) {
-      ref.read(wearPrinterSelectNotifierProvider.notifier).resetSelection();
-    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (widget.returnSelection) {
+        ref.read(wearPrinterSelectNotifierProvider.notifier).resetSelection();
+      }
       _sendGlassesState(ref.read(wearPrinterSelectNotifierProvider));
     });
   }
@@ -224,12 +225,23 @@ class _WearPrinterSelectScreenState
   }
 
   void _onVoiceSelect() {
-    print('[PrinterSelect] _onVoiceSelect called, focusedIndex=$_focusedIndex');
     final WearPrinterSelectState s =
         ref.read(wearPrinterSelectNotifierProvider);
-    if (s.isLoading || s.printers.isEmpty) return;
+    print(
+      '[PrinterSelect] _onVoiceSelect focusedIndex=$_focusedIndex '
+      'phase=${s.phase} step=${s.step} isLoading=${s.isLoading} '
+      'printers=${s.printers.length}',
+    );
+    if (s.isLoading || s.printers.isEmpty) {
+      print('[PrinterSelect] ignore voice select: printers are not ready');
+      return;
+    }
     final List<WearPrinter> printers = _visiblePrinters(s);
     if (_focusedIndex >= 0 && _focusedIndex < printers.length) {
+      print(
+        '[PrinterSelect] voice select printer index=$_focusedIndex '
+        'id=${printers[_focusedIndex].id} name=${printers[_focusedIndex].name}',
+      );
       ref
           .read(wearPrinterSelectNotifierProvider.notifier)
           .selectPrinter(printers[_focusedIndex]);

@@ -41,6 +41,7 @@ class WearAvailabilityCheckScreen extends ConsumerStatefulWidget {
 class _WearAvailabilityCheckScreenState
     extends ConsumerState<WearAvailabilityCheckScreen> {
   bool _isStatusRouteOpen = false;
+  bool _sentInitialGlassesState = false;
   int _statusRouteSession = 0;
 
   @override
@@ -56,6 +57,8 @@ class _WearAvailabilityCheckScreenState
         onUp: _onVoiceUp,
         onDown: _onVoiceDown,
         onSelect: _onVoiceSelectForCurrentProduct,
+        onYes: _onVoiceYes,
+        onNo: _onVoiceNo,
       ),
     );
   }
@@ -92,7 +95,8 @@ class _WearAvailabilityCheckScreenState
       }
       if (previous?.navStatus != next.navStatus && next.navStatus != null) {
         final WearStatusScreenArgs args = next.navStatus!;
-        WearStatusIconReporter.I.send(
+        WearStatusIconReporter.I.sendForScreen(
+          WearScreenId.availabilityCheck,
           WearGlassesPayload.status(
             isError: args.kind == WearStatusKind.error,
             title: args.title,
@@ -106,6 +110,11 @@ class _WearAvailabilityCheckScreenState
         _openOrReplaceStatus(args);
       }
     });
+
+    if (!_sentInitialGlassesState) {
+      _sentInitialGlassesState = true;
+      _sendGlassesState(state);
+    }
 
     return WearScreenScaffold(
       showHomeButton: true,
@@ -153,12 +162,24 @@ class _WearAvailabilityCheckScreenState
   }
 
   void _onVoiceDown() {
+    _answerProductQuestion(false);
+  }
+
+  void _onVoiceYes() {
+    _answerProductQuestion(true);
+  }
+
+  void _onVoiceNo() {
+    _answerProductQuestion(false);
+  }
+
+  void _answerProductQuestion(bool available) {
     final WearAvailabilityProduct? product = widget.product;
     if (product == null) return;
     final provider = wearAvailabilityCheckNotifierProvider(product);
     final WearAvailabilityCheckState state = ref.read(provider);
     if (state.flow.step == WearAvailabilityFlowStep.productQuestion) {
-      ref.read(provider.notifier).answerProductAvailable(false);
+      ref.read(provider.notifier).answerProductAvailable(available);
     }
   }
 
@@ -223,7 +244,11 @@ class _WearAvailabilityCheckScreenState
       WearPrinterSelectScreen.route,
       extra: true,
     );
-    if (!mounted || selection == null) return;
+    if (!mounted) return;
+    if (selection == null) {
+      _sendGlassesState(ref.read(provider));
+      return;
+    }
     WearSession.setPrinterSelection(selection);
     ref.read(provider.notifier).printPriceTag();
   }
@@ -242,7 +267,8 @@ class _WearAvailabilityCheckScreenState
     final WearAvailabilityFlowState flow = state.flow;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (state.isLoading) {
-        WearStatusIconReporter.I.send(
+        WearStatusIconReporter.I.sendFastForScreen(
+          WearScreenId.availabilityCheck,
           WearAvailabilityGlassesPayloads.loading(
             title: 'Доступность',
             subtitle: flow.selectedProduct?.name,
@@ -252,8 +278,14 @@ class _WearAvailabilityCheckScreenState
         );
         return;
       }
-      WearStatusIconReporter.I.send(
-        _glassesPayload(state),
+      final WearGlassesPayload payload = _glassesPayload(state);
+      WearDependencies.I.wearFlowController.rememberScreenPayload(
+        WearScreenId.availabilityCheck,
+        payload,
+      );
+      WearStatusIconReporter.I.sendFastForScreen(
+        WearScreenId.availabilityCheck,
+        payload,
       );
     });
   }

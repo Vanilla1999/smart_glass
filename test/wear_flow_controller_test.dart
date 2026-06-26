@@ -694,6 +694,57 @@ void main() {
 
       expect(selectCalls, 1);
     });
+
+    test('yes and no commands invoke semantic screen actions', () async {
+      int yesCalls = 0;
+      int noCalls = 0;
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.availabilityCheck);
+      controller.registerScreenActions(
+        WearScreenId.availabilityCheck,
+        WearScreenActionHandler(
+          onYes: () {
+            yesCalls++;
+          },
+          onNo: () {
+            noCalls++;
+          },
+        ),
+      );
+
+      await controller.handleVoiceCommand(WearVoiceCommand.yes);
+      await controller.handleVoiceCommand(WearVoiceCommand.no);
+
+      expect(yesCalls, 1);
+      expect(noCalls, 1);
+    });
+
+    test('yes command falls back to select when screen has no yes action',
+        () async {
+      int selectCalls = 0;
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.availabilityCheck);
+      controller.registerScreenActions(
+        WearScreenId.availabilityCheck,
+        WearScreenActionHandler(
+          onSelect: () {
+            selectCalls++;
+          },
+        ),
+      );
+
+      await controller.handleVoiceCommand(WearVoiceCommand.yes);
+
+      expect(selectCalls, 1);
+    });
   });
 }
 

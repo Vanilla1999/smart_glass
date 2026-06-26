@@ -20,6 +20,8 @@ class WearScreenActionHandler {
     this.onUp,
     this.onDown,
     this.onSelect,
+    this.onYes,
+    this.onNo,
     this.onBack,
     this.onHome,
   });
@@ -27,6 +29,8 @@ class WearScreenActionHandler {
   final WearFlowAction? onUp;
   final WearFlowAction? onDown;
   final WearFlowAction? onSelect;
+  final WearFlowAction? onYes;
+  final WearFlowAction? onNo;
   final WearFlowAction? onBack;
   final WearFlowAction? onHome;
 }
@@ -53,6 +57,8 @@ class WearFlowController {
       StreamController<WearFlowState>.broadcast();
   final Map<WearScreenId, WearScreenActionHandler> _screenActions =
       <WearScreenId, WearScreenActionHandler>{};
+  final Map<WearScreenId, WearGlassesPayload> _screenPayloads =
+      <WearScreenId, WearGlassesPayload>{};
   final List<WearVoiceCommand> _commandQueue = <WearVoiceCommand>[];
   final WearFlashlightToggle _flashlightToggle;
   bool _isProcessingCommand = false;
@@ -67,6 +73,10 @@ class WearFlowController {
 
   void setNavigationOutput(WearNavigationOutput output) {
     _navigationOutput = output;
+  }
+
+  Future<void> renderCurrentGlasses() {
+    return _renderGlasses();
   }
 
   void setUiLifecycle(WearUiLifecycle lifecycle) {
@@ -93,6 +103,13 @@ class WearFlowController {
   void unregisterScreenActions(WearScreenId screen) {
     _screenActions.remove(screen);
     print('[WearFlowController] unregister actions screen=$screen');
+  }
+
+  void rememberScreenPayload(
+    WearScreenId screen,
+    WearGlassesPayload payload,
+  ) {
+    _screenPayloads[screen] = payload;
   }
 
   void setMenuFocusedIndex(int index) {
@@ -122,6 +139,18 @@ class WearFlowController {
 
   void setAvailabilityInteractionFocusedIndex(int index) {
     _setAvailabilityInteractionFocus(index);
+  }
+
+  void setAvailabilityProductFocusedIndex(int index, int itemCount) {
+    if (itemCount <= 0) return;
+    final int next = index.clamp(0, itemCount - 1);
+    _setState(
+      _state.copyWith(
+        focusedIndex: next,
+        availabilityProductFocusedIndex: next,
+        clearError: true,
+      ),
+    );
   }
 
   Future<void> selectAvailabilityInteractionIndex(int index) async {
@@ -163,6 +192,12 @@ class WearFlowController {
             break;
           case WearVoiceCommand.select:
             await _handleSelect();
+            break;
+          case WearVoiceCommand.yes:
+            await _handleYes();
+            break;
+          case WearVoiceCommand.no:
+            await _handleNo();
             break;
           case WearVoiceCommand.back:
             await _handleBack();
@@ -231,6 +266,22 @@ class WearFlowController {
     if (await _handleControllerSelect()) return;
     if (_uiLifecycle == WearUiLifecycle.inactive) return;
     await _invokeScreenAction(_state.screen, (handler) => handler.onSelect);
+  }
+
+  Future<void> _handleYes() async {
+    if (_uiLifecycle == WearUiLifecycle.inactive) return;
+    final bool handled = await _invokeScreenAction(
+      _state.screen,
+      (handler) => handler.onYes,
+    );
+    if (!handled) {
+      await _handleSelect();
+    }
+  }
+
+  Future<void> _handleNo() async {
+    if (_uiLifecycle == WearUiLifecycle.inactive) return;
+    await _invokeScreenAction(_state.screen, (handler) => handler.onNo);
   }
 
   Future<void> _selectFromMenu() async {
@@ -534,21 +585,26 @@ class WearFlowController {
         WearAvailabilityGlassesPayloads.interactionTypes(
           selectedIndex: state.availabilityInteractionFocusedIndex,
         ),
-      WearScreenId.availabilityGroup => WearAvailabilityGlassesPayloads.loading(
-          title: 'Товарная группа',
-          statusText: 'Загружаем...',
-        ),
+      WearScreenId.availabilityGroup =>
+        _screenPayloads[WearScreenId.availabilityGroup] ??
+            WearAvailabilityGlassesPayloads.loading(
+              title: 'Товарная группа',
+              statusText: 'Загружаем...',
+            ),
       WearScreenId.availabilityProduct =>
-        WearAvailabilityGlassesPayloads.loading(
-          title: 'Товарная позиция',
-          statusText: 'Загружаем...',
-        ),
+        _screenPayloads[WearScreenId.availabilityProduct] ??
+            WearAvailabilityGlassesPayloads.loading(
+              title: 'Товарная позиция',
+              statusText: 'Загружаем...',
+            ),
       WearScreenId.availabilityDirectScan =>
         WearAvailabilityGlassesPayloads.directScanWaiting(),
-      WearScreenId.availabilityCheck => WearAvailabilityGlassesPayloads.loading(
-          title: 'Проверка товара',
-          statusText: 'Загружаем...',
-        ),
+      WearScreenId.availabilityCheck =>
+        _screenPayloads[WearScreenId.availabilityCheck] ??
+            WearAvailabilityGlassesPayloads.loading(
+              title: 'Проверка товара',
+              statusText: 'Загружаем...',
+            ),
       WearScreenId.availabilityFill => WearAvailabilityGlassesPayloads.loading(
           title: 'Наполнение базы',
           statusText: 'Загружаем...',

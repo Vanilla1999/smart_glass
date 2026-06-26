@@ -39,9 +39,25 @@ class WearStatusIconReporter {
   Timer? _timer;
   bool _wasWifiAvailable = true;
   bool _wasPrinterAvailable = true;
+  bool _voiceStartupActive = false;
+  WearScreenId Function()? _currentScreenForTesting;
 
   WearStatusIconSnapshot get snapshot => _snapshot;
   WearGlassesPayload? get lastPayload => _lastPayload;
+
+  void debugSetCurrentScreenProviderForTesting(
+    WearScreenId Function()? currentScreen,
+  ) {
+    _currentScreenForTesting = currentScreen;
+  }
+
+  void beginVoiceStartup() {
+    _voiceStartupActive = true;
+  }
+
+  void endVoiceStartup() {
+    _voiceStartupActive = false;
+  }
 
   void start() {
     _timer ??= Timer.periodic(
@@ -101,20 +117,56 @@ class WearStatusIconReporter {
   }
 
   Future<void> send(WearGlassesPayload payload) async {
+    if (_shouldDeferForVoiceStartup(payload)) return;
     final WearStatusIconSnapshot snapshot = await refresh();
+    if (_shouldDeferForVoiceStartup(payload)) return;
+    final WearGlassesPayload next = _withSnapshot(payload, snapshot);
+    _lastPayload = next;
+    await wearGlassesBridge.update(next);
+  }
+
+  Future<void> sendForScreen(
+    WearScreenId screen,
+    WearGlassesPayload payload,
+  ) async {
+    if (_shouldDeferForVoiceStartup(payload)) return;
+    if (!_isCurrentScreen(screen)) return;
+    final WearStatusIconSnapshot snapshot = await refresh();
+    if (_shouldDeferForVoiceStartup(payload)) return;
+    if (!_isCurrentScreen(screen)) return;
     final WearGlassesPayload next = _withSnapshot(payload, snapshot);
     _lastPayload = next;
     await wearGlassesBridge.update(next);
   }
 
   Future<void> sendFast(WearGlassesPayload payload) async {
+    if (_shouldDeferForVoiceStartup(payload)) return;
     final WearGlassesPayload next = _withSnapshot(payload, _snapshot);
     _lastPayload = next;
     await wearGlassesBridge.update(next);
   }
 
+  Future<void> sendFastForScreen(
+    WearScreenId screen,
+    WearGlassesPayload payload,
+  ) async {
+    if (_shouldDeferForVoiceStartup(payload)) return;
+    if (!_isCurrentScreen(screen)) return;
+    final WearGlassesPayload next = _withSnapshot(payload, _snapshot);
+    _lastPayload = next;
+    await wearGlassesBridge.update(next);
+  }
+
+  Future<void> sendTransientFast(WearGlassesPayload payload) async {
+    if (_shouldDeferForVoiceStartup(payload)) return;
+    final WearGlassesPayload next = _withSnapshot(payload, _snapshot);
+    await wearGlassesBridge.update(next);
+  }
+
   Future<void> show(WearGlassesPayload payload) async {
+    if (_shouldDeferForVoiceStartup(payload)) return;
     final WearStatusIconSnapshot snapshot = await refresh();
+    if (_shouldDeferForVoiceStartup(payload)) return;
     final WearGlassesPayload next = _withSnapshot(payload, snapshot);
     _lastPayload = next;
     await wearGlassesBridge.show(next);
@@ -126,6 +178,7 @@ class WearStatusIconReporter {
       await refresh();
       return;
     }
+    if (_voiceStartupActive) return;
 
     final WearStatusIconSnapshot previous = _snapshot;
     final WearStatusIconSnapshot next = await refresh();
@@ -151,5 +204,24 @@ class WearStatusIconReporter {
       showPrinterIcon: snapshot.showPrinter,
       printerAvailable: snapshot.printerAvailable,
     );
+  }
+
+  bool _isCurrentScreen(WearScreenId screen) {
+    final WearScreenId Function()? currentScreen = _currentScreenForTesting;
+    if (currentScreen != null) {
+      return currentScreen() == screen;
+    }
+    return WearDependencies.I.wearFlowController.state.screen == screen;
+  }
+
+  bool _shouldDeferForVoiceStartup(WearGlassesPayload payload) {
+    return _voiceStartupActive && !_isVoiceStartupPayload(payload);
+  }
+
+  bool _isVoiceStartupPayload(WearGlassesPayload payload) {
+    return payload.screenType == WearGlassesScreenType.status &&
+        payload.phase == WearGlassesPhase.loading &&
+        payload.title == 'Голосовое управление' &&
+        payload.statusText == 'Запускаем голос...';
   }
 }

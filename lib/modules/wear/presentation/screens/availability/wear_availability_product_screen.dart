@@ -105,6 +105,13 @@ class _WearAvailabilityProductScreenState
       return _buildMessage('В группе нет заданий');
     }
 
+    final int savedIndex = WearDependencies
+        .I.wearFlowController.state.availabilityProductFocusedIndex
+        .clamp(0, products.length - 1);
+    if (_focusedIndex != savedIndex) {
+      _focusedIndex = savedIndex;
+    }
+
     return RefreshIndicator(
       onRefresh: () =>
           ref.refresh(wearAvailabilityProductsProvider(group).future),
@@ -150,6 +157,9 @@ class _WearAvailabilityProductScreenState
           final int itemIndex = (listIndex - 1).clamp(0, products.length - 1);
           if (itemIndex == _focusedIndex) return;
           _focusedIndex = itemIndex;
+          WearDependencies.I.wearFlowController
+              .setAvailabilityProductFocusedIndex(
+                  _focusedIndex, products.length);
           _sendGlassesState(group, products, fast: true);
         },
       ),
@@ -165,6 +175,8 @@ class _WearAvailabilityProductScreenState
     _focusedIndex = _focusedIndex.clamp(0, products.length - 1);
     if (_focusedIndex <= 0) return;
     _focusedIndex--;
+    WearDependencies.I.wearFlowController
+        .setAvailabilityProductFocusedIndex(_focusedIndex, products.length);
     _scrollToFocused();
     _sendGlassesState(group, products, fast: true);
   }
@@ -178,6 +190,8 @@ class _WearAvailabilityProductScreenState
     _focusedIndex = _focusedIndex.clamp(0, products.length - 1);
     if (_focusedIndex >= products.length - 1) return;
     _focusedIndex++;
+    WearDependencies.I.wearFlowController
+        .setAvailabilityProductFocusedIndex(_focusedIndex, products.length);
     _scrollToFocused();
     _sendGlassesState(group, products, fast: true);
   }
@@ -195,7 +209,13 @@ class _WearAvailabilityProductScreenState
 
   void _scrollToFocused() {
     if (!_scroll.hasClients) return;
-    final double target = ((_focusedIndex + 1) * 56.0).clamp(
+    const double itemExtent = 56.0;
+    const double topPadding = 40.0;
+    final double viewport = _scroll.position.viewportDimension;
+    final int listIndex = _focusedIndex + 1;
+    final double target =
+        (topPadding + listIndex * itemExtent + itemExtent / 2 - viewport / 2)
+            .clamp(
       0.0,
       _scroll.position.maxScrollExtent,
     );
@@ -227,17 +247,28 @@ class _WearAvailabilityProductScreenState
         products: products,
         selectedIndex: _focusedIndex,
       );
+      WearDependencies.I.wearFlowController.rememberScreenPayload(
+        WearScreenId.availabilityProduct,
+        payload,
+      );
       if (fast) {
-        WearStatusIconReporter.I.sendFast(payload);
+        WearStatusIconReporter.I.sendFastForScreen(
+          WearScreenId.availabilityProduct,
+          payload,
+        );
       } else {
-        WearStatusIconReporter.I.send(payload);
+        WearStatusIconReporter.I.sendForScreen(
+          WearScreenId.availabilityProduct,
+          payload,
+        );
       }
     });
   }
 
   void _sendLoading(WearAvailabilityGroup group) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      WearStatusIconReporter.I.send(
+      WearStatusIconReporter.I.sendForScreen(
+        WearScreenId.availabilityProduct,
         WearAvailabilityGlassesPayloads.loading(
           title: group.name,
           statusText: 'Загружаем...',
@@ -249,7 +280,8 @@ class _WearAvailabilityProductScreenState
 
   void _sendError(Object error) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      WearStatusIconReporter.I.send(
+      WearStatusIconReporter.I.sendForScreen(
+        WearScreenId.availabilityProduct,
         WearAvailabilityGlassesPayloads.error(
           title: 'Ошибка доступности',
           message: _asUiMessage(error),

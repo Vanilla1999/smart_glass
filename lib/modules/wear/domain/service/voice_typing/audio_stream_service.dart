@@ -23,6 +23,7 @@ class AudioStreamService {
   double _audioLevel = 0.0;
   int _chunksReceived = 0;
   int? _lastChunkAtMillis;
+  int? _lastNonSilentChunkAtMillis;
   int? _startedAtMillis;
 
   final List<void Function(Uint8List)> _dataCallbacks = [];
@@ -32,6 +33,7 @@ class AudioStreamService {
   double get audioLevel => _audioLevel;
   int get chunksReceived => _chunksReceived;
   int? get lastChunkAtMillis => _lastChunkAtMillis;
+  int? get lastNonSilentChunkAtMillis => _lastNonSilentChunkAtMillis;
   Stream<double> get audioLevelStream => _audioLevelController.stream;
 
   void addDataCallback(void Function(Uint8List) callback) {
@@ -49,15 +51,17 @@ class AudioStreamService {
   Future<String> diagnostics() async {
     final bool isRecording = await _audioRecorder.isRecording();
     final int now = DateTime.now().millisecondsSinceEpoch;
-    final int? lastChunkAgeMs = _lastChunkAtMillis == null
+    final int? lastChunkAgeMs =
+        _lastChunkAtMillis == null ? null : now - _lastChunkAtMillis!;
+    final int? lastNonSilentAgeMs = _lastNonSilentChunkAtMillis == null
         ? null
-        : now - _lastChunkAtMillis!;
-    final int? runningForMs = _startedAtMillis == null
-        ? null
-        : now - _startedAtMillis!;
+        : now - _lastNonSilentChunkAtMillis!;
+    final int? runningForMs =
+        _startedAtMillis == null ? null : now - _startedAtMillis!;
     return 'AudioStreamService{isRunning=$_isRunning, '
         'recorderIsRecording=$isRecording, callbacks=${_dataCallbacks.length}, '
         'chunks=$_chunksReceived, lastChunkAgeMs=$lastChunkAgeMs, '
+        'lastNonSilentAgeMs=$lastNonSilentAgeMs, '
         'runningForMs=$runningForMs}';
   }
 
@@ -82,6 +86,7 @@ class AudioStreamService {
     _chunksReceived = 0;
     _lastChunkAtMillis = null;
     _startedAtMillis = DateTime.now().millisecondsSinceEpoch;
+    _lastNonSilentChunkAtMillis = _startedAtMillis;
     print('[AudioStreamService] startStream begin at $_startedAtMillis');
 
     final audioStream = await _audioRecorder.startStream(
@@ -111,8 +116,11 @@ class AudioStreamService {
         final boostedBytes = _boostPcm16(bytes);
         _chunksReceived++;
         _lastChunkAtMillis = DateTime.now().millisecondsSinceEpoch;
+        final _PcmStats stats = _pcmStats(boostedBytes);
+        if (stats.peak > 0.0001) {
+          _lastNonSilentChunkAtMillis = _lastChunkAtMillis;
+        }
         if (_chunksReceived == 1 || _chunksReceived % 200 == 0) {
-          final _PcmStats stats = _pcmStats(boostedBytes);
           print(
             '[AudioStreamService] chunk#$_chunksReceived '
             'bytes=${boostedBytes.lengthInBytes} callbacks=${_dataCallbacks.length} '
@@ -157,7 +165,8 @@ class AudioStreamService {
   }
 
   Future<void> pauseCallbacks() async {
-    print('[AudioStreamService] pauseCallbacks callbacks=${_dataCallbacks.length}');
+    print(
+        '[AudioStreamService] pauseCallbacks callbacks=${_dataCallbacks.length}');
     _dataCallbacks.clear();
     _errorCallback = null;
   }
@@ -229,9 +238,8 @@ class AudioStreamService {
     for (var i = 0; i < sampleCount; i++) {
       final offset = i * 2;
       final sample = byteData.getInt16(offset, Endian.little);
-      final amplified = (sample * _liveGainMultiplier)
-          .round()
-          .clamp(-32768, 32767);
+      final amplified =
+          (sample * _liveGainMultiplier).round().clamp(-32768, 32767);
       byteData.setInt16(offset, amplified, Endian.little);
     }
 
