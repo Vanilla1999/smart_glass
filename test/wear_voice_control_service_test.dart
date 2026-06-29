@@ -172,6 +172,65 @@ void main() {
 
       expect(emitted, <WearVoiceCommand>[WearVoiceCommand.select]);
     });
+
+    test('final unknown text emits free phrase', () async {
+      final WearVoiceControlService service = createService();
+      final List<String> emitted = <String>[];
+      service.phraseStream.listen(emitted.add);
+
+      now = 1000;
+      speech.emitResult('чудо творожок');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(emitted, <String>['чудо творожок']);
+    });
+
+    test('partial unknown text emits partial phrase only', () async {
+      final WearVoiceControlService service = createService();
+      final List<String> phrases = <String>[];
+      final List<String> partialPhrases = <String>[];
+      service.phraseStream.listen(phrases.add);
+      service.partialPhraseStream.listen(partialPhrases.add);
+
+      now = 1000;
+      speech.emitPartial('безалкогольное');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(phrases, isEmpty);
+      expect(partialPhrases, <String>['безалкогольное']);
+    });
+
+    test('short partial unknown text does not emit partial phrase', () async {
+      final WearVoiceControlService service = createService();
+      final List<String> partialPhrases = <String>[];
+      service.partialPhraseStream.listen(partialPhrases.add);
+
+      now = 1000;
+      speech.emitPartial('чудо');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(partialPhrases, isEmpty);
+    });
+
+    test('duplicate partial phrase is throttled', () async {
+      final WearVoiceControlService service = createService();
+      final List<String> partialPhrases = <String>[];
+      service.partialPhraseStream.listen(partialPhrases.add);
+
+      now = 1000;
+      speech.emitPartial('безалкогольное');
+      await Future<void>.delayed(Duration.zero);
+
+      now = 1100;
+      speech.emitPartial('безалкогольное');
+      await Future<void>.delayed(Duration.zero);
+
+      now = 1400;
+      speech.emitPartial('безалкогольное');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(partialPhrases, <String>['безалкогольное', 'безалкогольное']);
+    });
   });
 }
 
@@ -230,6 +289,9 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
 
   @override
   Future<void> restartListening({required String reason}) async {}
+
+  @override
+  Future<void> setRecognitionGrammar(List<String>? grammar) async {}
 
   @override
   Future<String> diagnostics() async => 'fake';

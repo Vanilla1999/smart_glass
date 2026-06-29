@@ -26,4 +26,6 @@ enum WearVoiceCommand {
   openList,
   openDirectScan,
   cancel,
+  nextPage,
+  previousPage,
 }

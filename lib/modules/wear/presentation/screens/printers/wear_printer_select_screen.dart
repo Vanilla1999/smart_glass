@@ -5,6 +5,7 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
@@ -57,6 +58,10 @@ class _WearPrinterSelectScreenState
         onUp: _onVoiceUp,
         onDown: _onVoiceDown,
         onSelect: _onVoiceSelect,
+        onNextPage: _onVoiceNextPage,
+        onPreviousPage: _onVoicePreviousPage,
+        onPhrase: _onVoicePhrase,
+        onPartialPhrase: _onVoicePartialPhrase,
       ),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -255,6 +260,108 @@ class _WearPrinterSelectScreenState
     }
   }
 
+  void _onVoiceNextPage() {
+    final List<WearPrinter> printers =
+        _visiblePrinters(ref.read(wearPrinterSelectNotifierProvider));
+    if (printers.isEmpty) return;
+    final int currentPage = _focusedIndex ~/ _visibleGlassesItemCount;
+    final int nextIndex = (currentPage + 1) * _visibleGlassesItemCount;
+    if (nextIndex >= printers.length) {
+      _showVoiceSearchMessage('Это последняя страница');
+      return;
+    }
+    _focusedIndex = nextIndex.clamp(0, printers.length - 1);
+    _scrollToFocused();
+    _sendGlassesState(ref.read(wearPrinterSelectNotifierProvider), fast: true);
+  }
+
+  void _onVoicePreviousPage() {
+    final List<WearPrinter> printers =
+        _visiblePrinters(ref.read(wearPrinterSelectNotifierProvider));
+    if (printers.isEmpty) return;
+    final int currentPage = _focusedIndex ~/ _visibleGlassesItemCount;
+    if (currentPage == 0) {
+      _showVoiceSearchMessage('Это первая страница');
+      return;
+    }
+    final int previousIndex = (currentPage - 1) * _visibleGlassesItemCount;
+    _focusedIndex = previousIndex.clamp(0, printers.length - 1);
+    _scrollToFocused();
+    _sendGlassesState(ref.read(wearPrinterSelectNotifierProvider), fast: true);
+  }
+
+  void _onVoicePhrase(String phrase) {
+    final WearPrinterSelectState state =
+        ref.read(wearPrinterSelectNotifierProvider);
+    if (state.isLoading) return;
+    final List<WearPrinter> printers = _visiblePrinters(state);
+    final VoiceListMatch<WearPrinter> match = VoiceListMatcher.match(
+      phrase,
+      printers,
+      (WearPrinter printer) => printer.name,
+    );
+    switch (match.type) {
+      case VoiceListMatchType.none:
+        _showVoiceSearchMessage('Не найдено');
+        break;
+      case VoiceListMatchType.ambiguous:
+        _showVoiceSearchMessage('Назовите точнее');
+        break;
+      case VoiceListMatchType.unique:
+        final WearPrinter printer = match.item!;
+        final int index = printers.indexWhere((WearPrinter item) {
+          return item.id == printer.id;
+        });
+        if (index >= 0) {
+          _focusedIndex = index;
+          _scrollToFocused();
+          _sendGlassesState(state, fast: true);
+        }
+        ref
+            .read(wearPrinterSelectNotifierProvider.notifier)
+            .selectPrinter(printer);
+        final WearPrinterSelectState updated =
+            ref.read(wearPrinterSelectNotifierProvider);
+        if (updated.whitePrinter != null && updated.yellowPrinter != null) {
+          _openScanScreen(context, updated);
+        }
+        break;
+    }
+  }
+
+  bool _onVoicePartialPhrase(String phrase) {
+    if (!VoiceListMatcher.canMatchPartial(phrase)) return false;
+    final WearPrinterSelectState state =
+        ref.read(wearPrinterSelectNotifierProvider);
+    if (state.isLoading) return false;
+    final List<WearPrinter> printers = _visiblePrinters(state);
+    final VoiceListMatch<WearPrinter> match = VoiceListMatcher.match(
+      phrase,
+      printers,
+      (WearPrinter printer) => printer.name,
+    );
+    if (match.type != VoiceListMatchType.unique) {
+      return false;
+    }
+
+    final WearPrinter printer = match.item!;
+    final int index = printers.indexWhere((WearPrinter item) {
+      return item.id == printer.id;
+    });
+    if (index >= 0) {
+      _focusedIndex = index;
+      _scrollToFocused();
+      _sendGlassesState(state, fast: true);
+    }
+    ref.read(wearPrinterSelectNotifierProvider.notifier).selectPrinter(printer);
+    final WearPrinterSelectState updated =
+        ref.read(wearPrinterSelectNotifierProvider);
+    if (updated.whitePrinter != null && updated.yellowPrinter != null) {
+      _openScanScreen(context, updated);
+    }
+    return true;
+  }
+
   List<WearPrinter> _visiblePrinters(WearPrinterSelectState state) {
     if (state.step == WearPrinterSelectStep.yellow &&
         state.whitePrinter != null) {
@@ -263,6 +370,30 @@ class _WearPrinterSelectScreenState
           .toList();
     }
     return state.printers;
+  }
+
+  void _scrollToFocused() {
+    if (!_scroll.hasClients) return;
+    final double target = (_focusedIndex * 56.0).clamp(
+      0.0,
+      _scroll.position.maxScrollExtent,
+    );
+    _scroll.animateTo(
+      target,
+      duration: const Duration(milliseconds: 150),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _showVoiceSearchMessage(String message) {
+    WearStatusIconReporter.I.showTransientFastForScreen(
+      WearScreenId.printerSelect,
+      WearGlassesPayload.status(
+        isError: true,
+        title: 'Голосовой выбор',
+        statusText: message,
+      ),
+    );
   }
 
   Widget _buildRefreshableMessage(
@@ -407,6 +538,12 @@ class _WearPrinterSelectScreenState
 
     final List<WearPrinter> printers = _visiblePrinters(state);
     if (printers.isEmpty) return;
+    final int selected = _focusedIndex.clamp(0, printers.length - 1);
+    final int start = _pageStart(selected);
+    final List<WearPrinter> visiblePrinters = printers
+        .skip(start)
+        .take(_visibleGlassesItemCount)
+        .toList(growable: false);
     send(
       WearGlassesPayload(
         screenType: WearGlassesScreenType.printer,
@@ -415,11 +552,27 @@ class _WearPrinterSelectScreenState
         subtitle: state.step == WearPrinterSelectStep.yellow
             ? 'Жёлтые ценники'
             : 'Белые ценники',
-        items: printers.map((WearPrinter printer) => printer.name).toList(),
-        selectedIndex: _focusedIndex.clamp(0, printers.length - 1),
-        pageText: printers.length > 4 ? 'Показаны первые 4' : null,
+        items: visiblePrinters
+            .map((WearPrinter printer) => printer.name)
+            .toList(growable: false),
+        selectedIndex: selected - start,
+        pageText: _pageText(printers.length, selected),
       ),
     );
+  }
+
+  static const int _visibleGlassesItemCount = 4;
+
+  int _pageStart(int selectedIndex) {
+    return (selectedIndex ~/ _visibleGlassesItemCount) *
+        _visibleGlassesItemCount;
+  }
+
+  String? _pageText(int itemCount, int selectedIndex) {
+    if (itemCount <= _visibleGlassesItemCount) return null;
+    final int page = (selectedIndex ~/ _visibleGlassesItemCount) + 1;
+    final int pageCount = ((itemCount - 1) ~/ _visibleGlassesItemCount) + 1;
+    return 'Страница: $page из $pageCount';
   }
 
   void _scrollToTop() {

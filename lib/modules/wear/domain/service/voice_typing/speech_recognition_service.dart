@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
@@ -25,6 +24,7 @@ class SpeechRecognitionService {
   Future<void> _lifecycleOperation = Future<void>.value();
   int _processedChunks = 0;
   int? _lastProcessedChunkAtMillis;
+  List<String>? _recognitionGrammar;
 
   vosk.Model? _model;
   vosk.Recognizer? _recognizer;
@@ -40,6 +40,38 @@ class SpeechRecognitionService {
   int? get lastAudioChunkAtMillis => _audioStream.lastChunkAtMillis;
   int? get lastNonSilentAudioChunkAtMillis =>
       _audioStream.lastNonSilentChunkAtMillis;
+
+  Future<void> setRecognitionGrammar(List<String>? grammar) async {
+    final List<String>? next = grammar == null
+        ? null
+        : List<String>.unmodifiable(grammar.where((String item) {
+            return item.trim().isNotEmpty;
+          }));
+    if (listEquals(_recognitionGrammar, next)) {
+      return;
+    }
+    _recognitionGrammar = next;
+    print(
+      '[SpeechRecognitionService] setRecognitionGrammar '
+      'enabled=${next != null} size=${next?.length ?? 0}',
+    );
+
+    if (_model == null && _recognizer == null) {
+      return;
+    }
+
+    await _runLifecycleOperation('setRecognitionGrammar', () async {
+      final bool wasListening = _isListening;
+      if (wasListening) {
+        await _stopListeningUnlocked();
+      }
+      await _disposeRecognizer();
+      await _createRecognizer();
+      if (wasListening) {
+        await _startListeningUnlocked();
+      }
+    });
+  }
 
   Future<bool> requestMicrophonePermission() {
     return _audioStream.requestPermission();
@@ -278,10 +310,18 @@ class SpeechRecognitionService {
       throw StateError('Vosk модель не инициализирована.');
     }
 
-    _recognizer = await _vosk.createRecognizer(
+    final recognizer = await _vosk.createRecognizer(
       model: model,
       sampleRate: _sampleRate,
     );
+    final List<String>? grammar = _recognitionGrammar;
+    if (grammar != null && grammar.isNotEmpty) {
+      print(
+        '[SpeechRecognitionService] applying grammar size=${grammar.length}',
+      );
+      await recognizer.setGrammar(grammar);
+    }
+    _recognizer = recognizer;
   }
 
   Future<void> _disposeRecognizer() async {

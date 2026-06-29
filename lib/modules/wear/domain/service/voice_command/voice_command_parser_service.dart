@@ -65,6 +65,13 @@ class VoiceCommandParserService {
     'отменить': WearVoiceCommand.cancel,
     'закрыть': WearVoiceCommand.cancel,
     'закрой': WearVoiceCommand.cancel,
+    'следующая страница': WearVoiceCommand.nextPage,
+    'дальше': WearVoiceCommand.nextPage,
+    'далее': WearVoiceCommand.nextPage,
+    'прошлая страница': WearVoiceCommand.previousPage,
+    'предыдущая страница': WearVoiceCommand.previousPage,
+    'страница назад': WearVoiceCommand.previousPage,
+    'назад страница': WearVoiceCommand.previousPage,
     'не надо': WearVoiceCommand.no,
     'назад': WearVoiceCommand.back,
     'вернуться': WearVoiceCommand.back,
@@ -115,6 +122,12 @@ class VoiceCommandParserService {
     ],
     WearVoiceCommand.yes: <String>['да', 'ага', 'верно', 'правильно', 'есть'],
     WearVoiceCommand.no: <String>['нет'],
+    WearVoiceCommand.previousPage: <String>[
+      'прошлая страница',
+      'предыдущая страница',
+      'страница назад',
+      'назад страница',
+    ],
     WearVoiceCommand.back: <String>['назад', 'вернуться', 'обратно'],
     WearVoiceCommand.home: <String>['домой', 'выход', 'главная'],
     WearVoiceCommand.finish: <String>[
@@ -145,7 +158,17 @@ class VoiceCommandParserService {
     WearVoiceCommand.openDirectScan: <String>['прямое сканирование'],
     WearVoiceCommand.clear: <String>['очистить'],
     WearVoiceCommand.save: <String>['сохранить'],
-    WearVoiceCommand.cancel: <String>['отмена', 'отменить', 'закрыть', 'закрой'],
+    WearVoiceCommand.cancel: <String>[
+      'отмена',
+      'отменить',
+      'закрыть',
+      'закрой'
+    ],
+    WearVoiceCommand.nextPage: <String>[
+      'следующая страница',
+      'дальше',
+      'далее',
+    ],
   };
 
   static List<String> get grammarPhrases => _exactCommandMap.keys.toList();

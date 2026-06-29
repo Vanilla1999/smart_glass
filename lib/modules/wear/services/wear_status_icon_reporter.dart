@@ -37,6 +37,7 @@ class WearStatusIconReporter {
   );
   WearGlassesPayload? _lastPayload;
   Timer? _timer;
+  Timer? _transientTimer;
   bool _wasWifiAvailable = true;
   bool _wasPrinterAvailable = true;
   bool _voiceStartupActive = false;
@@ -161,6 +162,22 @@ class WearStatusIconReporter {
     if (_shouldDeferForVoiceStartup(payload)) return;
     final WearGlassesPayload next = _withSnapshot(payload, _snapshot);
     await wearGlassesBridge.update(next);
+  }
+
+  Future<void> showTransientFastForScreen(
+    WearScreenId screen,
+    WearGlassesPayload payload, {
+    Duration duration = const Duration(seconds: 3),
+  }) async {
+    if (_shouldDeferForVoiceStartup(payload)) return;
+    if (!_isCurrentScreen(screen)) return;
+    _transientTimer?.cancel();
+    final WearGlassesPayload? restorePayload = _lastPayload;
+    await sendTransientFast(payload);
+    _transientTimer = Timer(duration, () {
+      if (restorePayload == null || !_isCurrentScreen(screen)) return;
+      unawaited(sendFastForScreen(screen, restorePayload));
+    });
   }
 
   Future<void> show(WearGlassesPayload payload) async {

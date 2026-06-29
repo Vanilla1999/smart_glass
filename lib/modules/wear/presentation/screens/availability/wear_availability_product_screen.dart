@@ -6,7 +6,9 @@ import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_group.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availability_glasses_payloads.dart';
+import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/availability/cubit/wear_availability_list_providers.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_check_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
@@ -50,6 +52,10 @@ class _WearAvailabilityProductScreenState
         onUp: _onVoiceUp,
         onDown: _onVoiceDown,
         onSelect: _onVoiceSelect,
+        onNextPage: _onVoiceNextPage,
+        onPreviousPage: _onVoicePreviousPage,
+        onPhrase: _onVoicePhrase,
+        onPartialPhrase: _onVoicePartialPhrase,
       ),
     );
   }
@@ -207,6 +213,113 @@ class _WearAvailabilityProductScreenState
         extra: products[productIndex]);
   }
 
+  void _onVoiceNextPage() {
+    final WearAvailabilityGroup? group = widget.group;
+    if (group == null) return;
+    final List<WearAvailabilityProduct>? products =
+        ref.read(wearAvailabilityProductsProvider(group)).valueOrNull;
+    if (products == null || products.isEmpty) return;
+    final int currentPage = _focusedIndex ~/ _visibleGlassesItemCount;
+    final int nextIndex = (currentPage + 1) * _visibleGlassesItemCount;
+    if (nextIndex >= products.length) {
+      _showVoiceSearchMessage('Это последняя страница');
+      return;
+    }
+    _focusedIndex = nextIndex.clamp(0, products.length - 1);
+    WearDependencies.I.wearFlowController
+        .setAvailabilityProductFocusedIndex(_focusedIndex, products.length);
+    _scrollToFocused();
+    _sendGlassesState(group, products, fast: true);
+  }
+
+  void _onVoicePreviousPage() {
+    final WearAvailabilityGroup? group = widget.group;
+    if (group == null) return;
+    final List<WearAvailabilityProduct>? products =
+        ref.read(wearAvailabilityProductsProvider(group)).valueOrNull;
+    if (products == null || products.isEmpty) return;
+    final int currentPage = _focusedIndex ~/ _visibleGlassesItemCount;
+    if (currentPage == 0) {
+      _showVoiceSearchMessage('Это первая страница');
+      return;
+    }
+    final int previousIndex = (currentPage - 1) * _visibleGlassesItemCount;
+    _focusedIndex = previousIndex.clamp(0, products.length - 1);
+    WearDependencies.I.wearFlowController
+        .setAvailabilityProductFocusedIndex(_focusedIndex, products.length);
+    _scrollToFocused();
+    _sendGlassesState(group, products, fast: true);
+  }
+
+  void _onVoicePhrase(String phrase) {
+    final WearAvailabilityGroup? group = widget.group;
+    if (group == null) return;
+    final List<WearAvailabilityProduct>? products =
+        ref.read(wearAvailabilityProductsProvider(group)).valueOrNull;
+    if (products == null || products.isEmpty) return;
+    final VoiceListMatch<WearAvailabilityProduct> match =
+        VoiceListMatcher.match(
+      phrase,
+      products,
+      (WearAvailabilityProduct product) => product.name,
+    );
+    switch (match.type) {
+      case VoiceListMatchType.none:
+        _showVoiceSearchMessage('Не найдено');
+        break;
+      case VoiceListMatchType.ambiguous:
+        _showVoiceSearchMessage('Назовите точнее');
+        break;
+      case VoiceListMatchType.unique:
+        final WearAvailabilityProduct product = match.item!;
+        final int index = products.indexWhere((WearAvailabilityProduct item) {
+          return item.id == product.id;
+        });
+        if (index >= 0) {
+          _focusedIndex = index;
+          WearDependencies.I.wearFlowController
+              .setAvailabilityProductFocusedIndex(
+                  _focusedIndex, products.length);
+          _scrollToFocused();
+          _sendGlassesState(group, products, fast: true);
+        }
+        context.push(WearAvailabilityCheckScreen.route, extra: product);
+        break;
+    }
+  }
+
+  bool _onVoicePartialPhrase(String phrase) {
+    if (!VoiceListMatcher.canMatchPartial(phrase)) return false;
+    final WearAvailabilityGroup? group = widget.group;
+    if (group == null) return false;
+    final List<WearAvailabilityProduct>? products =
+        ref.read(wearAvailabilityProductsProvider(group)).valueOrNull;
+    if (products == null || products.isEmpty) return false;
+    final VoiceListMatch<WearAvailabilityProduct> match =
+        VoiceListMatcher.match(
+      phrase,
+      products,
+      (WearAvailabilityProduct product) => product.name,
+    );
+    if (match.type != VoiceListMatchType.unique) {
+      return false;
+    }
+
+    final WearAvailabilityProduct product = match.item!;
+    final int index = products.indexWhere((WearAvailabilityProduct item) {
+      return item.id == product.id;
+    });
+    if (index >= 0) {
+      _focusedIndex = index;
+      WearDependencies.I.wearFlowController
+          .setAvailabilityProductFocusedIndex(_focusedIndex, products.length);
+      _scrollToFocused();
+      _sendGlassesState(group, products, fast: true);
+    }
+    context.push(WearAvailabilityCheckScreen.route, extra: product);
+    return true;
+  }
+
   void _scrollToFocused() {
     if (!_scroll.hasClients) return;
     const double itemExtent = 56.0;
@@ -289,6 +402,19 @@ class _WearAvailabilityProductScreenState
       );
     });
   }
+
+  void _showVoiceSearchMessage(String message) {
+    WearStatusIconReporter.I.showTransientFastForScreen(
+      WearScreenId.availabilityProduct,
+      WearGlassesPayload.status(
+        isError: true,
+        title: 'Голосовой выбор',
+        statusText: message,
+      ),
+    );
+  }
+
+  static const int _visibleGlassesItemCount = 4;
 
   String _rest(double value) {
     if (value == value.roundToDouble()) {

@@ -451,6 +451,60 @@ void main() {
       expect(routerFlow.state.menuFocusedIndex, 1);
     });
 
+    testWidgets(
+        'final and repeated partial phrases are suppressed after '
+        'consumed partial', (WidgetTester tester) async {
+      final StreamController<String> voicePhrases =
+          StreamController<String>.broadcast();
+      final StreamController<String> voicePartialPhrases =
+          StreamController<String>.broadcast();
+      addTearDown(voicePhrases.close);
+      addTearDown(voicePartialPhrases.close);
+      final WearFlowController routerFlow = WearFlowController(
+        glassesOutput: _TestGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+
+      await tester.pumpWidget(
+        WearModuleApp(
+          flowController: routerFlow,
+          voiceCommandStream: const Stream<WearVoiceCommand>.empty(),
+          voicePhraseStream: voicePhrases.stream,
+          voicePartialPhraseStream: voicePartialPhrases.stream,
+          routes: _testRoutes,
+          initialLocation: WearMenuScreen.route,
+          onStartVoice: () async {},
+          onStopVoice: () async {},
+          onRestartVoice: (_) async {},
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      var partialCalls = 0;
+      var finalCalls = 0;
+      routerFlow.registerScreenActions(
+        WearScreenId.menu,
+        WearScreenActionHandler(
+          onPartialPhrase: (String phrase) {
+            partialCalls++;
+            return true;
+          },
+          onPhrase: (String phrase) {
+            finalCalls++;
+          },
+        ),
+      );
+
+      voicePartialPhrases.add('безалкоголь');
+      await tester.pumpAndSettle();
+      voicePartialPhrases.add('безалкогольное');
+      voicePhrases.add('безалкогольное');
+      await tester.pumpAndSettle();
+
+      expect(partialCalls, 1);
+      expect(finalCalls, 0);
+    });
+
     testWidgets('voice starts immediately when authorization completes',
         (WidgetTester tester) async {
       WearSession.clear();
@@ -898,6 +952,9 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
 
   @override
   int? get lastNonSilentAudioChunkAtMillis => null;
+
+  @override
+  Future<void> setRecognitionGrammar(List<String>? grammar) async {}
 
   void emitPartial(String text) {
     _partialController.add(text);

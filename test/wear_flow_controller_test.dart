@@ -117,6 +117,116 @@ void main() {
       expect(controller.state.screen, WearScreenId.printerSelect);
     });
 
+    test('routes free phrase to current screen handler', () async {
+      String? handledPhrase;
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.printerSelect);
+      controller.registerScreenActions(
+        WearScreenId.printerSelect,
+        WearScreenActionHandler(
+          onPhrase: (String phrase) {
+            handledPhrase = phrase;
+          },
+        ),
+      );
+
+      await controller.handleVoicePhrase('чудо творожок');
+
+      expect(handledPhrase, 'чудо творожок');
+    });
+
+    test('routes partial phrase to current screen handler', () async {
+      String? handledPhrase;
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.printerSelect);
+      controller.registerScreenActions(
+        WearScreenId.printerSelect,
+        WearScreenActionHandler(
+          onPartialPhrase: (String phrase) {
+            handledPhrase = phrase;
+            return true;
+          },
+        ),
+      );
+
+      final bool consumed =
+          await controller.handleVoicePartialPhrase('безалкогольное');
+
+      expect(consumed, isTrue);
+      expect(handledPhrase, 'безалкогольное');
+    });
+
+    test('partial phrase returns false without screen handler', () async {
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.printerSelect);
+
+      final bool consumed =
+          await controller.handleVoicePartialPhrase('безалкогольное');
+
+      expect(consumed, isFalse);
+    });
+
+    test('routes next page command to current screen handler', () async {
+      var calls = 0;
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.printerSelect);
+      controller.registerScreenActions(
+        WearScreenId.printerSelect,
+        WearScreenActionHandler(
+          onNextPage: () {
+            calls++;
+          },
+        ),
+      );
+
+      await controller.handleVoiceCommand(WearVoiceCommand.nextPage);
+
+      expect(calls, 1);
+    });
+
+    test('routes previous page command to current screen handler', () async {
+      var calls = 0;
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.printerSelect);
+      controller.registerScreenActions(
+        WearScreenId.printerSelect,
+        WearScreenActionHandler(
+          onPreviousPage: () {
+            calls++;
+          },
+        ),
+      );
+
+      await controller.handleVoiceCommand(WearVoiceCommand.previousPage);
+
+      expect(calls, 1);
+    });
+
     test('rapid down preserves intermediate focusedIndex in stateStream',
         () async {
       final List<WearFlowState> states = <WearFlowState>[];

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 
@@ -34,6 +35,10 @@ class WearVoiceControlService {
   final WearVoiceClock _now;
   final StreamController<WearVoiceCommand> _commandController =
       StreamController<WearVoiceCommand>.broadcast();
+  final StreamController<String> _phraseController =
+      StreamController<String>.broadcast();
+  final StreamController<String> _partialPhraseController =
+      StreamController<String>.broadcast();
   StreamSubscription<String>? _recognitionSubscription;
   StreamSubscription<String>? _partialRecognitionSubscription;
   WearVoiceCommand? _lastPartialCommand;
@@ -42,11 +47,17 @@ class WearVoiceControlService {
   int _lastEmittedPartialCommandAt = 0;
   int _recognitionEventSeq = 0;
   int _emittedCommandSeq = 0;
+  String? _lastPartialPhrase;
+  int _lastPartialPhraseAt = 0;
 
   static const int _duplicatePartialMs = 1200;
   static const int _matchingFinalSuppressMs = 1500;
+  static const int _partialPhraseThrottleMs = 300;
+  static const int _minPartialPhraseLength = 6;
 
   Stream<WearVoiceCommand> get commandStream => _commandController.stream;
+  Stream<String> get phraseStream => _phraseController.stream;
+  Stream<String> get partialPhraseStream => _partialPhraseController.stream;
 
   void _onRecognitionResult(String resultText) {
     final t0 = _now();
@@ -59,6 +70,7 @@ class WearVoiceControlService {
     final WearVoiceCommand? cmd = _commandParserService.parse(resultText);
     if (cmd == null) {
       print('[WearVoiceControlService] no command matched for "$resultText"');
+      _emitPhrase(resultText, t0);
       return;
     }
     if (_isMatchingFinalForRecentPartial(cmd, t0)) {
@@ -86,6 +98,7 @@ class WearVoiceControlService {
       print(
         '[WearVoiceControlService] no partial command matched for "$resultText"',
       );
+      _emitPartialPhrase(resultText, t0);
       return;
     }
     if (_isDuplicatePartialCommand(cmd, t0)) {
@@ -130,6 +143,42 @@ class WearVoiceControlService {
     }
   }
 
+  void _emitPhrase(String phrase, int startedAt) {
+    final String trimmed = phrase.trim();
+    if (trimmed.isEmpty || _phraseController.isClosed) {
+      return;
+    }
+    final t1 = _now();
+    print(
+      '[WearVoiceControlService] emitting phrase: "$trimmed" '
+      'at=$t1 parseLatencyMs=${t1 - startedAt} '
+      'hasListener=${_phraseController.hasListener}',
+    );
+    _phraseController.add(trimmed);
+  }
+
+  void _emitPartialPhrase(String phrase, int startedAt) {
+    final String trimmed = phrase.trim();
+    final String normalized = VoiceListMatcher.normalize(trimmed);
+    if (normalized.length < _minPartialPhraseLength ||
+        _partialPhraseController.isClosed) {
+      return;
+    }
+    if (_lastPartialPhrase == normalized &&
+        startedAt - _lastPartialPhraseAt < _partialPhraseThrottleMs) {
+      return;
+    }
+    _lastPartialPhrase = normalized;
+    _lastPartialPhraseAt = startedAt;
+    final t1 = _now();
+    print(
+      '[WearVoiceControlService] emitting partial phrase: "$trimmed" '
+      'at=$t1 parseLatencyMs=${t1 - startedAt} '
+      'hasListener=${_partialPhraseController.hasListener}',
+    );
+    _partialPhraseController.add(trimmed);
+  }
+
   void _onRecognitionError(Object error, StackTrace stackTrace) {
     print('[WearVoiceControlService] ASR stream error: $error');
     if (!_commandController.isClosed) {
@@ -141,5 +190,7 @@ class WearVoiceControlService {
     await _recognitionSubscription?.cancel();
     await _partialRecognitionSubscription?.cancel();
     await _commandController.close();
+    await _phraseController.close();
+    await _partialPhraseController.close();
   }
 }

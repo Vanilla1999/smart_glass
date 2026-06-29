@@ -47,6 +47,13 @@ void main() {
         'закрой': WearVoiceCommand.cancel,
         'вернуться': WearVoiceCommand.back,
         'включить фонарик': WearVoiceCommand.flashlight,
+        'следующая страница': WearVoiceCommand.nextPage,
+        'дальше': WearVoiceCommand.nextPage,
+        'далее': WearVoiceCommand.nextPage,
+        'прошлая страница': WearVoiceCommand.previousPage,
+        'предыдущая страница': WearVoiceCommand.previousPage,
+        'страница назад': WearVoiceCommand.previousPage,
+        'назад страница': WearVoiceCommand.previousPage,
       };
 
       for (final MapEntry<String, WearVoiceCommand> entry in cases.entries) {
@@ -78,6 +85,8 @@ void main() {
       expect(parser.parse('давай напечатать'), WearVoiceCommand.print);
       expect(parser.parse('нужно продолжить'), WearVoiceCommand.continueScan);
       expect(parser.parse('можно вернуться'), WearVoiceCommand.back);
+      expect(
+          parser.parse('можно страница назад'), WearVoiceCommand.previousPage);
     });
 
     test('exposes grammar phrases for Vosk recognizer', () {
@@ -88,6 +97,10 @@ void main() {
           contains('прямое сканирование'));
       expect(VoiceCommandParserService.grammarPhrases,
           contains('включить фонарик'));
+      expect(VoiceCommandParserService.grammarPhrases,
+          contains('следующая страница'));
+      expect(VoiceCommandParserService.grammarPhrases,
+          contains('прошлая страница'));
     });
 
     test('does not parse partial words as commands', () {

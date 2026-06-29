@@ -1,4 +1,6 @@
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
 
 class WearVoiceSession {
   WearVoiceSession._();
@@ -10,6 +12,13 @@ class WearVoiceSession {
 
   Future<String> diagnostics() {
     return WearDependencies.I.speechRecognitionService.diagnostics();
+  }
+
+  Future<void> configureForScreen(WearScreenId screen) async {
+    final bool freeText = _usesFreeTextRecognition(screen);
+    await WearDependencies.I.speechRecognitionService.setRecognitionGrammar(
+      freeText ? null : VoiceCommandParserService.grammarPhrases,
+    );
   }
 
   Future<void> start() async {
@@ -76,5 +85,18 @@ class WearVoiceSession {
     if (lastAudioAgeMs == null || lastAudioAgeMs > 3000) {
       await restart(reason: '$reason staleAudioAgeMs=$lastAudioAgeMs');
     }
+  }
+
+  bool _usesFreeTextRecognition(WearScreenId screen) {
+    return switch (screen) {
+      WearScreenId.printerSelect ||
+      WearScreenId.productSelect ||
+      WearScreenId.availabilityGroup ||
+      WearScreenId.availabilityProduct ||
+      WearScreenId.availabilityFill ||
+      WearScreenId.printCodeInput =>
+        true,
+      _ => false,
+    };
   }
 }

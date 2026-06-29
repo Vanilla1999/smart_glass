@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
@@ -54,6 +55,10 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
         onDown: _onVoiceDown,
         onSelect: _onVoiceSelect,
         onCancel: _onVoiceCancel,
+        onNextPage: _onVoiceNextPage,
+        onPreviousPage: _onVoicePreviousPage,
+        onPhrase: _onVoicePhrase,
+        onPartialPhrase: _onVoicePartialPhrase,
       ),
     );
   }
@@ -72,15 +77,22 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
         widget.args?.products ?? <BarcodeProductInfo>[];
     if (products.isEmpty) return;
     final int idx = _focusedIndex.clamp(0, products.length - 1);
+    final int start = _pageStart(idx);
+    final List<BarcodeProductInfo> visibleProducts = products
+        .skip(start)
+        .take(_visibleGlassesItemCount)
+        .toList(growable: false);
     WearStatusIconReporter.I.sendFast(
       WearGlassesPayload(
         screenType: WearGlassesScreenType.productSelect,
         phase: WearGlassesPhase.idle,
         title: 'Дубль ШК',
         subtitle: 'Выберите нужный товар',
-        items: products.map((BarcodeProductInfo p) => p.name).toList(),
-        selectedIndex: idx,
-        pageText: products.length > 4 ? 'Показаны первые 4' : null,
+        items: visibleProducts
+            .map((BarcodeProductInfo p) => p.name)
+            .toList(growable: false),
+        selectedIndex: idx - start,
+        pageText: _pageText(products.length, idx),
       ),
     );
   }
@@ -125,9 +137,131 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
     context.pop(products[productIndex]);
   }
 
+  void _onVoiceNextPage() {
+    final List<BarcodeProductInfo> products =
+        widget.args?.products ?? <BarcodeProductInfo>[];
+    if (products.isEmpty) return;
+    final int currentPage = _focusedIndex ~/ _visibleGlassesItemCount;
+    final int nextIndex = (currentPage + 1) * _visibleGlassesItemCount;
+    if (nextIndex >= products.length) {
+      _showVoiceSearchMessage('Это последняя страница');
+      return;
+    }
+    _focusedIndex = nextIndex.clamp(0, products.length - 1);
+    _scrollToFocused();
+    _sendGlassesFocus();
+  }
+
+  void _onVoicePreviousPage() {
+    final List<BarcodeProductInfo> products =
+        widget.args?.products ?? <BarcodeProductInfo>[];
+    if (products.isEmpty) return;
+    final int currentPage = _focusedIndex ~/ _visibleGlassesItemCount;
+    if (currentPage == 0) {
+      _showVoiceSearchMessage('Это первая страница');
+      return;
+    }
+    final int previousIndex = (currentPage - 1) * _visibleGlassesItemCount;
+    _focusedIndex = previousIndex.clamp(0, products.length - 1);
+    _scrollToFocused();
+    _sendGlassesFocus();
+  }
+
+  void _onVoicePhrase(String phrase) {
+    final List<BarcodeProductInfo> products =
+        widget.args?.products ?? <BarcodeProductInfo>[];
+    if (products.isEmpty) return;
+    final VoiceListMatch<BarcodeProductInfo> match = VoiceListMatcher.match(
+      phrase,
+      products,
+      (BarcodeProductInfo product) => product.name,
+    );
+    switch (match.type) {
+      case VoiceListMatchType.none:
+        _showVoiceSearchMessage('Не найдено');
+        break;
+      case VoiceListMatchType.ambiguous:
+        _showVoiceSearchMessage('Назовите точнее');
+        break;
+      case VoiceListMatchType.unique:
+        final BarcodeProductInfo product = match.item!;
+        final int index = products.indexOf(product);
+        if (index >= 0) {
+          _focusedIndex = index;
+          _scrollToFocused();
+          _sendGlassesFocus();
+        }
+        context.pop(product);
+        break;
+    }
+  }
+
+  bool _onVoicePartialPhrase(String phrase) {
+    if (!VoiceListMatcher.canMatchPartial(phrase)) return false;
+    final List<BarcodeProductInfo> products =
+        widget.args?.products ?? <BarcodeProductInfo>[];
+    if (products.isEmpty) return false;
+    final VoiceListMatch<BarcodeProductInfo> match = VoiceListMatcher.match(
+      phrase,
+      products,
+      (BarcodeProductInfo product) => product.name,
+    );
+    if (match.type != VoiceListMatchType.unique) {
+      return false;
+    }
+
+    final BarcodeProductInfo product = match.item!;
+    final int index = products.indexOf(product);
+    if (index >= 0) {
+      _focusedIndex = index;
+      _scrollToFocused();
+      _sendGlassesFocus();
+    }
+    context.pop(product);
+    return true;
+  }
+
   void _onVoiceCancel() {
     if (!_isProductDialogOpen) return;
     Navigator.of(context, rootNavigator: true).pop();
+  }
+
+  void _scrollToFocused() {
+    if (!_scroll.hasClients) return;
+    final double target = ((_focusedIndex + 1) * 56.0).clamp(
+      0.0,
+      _scroll.position.maxScrollExtent,
+    );
+    _scroll.animateTo(
+      target,
+      duration: const Duration(milliseconds: 150),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _showVoiceSearchMessage(String message) {
+    WearStatusIconReporter.I.showTransientFastForScreen(
+      WearScreenId.productSelect,
+      WearGlassesPayload.status(
+        isError: true,
+        title: 'Голосовой выбор',
+        statusText: message,
+      ),
+    );
+  }
+
+  static const int _visibleGlassesItemCount = 4;
+
+  int _pageStart(int selectedIndex) {
+    return (selectedIndex ~/ _visibleGlassesItemCount) *
+        _visibleGlassesItemCount;
+  }
+
+  String? _pageText(int itemCount, int selectedIndex) {
+    if (itemCount <= _visibleGlassesItemCount) return null;
+    final int page = (selectedIndex ~/ _visibleGlassesItemCount) + 1;
+    final int pageCount = ((itemCount - 1) ~/ _visibleGlassesItemCount) + 1;
+    return 'Страница: $page из $pageCount';
   }
 
   @override
@@ -193,17 +327,7 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
           if (current.isEmpty) return;
           final int itemIndex = (listIndex - 1).clamp(0, current.length - 1);
           _focusedIndex = itemIndex;
-          WearStatusIconReporter.I.sendFast(
-            WearGlassesPayload(
-              screenType: WearGlassesScreenType.productSelect,
-              phase: WearGlassesPhase.idle,
-              title: 'Дубль ШК',
-              subtitle: 'Выберите нужный товар',
-              items: current.map((BarcodeProductInfo p) => p.name).toList(),
-              selectedIndex: itemIndex,
-              pageText: current.length > 4 ? 'Показаны первые 4' : null,
-            ),
-          );
+          _sendGlassesFocus();
         },
       ),
     );

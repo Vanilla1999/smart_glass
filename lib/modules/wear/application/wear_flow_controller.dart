@@ -13,6 +13,8 @@ import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availabilit
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 
 typedef WearFlowAction = FutureOr<void> Function();
+typedef WearFlowPhraseAction = FutureOr<void> Function(String phrase);
+typedef WearFlowPartialPhraseAction = FutureOr<bool> Function(String phrase);
 typedef WearFlashlightToggle = Future<void> Function();
 
 class WearScreenActionHandler {
@@ -35,6 +37,10 @@ class WearScreenActionHandler {
     this.onSwitchUser,
     this.onOpenDbSettings,
     this.onFillDatabase,
+    this.onNextPage,
+    this.onPreviousPage,
+    this.onPhrase,
+    this.onPartialPhrase,
   });
 
   final WearFlowAction? onUp;
@@ -55,6 +61,10 @@ class WearScreenActionHandler {
   final WearFlowAction? onSwitchUser;
   final WearFlowAction? onOpenDbSettings;
   final WearFlowAction? onFillDatabase;
+  final WearFlowAction? onNextPage;
+  final WearFlowAction? onPreviousPage;
+  final WearFlowPhraseAction? onPhrase;
+  final WearFlowPartialPhraseAction? onPartialPhrase;
 }
 
 class WearFlowController {
@@ -199,6 +209,20 @@ class WearFlowController {
     }
   }
 
+  Future<void> handleVoicePhrase(String phrase) async {
+    final String trimmed = phrase.trim();
+    if (trimmed.isEmpty) return;
+    print('[WearFlowController] phrase="$trimmed" state=$_state');
+    await _invokeScreenPhrase(_state.screen, trimmed);
+  }
+
+  Future<bool> handleVoicePartialPhrase(String phrase) async {
+    final String trimmed = phrase.trim();
+    if (trimmed.isEmpty) return false;
+    print('[WearFlowController] partial phrase="$trimmed" state=$_state');
+    return _invokeScreenPartialPhrase(_state.screen, trimmed);
+  }
+
   Future<void> _drainCommandQueue() async {
     _isProcessingCommand = true;
     while (_commandQueue.isNotEmpty) {
@@ -308,6 +332,18 @@ class WearFlowController {
           case WearVoiceCommand.cancel:
             await _invokeScreenAction(
                 _state.screen, (handler) => handler.onCancel);
+            break;
+          case WearVoiceCommand.nextPage:
+            await _invokeScreenAction(
+              _state.screen,
+              (handler) => handler.onNextPage,
+            );
+            break;
+          case WearVoiceCommand.previousPage:
+            await _invokeScreenAction(
+              _state.screen,
+              (handler) => handler.onPreviousPage,
+            );
             break;
         }
       } catch (error, stackTrace) {
@@ -714,6 +750,34 @@ class WearFlowController {
     print('[WearFlowController] invoke screen action screen=$screen');
     await action();
     return true;
+  }
+
+  Future<bool> _invokeScreenPhrase(WearScreenId screen, String phrase) async {
+    final WearScreenActionHandler? handler = _screenActions[screen];
+    final WearFlowPhraseAction? action =
+        (handler ?? const WearScreenActionHandler()).onPhrase;
+    if (action == null) {
+      print('[WearFlowController] no phrase action screen=$screen');
+      return false;
+    }
+    print('[WearFlowController] invoke phrase action screen=$screen');
+    await action(phrase);
+    return true;
+  }
+
+  Future<bool> _invokeScreenPartialPhrase(
+    WearScreenId screen,
+    String phrase,
+  ) async {
+    final WearScreenActionHandler? handler = _screenActions[screen];
+    final WearFlowPartialPhraseAction? action =
+        (handler ?? const WearScreenActionHandler()).onPartialPhrase;
+    if (action == null) {
+      print('[WearFlowController] no partial phrase action screen=$screen');
+      return false;
+    }
+    print('[WearFlowController] invoke partial phrase action screen=$screen');
+    return action(phrase);
   }
 
   Future<void> _renderGlasses() async {

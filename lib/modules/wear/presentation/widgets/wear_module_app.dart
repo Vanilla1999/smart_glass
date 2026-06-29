@@ -10,6 +10,7 @@ import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_navigation_output.dart';
@@ -27,6 +28,8 @@ class WearModuleApp extends StatefulWidget {
     this.onRouterReady,
     this.flowController,
     this.voiceCommandStream,
+    this.voicePhraseStream,
+    this.voicePartialPhraseStream,
     this.routes,
     this.initialLocation,
     this.onStartVoice,
@@ -37,6 +40,8 @@ class WearModuleApp extends StatefulWidget {
   final ValueChanged<GoRouter>? onRouterReady;
   final WearFlowController? flowController;
   final Stream<WearVoiceCommand>? voiceCommandStream;
+  final Stream<String>? voicePhraseStream;
+  final Stream<String>? voicePartialPhraseStream;
   final List<RouteBase>? routes;
   final String? initialLocation;
   final Future<void> Function()? onStartVoice;
@@ -51,20 +56,45 @@ class _WearModuleAppState extends State<WearModuleApp>
     with WidgetsBindingObserver {
   late final GoRouter _router;
   StreamSubscription<WearVoiceCommand>? _voiceSub;
+  StreamSubscription<String>? _voicePhraseSub;
+  StreamSubscription<String>? _voicePartialPhraseSub;
+  StreamSubscription<WearFlowState>? _flowStateSub;
   StreamSubscription<dynamic>? _authorizedSub;
   Timer? _voiceHealthTimer;
   bool _voiceStarted = false;
   bool _voiceStarting = false;
   String? _voiceStartError;
+  String? _consumedPartialPhrase;
+  int _consumedPartialPhraseAt = 0;
 
   static const Duration _minimumVoiceLoaderDuration = Duration(seconds: 10);
+  static const int _finalPhraseSuppressMs = 1500;
 
   WearFlowController get _flow =>
       widget.flowController ?? WearDependencies.I.wearFlowController;
 
-  Stream<WearVoiceCommand> get _voiceCommands =>
-      widget.voiceCommandStream ??
-      WearDependencies.I.voiceControlService.commandStream;
+  Stream<WearVoiceCommand> get _voiceCommands {
+    final Stream<WearVoiceCommand>? stream = widget.voiceCommandStream;
+    if (stream != null) return stream;
+    if (widget.onStartVoice != null) {
+      return const Stream<WearVoiceCommand>.empty();
+    }
+    return WearDependencies.I.voiceControlService.commandStream;
+  }
+
+  Stream<String> get _voicePhrases {
+    final Stream<String>? stream = widget.voicePhraseStream;
+    if (stream != null) return stream;
+    if (widget.onStartVoice != null) return const Stream<String>.empty();
+    return WearDependencies.I.voiceControlService.phraseStream;
+  }
+
+  Stream<String> get _voicePartialPhrases {
+    final Stream<String>? stream = widget.voicePartialPhraseStream;
+    if (stream != null) return stream;
+    if (widget.onStartVoice != null) return const Stream<String>.empty();
+    return WearDependencies.I.voiceControlService.partialPhraseStream;
+  }
 
   @override
   void initState() {
@@ -103,6 +133,67 @@ class _WearModuleAppState extends State<WearModuleApp>
         print('[WearModuleApp] voice command stream error=$error\n$stackTrace');
       },
     );
+    _voicePhraseSub = _voicePhrases.listen(
+      (String phrase) async {
+        final int startedAt = DateTime.now().millisecondsSinceEpoch;
+        if (_shouldSuppressFinalPhrase(phrase, startedAt)) {
+          print(
+            '[WearModuleApp] suppress final phrase after consumed partial '
+            'phrase="$phrase" screen=${flow.state.screen}',
+          );
+          return;
+        }
+        print(
+          '[WearModuleApp] voice phrase received phrase="$phrase" '
+          'screen=${flow.state.screen} at=$startedAt',
+        );
+        await flow.handleVoicePhrase(phrase);
+        final int finishedAt = DateTime.now().millisecondsSinceEpoch;
+        print(
+          '[WearModuleApp] voice phrase handled phrase="$phrase" '
+          'screen=${flow.state.screen} durationMs=${finishedAt - startedAt}',
+        );
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        print('[WearModuleApp] voice phrase stream error=$error\n$stackTrace');
+      },
+    );
+    _voicePartialPhraseSub = _voicePartialPhrases.listen(
+      (String phrase) async {
+        final int startedAt = DateTime.now().millisecondsSinceEpoch;
+        if (_shouldSuppressConsumedPartialPhrase(phrase, startedAt)) {
+          print(
+            '[WearModuleApp] suppress partial phrase after consumed partial '
+            'phrase="$phrase" screen=${flow.state.screen}',
+          );
+          return;
+        }
+        print(
+          '[WearModuleApp] voice partial phrase received phrase="$phrase" '
+          'screen=${flow.state.screen} at=$startedAt',
+        );
+        final bool consumed = await flow.handleVoicePartialPhrase(phrase);
+        if (consumed) {
+          _consumedPartialPhrase = VoiceListMatcher.normalize(phrase);
+          _consumedPartialPhraseAt = startedAt;
+        }
+        final int finishedAt = DateTime.now().millisecondsSinceEpoch;
+        print(
+          '[WearModuleApp] voice partial phrase handled phrase="$phrase" '
+          'screen=${flow.state.screen} consumed=$consumed '
+          'durationMs=${finishedAt - startedAt}',
+        );
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        print(
+          '[WearModuleApp] voice partial phrase stream error=$error\n$stackTrace',
+        );
+      },
+    );
+    _flowStateSub = flow.stateStream.listen((WearFlowState state) {
+      _configureVoiceForScreen(state.screen);
+    });
+    _configureVoiceForScreen(flow.state.screen);
     _authorizedSub = WearSession.authorizedStream.listen((_) {
       if (!_voiceStarted) {
         _startVoice('authorized');
@@ -147,6 +238,35 @@ class _WearModuleAppState extends State<WearModuleApp>
       print('[ROUTER-CHANGE] enterScreen $screenId');
       flow.enterScreen(screenId, extra: _router.state.extra);
     }
+  }
+
+  bool _shouldSuppressFinalPhrase(String phrase, int now) {
+    return _shouldSuppressConsumedPartialPhrase(phrase, now);
+  }
+
+  bool _shouldSuppressConsumedPartialPhrase(String phrase, int now) {
+    final String normalized = VoiceListMatcher.normalize(phrase);
+    if (normalized.isEmpty || _consumedPartialPhrase == null) {
+      return false;
+    }
+    if (now - _consumedPartialPhraseAt > _finalPhraseSuppressMs) {
+      return false;
+    }
+    return normalized == _consumedPartialPhrase ||
+        normalized.contains(_consumedPartialPhrase!) ||
+        _consumedPartialPhrase!.contains(normalized);
+  }
+
+  void _configureVoiceForScreen(WearScreenId screen) {
+    if (widget.onStartVoice != null) return;
+    WearVoiceSession.I.configureForScreen(screen).catchError(
+      (Object error, StackTrace stackTrace) {
+        print(
+          '[WearModuleApp] configure voice failed screen=$screen '
+          'error=$error\n$stackTrace',
+        );
+      },
+    );
   }
 
   void _startVoice(String source) {
@@ -304,6 +424,9 @@ class _WearModuleAppState extends State<WearModuleApp>
     WidgetsBinding.instance.removeObserver(this);
     _router.routerDelegate.removeListener(_onRouterChange);
     _voiceSub?.cancel();
+    _voicePhraseSub?.cancel();
+    _voicePartialPhraseSub?.cancel();
+    _flowStateSub?.cancel();
     _authorizedSub?.cancel();
     _flow.setNavigationOutput(
       NoopWearNavigationOutput(),
