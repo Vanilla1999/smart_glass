@@ -46,6 +46,7 @@ class _WearAvailabilityDirectScanScreenState
         onUp: _onVoiceUp,
         onDown: _onVoiceDown,
         onSelect: _onVoiceSelect,
+        onManualInput: _manualInput,
       ),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {

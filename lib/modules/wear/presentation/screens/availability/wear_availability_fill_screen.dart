@@ -45,6 +45,8 @@ class _WearAvailabilityFillScreenState extends State<WearAvailabilityFillScreen>
       WearScreenActionHandler(
         onSelect: _manualInput,
         onDown: _reset,
+        onManualInput: _manualInput,
+        onClear: _reset,
       ),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {

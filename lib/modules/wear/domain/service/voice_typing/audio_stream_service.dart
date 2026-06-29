@@ -95,7 +95,7 @@ class AudioStreamService {
         sampleRate: 16000,
         numChannels: 1,
         androidConfig: AndroidRecordConfig(
-          audioSource: AndroidAudioSource.mic,
+          audioSource: AndroidAudioSource.voiceRecognition,
           service: AndroidService(
             title: 'Smart Glasses',
             content: 'Голосовое управление активно',

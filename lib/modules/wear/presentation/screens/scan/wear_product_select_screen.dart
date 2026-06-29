@@ -38,6 +38,7 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
     with ScreenLifecycleLogging<WearProductSelectScreen> {
   final ScrollController _scroll = ScrollController();
   int _focusedIndex = 0;
+  bool _isProductDialogOpen = false;
 
   @override
   void initState() {
@@ -52,6 +53,7 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
         onUp: _onVoiceUp,
         onDown: _onVoiceDown,
         onSelect: _onVoiceSelect,
+        onCancel: _onVoiceCancel,
       ),
     );
   }
@@ -121,6 +123,11 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
     if (products.isEmpty) return;
     final int productIndex = _focusedIndex.clamp(0, products.length - 1);
     context.pop(products[productIndex]);
+  }
+
+  void _onVoiceCancel() {
+    if (!_isProductDialogOpen) return;
+    Navigator.of(context, rootNavigator: true).pop();
   }
 
   @override
@@ -227,6 +234,7 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
     BuildContext context,
     BarcodeProductInfo product,
   ) async {
+    _isProductDialogOpen = true;
     await showDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -308,6 +316,7 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
         );
       },
     );
+    _isProductDialogOpen = false;
   }
 
   String _buildTitle(BarcodeProductInfo product) {

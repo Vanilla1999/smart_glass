@@ -39,6 +39,7 @@ class _WearHomeConfirmScreenState extends State<WearHomeConfirmScreen>
         onDown: _focusCancel,
         onSelect: _selectFocused,
         onBack: _cancel,
+        onCancel: _cancel,
       ),
     );
     _flowSub = _flow.stateStream.listen(_onFlowState);

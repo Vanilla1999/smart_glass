@@ -38,6 +38,10 @@ class _WearSettingsScreenState extends ConsumerState<WearSettingsScreen> {
         onUp: _onVoiceUp,
         onDown: _onVoiceDown,
         onSelect: _onVoiceSelect,
+        onConnectScanner: _connectRingScanner,
+        onSwitchUser: _switchUser,
+        onOpenDbSettings: _switchDB,
+        onFillDatabase: _openAvailabilityFill,
       ),
     );
   }

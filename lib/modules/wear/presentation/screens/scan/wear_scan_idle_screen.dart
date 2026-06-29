@@ -53,7 +53,10 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen>
     );
     WearDependencies.I.wearFlowController.registerScreenActions(
       WearScreenId.scanIdle,
-      WearScreenActionHandler(onSelect: _onVoiceSelect),
+      WearScreenActionHandler(
+        onSelect: _onVoiceSelect,
+        onManualInput: _onVoiceSelect,
+      ),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       WearStatusIconReporter.I.send(WearGlassesPayload.scanWaiting());

@@ -4,7 +4,6 @@ class WearVoiceSession {
   WearVoiceSession._();
 
   static final WearVoiceSession I = WearVoiceSession._();
-  static const int _silentAudioRestartMs = 3000;
 
   bool get isListening =>
       WearDependencies.I.speechRecognitionService.isListening;
@@ -76,14 +75,6 @@ class WearVoiceSession {
 
     if (lastAudioAgeMs == null || lastAudioAgeMs > 3000) {
       await restart(reason: '$reason staleAudioAgeMs=$lastAudioAgeMs');
-      return;
-    }
-
-    if (lastNonSilentAudioAgeMs != null &&
-        lastNonSilentAudioAgeMs > _silentAudioRestartMs) {
-      await restart(
-        reason: '$reason silentAudioAgeMs=$lastNonSilentAudioAgeMs',
-      );
     }
   }
 }

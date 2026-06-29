@@ -24,6 +24,17 @@ class WearScreenActionHandler {
     this.onNo,
     this.onBack,
     this.onHome,
+    this.onManualInput,
+    this.onPrint,
+    this.onPhoto,
+    this.onBackToList,
+    this.onClear,
+    this.onSave,
+    this.onCancel,
+    this.onConnectScanner,
+    this.onSwitchUser,
+    this.onOpenDbSettings,
+    this.onFillDatabase,
   });
 
   final WearFlowAction? onUp;
@@ -33,6 +44,17 @@ class WearScreenActionHandler {
   final WearFlowAction? onNo;
   final WearFlowAction? onBack;
   final WearFlowAction? onHome;
+  final WearFlowAction? onManualInput;
+  final WearFlowAction? onPrint;
+  final WearFlowAction? onPhoto;
+  final WearFlowAction? onBackToList;
+  final WearFlowAction? onClear;
+  final WearFlowAction? onSave;
+  final WearFlowAction? onCancel;
+  final WearFlowAction? onConnectScanner;
+  final WearFlowAction? onSwitchUser;
+  final WearFlowAction? onOpenDbSettings;
+  final WearFlowAction? onFillDatabase;
 }
 
 class WearFlowController {
@@ -211,6 +233,82 @@ class WearFlowController {
           case WearVoiceCommand.flashlight:
             await _flashlightToggle();
             break;
+          case WearVoiceCommand.openPrintPriceTag:
+            await _handleOpenPrintPriceTag();
+            break;
+          case WearVoiceCommand.openAvailability:
+            await _handleOpenAvailability();
+            break;
+          case WearVoiceCommand.openHelp:
+            await _handleOpenHelp();
+            break;
+          case WearVoiceCommand.openSettings:
+            await _handleOpenSettings();
+            break;
+          case WearVoiceCommand.connectScanner:
+            await _invokeScreenAction(
+              _state.screen,
+              (handler) => handler.onConnectScanner,
+            );
+            break;
+          case WearVoiceCommand.switchUser:
+            await _invokeScreenAction(
+              _state.screen,
+              (handler) => handler.onSwitchUser,
+            );
+            break;
+          case WearVoiceCommand.openDbSettings:
+            await _invokeScreenAction(
+              _state.screen,
+              (handler) => handler.onOpenDbSettings,
+            );
+            break;
+          case WearVoiceCommand.fillDatabase:
+            await _invokeScreenAction(
+              _state.screen,
+              (handler) => handler.onFillDatabase,
+            );
+            break;
+          case WearVoiceCommand.continueScan:
+            await _handleContinueScan();
+            break;
+          case WearVoiceCommand.manualInput:
+            await _invokeScreenAction(
+              _state.screen,
+              (handler) => handler.onManualInput,
+            );
+            break;
+          case WearVoiceCommand.print:
+            await _handlePrint();
+            break;
+          case WearVoiceCommand.takePhoto:
+            await _invokeScreenAction(
+                _state.screen, (handler) => handler.onPhoto);
+            break;
+          case WearVoiceCommand.backToList:
+            await _invokeScreenAction(
+              _state.screen,
+              (handler) => handler.onBackToList,
+            );
+            break;
+          case WearVoiceCommand.clear:
+            await _invokeScreenAction(
+                _state.screen, (handler) => handler.onClear);
+            break;
+          case WearVoiceCommand.save:
+            await _invokeScreenAction(
+                _state.screen, (handler) => handler.onSave);
+            break;
+          case WearVoiceCommand.openList:
+            await _handleOpenList();
+            break;
+          case WearVoiceCommand.openDirectScan:
+            await _handleOpenDirectScan();
+            break;
+          case WearVoiceCommand.cancel:
+            await _invokeScreenAction(
+                _state.screen, (handler) => handler.onCancel);
+            break;
         }
       } catch (error, stackTrace) {
         print('[WearFlowController] command error=$error\n$stackTrace');
@@ -312,7 +410,11 @@ class WearFlowController {
   }
 
   Future<void> _handleHome() async {
-    if (_state.screen == WearScreenId.homeConfirm) return;
+    if (_state.screen == WearScreenId.homeConfirm) {
+      _setHomeConfirmFocus(0);
+      await _selectHomeConfirm();
+      return;
+    }
     final WearScreenId returnScreen = _state.screen;
     if (_uiLifecycle == WearUiLifecycle.active) {
       await _invokeScreenAction(_state.screen, (handler) => handler.onHome);
@@ -323,7 +425,63 @@ class WearFlowController {
 
   Future<void> _handleFinish() async {
     if (_uiLifecycle == WearUiLifecycle.inactive) return;
+    if (_state.screen == WearScreenId.continueScan) {
+      _setContinueScanFocus(1);
+    }
     await _invokeScreenAction(_state.screen, (handler) => handler.onSelect);
+  }
+
+  Future<void> _handleOpenPrintPriceTag() async {
+    if (_state.screen == WearScreenId.menu) {
+      await selectMenuIndex(0);
+    }
+  }
+
+  Future<void> _handlePrint() async {
+    if (_state.screen == WearScreenId.menu) {
+      await selectMenuIndex(0);
+      return;
+    }
+    await _invokeScreenAction(_state.screen, (handler) => handler.onPrint);
+  }
+
+  Future<void> _handleOpenAvailability() async {
+    if (_state.screen == WearScreenId.menu) {
+      await selectMenuIndex(1);
+    }
+  }
+
+  Future<void> _handleOpenHelp() async {
+    if (_state.screen == WearScreenId.menu) {
+      await selectMenuIndex(2);
+    }
+  }
+
+  Future<void> _handleOpenSettings() async {
+    if (_state.screen == WearScreenId.menu) {
+      await selectMenuIndex(3);
+    }
+  }
+
+  Future<void> _handleContinueScan() async {
+    if (_state.screen == WearScreenId.continueScan) {
+      _setContinueScanFocus(0);
+      await _handleSelect();
+    }
+  }
+
+  Future<void> _handleOpenList() async {
+    if (_state.screen == WearScreenId.availabilityInteraction) {
+      await selectAvailabilityInteractionIndex(0);
+      return;
+    }
+    await _invokeScreenAction(_state.screen, (handler) => handler.onBackToList);
+  }
+
+  Future<void> _handleOpenDirectScan() async {
+    if (_state.screen == WearScreenId.availabilityInteraction) {
+      await selectAvailabilityInteractionIndex(1);
+    }
   }
 
   static Future<void> _toggleScannerFlashlight() async {

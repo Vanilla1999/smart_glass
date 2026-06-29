@@ -30,6 +30,21 @@ void main() {
         'закончить': WearVoiceCommand.finish,
         'готово': WearVoiceCommand.finish,
         'фонарик': WearVoiceCommand.flashlight,
+        'подтвердить': WearVoiceCommand.select,
+        'принять': WearVoiceCommand.select,
+        'печать ценника': WearVoiceCommand.openPrintPriceTag,
+        'печать ценников': WearVoiceCommand.openPrintPriceTag,
+        'напечатать': WearVoiceCommand.print,
+        'продолжить': WearVoiceCommand.continueScan,
+        'ручной ввод': WearVoiceCommand.manualInput,
+        'сделать фото': WearVoiceCommand.takePhoto,
+        'к списку': WearVoiceCommand.backToList,
+        'прямое сканирование': WearVoiceCommand.openDirectScan,
+        'отмена': WearVoiceCommand.cancel,
+        'закрыть': WearVoiceCommand.cancel,
+        'закрой': WearVoiceCommand.cancel,
+        'вернуться': WearVoiceCommand.back,
+        'включить фонарик': WearVoiceCommand.flashlight,
       };
 
       for (final MapEntry<String, WearVoiceCommand> entry in cases.entries) {
@@ -56,6 +71,21 @@ void main() {
       expect(parser.parse('включи фонарик пожалуйста'),
           WearVoiceCommand.flashlight);
       expect(parser.parse('можно завершить'), WearVoiceCommand.finish);
+      expect(parser.parse('можно печать ценника'),
+          WearVoiceCommand.openPrintPriceTag);
+      expect(parser.parse('давай напечатать'), WearVoiceCommand.print);
+      expect(parser.parse('нужно продолжить'), WearVoiceCommand.continueScan);
+      expect(parser.parse('можно вернуться'), WearVoiceCommand.back);
+    });
+
+    test('exposes grammar phrases for Vosk recognizer', () {
+      expect(VoiceCommandParserService.grammarPhrases, contains('вверх'));
+      expect(
+          VoiceCommandParserService.grammarPhrases, contains('печать ценника'));
+      expect(VoiceCommandParserService.grammarPhrases,
+          contains('прямое сканирование'));
+      expect(VoiceCommandParserService.grammarPhrases,
+          contains('включить фонарик'));
     });
 
     test('does not parse partial words as commands', () {

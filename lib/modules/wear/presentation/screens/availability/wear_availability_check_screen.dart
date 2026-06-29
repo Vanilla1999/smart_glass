@@ -59,6 +59,10 @@ class _WearAvailabilityCheckScreenState
         onSelect: _onVoiceSelectForCurrentProduct,
         onYes: _onVoiceYes,
         onNo: _onVoiceNo,
+        onManualInput: _onVoiceManualInput,
+        onPrint: _onVoicePrint,
+        onPhoto: _onVoicePhoto,
+        onBackToList: _onVoiceBackToList,
       ),
     );
   }
@@ -220,6 +224,51 @@ class _WearAvailabilityCheckScreenState
     final WearAvailabilityProduct? product = widget.product;
     if (product == null) return;
     _onVoiceSelect(wearAvailabilityCheckNotifierProvider(product));
+  }
+
+  void _onVoiceManualInput() {
+    final WearAvailabilityProduct? product = widget.product;
+    if (product == null) return;
+    final provider = wearAvailabilityCheckNotifierProvider(product);
+    final WearAvailabilityCheckState state = ref.read(provider);
+    if (state.isLoading) return;
+    if (state.flow.step == WearAvailabilityFlowStep.productScan ||
+        state.flow.step == WearAvailabilityFlowStep.priceTagScan) {
+      _manualInput(provider);
+    }
+  }
+
+  void _onVoicePrint() {
+    final WearAvailabilityProduct? product = widget.product;
+    if (product == null) return;
+    final provider = wearAvailabilityCheckNotifierProvider(product);
+    final WearAvailabilityCheckState state = ref.read(provider);
+    if (state.isLoading) return;
+    if (state.flow.step == WearAvailabilityFlowStep.priceTagOutdated) {
+      _printPriceTag(provider);
+    }
+  }
+
+  void _onVoicePhoto() {
+    final WearAvailabilityProduct? product = widget.product;
+    if (product == null) return;
+    final provider = wearAvailabilityCheckNotifierProvider(product);
+    final WearAvailabilityCheckState state = ref.read(provider);
+    if (state.isLoading) return;
+    if (state.flow.step == WearAvailabilityFlowStep.photoCapture) {
+      ref.read(provider.notifier).capturePhoto();
+    }
+  }
+
+  void _onVoiceBackToList() {
+    final WearAvailabilityProduct? product = widget.product;
+    if (product == null) return;
+    final provider = wearAvailabilityCheckNotifierProvider(product);
+    final WearAvailabilityCheckState state = ref.read(provider);
+    if (state.isLoading) return;
+    if (state.flow.step == WearAvailabilityFlowStep.completed) {
+      context.pop();
+    }
   }
 
   Future<void> _manualInput(

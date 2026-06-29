@@ -236,7 +236,7 @@ void main() {
       expect(navigation.homeCalls, 0);
     });
 
-    test('home on home confirm does not push duplicate route', () async {
+    test('home on home confirm selects home', () async {
       final _FakeNavigationOutput navigation = _FakeNavigationOutput();
       final WearFlowController controller = WearFlowController(
         glassesOutput: _FakeGlassesOutput(),
@@ -248,8 +248,9 @@ void main() {
       await controller.handleVoiceCommand(WearVoiceCommand.home);
       await controller.handleVoiceCommand(WearVoiceCommand.home);
 
-      expect(controller.state.screen, WearScreenId.homeConfirm);
+      expect(controller.state.screen, WearScreenId.menu);
       expect(navigation.goToCalls, <WearScreenId>[WearScreenId.homeConfirm]);
+      expect(navigation.homeCalls, 1);
     });
 
     test('home confirm selects home with replace navigation', () async {
@@ -452,6 +453,92 @@ void main() {
       expect(glasses.payloads.last.screenType, WearGlassesScreenType.printer);
       expect(glasses.payloads.last.phase, WearGlassesPhase.loading);
       expect(nav.goToCalls, <WearScreenId>[WearScreenId.printerSelect]);
+    });
+
+    test('direct print price tag command navigates from menu to printerSelect',
+        () async {
+      final nav = _FakeNavigationOutput();
+      final controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: nav,
+      );
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.menu);
+      await controller.handleVoiceCommand(WearVoiceCommand.down);
+
+      await controller.handleVoiceCommand(WearVoiceCommand.openPrintPriceTag);
+
+      expect(controller.state.screen, WearScreenId.printerSelect);
+      expect(controller.state.menuFocusedIndex, 0);
+      expect(nav.goToCalls, <WearScreenId>[WearScreenId.printerSelect]);
+    });
+
+    test('short print command also navigates from menu to printerSelect',
+        () async {
+      final nav = _FakeNavigationOutput();
+      final controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: nav,
+      );
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.menu);
+
+      await controller.handleVoiceCommand(WearVoiceCommand.print);
+
+      expect(controller.state.screen, WearScreenId.printerSelect);
+      expect(nav.goToCalls, <WearScreenId>[WearScreenId.printerSelect]);
+    });
+
+    test('direct availability command navigates from menu to availability',
+        () async {
+      final nav = _FakeNavigationOutput();
+      final controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: nav,
+      );
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.menu);
+
+      await controller.handleVoiceCommand(WearVoiceCommand.openAvailability);
+
+      expect(controller.state.screen, WearScreenId.availabilityInteraction);
+      expect(controller.state.menuFocusedIndex, 1);
+      expect(
+          nav.goToCalls, <WearScreenId>[WearScreenId.availabilityInteraction]);
+    });
+
+    test('direct list command chooses list in availability interaction',
+        () async {
+      final nav = _FakeNavigationOutput();
+      final controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: nav,
+      );
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.availabilityInteraction);
+      await controller.handleVoiceCommand(WearVoiceCommand.down);
+
+      await controller.handleVoiceCommand(WearVoiceCommand.openList);
+
+      expect(controller.state.availabilityInteractionFocusedIndex, 0);
+      expect(nav.goToCalls, <WearScreenId>[WearScreenId.availabilityGroup]);
+    });
+
+    test('direct scan command chooses direct scan in availability interaction',
+        () async {
+      final nav = _FakeNavigationOutput();
+      final controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: nav,
+      );
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.availabilityInteraction);
+
+      await controller.handleVoiceCommand(WearVoiceCommand.openDirectScan);
+
+      expect(controller.state.availabilityInteractionFocusedIndex, 1);
+      expect(
+          nav.goToCalls, <WearScreenId>[WearScreenId.availabilityDirectScan]);
     });
 
     test('menu item 1 select navigates to availabilityInteraction', () async {
