@@ -5,6 +5,8 @@ class VoiceCommandParserService {
       <String, WearVoiceCommand>{
     'вверх': WearVoiceCommand.up,
     'верх': WearVoiceCommand.up,
+    'бер': WearVoiceCommand.up,
+    'сбер': WearVoiceCommand.up,
     'наверх': WearVoiceCommand.up,
     'на верх': WearVoiceCommand.up,
     'выше': WearVoiceCommand.up,
@@ -86,6 +88,8 @@ class VoiceCommandParserService {
       <WearVoiceCommand, List<String>>{
     WearVoiceCommand.up: <String>[
       'вверх',
+      'бер',
+      'сбер',
       'наверх',
       'выше',
       'подними',

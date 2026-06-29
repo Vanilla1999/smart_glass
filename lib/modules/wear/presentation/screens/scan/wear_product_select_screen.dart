@@ -192,6 +192,7 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
               widget.args?.products ?? <BarcodeProductInfo>[];
           if (current.isEmpty) return;
           final int itemIndex = (listIndex - 1).clamp(0, current.length - 1);
+          _focusedIndex = itemIndex;
           WearStatusIconReporter.I.sendFast(
             WearGlassesPayload(
               screenType: WearGlassesScreenType.productSelect,

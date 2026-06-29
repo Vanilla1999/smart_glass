@@ -13,6 +13,8 @@ void main() {
     test('parses exact Russian command aliases', () {
       const Map<String, WearVoiceCommand> cases = <String, WearVoiceCommand>{
         'вверх': WearVoiceCommand.up,
+        'бер': WearVoiceCommand.up,
+        'сбер': WearVoiceCommand.up,
         'на верх': WearVoiceCommand.up,
         'выше': WearVoiceCommand.up,
         'вниз': WearVoiceCommand.down,
