@@ -61,6 +61,9 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
         onPartialPhrase: _onVoicePartialPhrase,
       ),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _sendGlassesFocus();
+    });
   }
 
   @override
@@ -82,18 +85,24 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
         .skip(start)
         .take(_visibleGlassesItemCount)
         .toList(growable: false);
-    WearStatusIconReporter.I.sendFast(
-      WearGlassesPayload(
-        screenType: WearGlassesScreenType.productSelect,
-        phase: WearGlassesPhase.idle,
-        title: 'Дубль ШК',
-        subtitle: 'Выберите нужный товар',
-        items: visibleProducts
-            .map((BarcodeProductInfo p) => p.name)
-            .toList(growable: false),
-        selectedIndex: idx - start,
-        pageText: _pageText(products.length, idx),
-      ),
+    final WearGlassesPayload payload = WearGlassesPayload(
+      screenType: WearGlassesScreenType.productSelect,
+      phase: WearGlassesPhase.idle,
+      title: 'Дубль ШК',
+      subtitle: 'Выберите нужный товар',
+      items: visibleProducts
+          .map((BarcodeProductInfo p) => p.name)
+          .toList(growable: false),
+      selectedIndex: idx - start,
+      pageText: _pageText(products.length, idx),
+    );
+    WearDependencies.I.wearFlowController.rememberScreenPayload(
+      WearScreenId.productSelect,
+      payload,
+    );
+    WearStatusIconReporter.I.sendFastForScreen(
+      WearScreenId.productSelect,
+      payload,
     );
   }
 
@@ -217,8 +226,7 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
       _scrollToFocused();
       _sendGlassesFocus();
     }
-    context.pop(product);
-    return true;
+    return false;
   }
 
   void _onVoiceCancel() {

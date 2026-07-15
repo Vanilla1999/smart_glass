@@ -49,6 +49,31 @@ class VoiceListMatcher {
     return normalize(phrase).length >= minPartialMatchLength;
   }
 
+  static VoiceListMatch<T> matchExactWord<T>(
+    String phrase,
+    List<T> items,
+    String Function(T item) labelOf, {
+    int minLength = 1,
+  }) {
+    final String query = normalize(phrase);
+    if (query.length < minLength || query.contains(' ') || items.isEmpty) {
+      return VoiceListMatch<T>.none();
+    }
+
+    final List<T> matches = items.where((T item) {
+      final List<String> words = normalize(labelOf(item)).split(' ');
+      return words.contains(query);
+    }).toList(growable: false);
+
+    if (matches.isEmpty) {
+      return VoiceListMatch<T>.none();
+    }
+    if (matches.length == 1) {
+      return VoiceListMatch<T>.unique(matches.single);
+    }
+    return VoiceListMatch<T>.ambiguous(matches);
+  }
+
   static VoiceListMatch<T> match<T>(
     String phrase,
     List<T> items,
@@ -63,7 +88,7 @@ class VoiceListMatcher {
     final List<T> matches = items.where((T item) {
       final String label = normalize(labelOf(item));
       if (label.isEmpty) return false;
-      if (label.contains(query)) return true;
+      if (_containsPhrase(label, query)) return true;
       return _allQueryWordsMatch(queryWords, label.split(' '));
     }).toList(growable: false);
 
@@ -97,7 +122,7 @@ class VoiceListMatcher {
   }
 
   static bool _wordMatches(String queryWord, String labelWord) {
-    if (labelWord.contains(queryWord) || queryWord.contains(labelWord)) {
+    if (labelWord == queryWord) {
       return true;
     }
     final int shorterLength = queryWord.length < labelWord.length
@@ -112,6 +137,13 @@ class VoiceListMatcher {
       return false;
     }
     return commonPrefix / shorterLength >= _minFuzzyPrefixRatio;
+  }
+
+  static bool _containsPhrase(String label, String query) {
+    return label == query ||
+        label.startsWith('$query ') ||
+        label.endsWith(' $query') ||
+        label.contains(' $query ');
   }
 
   static int _commonPrefixLength(String left, String right) {

@@ -21,8 +21,13 @@ import io.flutter.embedding.engine.FlutterEngineGroup
 import io.flutter.embedding.engine.dart.DartExecutor
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.embedding.android.FlutterView
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : FlutterFragmentActivity() {
+    companion object {
+        private const val WEAR_OPERATION_TIMEOUT_MS = 5_000L
+    }
+
     private var engineGroup: FlutterEngineGroup? = null
     private var glassesEngine: FlutterEngine? = null
     private var glassesChannel: MethodChannel? = null
@@ -31,7 +36,10 @@ class MainActivity : FlutterFragmentActivity() {
     private var currentCounter = 0
     private var currentRecognizedText = ""
     private var currentWearGlassesPayload: Map<*, *>? = null
+    private var wearProjectionGeneration = 0
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val pendingWearResults = mutableSetOf<BoundedResult>()
+    private var pendingWearShowResult: BoundedResult? = null
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -83,19 +91,16 @@ class MainActivity : FlutterFragmentActivity() {
                     "showWearGlasses" -> {
                         val payload = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
                         Log.d("SmartWear", "showWearGlasses called: $payload")
-                        showWearGlasses(payload)
-                        result.success(true)
+                        showWearGlasses(payload, result)
                     }
                     "updateWearGlasses" -> {
                         val payload = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
                         Log.d("SmartWear", "updateWearGlasses called: $payload")
-                        updateWearGlasses(payload)
-                        result.success(true)
+                        updateWearGlasses(payload, result)
                     }
                     "hideWearGlasses" -> {
                         Log.d("SmartWear", "hideWearGlasses called")
-                        hideWearGlasses()
-                        result.success(true)
+                        hideWearGlasses(result)
                     }
                     "saveLogs" -> {
                         saveLogsToFile()
@@ -120,6 +125,7 @@ class MainActivity : FlutterFragmentActivity() {
 
     private fun showGlassesInitialization() {
         Log.d("SmartWear", "showGlassesInitialization() called")
+        invalidatePendingWearShow()
         val displays = displayManager?.getDisplays()
         if (displays != null && displays.size > 1) {
             val secondaryDisplay = displays[displays.size - 1]
@@ -140,41 +146,184 @@ class MainActivity : FlutterFragmentActivity() {
 
     private fun navigateGlassesToEmpty() {
         Log.d("SmartWear", "navigateGlassesToEmpty() called")
+        invalidatePendingWearShow()
         glassesChannel?.invokeMethod("navigateToRoute", "/empty")
     }
 
-    private fun showWearGlasses(payload: Map<*, *>) {
+    private fun showWearGlasses(payload: Map<*, *>, result: MethodChannel.Result) {
+        invalidatePendingWearShow()
+        val generation = wearProjectionGeneration
         currentWearGlassesPayload = payload
         val displays = displayManager?.getDisplays()
         if (displays != null && displays.size > 1) {
             val secondaryDisplay = displays[displays.size - 1]
 
-            if (glassesPresentation == null && glassesEngine != null) {
-                glassesPresentation = GlassesPresentation(this, secondaryDisplay, glassesEngine!!)
+            val engine = glassesEngine
+            val channel = glassesChannel
+            if (engine == null || channel == null) {
+                result.error("GLASSES_ENGINE_UNAVAILABLE", "Secondary Flutter engine is unavailable", null)
+                return
+            }
+            if (glassesPresentation == null) {
+                glassesPresentation = GlassesPresentation(this, secondaryDisplay, engine)
                 glassesPresentation?.show()
             }
 
             Log.d("SmartWear", "Navigating to wear projection on glasses")
-            glassesChannel?.invokeMethod("updateWearGlasses", payload)
-            glassesChannel?.invokeMethod("navigateToRoute", "/wear")
+            val pendingResult = BoundedResult(
+                result,
+                "showWearGlasses",
+                onTimeout = {
+                    if (generation == wearProjectionGeneration) {
+                        wearProjectionGeneration++
+                        channel.invokeMethod("navigateToRoute", "/empty")
+                    }
+                }
+            )
+            pendingWearShowResult = pendingResult
+            channel.invokeMethod("updateWearGlasses", payload, object : MethodChannel.Result {
+                override fun success(updateResult: Any?) {
+                    if (generation != wearProjectionGeneration) {
+                        pendingResult.error(
+                            "GLASSES_OPERATION_SUPERSEDED",
+                            "Wear projection show was superseded",
+                            null
+                        )
+                        return
+                    }
+                    if (!pendingResult.isPending()) {
+                        return
+                    }
+                    channel.invokeMethod(
+                        "navigateToRoute",
+                        "/wear",
+                        pendingResult
+                    )
+                }
+
+                override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
+                    pendingResult.error(errorCode, errorMessage, errorDetails)
+                }
+
+                override fun notImplemented() {
+                    pendingResult.notImplemented()
+                }
+            })
         } else {
             Log.d("SmartWear", "No secondary display found for wear projection")
+            result.error("GLASSES_DISPLAY_UNAVAILABLE", "No secondary display found", null)
         }
     }
 
-    private fun updateWearGlasses(payload: Map<*, *>) {
+    private fun updateWearGlasses(payload: Map<*, *>, result: MethodChannel.Result) {
         currentWearGlassesPayload = payload
         if (glassesPresentation == null) {
             Log.d("SmartWear", "Wear projection update requested before presentation; creating presentation")
-            showWearGlasses(payload)
+            showWearGlasses(payload, result)
             return
         }
-        glassesChannel?.invokeMethod("updateWearGlasses", payload)
+        val channel = glassesChannel
+        if (channel == null) {
+            result.error("GLASSES_ENGINE_UNAVAILABLE", "Secondary Flutter channel is unavailable", null)
+            return
+        }
+        channel.invokeMethod(
+            "updateWearGlasses",
+            payload,
+            BoundedResult(result, "updateWearGlasses")
+        )
     }
 
-    private fun hideWearGlasses() {
+    private fun hideWearGlasses(result: MethodChannel.Result) {
+        invalidatePendingWearShow()
         currentWearGlassesPayload = null
-        glassesChannel?.invokeMethod("navigateToRoute", "/empty")
+        val channel = glassesChannel
+        if (channel == null) {
+            result.error("GLASSES_ENGINE_UNAVAILABLE", "Secondary Flutter channel is unavailable", null)
+            return
+        }
+        channel.invokeMethod(
+            "navigateToRoute",
+            "/empty",
+            BoundedResult(result, "navigateToRoute")
+        )
+    }
+
+    private fun invalidatePendingWearShow() {
+        wearProjectionGeneration++
+        pendingWearShowResult?.error(
+            "GLASSES_OPERATION_SUPERSEDED",
+            "Wear projection show was superseded",
+            null
+        )
+        pendingWearShowResult = null
+    }
+
+    private fun supersedePendingWearResults() {
+        val pendingResults = synchronized(pendingWearResults) {
+            pendingWearResults.toList()
+        }
+        pendingResults.forEach {
+            it.error(
+                "GLASSES_OPERATION_SUPERSEDED",
+                "Wear projection operation was superseded",
+                null
+            )
+        }
+    }
+
+    private inner class BoundedResult(
+        private val target: MethodChannel.Result,
+        private val operation: String,
+        private val onTimeout: (() -> Unit)? = null
+    ) : MethodChannel.Result {
+        private val completed = AtomicBoolean(false)
+        private val timeout = Runnable {
+            onTimeout?.invoke()
+            error(
+                "GLASSES_OPERATION_TIMEOUT",
+                "Timed out waiting for $operation acknowledgement",
+                null
+            )
+        }
+
+        init {
+            synchronized(pendingWearResults) {
+                pendingWearResults.add(this)
+            }
+            mainHandler.postDelayed(timeout, WEAR_OPERATION_TIMEOUT_MS)
+        }
+
+        fun isPending(): Boolean = !completed.get()
+
+        override fun success(result: Any?) {
+            complete { target.success(result) }
+        }
+
+        override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
+            complete {
+                Log.e("SmartWear", "forward $operation error $errorCode: $errorMessage")
+                target.error(errorCode, errorMessage, errorDetails)
+            }
+        }
+
+        override fun notImplemented() {
+            complete {
+                Log.e("SmartWear", "forward $operation notImplemented")
+                target.notImplemented()
+            }
+        }
+
+        private fun complete(completion: () -> Unit) {
+            if (!completed.compareAndSet(false, true)) {
+                return
+            }
+            mainHandler.removeCallbacks(timeout)
+            synchronized(pendingWearResults) {
+                pendingWearResults.remove(this)
+            }
+            completion()
+        }
     }
 
     private fun updateGlassesCounter(counter: Int) {
@@ -187,6 +336,8 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     override fun onDestroy() {
+        invalidatePendingWearShow()
+        supersedePendingWearResults()
         super.onDestroy()
         glassesPresentation?.dismiss()
         glassesEngine?.destroy()

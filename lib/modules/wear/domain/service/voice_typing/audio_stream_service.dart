@@ -37,7 +37,9 @@ class AudioStreamService {
   Stream<double> get audioLevelStream => _audioLevelController.stream;
 
   void addDataCallback(void Function(Uint8List) callback) {
-    _dataCallbacks.add(callback);
+    if (!_dataCallbacks.contains(callback)) {
+      _dataCallbacks.add(callback);
+    }
   }
 
   void removeDataCallback(void Function(Uint8List) callback) {

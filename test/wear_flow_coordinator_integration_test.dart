@@ -34,6 +34,7 @@ import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_produc
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_scan_idle_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_module_app.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
+import 'package:smart_glasses/modules/wear/services/wear_wifi_status_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Bridges WearGlassesOutput → MethodChannel → GlassesCoordinatorCubit
@@ -83,8 +84,24 @@ void main() {
   late GlassesCoordinatorCubit coordinator;
   late Map<String, dynamic> lastWearPayload;
 
+  void testWearWidget(
+    String description,
+    Future<void> Function(WidgetTester tester) body,
+  ) {
+    testWidgets(description, (WidgetTester tester) async {
+      try {
+        await body(tester);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        await WearStatusIconReporter.I.stop();
+      }
+    });
+  }
+
   setUp(() {
     TestWidgetsFlutterBinding.ensureInitialized();
+    dotenv.testLoad(fileInput: 'WEAR_GLASSES_ENABLED=false');
 
     channel = MethodChannel(AppConstants.glassesChannelName);
     appChannel = MethodChannel(AppConstants.appChannelName);
@@ -126,9 +143,11 @@ void main() {
     );
   });
 
-  tearDown(() {
+  tearDown(() async {
     WearStatusIconReporter.I.endVoiceStartup();
     WearStatusIconReporter.I.debugSetCurrentScreenProviderForTesting(null);
+    WearStatusIconReporter.I.debugSetRefreshForTesting(null);
+    await WearStatusIconReporter.I.stop();
     coordinator.close();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
@@ -323,8 +342,27 @@ void main() {
   });
 
   group('WearModuleApp router integration', () {
+    setUp(() async {
+      await WearStatusIconReporter.I.stop();
+      WearStatusIconReporter.I.debugSetCurrentScreenProviderForTesting(
+        () => WearScreenId.menu,
+      );
+      WearStatusIconReporter.I.debugSetRefreshForTesting(
+        () async => const WearStatusIconSnapshot(
+          wifi: WearWifiStatus(isAvailable: true, level: 3),
+          showPrinter: false,
+          printerAvailable: false,
+        ),
+      );
+    });
+
     setUp(() {
-      dotenv.testLoad(fileInput: 'WEAR_SKIP_SCANNER_CONNECT_SCREEN=true');
+      dotenv.testLoad(
+        fileInput: '''
+WEAR_GLASSES_ENABLED=false
+WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
+''',
+      );
       WearSession.setUser(AuthenticatedUser(
         idUser: 1,
         idEmployee: 1,
@@ -336,7 +374,7 @@ void main() {
       WearSession.clear();
     });
 
-    testWidgets('pop from scanIdle syncs flow state back to printerSelect',
+    testWearWidget('pop from scanIdle syncs flow state back to printerSelect',
         (WidgetTester tester) async {
       GoRouter? router;
       final WearFlowController routerFlow = WearFlowController(
@@ -378,7 +416,7 @@ void main() {
       );
     });
 
-    testWidgets('pop to scanIdle keeps route extra in flow state',
+    testWearWidget('pop to scanIdle keeps route extra in flow state',
         (WidgetTester tester) async {
       final WearPrinterSelection selection = _printerSelection();
       GoRouter? router;
@@ -417,7 +455,8 @@ void main() {
       );
     });
 
-    testWidgets('voice stream command is routed through WearModuleApp to flow',
+    testWearWidget(
+        'voice stream command is routed through WearModuleApp to flow',
         (WidgetTester tester) async {
       final StreamController<WearVoiceCommand> voiceCommands =
           StreamController<WearVoiceCommand>.broadcast();
@@ -451,7 +490,7 @@ void main() {
       expect(routerFlow.state.menuFocusedIndex, 1);
     });
 
-    testWidgets(
+    testWearWidget(
         'final and repeated partial phrases are suppressed after '
         'consumed partial', (WidgetTester tester) async {
       final StreamController<String> voicePhrases =
@@ -505,10 +544,11 @@ void main() {
       expect(finalCalls, 0);
     });
 
-    testWidgets('voice starts immediately when authorization completes',
+    testWearWidget('voice starts immediately when authorization completes',
         (WidgetTester tester) async {
       WearSession.clear();
       int startVoiceCalls = 0;
+      int stopVoiceCalls = 0;
       final WearFlowController routerFlow = WearFlowController(
         glassesOutput: _TestGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
@@ -523,7 +563,9 @@ void main() {
           onStartVoice: () async {
             startVoiceCalls++;
           },
-          onStopVoice: () async {},
+          onStopVoice: () async {
+            stopVoiceCalls++;
+          },
           onRestartVoice: (_) async {},
         ),
       );
@@ -538,9 +580,14 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(startVoiceCalls, 1);
+
+      WearSession.clear();
+      await tester.pump();
+
+      expect(stopVoiceCalls, 1);
     });
 
-    testWidgets('voice startup loader stays until voice start completes',
+    testWearWidget('voice startup loader stays until voice start completes',
         (WidgetTester tester) async {
       WearSession.clear();
       final Completer<void> startVoiceCompleter = Completer<void>();
@@ -573,13 +620,13 @@ void main() {
       expect(find.text('Подготовка голосового\nуправления'), findsOneWidget);
 
       startVoiceCompleter.complete();
-      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(seconds: 10));
       await tester.pump();
 
       expect(find.text('Подготовка голосового\nуправления'), findsNothing);
     });
 
-    testWidgets('voice startup loader stays at least five seconds',
+    testWearWidget('voice startup loader stays at least ten seconds',
         (WidgetTester tester) async {
       WearSession.clear();
       final WearFlowController routerFlow = WearFlowController(
@@ -609,7 +656,7 @@ void main() {
       await tester.pump();
       expect(find.text('Подготовка голосового\nуправления'), findsOneWidget);
 
-      await tester.pump(const Duration(seconds: 4, milliseconds: 999));
+      await tester.pump(const Duration(seconds: 9, milliseconds: 999));
       expect(find.text('Подготовка голосового\nуправления'), findsOneWidget);
 
       await tester.pump(const Duration(milliseconds: 1));
@@ -617,7 +664,7 @@ void main() {
       expect(find.text('Подготовка голосового\nуправления'), findsNothing);
     });
 
-    testWidgets(
+    testWearWidget(
         'voice startup success does not overwrite current glasses screen',
         (WidgetTester tester) async {
       WearSession.clear();
@@ -700,6 +747,27 @@ void main() {
       expect(WearStatusIconReporter.I.lastPayload?.title, 'Выбор раздела');
     });
 
+    test('old startup completion cannot end a newer startup guard', () async {
+      final int oldStartup = WearStatusIconReporter.I.beginVoiceStartup();
+      final int currentStartup = WearStatusIconReporter.I.beginVoiceStartup();
+      await WearStatusIconReporter.I.sendFast(
+        WearGlassesPayload.loading(
+          screenType: WearGlassesScreenType.status,
+          title: 'Голосовое управление',
+          statusText: 'Запускаем голос...',
+        ),
+      );
+
+      WearStatusIconReporter.I.endVoiceStartup(oldStartup);
+      await WearStatusIconReporter.I.sendFast(WearGlassesPayload.menu());
+
+      expect(
+        WearStatusIconReporter.I.lastPayload?.title,
+        'Голосовое управление',
+      );
+      WearStatusIconReporter.I.endVoiceStartup(currentStartup);
+    });
+
     test(
         'sendFastForScreen drops stale product payload after check becomes current',
         () async {
@@ -736,8 +804,83 @@ void main() {
           WearStatusIconReporter.I.lastPayload?.title, 'Товар есть на полке?');
     });
 
-    testWidgets(
-        'ASR partial flows through WearVoiceControlService and WearModuleApp to flow',
+    test('transient feedback does not restore an older payload', () async {
+      WearStatusIconReporter.I.debugSetCurrentScreenProviderForTesting(
+        () => WearScreenId.menu,
+      );
+      await WearStatusIconReporter.I.sendFastForScreen(
+        WearScreenId.menu,
+        WearGlassesPayload.menu(selectedIndex: 0),
+      );
+      await WearStatusIconReporter.I.showTransientFastForScreen(
+        WearScreenId.menu,
+        WearGlassesPayload.status(
+          isError: true,
+          title: 'Голосовой выбор',
+          statusText: 'Не найдено',
+        ),
+        duration: const Duration(milliseconds: 10),
+      );
+      await WearStatusIconReporter.I.sendFastForScreen(
+        WearScreenId.menu,
+        WearGlassesPayload.menu(selectedIndex: 2),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(WearStatusIconReporter.I.lastPayload?.selectedIndex, 2);
+      expect(WearStatusIconReporter.I.lastPayload?.title, 'Выбор раздела');
+    });
+
+    test('new fast payload supersedes delayed refresh and reopens projection',
+        () async {
+      dotenv.testLoad(fileInput: 'WEAR_GLASSES_ENABLED=true');
+      final List<MethodCall> calls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(appChannel, (MethodCall call) async {
+        calls.add(call);
+        return true;
+      });
+      await WearStatusIconReporter.I.stop();
+      calls.clear();
+
+      final Completer<WearStatusIconSnapshot> refresh =
+          Completer<WearStatusIconSnapshot>();
+      WearStatusIconReporter.I.debugSetRefreshForTesting(() => refresh.future);
+      final Future<void> staleSend = WearStatusIconReporter.I.send(
+        WearGlassesPayload.status(
+          isError: false,
+          title: 'Старый payload',
+          statusText: 'Ожидание',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      await WearStatusIconReporter.I.sendFast(WearGlassesPayload.menu());
+      refresh.complete(
+        const WearStatusIconSnapshot(
+          wifi: WearWifiStatus(isAvailable: true, level: 3),
+          showPrinter: false,
+          printerAvailable: false,
+        ),
+      );
+      await staleSend;
+
+      final List<MethodCall> projectionCalls = calls.where((MethodCall call) {
+        return call.method == 'showWearGlasses' ||
+            call.method == 'updateWearGlasses';
+      }).toList(growable: false);
+      expect(projectionCalls, hasLength(1));
+      expect(projectionCalls.single.method, 'showWearGlasses');
+      expect(
+        (projectionCalls.single.arguments as Map<Object?, Object?>)['title'],
+        'Выбор раздела',
+      );
+      expect(WearStatusIconReporter.I.lastPayload?.title, 'Выбор раздела');
+    });
+
+    testWearWidget(
+        'ASR command waits for final before reaching WearFlowController',
         (WidgetTester tester) async {
       final _FakeSpeechRecognitionService speech =
           _FakeSpeechRecognitionService();
@@ -769,6 +912,11 @@ void main() {
       speech.emitPartial('вниз');
       await tester.pumpAndSettle();
 
+      expect(routerFlow.state.menuFocusedIndex, 0);
+
+      speech.emitResult('вниз');
+      await tester.pumpAndSettle();
+
       expect(routerFlow.state.menuFocusedIndex, 1);
     });
   });
@@ -789,7 +937,7 @@ void main() {
       WearSession.clear();
     });
 
-    testWidgets(
+    testWearWidget(
         're-selecting already selected yellow printer pushes scanIdle once with selection extra',
         (WidgetTester tester) async {
       GoRouter? router;
@@ -820,6 +968,9 @@ void main() {
         routes: routes,
       );
       addTearDown(router.dispose);
+      WearStatusIconReporter.I.debugSetCurrentScreenProviderForTesting(
+        () => WearScreenId.printerSelect,
+      );
 
       await tester.pumpWidget(
         ProviderScope(
@@ -933,6 +1084,9 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
       StreamController<String>.broadcast();
 
   @override
+  Never get audioStreamService => throw UnsupportedError('Not used in test');
+
+  @override
   Stream<String> get resultsStream => _resultsController.stream;
 
   @override
@@ -948,6 +1102,9 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   bool get isListening => false;
 
   @override
+  bool get usesFreeTextRecognition => true;
+
+  @override
   int? get lastAudioChunkAtMillis => null;
 
   @override
@@ -958,6 +1115,10 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
 
   void emitPartial(String text) {
     _partialController.add(text);
+  }
+
+  void emitResult(String text) {
+    _resultsController.add(text);
   }
 
   @override

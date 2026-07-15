@@ -31,6 +31,7 @@ lib/
 - MethodChannel связь Main ↔ Glasses
 - Wear-модуль: авторизация, выбор принтера, сканирование, голосовой/цифровой ввод, печать ценника
 - Wear glasses output через `WearGlassesBridge` / `WearFlowController`
+- Проверка наличия товара в wear-модуле с projection state на очки
 
 ## Wear module
 
@@ -47,7 +48,9 @@ lib/
 - `presentation/` — screens, cubits/notifiers, widgets
 - `services/` — voice session, wifi/printer/status services
 
-Голосовые сервисы wear используют общий `AudioStreamService` и `SpeechRecognitionService`.
+Голосовые сервисы wear используют общий `AudioStreamService` и `SpeechRecognitionService`. `WearVoiceSession` переключает Vosk между `grammar` для системных команд и `freeText` для списков/диктовки без перезапуска микрофона.
+
+Wear UI на очках получает только `WearGlassesPayload`: business logic остается в phone runtime, а glasses runtime отображает projection state через `/wear`.
 
 ## Env
 
@@ -65,6 +68,7 @@ Env загружается из `assets/develop.env`. Если ключ не з�
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — основная архитектура проекта
 - [docs/wear_ARCHITECTURE.md](docs/wear_ARCHITECTURE.md) — архитектура wear-модуля
+- [docs/wear_voice_background_navigation_problem.md](docs/wear_voice_background_navigation_problem.md) — контекст по voice/background navigation
 - [docs/INDEX.md](docs/INDEX.md) — индекс документации
 
 ## Добавление экрана в очки
@@ -124,3 +128,11 @@ methodChannel.invokeMethod("navigateGlassesToRoute", "/screenX")
 flutter pub get
 flutter run
 ```
+
+Targeted checks used for recent voice/glasses changes:
+
+```bash
+flutter test test/voice_list_matcher_test.dart test/voice_command_parser_service_test.dart test/wear_flow_controller_test.dart
+```
+
+`./gradlew app:compileDebugKotlin` может падать в external `multi_scanner` из `.pub-cache` на unresolved `BTDevices` / `BattaryStateList` / `BattaryState`.

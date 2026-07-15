@@ -21,7 +21,9 @@ void main() {
     expect(json['screenType'], 'menu');
     expect(json['phase'], 'idle');
     expect(
-        json['items'], <String>['Печать ценников', 'Доступность', 'Справка']);
+      json['items'],
+      <String>['Печать ценников', 'Доступность', 'Справка', 'Настройки'],
+    );
     expect(json['selectedIndex'], 0);
   });
 }

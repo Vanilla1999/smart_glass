@@ -12,8 +12,10 @@ void main() {
     expect(cubit.state.screenType, WearGlassesScreenType.menu);
     expect(cubit.state.phase, WearGlassesPhase.idle);
     expect(cubit.state.title, 'Выбор раздела');
-    expect(cubit.state.items,
-        <String>['Печать ценников', 'Доступность', 'Справка']);
+    expect(
+      cubit.state.items,
+      <String>['Печать ценников', 'Доступность', 'Справка', 'Настройки'],
+    );
   });
 
   test('maps item maps to titles defensively', () {

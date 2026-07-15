@@ -315,7 +315,6 @@ class _WearPrinterSelectScreenState
         if (index >= 0) {
           _focusedIndex = index;
           _scrollToFocused();
-          _sendGlassesState(state, fast: true);
         }
         ref
             .read(wearPrinterSelectNotifierProvider.notifier)
@@ -330,16 +329,23 @@ class _WearPrinterSelectScreenState
   }
 
   bool _onVoicePartialPhrase(String phrase) {
-    if (!VoiceListMatcher.canMatchPartial(phrase)) return false;
     final WearPrinterSelectState state =
         ref.read(wearPrinterSelectNotifierProvider);
     if (state.isLoading) return false;
     final List<WearPrinter> printers = _visiblePrinters(state);
-    final VoiceListMatch<WearPrinter> match = VoiceListMatcher.match(
-      phrase,
-      printers,
-      (WearPrinter printer) => printer.name,
-    );
+    final VoiceListMatch<WearPrinter> match =
+        VoiceListMatcher.canMatchPartial(phrase)
+            ? VoiceListMatcher.match(
+                phrase,
+                printers,
+                (WearPrinter printer) => printer.name,
+              )
+            : VoiceListMatcher.matchExactWord(
+                phrase,
+                printers,
+                (WearPrinter printer) => printer.name,
+                minLength: 5,
+              );
     if (match.type != VoiceListMatchType.unique) {
       return false;
     }
@@ -351,15 +357,12 @@ class _WearPrinterSelectScreenState
     if (index >= 0) {
       _focusedIndex = index;
       _scrollToFocused();
-      _sendGlassesState(state, fast: true);
+      _sendGlassesState(
+        ref.read(wearPrinterSelectNotifierProvider),
+        fast: true,
+      );
     }
-    ref.read(wearPrinterSelectNotifierProvider.notifier).selectPrinter(printer);
-    final WearPrinterSelectState updated =
-        ref.read(wearPrinterSelectNotifierProvider);
-    if (updated.whitePrinter != null && updated.yellowPrinter != null) {
-      _openScanScreen(context, updated);
-    }
-    return true;
+    return false;
   }
 
   List<WearPrinter> _visiblePrinters(WearPrinterSelectState state) {
@@ -513,26 +516,28 @@ class _WearPrinterSelectScreenState
         : WearStatusIconReporter.I.send;
 
     if (state.isLoading) {
-      send(
-        const WearGlassesPayload(
-          screenType: WearGlassesScreenType.printer,
-          phase: WearGlassesPhase.loading,
-          title: 'Выбор принтера',
-          statusText: 'Инициализация...',
-          isLoading: true,
-        ),
+      const WearGlassesPayload payload = WearGlassesPayload(
+        screenType: WearGlassesScreenType.printer,
+        phase: WearGlassesPhase.loading,
+        title: 'Выбор принтера',
+        statusText: 'Инициализация...',
+        isLoading: true,
       );
+      _flowController.rememberScreenPayload(
+          WearScreenId.printerSelect, payload);
+      send(payload);
       return;
     }
 
     if (state.hasError && state.printers.isEmpty) {
-      send(
-        WearGlassesPayload.status(
-          isError: true,
-          title: 'Ошибка загрузки принтеров',
-          subtitle: state.error,
-        ),
+      final WearGlassesPayload payload = WearGlassesPayload.status(
+        isError: true,
+        title: 'Ошибка загрузки принтеров',
+        subtitle: state.error,
       );
+      _flowController.rememberScreenPayload(
+          WearScreenId.printerSelect, payload);
+      send(payload);
       return;
     }
 
@@ -544,21 +549,21 @@ class _WearPrinterSelectScreenState
         .skip(start)
         .take(_visibleGlassesItemCount)
         .toList(growable: false);
-    send(
-      WearGlassesPayload(
-        screenType: WearGlassesScreenType.printer,
-        phase: WearGlassesPhase.idle,
-        title: 'Выбор принтера',
-        subtitle: state.step == WearPrinterSelectStep.yellow
-            ? 'Жёлтые ценники'
-            : 'Белые ценники',
-        items: visiblePrinters
-            .map((WearPrinter printer) => printer.name)
-            .toList(growable: false),
-        selectedIndex: selected - start,
-        pageText: _pageText(printers.length, selected),
-      ),
+    final WearGlassesPayload payload = WearGlassesPayload(
+      screenType: WearGlassesScreenType.printer,
+      phase: WearGlassesPhase.idle,
+      title: 'Выбор принтера',
+      subtitle: state.step == WearPrinterSelectStep.yellow
+          ? 'Жёлтые ценники'
+          : 'Белые ценники',
+      items: visiblePrinters
+          .map((WearPrinter printer) => printer.name)
+          .toList(growable: false),
+      selectedIndex: selected - start,
+      pageText: _pageText(printers.length, selected),
     );
+    _flowController.rememberScreenPayload(WearScreenId.printerSelect, payload);
+    send(payload);
   }
 
   static const int _visibleGlassesItemCount = 4;

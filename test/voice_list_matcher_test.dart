@@ -79,9 +79,73 @@ void main() {
       expect(match.type, VoiceListMatchType.none);
     });
 
+    test('does not match a short substring inside another word', () {
+      final VoiceListMatch<String> result = VoiceListMatcher.match(
+        'сок',
+        <String>['Высокий стакан'],
+        (String item) => item,
+      );
+
+      expect(result.type, VoiceListMatchType.none);
+    });
+
     test('allows partial matching only for long enough phrases', () {
       expect(VoiceListMatcher.canMatchPartial('молоко'), isFalse);
       expect(VoiceListMatcher.canMatchPartial('безалкогольное'), isTrue);
+    });
+
+    test('matches short exact word when explicitly requested', () {
+      final VoiceListMatch<String> match = VoiceListMatcher.matchExactWord(
+        'белый',
+        <String>['MOCK Белый 1', 'MOCK Желтый 1'],
+        (String item) => item,
+        minLength: 5,
+      );
+
+      expect(match.type, VoiceListMatchType.unique);
+      expect(match.item, 'MOCK Белый 1');
+    });
+
+    test('normalizes short exact word for printer labels', () {
+      final VoiceListMatch<String> yellow = VoiceListMatcher.matchExactWord(
+        'жёлтый',
+        <String>['MOCK Белый 1', 'MOCK Желтый 1', 'MOCK Мобильный 2'],
+        (String item) => item,
+        minLength: 5,
+      );
+      final VoiceListMatch<String> mobile = VoiceListMatcher.matchExactWord(
+        'мобильный',
+        <String>['MOCK Белый 1', 'MOCK Желтый 1', 'MOCK Мобильный 2'],
+        (String item) => item,
+        minLength: 5,
+      );
+
+      expect(yellow.type, VoiceListMatchType.unique);
+      expect(yellow.item, 'MOCK Желтый 1');
+      expect(mobile.type, VoiceListMatchType.unique);
+      expect(mobile.item, 'MOCK Мобильный 2');
+    });
+
+    test('does not match short exact word below minimum length', () {
+      final VoiceListMatch<String> match = VoiceListMatcher.matchExactWord(
+        'мок',
+        <String>['MOCK Белый 1'],
+        (String item) => item,
+        minLength: 5,
+      );
+
+      expect(match.type, VoiceListMatchType.none);
+    });
+
+    test('keeps short exact word ambiguous when multiple items match', () {
+      final VoiceListMatch<String> match = VoiceListMatcher.matchExactWord(
+        'белый',
+        <String>['MOCK Белый 1', 'MOCK Белый 2'],
+        (String item) => item,
+        minLength: 5,
+      );
+
+      expect(match.type, VoiceListMatchType.ambiguous);
     });
   });
 }

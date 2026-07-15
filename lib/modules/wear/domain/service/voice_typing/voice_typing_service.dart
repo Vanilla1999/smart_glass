@@ -1,19 +1,36 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/number_parser_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 
 class VoiceTypingService {
-  VoiceTypingService({
+  factory VoiceTypingService({
     AudioStreamService? audioStreamService,
     SpeechRecognitionService? speechRecognitionService,
     NumberParserService? numberParserService,
-  })  : _audioStreamService = audioStreamService ?? AudioStreamService(),
-        _speechRecognitionService =
-            speechRecognitionService ?? SpeechRecognitionService(),
-        _numberParserService = numberParserService ?? NumberParserService() {
+  }) {
+    final AudioStreamService sharedAudio = audioStreamService ??
+        speechRecognitionService?.audioStreamService ??
+        AudioStreamService();
+    return VoiceTypingService._(
+      audioStreamService: sharedAudio,
+      speechRecognitionService: speechRecognitionService ??
+          SpeechRecognitionService(audioStreamService: sharedAudio),
+      numberParserService: numberParserService ?? NumberParserService(),
+      ownsSpeechRecognitionService: speechRecognitionService == null,
+    );
+  }
+
+  VoiceTypingService._({
+    required AudioStreamService audioStreamService,
+    required SpeechRecognitionService speechRecognitionService,
+    required NumberParserService numberParserService,
+    required bool ownsSpeechRecognitionService,
+  })  : _audioStreamService = audioStreamService,
+        _speechRecognitionService = speechRecognitionService,
+        _numberParserService = numberParserService,
+        _ownsSpeechRecognitionService = ownsSpeechRecognitionService {
     _recognitionSubscription = _speechRecognitionService.resultsStream.listen(
       _onRecognitionResult,
       onError: _onRecognitionError,
@@ -23,11 +40,11 @@ class VoiceTypingService {
   final AudioStreamService _audioStreamService;
   final SpeechRecognitionService _speechRecognitionService;
   final NumberParserService _numberParserService;
+  final bool _ownsSpeechRecognitionService;
   final StreamController<String> _resultsController =
       StreamController<String>.broadcast();
 
   StreamSubscription<String>? _recognitionSubscription;
-  Future<void> _audioProcessing = Future<void>.value();
 
   Stream<String> get resultsStream => _resultsController.stream;
   Stream<double> get audioLevelStream => _audioStreamService.audioLevelStream;
@@ -48,45 +65,20 @@ class VoiceTypingService {
         'Сначала подготовьте модель вызовом prepare() перед стартом сессии.',
       );
     }
-    print('[STARTING SESSION]');
-    await _speechRecognitionService.startSession();
-    await _audioStreamService.start(
-      onData: _onAudioChunk,
-      onError: _onAudioError,
-    );
-  }
-
-  Future<void> stopSession() async {
-    await _audioStreamService.pauseCallbacks();
-    await _audioProcessing;
-    await _speechRecognitionService.stopSession();
-  }
-
-  Future<void> dispose() async {
-    try {
-      await stopSession();
-    } finally {
-      await _recognitionSubscription?.cancel();
-      await _resultsController.close();
+    if (!_speechRecognitionService.isListening) {
+      await _speechRecognitionService.startListening();
     }
   }
 
-  void _onAudioChunk(Uint8List bytes) {
-    // print('GOT CHUNK');
-    _audioProcessing = _audioProcessing
-        .then((_) => _speechRecognitionService.processAudioChunk(bytes))
-        .catchError((Object error, StackTrace stackTrace) {
-      _onProcessingError(error, stackTrace);
-    });
+  Future<void> stopSession() async {
+    // WearVoiceSession owns the shared recorder; the cubit stops consuming results.
   }
 
-  void _onAudioError(Object error, StackTrace stackTrace) {
-    _onProcessingError(error, stackTrace);
-  }
-
-  void _onProcessingError(Object error, StackTrace stackTrace) {
-    if (!_resultsController.isClosed) {
-      _resultsController.addError(error, stackTrace);
+  Future<void> dispose() async {
+    await _recognitionSubscription?.cancel();
+    await _resultsController.close();
+    if (_ownsSpeechRecognitionService) {
+      await _speechRecognitionService.dispose();
     }
   }
 

@@ -267,8 +267,7 @@ class _WearAvailabilityGroupScreenState
       _scrollToFocused();
       _sendGlassesState(groups, fast: true);
     }
-    context.push(WearAvailabilityProductScreen.route, extra: group);
-    return true;
+    return false;
   }
 
   void _scrollToFocused() {

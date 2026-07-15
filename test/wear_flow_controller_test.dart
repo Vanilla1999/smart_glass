@@ -117,6 +117,31 @@ void main() {
       expect(controller.state.screen, WearScreenId.printerSelect);
     });
 
+    test('printer select clears remembered payload on re-enter', () async {
+      final _FakeGlassesOutput glasses = _FakeGlassesOutput();
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: glasses,
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      const WearGlassesPayload printerPayload = WearGlassesPayload(
+        screenType: WearGlassesScreenType.printer,
+        phase: WearGlassesPhase.idle,
+        title: 'Выбор принтера',
+        subtitle: 'Жёлтые ценники',
+        items: <String>['MOCK Желтый 1'],
+      );
+
+      controller.rememberScreenPayload(
+        WearScreenId.printerSelect,
+        printerPayload,
+      );
+      controller.enterScreen(WearScreenId.printerSelect);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(glasses.payloads.last.title, 'Принтеры');
+      expect(glasses.payloads.last.isLoading, isTrue);
+    });
+
     test('routes free phrase to current screen handler', () async {
       String? handledPhrase;
       final WearFlowController controller = WearFlowController(
@@ -346,7 +371,7 @@ void main() {
       expect(navigation.homeCalls, 0);
     });
 
-    test('home on home confirm selects home', () async {
+    test('repeated home on home confirm still requires confirmation', () async {
       final _FakeNavigationOutput navigation = _FakeNavigationOutput();
       final WearFlowController controller = WearFlowController(
         glassesOutput: _FakeGlassesOutput(),
@@ -358,9 +383,9 @@ void main() {
       await controller.handleVoiceCommand(WearVoiceCommand.home);
       await controller.handleVoiceCommand(WearVoiceCommand.home);
 
-      expect(controller.state.screen, WearScreenId.menu);
+      expect(controller.state.screen, WearScreenId.homeConfirm);
       expect(navigation.goToCalls, <WearScreenId>[WearScreenId.homeConfirm]);
-      expect(navigation.homeCalls, 1);
+      expect(navigation.homeCalls, 0);
     });
 
     test('home confirm selects home with replace navigation', () async {
@@ -870,7 +895,7 @@ void main() {
       expect(flashlightCalls, 2);
     });
 
-    test('finish command invokes current screen select action', () async {
+    test('finish command does not fall back to select action', () async {
       int selectCalls = 0;
       final WearFlowController controller = WearFlowController(
         glassesOutput: _FakeGlassesOutput(),
@@ -889,7 +914,182 @@ void main() {
 
       await controller.handleVoiceCommand(WearVoiceCommand.finish);
 
-      expect(selectCalls, 1);
+      expect(selectCalls, 0);
+    });
+
+    test('continue and finish invoke semantic continue-scan actions', () async {
+      int continueCalls = 0;
+      int finishCalls = 0;
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.continueScan);
+      controller.registerScreenActions(
+        WearScreenId.continueScan,
+        WearScreenActionHandler(
+          onContinue: () => continueCalls++,
+          onFinish: () => finishCalls++,
+        ),
+      );
+
+      await controller.handleVoiceCommand(WearVoiceCommand.finish);
+      await controller.handleVoiceCommand(WearVoiceCommand.continueScan);
+
+      expect(finishCalls, 1);
+      expect(continueCalls, 1);
+    });
+
+    test('inactive continue returns to scan with printer selection', () async {
+      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: navigation,
+      );
+      final Object printerSelection = Object();
+      controller.enterScreen(
+        WearScreenId.scanIdle,
+        extra: printerSelection,
+      );
+      controller.enterScreen(WearScreenId.continueScan);
+
+      await controller.handleVoiceCommand(WearVoiceCommand.continueScan);
+
+      expect(controller.state.screen, WearScreenId.scanIdle);
+      expect(controller.state.currentPrinterSelection, same(printerSelection));
+      expect(controller.state.pendingNavigation?.popCurrent, isTrue);
+      expect(controller.state.pendingNavigation?.extra, same(printerSelection));
+
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(navigation.backCalls, 1);
+      expect(navigation.goToCalls, isEmpty);
+    });
+
+    test('inactive finish replaces continue screen with menu', () async {
+      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: navigation,
+      );
+      controller.enterScreen(WearScreenId.continueScan);
+
+      await controller.handleVoiceCommand(WearVoiceCommand.finish);
+
+      expect(controller.state.screen, WearScreenId.menu);
+      expect(controller.state.pendingNavigation?.replaceCurrent, isTrue);
+
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(navigation.homeCalls, 1);
+    });
+
+    test('glasses failure does not block phone navigation', () async {
+      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _ThrowingGlassesOutput(),
+        navigationOutput: navigation,
+      );
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.menu);
+
+      await controller.handleVoiceCommand(WearVoiceCommand.select);
+
+      expect(controller.state.screen, WearScreenId.printerSelect);
+      expect(navigation.goToCalls, <WearScreenId>[WearScreenId.printerSelect]);
+    });
+
+    test('inactive lifecycle does not invoke widget callbacks or phrases',
+        () async {
+      int actionCalls = 0;
+      int phraseCalls = 0;
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      controller.enterScreen(WearScreenId.availabilityCheck);
+      controller.registerScreenActions(
+        WearScreenId.availabilityCheck,
+        WearScreenActionHandler(
+          onManualInput: () => actionCalls++,
+          onPhrase: (_) => phraseCalls++,
+        ),
+      );
+
+      await controller.handleVoiceCommand(WearVoiceCommand.manualInput);
+      await controller.handleVoicePhrase('товар');
+
+      expect(actionCalls, 0);
+      expect(phraseCalls, 0);
+    });
+
+    test('new product selection clears payload cached for previous args',
+        () async {
+      final _FakeGlassesOutput glasses = _FakeGlassesOutput();
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: glasses,
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      final Object firstArgs = Object();
+      final Object secondArgs = Object();
+      const WearGlassesPayload firstPayload = WearGlassesPayload(
+        screenType: WearGlassesScreenType.productSelect,
+        phase: WearGlassesPhase.idle,
+        title: 'Первый список',
+      );
+
+      controller.enterScreen(WearScreenId.productSelect, extra: firstArgs);
+      controller.rememberScreenPayload(
+        WearScreenId.productSelect,
+        firstPayload,
+      );
+      await controller.renderCurrentGlasses();
+      expect(glasses.payloads.last.title, 'Первый список');
+
+      controller.enterScreen(WearScreenId.productSelect, extra: secondArgs);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(glasses.payloads.last.title, 'Выбор товара');
+      expect(glasses.payloads.last.phase, WearGlassesPhase.loading);
+    });
+
+    test('new availability context clears payload cached for previous item',
+        () async {
+      final _FakeGlassesOutput glasses = _FakeGlassesOutput();
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: glasses,
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      final Object firstGroup = Object();
+      final Object secondGroup = Object();
+      const WearGlassesPayload firstPayload = WearGlassesPayload(
+        screenType: WearGlassesScreenType.availability,
+        phase: WearGlassesPhase.idle,
+        title: 'Старый список',
+      );
+
+      controller.enterScreen(
+        WearScreenId.availabilityProduct,
+        extra: firstGroup,
+      );
+      controller.rememberScreenPayload(
+        WearScreenId.availabilityProduct,
+        firstPayload,
+      );
+      await controller.renderCurrentGlasses();
+      expect(glasses.payloads.last.title, 'Старый список');
+
+      controller.enterScreen(
+        WearScreenId.availabilityProduct,
+        extra: secondGroup,
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(glasses.payloads.last.title, 'Товарная позиция');
+      expect(glasses.payloads.last.phase, WearGlassesPhase.loading);
     });
 
     test('yes and no commands invoke semantic screen actions', () async {
@@ -959,6 +1159,13 @@ class _FakeGlassesOutput implements WearGlassesOutput {
   @override
   Future<void> send(WearGlassesPayload payload) async {
     payloads.add(payload);
+  }
+}
+
+class _ThrowingGlassesOutput implements WearGlassesOutput {
+  @override
+  Future<void> send(WearGlassesPayload payload) async {
+    throw StateError('glasses unavailable');
   }
 }
 

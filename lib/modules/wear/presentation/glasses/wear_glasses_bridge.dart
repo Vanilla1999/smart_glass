@@ -12,6 +12,8 @@ class WearGlassesBridge {
   final MethodChannelService _methodChannelService;
   final bool Function() _isEnabled;
 
+  bool get isEnabled => _isEnabled();
+
   Future<void> show(WearGlassesPayload payload) async {
     if (!_isEnabled()) return;
     final Map<String, dynamic> json = payload.toJson();

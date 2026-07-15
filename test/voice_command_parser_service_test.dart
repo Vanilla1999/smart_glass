@@ -32,6 +32,7 @@ void main() {
         'закончить': WearVoiceCommand.finish,
         'готово': WearVoiceCommand.finish,
         'фонарик': WearVoiceCommand.flashlight,
+        'люмус максима': WearVoiceCommand.flashlight,
         'подтвердить': WearVoiceCommand.select,
         'принять': WearVoiceCommand.select,
         'печать ценника': WearVoiceCommand.openPrintPriceTag,
@@ -51,7 +52,10 @@ void main() {
         'дальше': WearVoiceCommand.nextPage,
         'далее': WearVoiceCommand.nextPage,
         'прошлая страница': WearVoiceCommand.previousPage,
+        'прошлое страница': WearVoiceCommand.previousPage,
+        'прошлую страницу': WearVoiceCommand.previousPage,
         'предыдущая страница': WearVoiceCommand.previousPage,
+        'предыдущую страницу': WearVoiceCommand.previousPage,
         'страница назад': WearVoiceCommand.previousPage,
         'назад страница': WearVoiceCommand.previousPage,
       };
@@ -87,6 +91,8 @@ void main() {
       expect(parser.parse('можно вернуться'), WearVoiceCommand.back);
       expect(
           parser.parse('можно страница назад'), WearVoiceCommand.previousPage);
+      expect(parser.parse('давай прошлое страница'),
+          WearVoiceCommand.previousPage);
     });
 
     test('exposes grammar phrases for Vosk recognizer', () {
@@ -97,6 +103,8 @@ void main() {
           contains('прямое сканирование'));
       expect(VoiceCommandParserService.grammarPhrases,
           contains('включить фонарик'));
+      expect(
+          VoiceCommandParserService.grammarPhrases, contains('люмус максима'));
       expect(VoiceCommandParserService.grammarPhrases,
           contains('следующая страница'));
       expect(VoiceCommandParserService.grammarPhrases,
@@ -107,6 +115,8 @@ void main() {
       expect(parser.parse('сверхновая'), isNull);
       expect(parser.parse('домовой'), isNull);
       expect(parser.parse('выбирать'), isNull);
+      expect(parser.parse('стоп'), isNull);
+      expect(parser.parse('конец'), isNull);
     });
 
     test('returns null for empty or unknown text', () {

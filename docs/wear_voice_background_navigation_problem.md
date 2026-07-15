@@ -1,8 +1,28 @@
 # Wear voice background navigation problem
 
+## Current status
+
+This is a historical problem statement, not the current implementation contract.
+
+The original issue was addressed by moving voice navigation and projection-state ownership away from screen-local widget listeners into `WearFlowController` and application-level routing/output ports. Current behavior is documented in `docs/wear_ARCHITECTURE.md`.
+
+Do not treat the old snippets below that mention `wearVoiceCommandsProvider`, `WearVoiceCommandOrchestrator`, or `WearVoiceCommandListener` as current code. The current pipeline is:
+
+```text
+WearVoiceSession
+  -> WearVoiceControlService.commandStream / phraseStream / partialPhraseStream
+  -> WearModuleApp subscriptions
+  -> WearFlowController.handleVoiceCommand / handleVoicePhrase / handleVoicePartialPhrase
+  -> WearScreenActionHandler for the active WearScreenId
+```
+
+Current invariant: if glasses UI must update while the phone screen is off or app lifecycle is not `resumed`, phone `Navigator`/screen widget lifecycle must not be the source of truth for glasses UI. Use `WearFlowController`, `WearNavigationOutput`, and `WearGlassesPayload` projection state.
+
+---
+
 ## Purpose of this document
 
-This document describes the current Flutter Wear module architecture, the voice-control pipeline, and a specific problem observed when the device screen/application is not active: voice commands `вверх` and `вниз` continue to work, but `выбрать` does not navigate to another screen.
+This document describes a previously observed Flutter Wear module problem when the device screen/application was not active: voice commands `вверх` and `вниз` continued to work, but `выбрать` did not navigate to another screen.
 
 The document is intended to be passed to another AI/reviewer for investigation and solution design.
 
@@ -12,11 +32,11 @@ The document is intended to be passed to another AI/reviewer for investigation a
 
 The project is a Flutter application with a dedicated `wear` module for smart glasses / wearable workflow.
 
-Relevant stack:
+Relevant stack at the time of the original investigation:
 
 - Flutter / Dart
 - `go_router` for navigation inside the Wear module
-- `flutter_riverpod` for command stream providers
+- `flutter_riverpod` for screen state; command-stream providers mentioned below are historical snippets
 - `record` for microphone audio stream
 - `vosk_flutter_service` for offline Russian speech recognition
 - Manual singleton DI through `WearDependencies`

@@ -10,6 +10,8 @@ class WearSession {
   static WearPrinterSelection? _printerSelection;
   static final StreamController<AuthenticatedUser> _authorizedController =
       StreamController<AuthenticatedUser>.broadcast();
+  static final StreamController<void> _clearedController =
+      StreamController<void>.broadcast();
 
   static bool get isAuthorized => _user != null;
 
@@ -17,6 +19,8 @@ class WearSession {
 
   static Stream<AuthenticatedUser> get authorizedStream =>
       _authorizedController.stream;
+
+  static Stream<void> get clearedStream => _clearedController.stream;
 
   static WearPrinterSelection? get printerSelectionOrNull => _printerSelection;
 
@@ -43,5 +47,8 @@ class WearSession {
   static void clear() {
     _user = null;
     _printerSelection = null;
+    if (!_clearedController.isClosed) {
+      _clearedController.add(null);
+    }
   }
 }

@@ -45,13 +45,25 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen>
         onUp: _onVoiceUp,
         onDown: _onVoiceDown,
         onSelect: _onVoiceSelect,
+        onContinue: _continueScanning,
+        onFinish: _finishScanning,
       ),
     );
     _flowSub = _flow.stateStream.listen(_onFlowState);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       _sendGlassesState();
-      WearVoiceSession.I.ensureHealthy(reason: 'continue_scan_enter');
+      unawaited(
+        WearVoiceSession.I
+            .ensureHealthy(reason: 'continue_scan_enter')
+            .catchError(
+          (Object error, StackTrace stackTrace) {
+            print(
+                '[ContinueScan] voice health-check failed: $error\n$stackTrace');
+          },
+        ),
+      );
     });
   }
 
@@ -65,7 +77,15 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _sendGlassesState(fast: true);
-        WearVoiceSession.I.ensureHealthy(reason: 'continue_scan_resumed');
+        unawaited(
+          WearVoiceSession.I
+              .ensureHealthy(reason: 'continue_scan_resumed')
+              .catchError((Object error, StackTrace stackTrace) {
+            print(
+              '[ContinueScan] voice health-check failed: $error\n$stackTrace',
+            );
+          }),
+        );
       });
     }
   }

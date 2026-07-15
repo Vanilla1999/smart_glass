@@ -316,8 +316,7 @@ class _WearAvailabilityProductScreenState
       _scrollToFocused();
       _sendGlassesState(group, products, fast: true);
     }
-    context.push(WearAvailabilityCheckScreen.route, extra: product);
-    return true;
+    return false;
   }
 
   void _scrollToFocused() {
@@ -354,28 +353,41 @@ class _WearAvailabilityProductScreenState
     List<WearAvailabilityProduct> products, {
     bool fast = false,
   }) {
+    if (fast) {
+      _sendGlassesPayload(group, products, fast: true);
+      return;
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final payload = WearAvailabilityGlassesPayloads.products(
-        group: group,
-        products: products,
-        selectedIndex: _focusedIndex,
-      );
-      WearDependencies.I.wearFlowController.rememberScreenPayload(
+      _sendGlassesPayload(group, products);
+    });
+  }
+
+  void _sendGlassesPayload(
+    WearAvailabilityGroup group,
+    List<WearAvailabilityProduct> products, {
+    bool fast = false,
+  }) {
+    final payload = WearAvailabilityGlassesPayloads.products(
+      group: group,
+      products: products,
+      selectedIndex: _focusedIndex,
+    );
+    WearDependencies.I.wearFlowController.rememberScreenPayload(
+      WearScreenId.availabilityProduct,
+      payload,
+    );
+    if (fast) {
+      WearStatusIconReporter.I.sendFastForScreen(
         WearScreenId.availabilityProduct,
         payload,
       );
-      if (fast) {
-        WearStatusIconReporter.I.sendFastForScreen(
-          WearScreenId.availabilityProduct,
-          payload,
-        );
-      } else {
-        WearStatusIconReporter.I.sendForScreen(
-          WearScreenId.availabilityProduct,
-          payload,
-        );
-      }
-    });
+      return;
+    }
+    WearStatusIconReporter.I.sendForScreen(
+      WearScreenId.availabilityProduct,
+      payload,
+    );
   }
 
   void _sendLoading(WearAvailabilityGroup group) {

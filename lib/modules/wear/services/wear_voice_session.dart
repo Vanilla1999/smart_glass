@@ -7,6 +7,10 @@ class WearVoiceSession {
 
   static final WearVoiceSession I = WearVoiceSession._();
 
+  bool _shouldListen = false;
+  int _listeningGeneration = 0;
+  Future<void> _operation = Future<void>.value();
+
   bool get isListening =>
       WearDependencies.I.speechRecognitionService.isListening;
 
@@ -16,53 +20,92 @@ class WearVoiceSession {
 
   Future<void> configureForScreen(WearScreenId screen) async {
     final bool freeText = _usesFreeTextRecognition(screen);
+    print(
+      '[WearVoiceSession] configureForScreen screen=$screen '
+      'mode=${freeText ? 'freeText' : 'grammar'}',
+    );
     await WearDependencies.I.speechRecognitionService.setRecognitionGrammar(
       freeText ? null : VoiceCommandParserService.grammarPhrases,
     );
   }
 
   Future<void> start() async {
-    print('[WearVoiceSession] start requested, isListening=$isListening');
-    if (isListening) {
-      print('[WearVoiceSession] start skipped: ${await diagnostics()}');
-      return;
-    }
-    try {
-      await WearDependencies.I.ensureVoiceTypingPrepared();
-      await WearDependencies.I.speechRecognitionService.startListening();
-      print('[WearVoiceSession] started: ${await diagnostics()}');
-    } catch (error, stackTrace) {
-      print('[WearVoiceSession] start failed: $error\n$stackTrace');
-    }
+    _shouldListen = true;
+    final int generation = ++_listeningGeneration;
+    return _enqueue(() async {
+      print('[WearVoiceSession] start requested, isListening=$isListening');
+      if (!_isCurrentListeningRequest(generation)) return;
+      if (isListening) {
+        print('[WearVoiceSession] start skipped: ${await diagnostics()}');
+        return;
+      }
+      try {
+        await WearDependencies.I.ensureVoiceTypingPrepared();
+        if (!_isCurrentListeningRequest(generation)) return;
+        await WearDependencies.I.speechRecognitionService.startListening();
+        if (!_isCurrentListeningRequest(generation)) {
+          await WearDependencies.I.speechRecognitionService.stopListening();
+          return;
+        }
+        print('[WearVoiceSession] started: ${await diagnostics()}');
+      } catch (error, stackTrace) {
+        print('[WearVoiceSession] start failed: $error\n$stackTrace');
+        rethrow;
+      }
+    });
   }
 
   Future<void> stop() async {
-    print('[WearVoiceSession] stop requested, isListening=$isListening');
-    if (!isListening) {
-      print('[WearVoiceSession] stop skipped: ${await diagnostics()}');
-      return;
-    }
-    try {
-      await WearDependencies.I.speechRecognitionService.stopListening();
-      print('[WearVoiceSession] stopped: ${await diagnostics()}');
-    } catch (error, stackTrace) {
-      print('[WearVoiceSession] stop failed: $error\n$stackTrace');
-    }
+    _shouldListen = false;
+    _listeningGeneration++;
+    return _enqueue(() async {
+      print('[WearVoiceSession] stop requested, isListening=$isListening');
+      try {
+        await WearDependencies.I.speechRecognitionService.stopListening();
+        print('[WearVoiceSession] stopped: ${await diagnostics()}');
+      } catch (error, stackTrace) {
+        print('[WearVoiceSession] stop failed: $error\n$stackTrace');
+      }
+    });
   }
 
   Future<void> restart({required String reason}) async {
-    print('[WearVoiceSession] restart requested reason=$reason');
-    try {
-      await WearDependencies.I.ensureVoiceTypingPrepared();
-      await WearDependencies.I.speechRecognitionService
-          .restartListening(reason: reason);
-      print('[WearVoiceSession] restarted: ${await diagnostics()}');
-    } catch (error, stackTrace) {
-      print('[WearVoiceSession] restart failed: $error\n$stackTrace');
-    }
+    _shouldListen = true;
+    final int generation = ++_listeningGeneration;
+    return _enqueue(() async {
+      print('[WearVoiceSession] restart requested reason=$reason');
+      if (!_isCurrentListeningRequest(generation)) return;
+      try {
+        await WearDependencies.I.ensureVoiceTypingPrepared();
+        if (!_isCurrentListeningRequest(generation)) return;
+        await WearDependencies.I.speechRecognitionService
+            .restartListening(reason: reason);
+        if (!_isCurrentListeningRequest(generation)) {
+          await WearDependencies.I.speechRecognitionService.stopListening();
+          return;
+        }
+        print('[WearVoiceSession] restarted: ${await diagnostics()}');
+      } catch (error, stackTrace) {
+        print('[WearVoiceSession] restart failed: $error\n$stackTrace');
+      }
+    });
+  }
+
+  bool _isCurrentListeningRequest(int generation) {
+    return _shouldListen && generation == _listeningGeneration;
+  }
+
+  Future<void> _enqueue(Future<void> Function() operation) {
+    final Future<void> next = _operation.then((_) => operation());
+    _operation = next.catchError((Object error, StackTrace stackTrace) {
+      print('[WearVoiceSession] queued operation failed: $error\n$stackTrace');
+    });
+    return next;
   }
 
   Future<void> ensureHealthy({required String reason}) async {
+    if (!_shouldListen) return;
+    final int generation = _listeningGeneration;
     final service = WearDependencies.I.speechRecognitionService;
     final int now = DateTime.now().millisecondsSinceEpoch;
     final int? lastAudioAt = service.lastAudioChunkAtMillis;
@@ -76,6 +119,7 @@ class WearVoiceSession {
       'lastNonSilentAudioAgeMs=$lastNonSilentAudioAgeMs '
       'diagnostics=${await diagnostics()}',
     );
+    if (!_isCurrentListeningRequest(generation)) return;
 
     if (!service.isListening) {
       await start();

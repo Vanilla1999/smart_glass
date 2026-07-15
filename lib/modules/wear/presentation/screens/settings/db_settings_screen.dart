@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
@@ -112,6 +113,10 @@ class _WearSettingsScreenState extends ConsumerState<DBSettingsScreen> {
   void initState() {
     super.initState();
     WearDependencies.I.wearFlowController.enterScreen(WearScreenId.dbSettings);
+    WearDependencies.I.wearFlowController.registerScreenActions(
+      WearScreenId.dbSettings,
+      WearScreenActionHandler(onSave: _saveSettings),
+    );
     _initControllers();
     _loadSavedSettings();
   }
@@ -149,6 +154,9 @@ class _WearSettingsScreenState extends ConsumerState<DBSettingsScreen> {
 
   @override
   void dispose() {
+    WearDependencies.I.wearFlowController.unregisterScreenActions(
+      WearScreenId.dbSettings,
+    );
     _hostController.dispose();
     _portController.dispose();
     _pathController.dispose();

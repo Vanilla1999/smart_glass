@@ -69,7 +69,10 @@ class VoiceCommandParserService {
     'дальше': WearVoiceCommand.nextPage,
     'далее': WearVoiceCommand.nextPage,
     'прошлая страница': WearVoiceCommand.previousPage,
+    'прошлое страница': WearVoiceCommand.previousPage,
+    'прошлую страницу': WearVoiceCommand.previousPage,
     'предыдущая страница': WearVoiceCommand.previousPage,
+    'предыдущую страницу': WearVoiceCommand.previousPage,
     'страница назад': WearVoiceCommand.previousPage,
     'назад страница': WearVoiceCommand.previousPage,
     'не надо': WearVoiceCommand.no,
@@ -84,11 +87,10 @@ class VoiceCommandParserService {
     'завершить': WearVoiceCommand.finish,
     'закончить': WearVoiceCommand.finish,
     'готово': WearVoiceCommand.finish,
-    'стоп': WearVoiceCommand.finish,
-    'конец': WearVoiceCommand.finish,
     'фонарик': WearVoiceCommand.flashlight,
     'включить фонарик': WearVoiceCommand.flashlight,
     'выключить фонарик': WearVoiceCommand.flashlight,
+    'люмус максима': WearVoiceCommand.flashlight,
   };
 
   static const Map<WearVoiceCommand, List<String>> _commandTokens =
@@ -124,7 +126,10 @@ class VoiceCommandParserService {
     WearVoiceCommand.no: <String>['нет'],
     WearVoiceCommand.previousPage: <String>[
       'прошлая страница',
+      'прошлое страница',
+      'прошлую страницу',
       'предыдущая страница',
+      'предыдущую страницу',
       'страница назад',
       'назад страница',
     ],
@@ -134,8 +139,6 @@ class VoiceCommandParserService {
       'завершить',
       'закончить',
       'готово',
-      'стоп',
-      'конец',
     ],
     WearVoiceCommand.flashlight: <String>['фонарик'],
     WearVoiceCommand.openPrintPriceTag: <String>['печать ценника'],
@@ -173,12 +176,14 @@ class VoiceCommandParserService {
 
   static List<String> get grammarPhrases => _exactCommandMap.keys.toList();
 
+  WearVoiceCommand? parseExact(String text) {
+    final String normalized = _normalize(text);
+    if (normalized.isEmpty) return null;
+    return _exactCommandMap[normalized];
+  }
+
   WearVoiceCommand? parse(String text) {
-    final String normalized = text
-        .trim()
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-zа-яё\s]'), '')
-        .trim();
+    final String normalized = _normalize(text);
     print('[VoiceCommandParser] raw="$text" normalized="$normalized"');
     if (normalized.isEmpty) return null;
     final WearVoiceCommand? exact = _exactCommandMap[normalized];
@@ -207,6 +212,14 @@ class VoiceCommandParserService {
       print('[VoiceCommandParser] token="$matchedToken" parsed=$cmd');
     }
     return cmd;
+  }
+
+  String _normalize(String text) {
+    return text
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-zа-яё\s]'), '')
+        .trim();
   }
 
   bool _containsToken(String text, String token) {

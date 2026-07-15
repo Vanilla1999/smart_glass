@@ -7,20 +7,23 @@
 - основной экран телефона;
 - отдельный экран для smart glasses, запускаемый через entrypoint `glassesMain`.
 
-Приложение объединяет управление очками, offline-распознавание речи через Vosk, сканер штрихкодов через `multi_scanner` и связь с native Android через `MethodChannel`.
+Приложение объединяет управление очками, offline-распознавание речи через Vosk, сканер штрихкодов через `multi_scanner`, wear-сценарий печати/проверки товара и связь с native Android через `MethodChannel`.
 
 ## Текущий стек
 
 | Зона | Решение |
 |---|---|
 | UI | Flutter Material |
-| State management | `flutter_bloc` / Cubit |
-| DI | Ручной контейнер `DependenciesContainer` + `AppScope` |
-| Native bridge | `MethodChannelService` |
+| State management | `flutter_bloc` / Cubit + `flutter_riverpod`/Notifier в wear-модуле |
+| DI | Ручной контейнер `DependenciesContainer` + `AppScope`; `WearDependencies` в wear-модуле |
+| Navigation | `MaterialApp`/`Navigator`; `go_router` внутри wear-модуля |
+| Native bridge | `MethodChannelService` (`app_channel` + `glasses_channel`) |
 | Voice recognition | `vosk_flutter_service` + `record` |
 | Scanner | `multi_scanner` |
 | Assets | `assets/vosk-model-small-ru-0.22.zip` |
 | Wi‑Fi status | `wifi_info_plugin_plus` + `permission_handler` |
+| Env | `flutter_dotenv` (`assets/develop.env`) |
+| Persistence | `shared_preferences` |
 
 ## Структура каталогов
 
@@ -43,12 +46,14 @@ lib/
 │   │   └── method_channel_service.dart
 │   └── utils/
 │       └── inherited_extension.dart
-└── features/
-    ├── initialization/
-    ├── home/
-    ├── scanner/
-    ├── voice/
-    └── glasses/
+├── features/
+│   ├── initialization/
+│   ├── home/
+│   ├── scanner/
+│   ├── voice/
+│   └── glasses/
+└── modules/
+    └── wear/
 ```
 
 Проект использует Feature-First подход. Общие инфраструктурные вещи живут в `app/` и `core/`, пользовательские сценарии - в `features/`.
@@ -111,6 +116,8 @@ glassesMain()
 
 `AppScope` передает контейнер вниз по дереву через `InheritedWidget`. Экраны получают зависимости через `AppScope.of(context)` и подключают Cubit'ы через `BlocProvider.value`.
 
+Wear-модуль не добавляется в `DependenciesContainer`: он живет в отдельном `ProviderScope` и использует собственный singleton `WearDependencies`. Общие native-вызовы все равно проходят через `MethodChannelService`.
+
 Правила:
 
 - не создавать второй экземпляр глобального Cubit'а внутри экрана, если он уже есть в `DependenciesContainer`;
@@ -133,6 +140,9 @@ glassesMain()
 | `GlassesCoordinatorCubit` | Прием MethodChannel-событий в runtime очков, маршрутизация данных на активный экран |
 | `GlassesScreenCubit` | State первого экрана очков: счетчик и распознанный текст |
 | `GlassesScreen2Cubit` | State второго экрана очков: распознанный текст |
+| `WearGlassesCubit` | State wear-проекции очков: декодирует `WearGlassesPayload` и отдает данные в `WearGlassesScreen` |
+
+Внутри wear-модуля источник flow-состояния - `WearFlowController` и Riverpod Notifier'ы. Phone `Navigator` не является источником правды для UI очков: очки получают готовый projection state через `WearGlassesPayload`.
 
 Правила:
 
@@ -158,9 +168,27 @@ glassesMain()
 | `showGlassesScreen2` | Показать второй экран очков |
 | `updateCounter` | Передать счетчик на очки |
 | `updateRecognizedText` | Передать распознанный текст на очки |
+| `showWearGlasses` | Показать wear-проекцию на очках и передать initial payload |
+| `updateWearGlasses` | Обновить текущий payload wear-проекции |
+| `hideWearGlasses` | Скрыть wear-проекцию и перевести очки на empty screen |
 | `saveLogs` | Запросить сохранение логов native-слоем |
 | `clearLogs` | Запросить очистку логов native-слоем |
 | `getInitialCounter` | Получить начальное значение счетчика в glasses runtime |
+
+Wear projection flow:
+
+```text
+WearGlassesBridge.show/update
+  -> MethodChannelService.showWearGlasses/updateWearGlasses
+  -> app_channel
+  -> MainActivity.showWearGlasses/updateWearGlasses
+  -> glasses_channel.updateWearGlasses + navigateToRoute('/wear')
+  -> GlassesCoordinatorCubit
+  -> WearGlassesCubit
+  -> WearGlassesScreen
+```
+
+`updateWearGlasses` на `app_channel` возвращает success после принятия запроса Android-слоем. Ошибки forwarding в glasses runtime логируются в Kotlin callback `MethodChannel.Result` (`error` / `notImplemented`).
 
 Правила изменения bridge:
 
@@ -211,6 +239,29 @@ startListening()
 - UI updates и отправка на очки throttled через константы в `AppConstants`;
 - Vosk model asset должен быть объявлен в `pubspec.yaml`.
 
+### Wear voice pipeline
+
+Wear-модуль использует общий `AudioStreamService` и общий `SpeechRecognitionService` для голосовых команд, свободного поиска по спискам и голосового ввода чисел. Параллельные recorder/recognizer создавать нельзя без отдельного архитектурного решения.
+
+`WearModuleApp` подписывается на три потока `WearVoiceControlService`: команды, final-фразы и partial-фразы. Смена режима распознавания идет через `WearVoiceSession.configureForScreen(screen)`:
+
+| Режим | Когда используется | Grammar |
+|---|---|---|
+| `grammar` | обычная навигация и системные команды | `VoiceCommandParserService.grammarPhrases` |
+| `freeText` | списки и ввод: `printerSelect`, `productSelect`, `availabilityGroup`, `availabilityProduct`, `availabilityFill`, `printCodeInput` | `null` |
+
+`SpeechRecognitionService` держит отдельные Vosk recognizer'ы для `freeText` и `grammar`. `setRecognitionGrammar(...)` не перезапускает микрофон: новый recognizer сначала создается и сбрасывается внутри общего audio barrier, после чего active mode и epoch публикуются атомарно. Chunks старого epoch отбрасываются до передачи в новый recognizer. Free-text fallback в незавершенном grammar mode запрещен. Если grammar та же и recognizer готов, он переиспользуется.
+
+Правила обработки результатов:
+
+- в `freeText` системные команды парсятся только по exact aliases, чтобы command token внутри названия товара не перехватывал phrase;
+- в `grammar` допускается token fallback `VoiceCommandParserService`;
+- partial-word совпадения не считаются системными командами;
+- command partial никогда не выполняет действие; команда исполняется только по final;
+- free-text partial при unique match может только переместить фокус; выбор, переход и печать выполняются по final;
+- для длинных partial списков используется `VoiceListMatcher.canMatchPartial(...)` (`minPartialMatchLength = 8`);
+- для коротких названий принтеров разрешен только exact-word matching через `VoiceListMatcher.matchExactWord(..., minLength: 5)`.
+
 ## Scanner Flow
 
 `ScannerCubit` реализует `MultiScannerDelegate`.
@@ -250,18 +301,21 @@ onErrorScan(error)
 | `/initialization` | `GlassesInitializationScreen` |
 | `/empty` | `GlassesEmptyScreen` |
 | `/screen2` | `GlassesScreen2` |
+| `/wear` | `WearGlassesScreen` |
 
 `GlassesCoordinatorCubit` принимает события:
 
 - `navigateToScreen`;
 - `navigateToRoute`;
 - `updateCounter`;
-- `updateRecognizedText`.
+- `updateRecognizedText`;
+- `updateWearGlasses`.
 
 Данные маршрутизируются на активный экран:
 
 - counter идет только на screen1;
-- recognized text идет на screen1 или screen2 в зависимости от `_currentRoute`.
+- recognized text идет на screen1 или screen2 в зависимости от `_currentRoute`;
+- wear payload идет в `WearGlassesCubit` и отображается только route `/wear`.
 
 Правила добавления нового экрана очков:
 
@@ -276,7 +330,7 @@ onErrorScan(error)
 
 ## Модуль Wear (Печать ценников)
 
-Модуль `wear` портирован из проекта `nbo` (ветка `MDVTM-4425/voice-test`) и реализует flow печати ценников: авторизация сотрудника → выбор принтера → сканирование товаров → голосовой ввод → печать.
+Модуль `wear` портирован из проекта `nbo` (ветка `MDVTM-4425/voice-test`) и реализует flow печати ценников и проверки наличия: авторизация сотрудника → выбор принтера → сканирование товаров → голосовой/цифровой ввод → печать; отдельный раздел `Доступность` ведет сценарии проверки товара.
 
 ### Отличия стека
 
@@ -296,32 +350,40 @@ onErrorScan(error)
 
 ```
 lib/modules/wear/
+├── application/                 # WearFlowController, ports, navigation requests
+│   ├── ports/                   # WearGlassesOutput / WearNavigationOutput
+│   ├── wear_command_router.dart
+│   ├── wear_flow_controller.dart
+│   ├── wear_flow_state.dart
+│   └── wear_screen_id.dart
 ├── config/
 │   ├── wear_dependencies.dart       # Singleton-контейнер зависимостей
 │   └── wear_session.dart            # Текущая сессия (пользователь)
 ├── data/
+│   ├── availability/                # Локальный каталог проверки наличия
 │   ├── auth/
 │   │   ├── data_source/
 │   │   │   ├── auth_data_source.dart    # HTTP-запросы к API аутентификации
 │   │   │   └── auth_dio_client.dart     # Настройка Dio-клиента
 │   │   └── model/
-│   │       └── auth_response.dart
-│   ├── bdto/
-│   │   ├── data_source/
-│   │   │   ├── bdto_datasource.dart     # Firebird-запросы через fbdb
-│   │   │   └── fbdb_error_handler.dart  # Обработка ошибок fbdb
-│   │   └── model/
-│   │       └── db_models.dart
-│   └── printer/
-│       └── data_source/
-│           └── printer_datasource.dart
+│   │       └── auth_user.dart
+│   └── bdto/
+│       ├── data_source/
+│       │   ├── bdto_datasource.dart     # Firebird-запросы через fbdb
+│       │   └── fbdb_error_handler.dart  # Обработка ошибок fbdb
+│       └── model/                      # Freezed-модели Firebird
 ├── domain/
+│   ├── availability/
+│   │   ├── model/
+│   │   ├── repository/
+│   │   └── use_case/
 │   ├── auth/
 │   │   ├── model/
 │   │   │   └── authenticated_user.dart
 │   │   └── use_case/
 │   │       └── authenticate_user_use_case.dart
 │   ├── price_tag_print/
+│   │   ├── model/
 │   │   └── use_case/
 │   │       ├── get_available_printers_use_case.dart
 │   │       ├── get_barcode_info_use_case.dart
@@ -334,6 +396,7 @@ lib/modules/wear/
 │           ├── speech_recognition_service.dart
 │           ├── tokenizer.dart
 │           └── voice_typing_service.dart
+├── infrastructure/              # Flutter/Noop adapters for application ports
 ├── models/
 │   └── wear_printer_selection.dart
 ├── navigation/
@@ -345,6 +408,9 @@ lib/modules/wear/
 │   └── wear_status_icon_reporter.dart     # Реактивная отправка статуса на очки (polling 2s)
 ├── presentation/
 │   ├── glasses/
+│   │   ├── wear_glasses_bridge.dart
+│   │   ├── wear_glasses_payload.dart
+│   │   └── wear_availability_glasses_payloads.dart
 │   ├── input/
 │   │   ├── cubit/
 │   │   │   └── ear_print_code_input_cubit.dart
@@ -361,6 +427,8 @@ lib/modules/wear/
 │   │   ├── menu/
 │   │   │   └── wear_menu_screen.dart         # Главное меню после входа
 │   │   ├── printers/
+│   │   │   ├── cubit/
+│   │   │   │   └── wear_printer_select_cubit.dart
 │   │   │   └── wear_printer_select_screen.dart
 │   │   ├── scan/
 │   │   │   ├── cubit/
@@ -369,18 +437,17 @@ lib/modules/wear/
 │   │   │   └── wear_scan_idle_screen.dart
 │   │   ├── settings/
 │   │   │   ├── wear_settings_screen.dart
+│   │   │   ├── wear_wifi_settings_screen.dart
+│   │   │   ├── wear_printer_settings_screen.dart
 │   │   │   └── db_settings_screen.dart
 │   │   └── status/
-│   │       ├── cubit/
-│   │       │   └── wear_status_cubit.dart
 │   │       ├── wear_status_args.dart
 │   │       └── wear_status_screen.dart
-│   ├── providers/
-│   │   └── wear_voice_providers.dart
 │   ├── utils/
 │   │   └── wear_feedback.dart
 │   └── widgets/
 │       ├── wear_loading.dart
+│       ├── wear_module_app.dart
 │       ├── wear_mode_toggle.dart
 │       ├── wear_pill.dart
 │       ├── wear_position_indicator.dart
@@ -388,7 +455,7 @@ lib/modules/wear/
 │       ├── wear_screen_scaffold.dart          # Общая обёртка экранов (статус-бар + сканер-индикатор)
 │       ├── wear_status_bar.dart              # Device-side Wi‑Fi / printer status icons (polling 10s)
 │       ├── wear_svg_icon.dart
-│       └── wear_voice_command_listener.dart
+│       └── wear_voice_indicator.dart
 └── theme/
     ├── wear_colors.dart
     ├── wear_images.dart
@@ -427,6 +494,7 @@ lib/modules/wear/
 | `WearScannerConnectScreen` | `/wear_scanner_connect` | Подключение Bluetooth-сканера (опционально, через env) |
 | `WearStatusScreen` | `/wear_status_screen` | Универсальный статус (успех/ошибка) с auto-dismiss |
 | `WearMenuScreen` | `/wear_menu` | Главное меню: печать, настройки, выход |
+| `WearHomeConfirmScreen` | `/wear_home_confirm` | Подтверждение перехода домой |
 | `WearScanIdleScreen` | `/wear_scan_idle` | Сканирование товаров, отображение результата |
 | `WearPrinterSelectScreen` | `/wear_printer_select` | Выбор принтера из списка |
 | `WearProductSelectScreen` | `/wear_product_select` | Выбор товара при множественных результатах |
@@ -440,6 +508,8 @@ lib/modules/wear/
 | `WearContinueScanScreen` | `/wear_continue_scan` | Продолжение сканирования после действия |
 | `WearHelpScreen` | `/wear_help` | Справка |
 | `WearSettingsScreen` | `/wear_settings` | Экран настроек |
+| `WearWifiSettingsScreen` | `/wear_wifi_settings` | Статус/повторная проверка Wi-Fi |
+| `WearPrinterSettingsScreen` | `/wear_printer_settings` | Статус/повторная проверка выбранного принтера |
 | `DBSettingsScreen` | `/db_settings` | Настройки подключения к Firebird |
 
 #### Дизайн-конвенции статусных иконок
@@ -465,10 +535,10 @@ Riverpod-провайдеры создаются через `autoDispose` и ж�
 | Провайдер | Тип | Назначение |
 |---|---|---|
 | `wearAuthNotifierProvider` | StateNotifierProvider | Состояние авторизации, навигационные команды |
-| `wearPrinterSelectControllerProvider` | — | Выбор принтера |
-| `wearScanCubitProvider` | — | Сканирование и печать |
-| `wearVoiceCommandsProvider` | StreamProvider | Поток распознанных голосовых команд |
-| `wearVoiceCallbacksProvider` | NotifierProvider | Callbacks активного экрана |
+| `wearPrinterSelectNotifierProvider` | StateNotifierProvider | Загрузка и выбор белого/желтого принтера |
+| `wearScanNotifierProvider` | StateNotifierProvider family | Сканирование, поиск товара, печать |
+| `wearAvailabilityGroupsProvider` | FutureProvider | Список групп для проверки наличия |
+| `wearAvailabilityProductsProvider` | FutureProvider family | Список товаров выбранной группы |
 
 #### Голосовые команды навигации
 
@@ -478,13 +548,13 @@ Riverpod-провайдеры создаются через `autoDispose` и ж�
 
 ```text
 WearVoiceSession
-  → WearVoiceControlService.commandStream
-  → wearVoiceCommandsProvider
-  → WearVoiceCommandOrchestrator
-  → WearVoiceCommandListener текущего экрана
+  → WearVoiceControlService.commandStream / phraseStream / partialPhraseStream
+  → WearModuleApp stream subscriptions
+  → WearFlowController.handleVoiceCommand / handleVoicePhrase / handleVoicePartialPhrase
+  → WearScreenActionHandler активного WearScreenId
 ```
 
-Поддерживаемые команды: `up`, `down`, `select`, `back`, `home`. `back/home` имеют глобальную обработку в `WearVoiceCommandOrchestrator`, `up/down/select` обычно обрабатываются активным экраном.
+Экраны регистрируют локальные действия через `WearFlowController.registerScreenActions(...)` и удаляют их через `unregisterScreenActions(...)`. Команды `back/home` обрабатываются централизованно в `WearFlowController`, `up/down/select` и screen-specific команды обычно делегируются активному экрану.
 
 Availability screens используют `up/down` для локального focused index, `select` для действия выбранного элемента и передают `selectedIndex` в glasses payload.
 
@@ -550,6 +620,7 @@ Navigator.push(
 - Отсутствие `ProviderScope` на уровне корневого `MaterialApp` (создаётся динамически при входе в модуль).
 - `assets/develop.env` объявлен в `pubspec.yaml`, но игнорируется `.gitignore` — свежий checkout/CI без него упадёт на сборке assets.
 - `dart analyze` на большом наборе файлов может лагать и виснуть — рекомендуется запускать по 1–2 файлам за раз.
+- `./gradlew app:compileDebugKotlin` может падать в external `.pub-cache/git/multiscanner...` на unresolved `BTDevices` / `BattaryStateList` / `BattaryState`; это отдельная проблема зависимости `multi_scanner`, не Kotlin-кода приложения.
 
 ## Правила Изменений
 
@@ -702,10 +773,17 @@ Review должен отвечать на вопросы:
 
 - `main()` запускает phone runtime, `glassesMain()` запускает glasses runtime.
 - Phone UI не управляет Navigator очков напрямую; связь идет через native bridge и coordinator.
+- Для wear-проекции source of truth - `WearFlowController` + `WearGlassesPayload`, а не phone `Navigator`.
+- Ошибка или timeout glasses transport логируется, но не блокирует phone navigation.
+- `WearStatusIconReporter` сериализует projection delivery, отбрасывает stale payload generation и после `stop()` активирует `/wear` через `showWearGlasses` на первом новом payload.
 - `MethodChannelService` - единственная точка Flutter-вызовов к native channels.
+- Native acknowledgement wear projection ограничен таймаутом 5 секунд и завершается ровно один раз.
+- Новые MethodChannel methods должны быть добавлены одновременно в `MethodChannelService`, `MainActivity.kt` и `GlassesCoordinatorCubit`, если событие доходит до glasses runtime.
 - Глобальные Cubit'ы создаются в `DependenciesContainer` и передаются через `AppScope`.
 - Локальные Cubit'ы glasses runtime создаются и закрываются внутри `GlassesRuntimeApp`.
 - Voice recognition работает offline через Vosk asset, объявленный в `pubspec.yaml`.
+- Wear voice services используют общий `AudioStreamService`/`SpeechRecognitionService`; не создавать параллельный recorder/recognizer без отдельного решения.
+- Переключение wear voice `grammar`/`freeText` идет через `setRecognitionGrammar(...)` без stop/start микрофона.
 - Scanner lifecycle обязан добавлять и удалять delegate симметрично.
 - Любой новый route очков должен быть согласован в Flutter runtime и native Android mapping.
 - Перед завершением изменений нужно запускать `analyze`; для логики Cubit/widget желательно добавлять или запускать tests.

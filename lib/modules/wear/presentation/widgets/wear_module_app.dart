@@ -60,12 +60,14 @@ class _WearModuleAppState extends State<WearModuleApp>
   StreamSubscription<String>? _voicePartialPhraseSub;
   StreamSubscription<WearFlowState>? _flowStateSub;
   StreamSubscription<dynamic>? _authorizedSub;
+  StreamSubscription<void>? _clearedSub;
   Timer? _voiceHealthTimer;
   bool _voiceStarted = false;
   bool _voiceStarting = false;
   String? _voiceStartError;
   String? _consumedPartialPhrase;
   int _consumedPartialPhraseAt = 0;
+  int? _voiceStartupToken;
 
   static const Duration _minimumVoiceLoaderDuration = Duration(seconds: 10);
   static const int _finalPhraseSuppressMs = 1500;
@@ -199,6 +201,9 @@ class _WearModuleAppState extends State<WearModuleApp>
         _startVoice('authorized');
       }
     });
+    _clearedSub = WearSession.clearedStream.listen((_) {
+      _stopVoiceForLogout();
+    });
     _router.routerDelegate.addListener(_onRouterChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!WearSession.isAuthorized) {
@@ -298,7 +303,7 @@ class _WearModuleAppState extends State<WearModuleApp>
       _voiceStarting = true;
       _voiceStartError = null;
     });
-    WearStatusIconReporter.I.beginVoiceStartup();
+    _voiceStartupToken = WearStatusIconReporter.I.beginVoiceStartup();
     unawaited(
       WearStatusIconReporter.I.sendFast(
         WearGlassesPayload.loading(
@@ -313,6 +318,7 @@ class _WearModuleAppState extends State<WearModuleApp>
 
   Future<void> _runVoiceStart(String source) async {
     final Future<void> Function()? startVoice = widget.onStartVoice;
+    final int? startupToken = _voiceStartupToken;
     try {
       final Future<void> minimumLoader = Future<void>.delayed(
         _minimumVoiceLoaderDuration,
@@ -323,8 +329,15 @@ class _WearModuleAppState extends State<WearModuleApp>
         await WearVoiceSession.I.start();
       }
       await minimumLoader;
-      WearStatusIconReporter.I.endVoiceStartup();
-      if (!mounted) return;
+      WearStatusIconReporter.I.endVoiceStartup(startupToken);
+      if (!_isCurrentVoiceStartup(startupToken)) return;
+      if (!WearSession.isAuthorized) {
+        setState(() {
+          _voiceStarting = false;
+          _voiceStartError = null;
+        });
+        return;
+      }
       setState(() {
         _voiceStarting = false;
         _voiceStartError = null;
@@ -334,8 +347,8 @@ class _WearModuleAppState extends State<WearModuleApp>
     } catch (error, stackTrace) {
       print(
           '[WearModuleApp] voice start failed source=$source: $error\n$stackTrace');
-      WearStatusIconReporter.I.endVoiceStartup();
-      if (!mounted) return;
+      WearStatusIconReporter.I.endVoiceStartup(startupToken);
+      if (!_isCurrentVoiceStartup(startupToken)) return;
       setState(() {
         _voiceStarting = false;
         _voiceStartError = 'Голосовое управление не запустилось';
@@ -358,10 +371,39 @@ class _WearModuleAppState extends State<WearModuleApp>
     _voiceHealthTimer?.cancel();
     _voiceHealthTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (!mounted || !WearSession.isAuthorized || _voiceStarting) return;
-      unawaited(
-        WearVoiceSession.I.ensureHealthy(reason: 'periodic_voice_health'),
-      );
+      _ensureVoiceHealthy('periodic_voice_health');
     });
+  }
+
+  void _ensureVoiceHealthy(String reason) {
+    unawaited(
+      WearVoiceSession.I.ensureHealthy(reason: reason).catchError(
+        (Object error, StackTrace stackTrace) {
+          print(
+            '[WearModuleApp] voice health-check failed reason=$reason '
+            'error=$error\n$stackTrace',
+          );
+        },
+      ),
+    );
+  }
+
+  void _stopVoiceForLogout() {
+    _voiceStarted = false;
+    _voiceHealthTimer?.cancel();
+    _voiceHealthTimer = null;
+    WearStatusIconReporter.I.endVoiceStartup(_voiceStartupToken);
+    _voiceStartupToken = null;
+    final Future<void> Function()? stopVoice = widget.onStopVoice;
+    if (stopVoice != null) {
+      unawaited(stopVoice());
+    } else {
+      unawaited(WearVoiceSession.I.stop());
+    }
+  }
+
+  bool _isCurrentVoiceStartup(int? token) {
+    return mounted && token != null && token == _voiceStartupToken;
   }
 
   @override
@@ -389,16 +431,10 @@ class _WearModuleAppState extends State<WearModuleApp>
         if (restartVoice != null) {
           unawaited(restartVoice('app_lifecycle_resumed'));
         } else {
-          unawaited(
-            WearVoiceSession.I.ensureHealthy(reason: 'app_lifecycle_resumed'),
-          );
+          _ensureVoiceHealthy('app_lifecycle_resumed');
           Future<void>.delayed(const Duration(seconds: 1), () {
             if (!mounted || !WearSession.isAuthorized) return;
-            unawaited(
-              WearVoiceSession.I.ensureHealthy(
-                reason: 'app_lifecycle_resumed_delayed',
-              ),
-            );
+            _ensureVoiceHealthy('app_lifecycle_resumed_delayed');
           });
         }
       }
@@ -419,7 +455,17 @@ class _WearModuleAppState extends State<WearModuleApp>
   @override
   void dispose() {
     print('[VOICE-LIFECYCLE] WearModuleApp dispose');
-    WearStatusIconReporter.I.endVoiceStartup();
+    WearStatusIconReporter.I.endVoiceStartup(_voiceStartupToken);
+    unawaited(
+      WearStatusIconReporter.I.stop().catchError(
+        (Object error, StackTrace stackTrace) {
+          print(
+            '[WearModuleApp] stop glasses projection failed: '
+            '$error\n$stackTrace',
+          );
+        },
+      ),
+    );
     _voiceHealthTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _router.routerDelegate.removeListener(_onRouterChange);
@@ -428,6 +474,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     _voicePartialPhraseSub?.cancel();
     _flowStateSub?.cancel();
     _authorizedSub?.cancel();
+    _clearedSub?.cancel();
     _flow.setNavigationOutput(
       NoopWearNavigationOutput(),
     );
