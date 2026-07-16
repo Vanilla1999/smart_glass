@@ -167,7 +167,13 @@ void main() {
       expect(lastWearPayload['selectedIndex'], 0);
       expect(
         lastWearPayload['items'],
-        <String>['Печать ценников', 'Доступность', 'Справка', 'Настройки'],
+        <String>[
+          'Последнее фото',
+          'Печать ценников',
+          'Доступность',
+          'Справка',
+          'Настройки',
+        ],
       );
     });
 
@@ -184,7 +190,7 @@ void main() {
       expect(lastWearPayload['screenType'], 'menu');
     });
 
-    test('menu select navigates and sends target screen payload', () async {
+    test('menu select navigates to latest photo', () async {
       await coordinator.init();
 
       flowController.setUiLifecycle(WearUiLifecycle.active);
@@ -193,13 +199,12 @@ void main() {
 
       await flowController.handleVoiceCommand(WearVoiceCommand.select);
 
-      expect(flowController.state.screen, WearScreenId.printerSelect);
-      expect(lastWearPayload['screenType'], 'printer');
-      expect(lastWearPayload['phase'], 'loading');
-      expect(lastWearPayload['title'], 'Принтеры');
+      expect(flowController.state.screen, WearScreenId.latestPhoto);
+      expect(lastWearPayload['screenType'], 'status');
+      expect(lastWearPayload['title'], 'Последнее фото');
     });
 
-    test('menu item 1 select sends availability payload to coordinator',
+    test('menu item 2 select sends availability payload to coordinator',
         () async {
       await coordinator.init();
 
@@ -207,6 +212,7 @@ void main() {
       flowController.enterScreen(WearScreenId.menu);
       await Future<void>.delayed(Duration.zero);
 
+      await flowController.handleVoiceCommand(WearVoiceCommand.down);
       await flowController.handleVoiceCommand(WearVoiceCommand.down);
       await flowController.handleVoiceCommand(WearVoiceCommand.select);
 
@@ -224,6 +230,7 @@ void main() {
 
       await flowController.handleVoiceCommand(WearVoiceCommand.down);
       await flowController.handleVoiceCommand(WearVoiceCommand.down);
+      await flowController.handleVoiceCommand(WearVoiceCommand.down);
       await flowController.handleVoiceCommand(WearVoiceCommand.select);
 
       expect(flowController.state.screen, WearScreenId.help);
@@ -239,7 +246,7 @@ void main() {
       flowController.enterScreen(WearScreenId.menu);
       await Future<void>.delayed(Duration.zero);
 
-      for (int i = 0; i < 3; i++) {
+      for (int i = 0; i < 4; i++) {
         await flowController.handleVoiceCommand(WearVoiceCommand.down);
       }
       await flowController.handleVoiceCommand(WearVoiceCommand.select);
@@ -266,7 +273,13 @@ void main() {
       expect(glassesState.title, 'Выбор раздела');
       expect(
         glassesState.items,
-        <String>['Печать ценников', 'Доступность', 'Справка', 'Настройки'],
+        <String>[
+          'Последнее фото',
+          'Печать ценников',
+          'Доступность',
+          'Справка',
+          'Настройки',
+        ],
       );
       expect(glassesState.phase, WearGlassesPhase.idle);
     });
@@ -319,7 +332,8 @@ void main() {
       flowController.enterScreen(WearScreenId.menu);
       await Future<void>.delayed(Duration.zero);
 
-      // down to index 1 (Доступность)
+      // down to index 2 (Доступность)
+      await flowController.handleVoiceCommand(WearVoiceCommand.down);
       await flowController.handleVoiceCommand(WearVoiceCommand.down);
       // select → availability
       await flowController.handleVoiceCommand(WearVoiceCommand.select);
@@ -336,8 +350,8 @@ void main() {
 
       glassesState = WearGlassesState.fromPayload(lastWearPayload);
       expect(glassesState.screenType, WearGlassesScreenType.menu);
-      expect(glassesState.selectedIndex, 1);
-      expect(flowController.state.menuFocusedIndex, 1);
+      expect(glassesState.selectedIndex, 2);
+      expect(flowController.state.menuFocusedIndex, 2);
     });
   });
 
@@ -620,13 +634,12 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       expect(find.text('Подготовка голосового\nуправления'), findsOneWidget);
 
       startVoiceCompleter.complete();
-      await tester.pump(const Duration(seconds: 10));
       await tester.pump();
 
       expect(find.text('Подготовка голосового\nуправления'), findsNothing);
     });
 
-    testWearWidget('voice startup loader stays at least ten seconds',
+    testWearWidget('voice startup loader adds no delay after voice is ready',
         (WidgetTester tester) async {
       WearSession.clear();
       final WearFlowController routerFlow = WearFlowController(
@@ -653,13 +666,6 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
         name: 'Authorized User',
       ));
       await tester.pump();
-      await tester.pump();
-      expect(find.text('Подготовка голосового\nуправления'), findsOneWidget);
-
-      await tester.pump(const Duration(seconds: 9, milliseconds: 999));
-      expect(find.text('Подготовка голосового\nуправления'), findsOneWidget);
-
-      await tester.pump(const Duration(milliseconds: 1));
       await tester.pump();
       expect(find.text('Подготовка голосового\nуправления'), findsNothing);
     });

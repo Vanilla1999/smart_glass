@@ -27,7 +27,7 @@ class _WearMenuScreenState extends State<WearMenuScreen>
   final _flow = WearDependencies.I.wearFlowController;
   StreamSubscription<WearFlowState>? _flowSub;
   int _focusedIndex = 0;
-  static const int _menuItemCount = 4;
+  static const int _menuItemCount = 5;
 
   @override
   void initState() {
@@ -64,12 +64,14 @@ class _WearMenuScreenState extends State<WearMenuScreen>
   String _getMenuItemName(int index) {
     switch (index) {
       case 0:
-        return 'Печать ценника';
+        return 'Последнее фото';
       case 1:
-        return 'Доступность';
+        return 'Печать ценника';
       case 2:
-        return 'Справка';
+        return 'Доступность';
       case 3:
+        return 'Справка';
+      case 4:
         return 'Настройки';
       default:
         return 'UNKNOWN(index=$index)';
@@ -105,23 +107,27 @@ class _WearMenuScreenState extends State<WearMenuScreen>
         ),
       ),
       WearPill(
-        title: 'Печать ценника',
+        title: 'Последнее фото',
         onTap: () {
           _flow.selectMenuIndex(0);
         },
       ),
       WearPill(
-        title: 'Доступность',
+        title: 'Печать ценника',
         onTap: () => _flow.selectMenuIndex(1),
       ),
       WearPill(
-        title: 'Справка',
+        title: 'Доступность',
         onTap: () => _flow.selectMenuIndex(2),
+      ),
+      WearPill(
+        title: 'Справка',
+        onTap: () => _flow.selectMenuIndex(3),
       ),
       WearPill(
         title: 'Настройки',
         icon: WearImages.gear,
-        onTap: () => _flow.selectMenuIndex(3),
+        onTap: () => _flow.selectMenuIndex(4),
       ),
       const SizedBox(
         height: 50,

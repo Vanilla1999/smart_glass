@@ -11,6 +11,7 @@ import android.view.Display
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.Point
+import android.net.Uri
 import android.widget.Toast
 import androidx.annotation.NonNull
 import io.flutter.FlutterInjector
@@ -102,6 +103,14 @@ class MainActivity : FlutterFragmentActivity() {
                         Log.d("SmartWear", "hideWearGlasses called")
                         hideWearGlasses(result)
                     }
+                    "copyPhotoToAppStorage" -> {
+                        val uri = call.argument<String>("uri")
+                        if (uri.isNullOrBlank()) {
+                            result.error("INVALID_PHOTO_URI", "Photo URI is required", null)
+                        } else {
+                            copyPhotoToAppStorage(uri, result)
+                        }
+                    }
                     "saveLogs" -> {
                         saveLogsToFile()
                         result.success(true)
@@ -113,6 +122,41 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    private fun copyPhotoToAppStorage(uri: String, result: MethodChannel.Result) {
+        Thread {
+            try {
+                val photoDirectory = java.io.File(filesDir, "wear_photos")
+                if (!photoDirectory.exists() && !photoDirectory.mkdirs()) {
+                    throw IllegalStateException("Unable to create photo directory")
+                }
+                val destination = java.io.File(photoDirectory, "latest_photo")
+                val temporary = java.io.File(photoDirectory, "latest_photo.tmp")
+                contentResolver.openInputStream(Uri.parse(uri)).use { input ->
+                    if (input == null) {
+                        throw IllegalStateException("Unable to open photo URI")
+                    }
+                    temporary.outputStream().use { output -> input.copyTo(output) }
+                }
+                if (destination.exists() && !destination.delete()) {
+                    throw IllegalStateException("Unable to replace previous photo")
+                }
+                if (!temporary.renameTo(destination)) {
+                    throw IllegalStateException("Unable to save photo")
+                }
+                mainHandler.post { result.success(destination.absolutePath) }
+            } catch (error: Exception) {
+                Log.e("SmartWear", "Failed to copy photo", error)
+                mainHandler.post {
+                    result.error(
+                        "PHOTO_COPY_FAILED",
+                        error.message ?: "Failed to copy photo",
+                        null
+                    )
+                }
+            }
+        }.start()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

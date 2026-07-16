@@ -44,9 +44,8 @@ class WearAvailabilityCheckState {
 
   factory WearAvailabilityCheckState.initial(
     WearAvailabilityProduct product,
+    WearAvailabilityFlowUseCase flowUseCase,
   ) {
-    final WearAvailabilityFlowUseCase flowUseCase =
-        WearDependencies.I.availabilityFlowUseCase;
     return WearAvailabilityCheckState(
       phase: WearAvailabilityCheckPhase.idle,
       flow: flowUseCase.selectProduct(
@@ -94,13 +93,25 @@ class WearAvailabilityCheckState {
 class WearAvailabilityCheckNotifier
     extends StateNotifier<WearAvailabilityCheckState>
     implements MultiScannerDelegate {
-  WearAvailabilityCheckNotifier(WearAvailabilityProduct product)
-      : _flowUseCase = WearDependencies.I.availabilityFlowUseCase,
-        super(WearAvailabilityCheckState.initial(product)) {
+  WearAvailabilityCheckNotifier(
+    WearAvailabilityProduct product, {
+    Future<String> Function()? capturePhoto,
+    WearAvailabilityFlowUseCase? flowUseCase,
+  })  : _capturePhoto =
+            capturePhoto ?? WearDependencies.I.photoStore.captureLatestPhoto,
+        _flowUseCase =
+            flowUseCase ?? WearDependencies.I.availabilityFlowUseCase,
+        super(
+          WearAvailabilityCheckState.initial(
+            product,
+            flowUseCase ?? WearDependencies.I.availabilityFlowUseCase,
+          ),
+        ) {
     _scanner.addDelegate(this);
   }
 
   final WearAvailabilityFlowUseCase _flowUseCase;
+  final Future<String> Function() _capturePhoto;
   final MultiScanner _scanner = MultiScanner.last();
   String? _lastAcceptedBarcode;
   WearAvailabilityFlowStep? _lastAcceptedStep;
@@ -270,16 +281,29 @@ class WearAvailabilityCheckNotifier
       photoPhase: WearAvailabilityPhotoPhase.taking,
       clearNav: true,
     );
-    await Future<void>.delayed(const Duration(milliseconds: 450));
-    if (!mounted) return;
-    state = state.copyWith(photoPhase: WearAvailabilityPhotoPhase.saving);
-    await Future<void>.delayed(const Duration(milliseconds: 450));
-    if (!mounted) return;
-    state = state.copyWith(
-      flow: _flowUseCase.capturePhoto(flow),
-      photoPhase: WearAvailabilityPhotoPhase.ready,
-      clearNav: true,
-    );
+    try {
+      await _capturePhoto();
+      if (!mounted) return;
+      state = state.copyWith(photoPhase: WearAvailabilityPhotoPhase.saving);
+      state = state.copyWith(
+        flow: _flowUseCase.capturePhoto(flow),
+        photoPhase: WearAvailabilityPhotoPhase.ready,
+        clearNav: true,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      await WearFeedback.play(WearStatusKind.error);
+      state = state.copyWith(photoPhase: WearAvailabilityPhotoPhase.ready);
+      _emitStatus(
+        WearStatusScreenArgs(
+          kind: WearStatusKind.error,
+          title: 'Ошибка фото',
+          message: _asUiMessage(error),
+          autoAfter: const Duration(seconds: 5),
+          autoAction: WearStatusAutoAction.none,
+        ),
+      );
+    }
   }
 
   Future<void> complete() async {

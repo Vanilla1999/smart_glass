@@ -69,7 +69,6 @@ class _WearModuleAppState extends State<WearModuleApp>
   int _consumedPartialPhraseAt = 0;
   int? _voiceStartupToken;
 
-  static const Duration _minimumVoiceLoaderDuration = Duration(seconds: 10);
   static const int _finalPhraseSuppressMs = 1500;
 
   WearFlowController get _flow =>
@@ -320,15 +319,11 @@ class _WearModuleAppState extends State<WearModuleApp>
     final Future<void> Function()? startVoice = widget.onStartVoice;
     final int? startupToken = _voiceStartupToken;
     try {
-      final Future<void> minimumLoader = Future<void>.delayed(
-        _minimumVoiceLoaderDuration,
-      );
       if (startVoice != null) {
         await startVoice();
       } else {
         await WearVoiceSession.I.start();
       }
-      await minimumLoader;
       WearStatusIconReporter.I.endVoiceStartup(startupToken);
       if (!_isCurrentVoiceStartup(startupToken)) return;
       if (!WearSession.isAuthorized) {

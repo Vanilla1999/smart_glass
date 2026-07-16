@@ -41,6 +41,7 @@ void main() {
         'продолжить': WearVoiceCommand.continueScan,
         'ручной ввод': WearVoiceCommand.manualInput,
         'сделать фото': WearVoiceCommand.takePhoto,
+        'Фото': WearVoiceCommand.takePhoto,
         'к списку': WearVoiceCommand.backToList,
         'прямое сканирование': WearVoiceCommand.openDirectScan,
         'отмена': WearVoiceCommand.cancel,

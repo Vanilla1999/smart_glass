@@ -27,6 +27,13 @@ class SpeechRecognitionService {
   Future<void> _lifecycleOperation = Future<void>.value();
   int _processedChunks = 0;
   int? _lastProcessedChunkAtMillis;
+  int _audioQueueTotalDelayMs = 0;
+  int _audioQueueMaxDelayMs = 0;
+  int _slowAudioQueueChunks = 0;
+  int _recognizerChunks = 0;
+  int _recognizerTotalLatencyMs = 0;
+  int _recognizerMaxLatencyMs = 0;
+  int _slowRecognizerChunks = 0;
   int _recognitionModeEpoch = 0;
   List<String>? _recognitionGrammar;
 
@@ -215,6 +222,7 @@ class SpeechRecognitionService {
       await startSession();
       _processedChunks = 0;
       _lastProcessedChunkAtMillis = null;
+      _resetPerformanceMetrics();
 
       print('[SpeechRecognitionService] adding audio callback...');
       _audioStream.addDataCallback(_onAudioChunk);
@@ -279,12 +287,22 @@ class SpeechRecognitionService {
         : now - _lastProcessedChunkAtMillis!;
     final String audio = await _audioStream.diagnostics();
     final bool usesFreeText = _recognitionGrammar == null;
+    final int queueAverageMs =
+        _processedChunks == 0 ? 0 : _audioQueueTotalDelayMs ~/ _processedChunks;
+    final int recognizerAverageMs = _recognizerChunks == 0
+        ? 0
+        : _recognizerTotalLatencyMs ~/ _recognizerChunks;
     return 'SpeechRecognitionService{isListening=$_isListening, '
         'isSessionActive=$_isSessionActive, isPrepared=$isPrepared, '
         'mode=${usesFreeText ? 'freeText' : 'grammar'}, '
         'freeRecognizer=${_freeTextRecognizer != null}, '
         'grammarRecognizer=${_grammarRecognizer != null}, '
         'processedChunks=$_processedChunks, '
+        'queueAvgMs=$queueAverageMs, queueMaxMs=$_audioQueueMaxDelayMs, '
+        'slowQueueChunks=$_slowAudioQueueChunks, '
+        'recognizerAvgMs=$recognizerAverageMs, '
+        'recognizerMaxMs=$_recognizerMaxLatencyMs, '
+        'slowRecognizerChunks=$_slowRecognizerChunks, '
         'lastProcessedAgeMs=$lastProcessedAgeMs, audio=$audio}';
   }
 
@@ -346,6 +364,13 @@ class SpeechRecognitionService {
     _processedChunks++;
     final int processingStartedAt = DateTime.now().millisecondsSinceEpoch;
     final int queueDelayMs = processingStartedAt - queuedAt;
+    _audioQueueTotalDelayMs += queueDelayMs;
+    if (queueDelayMs > _audioQueueMaxDelayMs) {
+      _audioQueueMaxDelayMs = queueDelayMs;
+    }
+    if (queueDelayMs > _slowAudioQueueDelayMs) {
+      _slowAudioQueueChunks++;
+    }
     _lastProcessedChunkAtMillis = processingStartedAt;
     if (_processedChunks == 1 || _processedChunks % 200 == 0) {
       print(
@@ -380,6 +405,7 @@ class SpeechRecognitionService {
         bytes: bytes,
         emitResults: true,
         modeEpoch: modeEpoch,
+        queueDelayMs: queueDelayMs,
       );
       return;
     }
@@ -406,6 +432,7 @@ class SpeechRecognitionService {
       bytes: bytes,
       emitResults: true,
       modeEpoch: modeEpoch,
+      queueDelayMs: queueDelayMs,
     );
   }
 
@@ -415,19 +442,29 @@ class SpeechRecognitionService {
     required Uint8List bytes,
     required bool emitResults,
     required int modeEpoch,
+    required int queueDelayMs,
   }) async {
     final t0 = DateTime.now().millisecondsSinceEpoch;
     final isResultReady = await recognizer.acceptWaveformBytes(bytes);
     final int acceptedAt = DateTime.now().millisecondsSinceEpoch;
     final int latencyMs = acceptedAt - t0;
+    _recognizerChunks++;
+    _recognizerTotalLatencyMs += latencyMs;
+    if (latencyMs > _recognizerMaxLatencyMs) {
+      _recognizerMaxLatencyMs = latencyMs;
+    }
     if (latencyMs > _slowRecognizerLatencyMs) {
+      _slowRecognizerChunks++;
       print(
         '[SpeechRecognitionService] slow recognizer source=${source.label} '
-        'latencyMs=$latencyMs emitResults=$emitResults',
+        'latencyMs=$latencyMs queueDelayMs=$queueDelayMs '
+        'chunk#$_processedChunks emitResults=$emitResults',
       );
     }
     if (isResultReady) {
+      final int resultStartedAt = DateTime.now().millisecondsSinceEpoch;
       final resultJson = await recognizer.getResult();
+      final int resultFinishedAt = DateTime.now().millisecondsSinceEpoch;
       final resultText = _extractText(resultJson, preferredKeys: const [
         'text',
       ]);
@@ -435,7 +472,9 @@ class SpeechRecognitionService {
         final t1 = DateTime.now().millisecondsSinceEpoch;
         print(
           '[VOSK][FINAL][${source.label}] $resultText at $t1 '
-          '(vosk_latency: ${t1 - t0}ms, emitResults=$emitResults)',
+          '(queueDelayMs=$queueDelayMs, acceptMs=$latencyMs, '
+          'resultMs=${resultFinishedAt - resultStartedAt}, '
+          'chunkTotalMs=${t1 - t0}, emitResults=$emitResults)',
         );
         if (_canEmitRecognizerResult(source, emitResults, modeEpoch) &&
             !_resultsController.isClosed) {
@@ -446,7 +485,9 @@ class SpeechRecognitionService {
       return;
     }
 
+    final int partialStartedAt = DateTime.now().millisecondsSinceEpoch;
     final partialResultJson = await recognizer.getPartialResult();
+    final int partialFinishedAt = DateTime.now().millisecondsSinceEpoch;
     final partialText = _extractText(partialResultJson, preferredKeys: const [
       'partial',
     ]);
@@ -454,7 +495,9 @@ class SpeechRecognitionService {
       final t1 = DateTime.now().millisecondsSinceEpoch;
       print(
         '[VOSK][PARTIAL][${source.label}] $partialText at $t1 '
-        '(emitResults=$emitResults)',
+        '(queueDelayMs=$queueDelayMs, acceptMs=$latencyMs, '
+        'partialMs=${partialFinishedAt - partialStartedAt}, '
+        'chunkTotalMs=${t1 - t0}, emitResults=$emitResults)',
       );
       if (_canEmitRecognizerResult(source, emitResults, modeEpoch) &&
           !_partialResultsController.isClosed) {
@@ -630,6 +673,16 @@ class SpeechRecognitionService {
       '${grammar == null ? 'freeText' : 'grammar'} '
       'size=${grammar?.length ?? 0} epoch=$_recognitionModeEpoch',
     );
+  }
+
+  void _resetPerformanceMetrics() {
+    _audioQueueTotalDelayMs = 0;
+    _audioQueueMaxDelayMs = 0;
+    _slowAudioQueueChunks = 0;
+    _recognizerChunks = 0;
+    _recognizerTotalLatencyMs = 0;
+    _recognizerMaxLatencyMs = 0;
+    _slowRecognizerChunks = 0;
   }
 
   String _partialText(_RecognitionSource source) {

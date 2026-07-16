@@ -114,6 +114,48 @@ void main() {
       expect(emitted, <WearVoiceCommand>[WearVoiceCommand.up]);
     });
 
+    test(
+        'grammar partial command emits immediately and matching final is suppressed',
+        () async {
+      speech.usesFreeText = false;
+      final WearVoiceControlService service = createService();
+      final List<WearVoiceCommand> emitted = <WearVoiceCommand>[];
+      service.commandStream.listen(emitted.add);
+
+      now = 1000;
+      speech.emitPartial('вверх');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(emitted, <WearVoiceCommand>[WearVoiceCommand.up]);
+
+      now = 1600;
+      speech.emitResult('вверх');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(emitted, <WearVoiceCommand>[WearVoiceCommand.up]);
+    });
+
+    test('grammar corrected final is emitted after a different partial',
+        () async {
+      speech.usesFreeText = false;
+      final WearVoiceControlService service = createService();
+      final List<WearVoiceCommand> emitted = <WearVoiceCommand>[];
+      service.commandStream.listen(emitted.add);
+
+      now = 1000;
+      speech.emitPartial('да');
+      await Future<void>.delayed(Duration.zero);
+
+      now = 1400;
+      speech.emitResult('далее');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        emitted,
+        <WearVoiceCommand>[WearVoiceCommand.yes, WearVoiceCommand.nextPage],
+      );
+    });
+
     test('corrected final is the only command that executes', () async {
       final WearVoiceControlService service = createService();
       final List<WearVoiceCommand> emitted = <WearVoiceCommand>[];
@@ -272,6 +314,7 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   final StreamController<String> _partialController =
       StreamController<String>.broadcast();
   bool listening = false;
+  bool usesFreeText = true;
   int startListeningCalls = 0;
   int stopListeningCalls = 0;
   int startSessionCalls = 0;
@@ -295,7 +338,7 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   bool get isListening => listening;
 
   @override
-  bool get usesFreeTextRecognition => true;
+  bool get usesFreeTextRecognition => usesFreeText;
 
   @override
   int? get lastAudioChunkAtMillis => null;

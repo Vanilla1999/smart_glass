@@ -87,6 +87,26 @@ class MethodChannelService {
     }
   }
 
+  /// Copy a content URI returned by the glasses into app-private storage.
+  Future<String> copyPhotoToAppStorage(String uri) async {
+    try {
+      final String? path = await _appChannel.invokeMethod<String>(
+        'copyPhotoToAppStorage',
+        <String, String>{'uri': uri},
+      );
+      if (path == null || path.isEmpty) {
+        throw PlatformException(
+          code: 'EMPTY_PHOTO_PATH',
+          message: 'Native photo copy returned an empty path',
+        );
+      }
+      return path;
+    } catch (e) {
+      print('Error copying photo to app storage: $e');
+      rethrow;
+    }
+  }
+
   /// Save logs to file
   Future<void> saveLogs() async {
     try {

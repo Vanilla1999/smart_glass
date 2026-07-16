@@ -43,6 +43,9 @@ class WearVoiceControlService {
   StreamSubscription<String>? _partialRecognitionSubscription;
   WearVoiceCommand? _lastPartialCommand;
   int _lastPartialCommandAt = 0;
+  int _firstPartialCommandAt = 0;
+  WearVoiceCommand? _lastEmittedPartialCommand;
+  int _lastEmittedPartialCommandAt = 0;
   int _recognitionEventSeq = 0;
   int _emittedCommandSeq = 0;
   String? _lastPartialPhrase;
@@ -50,6 +53,7 @@ class WearVoiceControlService {
 
   static const int _partialPhraseThrottleMs = 300;
   static const int _minPartialPhraseLength = 6;
+  static const int _matchingFinalSuppressMs = 2000;
   Stream<WearVoiceCommand> get commandStream => _commandController.stream;
   Stream<String> get phraseStream => _phraseController.stream;
   Stream<String> get partialPhraseStream => _partialPhraseController.stream;
@@ -58,12 +62,32 @@ class WearVoiceControlService {
     final t0 = _now();
     final int seq = ++_recognitionEventSeq;
     print(
-      '[WearVoiceControlService] ASR#$seq final at $t0: "$resultText"',
+      '[WearVoiceControlService] ASR#$seq final at $t0: "$resultText" '
+      'priorPartial=$_lastPartialCommand '
+      'partialToFinalMs=${_firstPartialCommandAt == 0 ? null : t0 - _firstPartialCommandAt} '
+      'lastPartialAgeMs=${_lastPartialCommandAt == 0 ? null : t0 - _lastPartialCommandAt}',
     );
     final WearVoiceCommand? cmd = _parseCommand(resultText);
+    final WearVoiceCommand? emittedPartial = _lastEmittedPartialCommand;
+    final int emittedPartialAgeMs = _lastEmittedPartialCommandAt == 0
+        ? 0
+        : t0 - _lastEmittedPartialCommandAt;
+    _lastPartialCommand = null;
+    _lastPartialCommandAt = 0;
+    _firstPartialCommandAt = 0;
+    _lastEmittedPartialCommand = null;
+    _lastEmittedPartialCommandAt = 0;
     if (cmd == null) {
       print('[WearVoiceControlService] no command matched for "$resultText"');
       _emitPhrase(resultText, t0);
+      return;
+    }
+    if (cmd == emittedPartial &&
+        emittedPartialAgeMs <= _matchingFinalSuppressMs) {
+      print(
+        '[WearVoiceControlService] suppress final matching grammar partial: '
+        '$cmd ageMs=$emittedPartialAgeMs',
+      );
       return;
     }
     _emitCommand(cmd, t0);
@@ -75,7 +99,7 @@ class WearVoiceControlService {
     print(
       '[WearVoiceControlService] ASR#$seq partial at $t0: "$resultText" '
       'lastPartial=$_lastPartialCommand '
-      'partialAge=${t0 - _lastPartialCommandAt}ms',
+      'partialAgeMs=${_lastPartialCommandAt == 0 ? null : t0 - _lastPartialCommandAt}',
     );
     final WearVoiceCommand? cmd = _parseCommand(resultText);
     if (cmd == null) {
@@ -85,8 +109,18 @@ class WearVoiceControlService {
       _emitPartialPhrase(resultText, t0);
       return;
     }
+    if (_firstPartialCommandAt == 0) {
+      _firstPartialCommandAt = t0;
+    }
     _lastPartialCommand = cmd;
     _lastPartialCommandAt = t0;
+    if (!_speechRecognitionService.usesFreeTextRecognition &&
+        _lastEmittedPartialCommand == null) {
+      _lastEmittedPartialCommand = cmd;
+      _lastEmittedPartialCommandAt = t0;
+      _emitCommand(cmd, t0, source: 'grammar-partial');
+      return;
+    }
     print('[WearVoiceControlService] defer partial command until final: $cmd');
   }
 

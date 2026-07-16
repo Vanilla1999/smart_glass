@@ -4,6 +4,7 @@ enum WearScreenId {
   status,
   homeConfirm,
   menu,
+  latestPhoto,
   printerSelect,
   scanIdle,
   productSelect,

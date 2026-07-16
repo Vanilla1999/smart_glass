@@ -80,6 +80,7 @@ class WearGlassesPayload {
       phase: WearGlassesPhase.idle,
       title: 'Выбор раздела',
       items: const <String>[
+        'Последнее фото',
         'Печать ценников',
         'Доступность',
         'Справка',

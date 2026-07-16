@@ -14,6 +14,7 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_re
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_typing_service.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_glasses_output.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_navigation_output.dart';
+import 'package:smart_glasses/modules/wear/services/wear_photo_store.dart';
 
 // На следующих этапах пригодится, поэтому можно сразу оставить импорты
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/use_case/get_available_printers_use_case.dart';
@@ -64,6 +65,8 @@ class WearDependencies {
 
   final WearAvailabilityRepository availabilityRepository =
       LocalWearAvailabilityRepository();
+
+  final WearPhotoStore photoStore = WearPhotoStore();
 
   late final WearAvailabilityFlowUseCase availabilityFlowUseCase =
       WearAvailabilityFlowUseCase(availabilityRepository);

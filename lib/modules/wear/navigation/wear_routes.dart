@@ -17,6 +17,7 @@ import 'package:smart_glasses/modules/wear/presentation/screens/home/wear_home_c
 import 'package:smart_glasses/modules/wear/presentation/screens/main/wear_main_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/wear_scanner_connect_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/menu/wear_menu_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/photo/wear_latest_photo_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/printers/wear_printer_select_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_product_select_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_scan_idle_screen.dart';
@@ -55,6 +56,12 @@ class WearRoute {
           path: WearMenuScreen.route,
           builder: (BuildContext context, GoRouterState state) {
             return const WearMenuScreen();
+          },
+        ),
+        GoRoute(
+          path: WearLatestPhotoScreen.route,
+          builder: (BuildContext context, GoRouterState state) {
+            return const WearLatestPhotoScreen();
           },
         ),
         GoRoute(
