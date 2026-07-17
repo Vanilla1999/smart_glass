@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:smart_glasses/core/constants/app_constants.dart';
 
 /// Service for managing MethodChannel communication with native code
 class MethodChannelService {
-  MethodChannelService._();
+  MethodChannelService._() {
+    _appChannel.setMethodCallHandler(_handleAppMethodCall);
+  }
 
   static final MethodChannelService _instance = MethodChannelService._();
   factory MethodChannelService() => _instance;
@@ -12,6 +16,22 @@ class MethodChannelService {
       const MethodChannel(AppConstants.appChannelName);
   final MethodChannel _glassesChannel =
       const MethodChannel(AppConstants.glassesChannelName);
+  final StreamController<bool> _audioCaptureSilencedController =
+      StreamController<bool>.broadcast();
+
+  Stream<bool> get audioCaptureSilencedStream =>
+      _audioCaptureSilencedController.stream;
+
+  Future<void> _handleAppMethodCall(MethodCall call) async {
+    if (call.method != 'audioCaptureSilencedChanged') {
+      throw MissingPluginException(
+          'Unknown app channel method: ${call.method}');
+    }
+    final bool? silenced = call.arguments as bool?;
+    if (silenced != null && !_audioCaptureSilencedController.isClosed) {
+      _audioCaptureSilencedController.add(silenced);
+    }
+  }
 
   /// Show glasses initialization screen
   Future<void> showGlassesInitialization() async {

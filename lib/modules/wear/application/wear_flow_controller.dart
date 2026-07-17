@@ -80,7 +80,7 @@ class WearFlowController {
         _navigationOutput = navigationOutput,
         _flashlightToggle = flashlightToggle ?? _toggleScannerFlashlight;
 
-  static const int _menuItemCount = 5;
+  static const int _menuItemCount = 4;
   static const int _homeConfirmItemCount = 2;
   static const int _availabilityInteractionItemCount = 2;
   static const int _continueScanItemCount = 2;
@@ -434,12 +434,11 @@ class WearFlowController {
 
   Future<void> _selectFromMenu() async {
     final WearScreenId target = switch (_state.menuFocusedIndex) {
-      0 => WearScreenId.latestPhoto,
-      1 => WearScreenId.printerSelect,
-      2 => WearScreenId.availabilityInteraction,
-      3 => WearScreenId.help,
-      4 => WearScreenId.settings,
-      _ => WearScreenId.latestPhoto,
+      0 => WearScreenId.printerSelect,
+      1 => WearScreenId.availabilityInteraction,
+      2 => WearScreenId.help,
+      3 => WearScreenId.settings,
+      _ => WearScreenId.printerSelect,
     };
     await _navigateTo(target);
   }
@@ -489,13 +488,13 @@ class WearFlowController {
 
   Future<void> _handleOpenPrintPriceTag() async {
     if (_state.screen == WearScreenId.menu) {
-      await selectMenuIndex(1);
+      await selectMenuIndex(0);
     }
   }
 
   Future<void> _handlePrint() async {
     if (_state.screen == WearScreenId.menu) {
-      await selectMenuIndex(1);
+      await selectMenuIndex(0);
       return;
     }
     await _invokeScreenAction(_state.screen, (handler) => handler.onPrint);
@@ -503,19 +502,19 @@ class WearFlowController {
 
   Future<void> _handleOpenAvailability() async {
     if (_state.screen == WearScreenId.menu) {
-      await selectMenuIndex(2);
+      await selectMenuIndex(1);
     }
   }
 
   Future<void> _handleOpenHelp() async {
     if (_state.screen == WearScreenId.menu) {
-      await selectMenuIndex(3);
+      await selectMenuIndex(2);
     }
   }
 
   Future<void> _handleOpenSettings() async {
     if (_state.screen == WearScreenId.menu) {
-      await selectMenuIndex(4);
+      await selectMenuIndex(3);
     }
   }
 
@@ -560,7 +559,7 @@ class WearFlowController {
   }
 
   static Future<void> _toggleScannerFlashlight() async {
-    final dynamic controller = MultiScannerController();
+    final MovfastGlassController controller = MovfastGlassController();
     final int currentState = await controller.getFlashlightState();
     await controller.setFlashlight(currentState == 1 ? 0 : 1);
   }
@@ -901,11 +900,6 @@ class WearFlowController {
     return switch (state.screen) {
       WearScreenId.menu =>
         WearGlassesPayload.menu(selectedIndex: state.menuFocusedIndex),
-      WearScreenId.latestPhoto => WearGlassesPayload.status(
-          isError: false,
-          title: 'Последнее фото',
-          statusText: 'Открыто в приложении',
-        ),
       WearScreenId.homeConfirm => WearGlassesPayload.homeConfirm(
           selectedIndex: state.homeConfirmFocusedIndex,
         ),

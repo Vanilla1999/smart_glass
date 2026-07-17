@@ -17,16 +17,37 @@ class WearVoiceControlService {
             commandParserService ?? VoiceCommandParserService(),
         _now = clock ?? (() => DateTime.now().millisecondsSinceEpoch) {
     print('[WearVoiceControlService] subscribing to ASR results');
-    _recognitionSubscription = _speechRecognitionService.resultsStream.listen(
-      _onRecognitionResult,
+    _commandRecognitionSubscription =
+        _speechRecognitionService.commandResultsStream.listen(
+      _onCommandRecognitionResult,
       onError: _onRecognitionError,
-      onDone: () => print('[WearVoiceControlService] ASR results stream done'),
+      onDone: () => print(
+        '[WearVoiceControlService] command results stream done',
+      ),
     );
-    _partialRecognitionSubscription =
-        _speechRecognitionService.partialResultsStream.listen(
-      _onPartialRecognitionResult,
+    _commandPartialRecognitionSubscription =
+        _speechRecognitionService.commandPartialResultsStream.listen(
+      _onCommandPartialRecognitionResult,
       onError: _onRecognitionError,
-      onDone: () => print('[WearVoiceControlService] ASR partial stream done'),
+      onDone: () => print(
+        '[WearVoiceControlService] command partial stream done',
+      ),
+    );
+    _freeTextRecognitionSubscription =
+        _speechRecognitionService.freeTextResultsStream.listen(
+      _onFreeTextRecognitionResult,
+      onError: _onRecognitionError,
+      onDone: () => print(
+        '[WearVoiceControlService] freeText results stream done',
+      ),
+    );
+    _freeTextPartialRecognitionSubscription =
+        _speechRecognitionService.freeTextPartialResultsStream.listen(
+      _onFreeTextPartialRecognitionResult,
+      onError: _onRecognitionError,
+      onDone: () => print(
+        '[WearVoiceControlService] freeText partial stream done',
+      ),
     );
   }
 
@@ -39,8 +60,10 @@ class WearVoiceControlService {
       StreamController<String>.broadcast();
   final StreamController<String> _partialPhraseController =
       StreamController<String>.broadcast();
-  StreamSubscription<String>? _recognitionSubscription;
-  StreamSubscription<String>? _partialRecognitionSubscription;
+  StreamSubscription<String>? _commandRecognitionSubscription;
+  StreamSubscription<String>? _commandPartialRecognitionSubscription;
+  StreamSubscription<String>? _freeTextRecognitionSubscription;
+  StreamSubscription<String>? _freeTextPartialRecognitionSubscription;
   WearVoiceCommand? _lastPartialCommand;
   int _lastPartialCommandAt = 0;
   int _firstPartialCommandAt = 0;
@@ -58,7 +81,7 @@ class WearVoiceControlService {
   Stream<String> get phraseStream => _phraseController.stream;
   Stream<String> get partialPhraseStream => _partialPhraseController.stream;
 
-  void _onRecognitionResult(String resultText) {
+  void _onCommandRecognitionResult(String resultText) {
     final t0 = _now();
     final int seq = ++_recognitionEventSeq;
     print(
@@ -67,7 +90,7 @@ class WearVoiceControlService {
       'partialToFinalMs=${_firstPartialCommandAt == 0 ? null : t0 - _firstPartialCommandAt} '
       'lastPartialAgeMs=${_lastPartialCommandAt == 0 ? null : t0 - _lastPartialCommandAt}',
     );
-    final WearVoiceCommand? cmd = _parseCommand(resultText);
+    final WearVoiceCommand? cmd = _commandParserService.parse(resultText);
     final WearVoiceCommand? emittedPartial = _lastEmittedPartialCommand;
     final int emittedPartialAgeMs = _lastEmittedPartialCommandAt == 0
         ? 0
@@ -79,21 +102,21 @@ class WearVoiceControlService {
     _lastEmittedPartialCommandAt = 0;
     if (cmd == null) {
       print('[WearVoiceControlService] no command matched for "$resultText"');
-      _emitPhrase(resultText, t0);
       return;
     }
-    if (cmd == emittedPartial &&
+    if (emittedPartial != null &&
         emittedPartialAgeMs <= _matchingFinalSuppressMs) {
       print(
-        '[WearVoiceControlService] suppress final matching grammar partial: '
-        '$cmd ageMs=$emittedPartialAgeMs',
+        '[WearVoiceControlService] suppress final after emitted grammar '
+        'partial: partial=$emittedPartial final=$cmd '
+        'ageMs=$emittedPartialAgeMs',
       );
       return;
     }
     _emitCommand(cmd, t0);
   }
 
-  void _onPartialRecognitionResult(String resultText) {
+  void _onCommandPartialRecognitionResult(String resultText) {
     final int t0 = _now();
     final int seq = ++_recognitionEventSeq;
     print(
@@ -101,12 +124,11 @@ class WearVoiceControlService {
       'lastPartial=$_lastPartialCommand '
       'partialAgeMs=${_lastPartialCommandAt == 0 ? null : t0 - _lastPartialCommandAt}',
     );
-    final WearVoiceCommand? cmd = _parseCommand(resultText);
+    final WearVoiceCommand? cmd = _commandParserService.parse(resultText);
     if (cmd == null) {
       print(
         '[WearVoiceControlService] no partial command matched for "$resultText"',
       );
-      _emitPartialPhrase(resultText, t0);
       return;
     }
     if (_firstPartialCommandAt == 0) {
@@ -114,8 +136,7 @@ class WearVoiceControlService {
     }
     _lastPartialCommand = cmd;
     _lastPartialCommandAt = t0;
-    if (!_speechRecognitionService.usesFreeTextRecognition &&
-        _lastEmittedPartialCommand == null) {
+    if (_lastEmittedPartialCommand == null) {
       _lastEmittedPartialCommand = cmd;
       _lastEmittedPartialCommandAt = t0;
       _emitCommand(cmd, t0, source: 'grammar-partial');
@@ -124,11 +145,38 @@ class WearVoiceControlService {
     print('[WearVoiceControlService] defer partial command until final: $cmd');
   }
 
-  WearVoiceCommand? _parseCommand(String text) {
-    if (_speechRecognitionService.usesFreeTextRecognition) {
-      return _commandParserService.parseExact(text);
+  void _onFreeTextRecognitionResult(String resultText) {
+    final int startedAt = _now();
+    final int seq = ++_recognitionEventSeq;
+    print(
+      '[WearVoiceControlService] ASR#$seq freeText final at $startedAt: '
+      '"$resultText"',
+    );
+    if (_commandParserService.parseExact(resultText) != null) {
+      print(
+        '[WearVoiceControlService] discard command from freeText final: '
+        '"$resultText"',
+      );
+      return;
     }
-    return _commandParserService.parse(text);
+    _emitPhrase(resultText, startedAt);
+  }
+
+  void _onFreeTextPartialRecognitionResult(String resultText) {
+    final int startedAt = _now();
+    final int seq = ++_recognitionEventSeq;
+    print(
+      '[WearVoiceControlService] ASR#$seq freeText partial at $startedAt: '
+      '"$resultText"',
+    );
+    if (_commandParserService.parseExact(resultText) != null) {
+      print(
+        '[WearVoiceControlService] discard command from freeText partial: '
+        '"$resultText"',
+      );
+      return;
+    }
+    _emitPartialPhrase(resultText, startedAt);
   }
 
   void _emitCommand(
@@ -192,8 +240,10 @@ class WearVoiceControlService {
   }
 
   Future<void> dispose() async {
-    await _recognitionSubscription?.cancel();
-    await _partialRecognitionSubscription?.cancel();
+    await _commandRecognitionSubscription?.cancel();
+    await _commandPartialRecognitionSubscription?.cancel();
+    await _freeTextRecognitionSubscription?.cancel();
+    await _freeTextPartialRecognitionSubscription?.cancel();
     await _commandController.close();
     await _phraseController.close();
     await _partialPhraseController.close();

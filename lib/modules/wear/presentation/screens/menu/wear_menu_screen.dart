@@ -1,11 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/photo/wear_latest_photo_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
@@ -27,7 +29,7 @@ class _WearMenuScreenState extends State<WearMenuScreen>
   final _flow = WearDependencies.I.wearFlowController;
   StreamSubscription<WearFlowState>? _flowSub;
   int _focusedIndex = 0;
-  static const int _menuItemCount = 5;
+  static const int _menuItemCount = 4;
 
   @override
   void initState() {
@@ -64,14 +66,12 @@ class _WearMenuScreenState extends State<WearMenuScreen>
   String _getMenuItemName(int index) {
     switch (index) {
       case 0:
-        return 'Последнее фото';
-      case 1:
         return 'Печать ценника';
-      case 2:
+      case 1:
         return 'Доступность';
-      case 3:
+      case 2:
         return 'Справка';
-      case 4:
+      case 3:
         return 'Настройки';
       default:
         return 'UNKNOWN(index=$index)';
@@ -80,7 +80,8 @@ class _WearMenuScreenState extends State<WearMenuScreen>
 
   void _scrollToFocusedIndex(int index, {bool animate = true}) {
     if (!_scroll.hasClients) return;
-    final double target = ((index + 1) * 56.0).clamp(
+    final int listIndex = index < 2 ? index + 1 : index + 2;
+    final double target = (listIndex * 56.0).clamp(
       0.0,
       _scroll.position.maxScrollExtent,
     );
@@ -107,27 +108,25 @@ class _WearMenuScreenState extends State<WearMenuScreen>
         ),
       ),
       WearPill(
-        title: 'Последнее фото',
-        onTap: () {
-          _flow.selectMenuIndex(0);
-        },
-      ),
-      WearPill(
         title: 'Печать ценника',
-        onTap: () => _flow.selectMenuIndex(1),
+        onTap: () => _flow.selectMenuIndex(0),
       ),
       WearPill(
         title: 'Доступность',
-        onTap: () => _flow.selectMenuIndex(2),
+        onTap: () => _flow.selectMenuIndex(1),
+      ),
+      WearPill(
+        title: 'Последнее фото',
+        onTap: () => context.push(WearLatestPhotoScreen.route),
       ),
       WearPill(
         title: 'Справка',
-        onTap: () => _flow.selectMenuIndex(3),
+        onTap: () => _flow.selectMenuIndex(2),
       ),
       WearPill(
         title: 'Настройки',
         icon: WearImages.gear,
-        onTap: () => _flow.selectMenuIndex(4),
+        onTap: () => _flow.selectMenuIndex(3),
       ),
       const SizedBox(
         height: 50,
@@ -149,7 +148,14 @@ class _WearMenuScreenState extends State<WearMenuScreen>
         extraSideInset: 30,
         itemBuilder: (BuildContext context, int i) => items[i],
         onFocusChanged: (int listIndex) {
-          final int itemIndex = (listIndex - 1).clamp(0, _menuItemCount - 1);
+          final int? itemIndex = switch (listIndex) {
+            1 => 0,
+            2 => 1,
+            4 => 2,
+            5 => 3,
+            _ => null,
+          };
+          if (itemIndex == null) return;
           print(
             '[MenuScreen] onFocusChanged: itemIndex=$itemIndex => ${_getMenuItemName(itemIndex)}',
           );

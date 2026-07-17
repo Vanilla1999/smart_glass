@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:go_router/go_router.dart';
+import 'package:smart_glasses/core/services/method_channel_service.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
@@ -35,6 +36,7 @@ class WearModuleApp extends StatefulWidget {
     this.onStartVoice,
     this.onStopVoice,
     this.onRestartVoice,
+    this.audioCaptureSilencedStream,
   });
 
   final ValueChanged<GoRouter>? onRouterReady;
@@ -47,6 +49,7 @@ class WearModuleApp extends StatefulWidget {
   final Future<void> Function()? onStartVoice;
   final Future<void> Function()? onStopVoice;
   final Future<void> Function(String reason)? onRestartVoice;
+  final Stream<bool>? audioCaptureSilencedStream;
 
   @override
   State<WearModuleApp> createState() => _WearModuleAppState();
@@ -61,6 +64,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   StreamSubscription<WearFlowState>? _flowStateSub;
   StreamSubscription<dynamic>? _authorizedSub;
   StreamSubscription<void>? _clearedSub;
+  StreamSubscription<bool>? _audioCaptureSilencedSub;
   Timer? _voiceHealthTimer;
   bool _voiceStarted = false;
   bool _voiceStarting = false;
@@ -68,6 +72,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   String? _consumedPartialPhrase;
   int _consumedPartialPhraseAt = 0;
   int? _voiceStartupToken;
+  bool? _audioCaptureSilenced;
 
   static const int _finalPhraseSuppressMs = 1500;
 
@@ -191,6 +196,9 @@ class _WearModuleAppState extends State<WearModuleApp>
         );
       },
     );
+    _audioCaptureSilencedSub = (widget.audioCaptureSilencedStream ??
+            MethodChannelService().audioCaptureSilencedStream)
+        .listen(_onAudioCaptureSilencedChanged);
     _flowStateSub = flow.stateStream.listen((WearFlowState state) {
       _configureVoiceForScreen(state.screen);
     });
@@ -364,7 +372,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   void _startVoiceHealthTimer() {
     if (widget.onStartVoice != null) return;
     _voiceHealthTimer?.cancel();
-    _voiceHealthTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+    _voiceHealthTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!mounted || !WearSession.isAuthorized || _voiceStarting) return;
       _ensureVoiceHealthy('periodic_voice_health');
     });
@@ -381,6 +389,28 @@ class _WearModuleAppState extends State<WearModuleApp>
         },
       ),
     );
+  }
+
+  void _onAudioCaptureSilencedChanged(bool silenced) {
+    if (_audioCaptureSilenced == silenced) return;
+    final bool wasSilenced = _audioCaptureSilenced == true;
+    _audioCaptureSilenced = silenced;
+    print('[WearModuleApp] audio capture silenced=$silenced');
+    if (widget.onStartVoice == null) {
+      WearVoiceSession.I.setCaptureSilenced(silenced);
+    }
+    if (silenced ||
+        !wasSilenced ||
+        !_voiceStarted ||
+        !WearSession.isAuthorized ||
+        widget.onStartVoice != null) {
+      return;
+    }
+
+    Future<void>.delayed(const Duration(seconds: 1), () {
+      if (!mounted || !WearSession.isAuthorized) return;
+      _ensureVoiceHealthy('android_audio_capture_unsilenced');
+    });
   }
 
   void _stopVoiceForLogout() {
@@ -467,6 +497,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     _voiceSub?.cancel();
     _voicePhraseSub?.cancel();
     _voicePartialPhraseSub?.cancel();
+    _audioCaptureSilencedSub?.cancel();
     _flowStateSub?.cancel();
     _authorizedSub?.cancel();
     _clearedSub?.cancel();

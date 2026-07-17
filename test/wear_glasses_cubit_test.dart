@@ -15,13 +15,27 @@ void main() {
     expect(
       cubit.state.items,
       <String>[
-        'Последнее фото',
         'Печать ценников',
         'Доступность',
         'Справка',
         'Настройки',
       ],
     );
+    expect(cubit.state.updateId, 1);
+    expect(cubit.state.payloadReceivedAtMillis, greaterThan(0));
+  });
+
+  test('assigns a unique id to each glasses update', () {
+    final WearGlassesCubit cubit = WearGlassesCubit();
+    addTearDown(cubit.close);
+
+    cubit.updateFromPayload(WearGlassesPayload.menu().toJson());
+    cubit.updateFromPayload(
+      WearGlassesPayload.menu(selectedIndex: 1).toJson(),
+    );
+
+    expect(cubit.state.updateId, 2);
+    expect(cubit.state.selectedIndex, 1);
   });
 
   test('maps item maps to titles defensively', () {

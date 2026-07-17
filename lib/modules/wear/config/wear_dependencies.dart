@@ -9,6 +9,7 @@ import 'package:smart_glasses/modules/wear/domain/availability/use_case/wear_ava
 import 'package:smart_glasses/modules/wear/domain/availability/use_case/wear_availability_flow_use_case.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/use_case/authenticate_user_use_case.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_control_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_typing_service.dart';
@@ -49,6 +50,7 @@ class WearDependencies {
     audioStreamService = AudioStreamService();
     speechRecognitionService = SpeechRecognitionService(
       audioStreamService: audioStreamService,
+      commandGrammar: VoiceCommandParserService.grammarPhrases,
     );
     voiceTypingService = VoiceTypingService(
       speechRecognitionService: speechRecognitionService,

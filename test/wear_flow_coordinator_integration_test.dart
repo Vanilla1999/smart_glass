@@ -23,12 +23,14 @@ import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_glasses_output.dart';
+import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/wear_main_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/printers/cubit/wear_printer_select_cubit.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/menu/wear_menu_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/photo/wear_latest_photo_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/printers/wear_printer_select_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_product_select_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_scan_idle_screen.dart';
@@ -168,7 +170,6 @@ void main() {
       expect(
         lastWearPayload['items'],
         <String>[
-          'Последнее фото',
           'Печать ценников',
           'Доступность',
           'Справка',
@@ -190,7 +191,7 @@ void main() {
       expect(lastWearPayload['screenType'], 'menu');
     });
 
-    test('menu select navigates to latest photo', () async {
+    test('menu select navigates to printer selection', () async {
       await coordinator.init();
 
       flowController.setUiLifecycle(WearUiLifecycle.active);
@@ -199,12 +200,11 @@ void main() {
 
       await flowController.handleVoiceCommand(WearVoiceCommand.select);
 
-      expect(flowController.state.screen, WearScreenId.latestPhoto);
-      expect(lastWearPayload['screenType'], 'status');
-      expect(lastWearPayload['title'], 'Последнее фото');
+      expect(flowController.state.screen, WearScreenId.printerSelect);
+      expect(lastWearPayload['screenType'], 'printer');
     });
 
-    test('menu item 2 select sends availability payload to coordinator',
+    test('menu item 1 select sends availability payload to coordinator',
         () async {
       await coordinator.init();
 
@@ -212,7 +212,6 @@ void main() {
       flowController.enterScreen(WearScreenId.menu);
       await Future<void>.delayed(Duration.zero);
 
-      await flowController.handleVoiceCommand(WearVoiceCommand.down);
       await flowController.handleVoiceCommand(WearVoiceCommand.down);
       await flowController.handleVoiceCommand(WearVoiceCommand.select);
 
@@ -230,7 +229,6 @@ void main() {
 
       await flowController.handleVoiceCommand(WearVoiceCommand.down);
       await flowController.handleVoiceCommand(WearVoiceCommand.down);
-      await flowController.handleVoiceCommand(WearVoiceCommand.down);
       await flowController.handleVoiceCommand(WearVoiceCommand.select);
 
       expect(flowController.state.screen, WearScreenId.help);
@@ -246,7 +244,7 @@ void main() {
       flowController.enterScreen(WearScreenId.menu);
       await Future<void>.delayed(Duration.zero);
 
-      for (int i = 0; i < 4; i++) {
+      for (int i = 0; i < 3; i++) {
         await flowController.handleVoiceCommand(WearVoiceCommand.down);
       }
       await flowController.handleVoiceCommand(WearVoiceCommand.select);
@@ -274,7 +272,6 @@ void main() {
       expect(
         glassesState.items,
         <String>[
-          'Последнее фото',
           'Печать ценников',
           'Доступность',
           'Справка',
@@ -332,8 +329,7 @@ void main() {
       flowController.enterScreen(WearScreenId.menu);
       await Future<void>.delayed(Duration.zero);
 
-      // down to index 2 (Доступность)
-      await flowController.handleVoiceCommand(WearVoiceCommand.down);
+      // down to index 1 (Доступность)
       await flowController.handleVoiceCommand(WearVoiceCommand.down);
       // select → availability
       await flowController.handleVoiceCommand(WearVoiceCommand.select);
@@ -350,12 +346,21 @@ void main() {
 
       glassesState = WearGlassesState.fromPayload(lastWearPayload);
       expect(glassesState.screenType, WearGlassesScreenType.menu);
-      expect(glassesState.selectedIndex, 2);
-      expect(flowController.state.menuFocusedIndex, 2);
+      expect(glassesState.selectedIndex, 1);
+      expect(flowController.state.menuFocusedIndex, 1);
     });
   });
 
   group('WearModuleApp router integration', () {
+    test('latest photo route is not mapped to the glasses flow', () {
+      expect(
+        FlutterWearNavigationOutput.screenIdForRoute(
+          WearLatestPhotoScreen.route,
+        ),
+        isNull,
+      );
+    });
+
     setUp(() async {
       await WearStatusIconReporter.I.stop();
       WearStatusIconReporter.I.debugSetCurrentScreenProviderForTesting(
@@ -599,6 +604,48 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       await tester.pump();
 
       expect(stopVoiceCalls, 1);
+    });
+
+    testWearWidget('silenced audio capture does not restart while silenced',
+        (WidgetTester tester) async {
+      final StreamController<bool> silencedEvents =
+          StreamController<bool>.broadcast();
+      addTearDown(silencedEvents.close);
+      final List<String> restartReasons = <String>[];
+      final WearFlowController routerFlow = WearFlowController(
+        glassesOutput: _TestGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+
+      await tester.pumpWidget(
+        WearModuleApp(
+          flowController: routerFlow,
+          voiceCommandStream: const Stream<WearVoiceCommand>.empty(),
+          routes: _testRoutes,
+          initialLocation: WearMenuScreen.route,
+          onStartVoice: () async {},
+          onStopVoice: () async {},
+          onRestartVoice: (String reason) async {
+            restartReasons.add(reason);
+          },
+          audioCaptureSilencedStream: silencedEvents.stream,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      silencedEvents.add(true);
+      await tester.pump();
+      silencedEvents.add(true);
+      await tester.pump();
+
+      expect(restartReasons, isEmpty);
+
+      silencedEvents.add(false);
+      await tester.pump(const Duration(seconds: 1));
+      silencedEvents.add(true);
+      await tester.pump();
+
+      expect(restartReasons, isEmpty);
     });
 
     testWearWidget('voice startup loader stays until voice start completes',
@@ -885,8 +932,7 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       expect(WearStatusIconReporter.I.lastPayload?.title, 'Выбор раздела');
     });
 
-    testWearWidget(
-        'ASR command waits for final before reaching WearFlowController',
+    testWearWidget('ASR command partial reaches WearFlowController immediately',
         (WidgetTester tester) async {
       final _FakeSpeechRecognitionService speech =
           _FakeSpeechRecognitionService();
@@ -915,12 +961,12 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       await tester.pumpAndSettle();
       expect(routerFlow.state.screen, WearScreenId.menu);
 
-      speech.emitPartial('вниз');
+      speech.emitCommandPartial('вниз');
       await tester.pumpAndSettle();
 
-      expect(routerFlow.state.menuFocusedIndex, 0);
+      expect(routerFlow.state.menuFocusedIndex, 1);
 
-      speech.emitResult('вниз');
+      speech.emitCommandResult('вниз');
       await tester.pumpAndSettle();
 
       expect(routerFlow.state.menuFocusedIndex, 1);
@@ -1084,19 +1130,31 @@ class _NeverPrintersUseCase extends GetAvailablePrintersUseCase {
 }
 
 class _FakeSpeechRecognitionService implements SpeechRecognitionService {
-  final StreamController<String> _resultsController =
+  final StreamController<String> _commandResultsController =
       StreamController<String>.broadcast();
-  final StreamController<String> _partialController =
+  final StreamController<String> _commandPartialController =
+      StreamController<String>.broadcast();
+  final StreamController<String> _freeTextResultsController =
+      StreamController<String>.broadcast();
+  final StreamController<String> _freeTextPartialController =
       StreamController<String>.broadcast();
 
   @override
   Never get audioStreamService => throw UnsupportedError('Not used in test');
 
   @override
-  Stream<String> get resultsStream => _resultsController.stream;
+  Stream<String> get commandResultsStream => _commandResultsController.stream;
 
   @override
-  Stream<String> get partialResultsStream => _partialController.stream;
+  Stream<String> get commandPartialResultsStream =>
+      _commandPartialController.stream;
+
+  @override
+  Stream<String> get freeTextResultsStream => _freeTextResultsController.stream;
+
+  @override
+  Stream<String> get freeTextPartialResultsStream =>
+      _freeTextPartialController.stream;
 
   @override
   bool get isPrepared => true;
@@ -1117,14 +1175,17 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   int? get lastNonSilentAudioChunkAtMillis => null;
 
   @override
-  Future<void> setRecognitionGrammar(List<String>? grammar) async {}
+  int? get continuousZeroAudioStartedAtMillis => null;
 
-  void emitPartial(String text) {
-    _partialController.add(text);
+  @override
+  Future<void> setFreeTextEnabled(bool enabled) async {}
+
+  void emitCommandPartial(String text) {
+    _commandPartialController.add(text);
   }
 
-  void emitResult(String text) {
-    _resultsController.add(text);
+  void emitCommandResult(String text) {
+    _commandResultsController.add(text);
   }
 
   @override
@@ -1156,7 +1217,9 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
 
   @override
   Future<void> dispose() async {
-    await _resultsController.close();
-    await _partialController.close();
+    await _commandResultsController.close();
+    await _commandPartialController.close();
+    await _freeTextResultsController.close();
+    await _freeTextPartialController.close();
   }
 }

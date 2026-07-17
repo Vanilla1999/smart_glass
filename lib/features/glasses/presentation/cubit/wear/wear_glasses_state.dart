@@ -5,6 +5,8 @@ class WearGlassesState {
     required this.screenType,
     required this.phase,
     required this.title,
+    required this.updateId,
+    required this.payloadReceivedAtMillis,
     this.subtitle,
     this.statusText,
     this.isLoading = false,
@@ -28,14 +30,24 @@ class WearGlassesState {
   factory WearGlassesState.initial() {
     return WearGlassesState.fromPayload(
       WearGlassesPayload.authWaitingBarcode().toJson(),
+      updateId: 0,
+      payloadReceivedAtMillis: DateTime.now().millisecondsSinceEpoch,
     );
   }
 
-  factory WearGlassesState.fromPayload(Map<String, dynamic> payload) {
+  factory WearGlassesState.fromPayload(
+    Map<String, dynamic> payload, {
+    int updateId = 0,
+    int? payloadReceivedAtMillis,
+  }) {
+    final int receivedAtMillis =
+        payloadReceivedAtMillis ?? DateTime.now().millisecondsSinceEpoch;
     return WearGlassesState(
       screenType: _screenType(payload['screenType']),
       phase: _phase(payload['phase']),
       title: _string(payload['title']) ?? 'Wear',
+      updateId: updateId,
+      payloadReceivedAtMillis: receivedAtMillis,
       subtitle: _string(payload['subtitle']),
       statusText: _string(payload['statusText']),
       isLoading: _bool(payload['isLoading']),
@@ -60,6 +72,8 @@ class WearGlassesState {
   final WearGlassesScreenType screenType;
   final WearGlassesPhase phase;
   final String title;
+  final int updateId;
+  final int payloadReceivedAtMillis;
   final String? subtitle;
   final String? statusText;
   final bool isLoading;

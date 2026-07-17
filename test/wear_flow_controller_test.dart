@@ -19,7 +19,7 @@ void main() {
 
       controller.setUiLifecycle(WearUiLifecycle.inactive);
       controller.enterScreen(WearScreenId.menu);
-      controller.setMenuFocusedIndex(2);
+      controller.setMenuFocusedIndex(1);
 
       await controller.handleVoiceCommand(WearVoiceCommand.select);
 
@@ -39,7 +39,7 @@ void main() {
 
       controller.setUiLifecycle(WearUiLifecycle.inactive);
       controller.enterScreen(WearScreenId.menu);
-      controller.setMenuFocusedIndex(3);
+      controller.setMenuFocusedIndex(2);
       await controller.handleVoiceCommand(WearVoiceCommand.select);
 
       controller.setUiLifecycle(WearUiLifecycle.active);
@@ -335,11 +335,11 @@ void main() {
 
       controller.setUiLifecycle(WearUiLifecycle.inactive);
       controller.enterScreen(WearScreenId.menu);
-      controller.setMenuFocusedIndex(1);
+      controller.setMenuFocusedIndex(0);
       await controller.handleVoiceCommand(WearVoiceCommand.select);
       final firstPending = controller.state.pendingNavigation;
 
-      controller.setMenuFocusedIndex(2);
+      controller.setMenuFocusedIndex(1);
       await controller.handleVoiceCommand(WearVoiceCommand.select);
       final secondPending = controller.state.pendingNavigation;
 
@@ -463,11 +463,10 @@ void main() {
 
       await controller.handleVoiceCommand(WearVoiceCommand.down);
       await controller.handleVoiceCommand(WearVoiceCommand.down);
-      await controller.handleVoiceCommand(WearVoiceCommand.down);
       await controller.handleVoiceCommand(WearVoiceCommand.up);
       await controller.handleVoiceCommand(WearVoiceCommand.select);
 
-      expect(controller.state.menuFocusedIndex, 2);
+      expect(controller.state.menuFocusedIndex, 1);
       expect(
         controller.state.screen,
         WearScreenId.availabilityInteraction,
@@ -514,13 +513,12 @@ void main() {
 
       controller.handleVoiceCommand(WearVoiceCommand.down);
       controller.handleVoiceCommand(WearVoiceCommand.down);
-      controller.handleVoiceCommand(WearVoiceCommand.down);
       controller.handleVoiceCommand(WearVoiceCommand.up);
       controller.handleVoiceCommand(WearVoiceCommand.select);
 
       await Future<void>.delayed(Duration.zero);
 
-      expect(controller.state.menuFocusedIndex, 2);
+      expect(controller.state.menuFocusedIndex, 1);
       expect(
         controller.state.screen,
         WearScreenId.availabilityInteraction,
@@ -547,7 +545,7 @@ void main() {
       expect(glasses.payloads.last.phase, WearGlassesPhase.idle);
     });
 
-    test('down at menu bottom stays at 4', () async {
+    test('down at menu bottom stays at 3', () async {
       final glasses = _FakeGlassesOutput();
       final controller = WearFlowController(
         glassesOutput: glasses,
@@ -560,8 +558,8 @@ void main() {
         await controller.handleVoiceCommand(WearVoiceCommand.down);
       }
 
-      expect(controller.state.menuFocusedIndex, 4);
-      expect(glasses.payloads.last.selectedIndex, 4);
+      expect(controller.state.menuFocusedIndex, 3);
+      expect(glasses.payloads.last.selectedIndex, 3);
     });
 
     test('up at menu top stays at 0', () async {
@@ -597,7 +595,6 @@ void main() {
       expect(
         glasses.payloads.last.items,
         <String>[
-          'Последнее фото',
           'Печать ценников',
           'Доступность',
           'Справка',
@@ -606,7 +603,7 @@ void main() {
       );
     });
 
-    test('menu item 0 select navigates to latestPhoto', () async {
+    test('menu item 0 select navigates to printerSelect', () async {
       final glasses = _FakeGlassesOutput();
       final nav = _FakeNavigationOutput();
       final controller = WearFlowController(
@@ -618,10 +615,9 @@ void main() {
 
       await controller.handleVoiceCommand(WearVoiceCommand.select);
 
-      expect(controller.state.screen, WearScreenId.latestPhoto);
-      expect(glasses.payloads.last.screenType, WearGlassesScreenType.status);
-      expect(glasses.payloads.last.title, 'Последнее фото');
-      expect(nav.goToCalls, <WearScreenId>[WearScreenId.latestPhoto]);
+      expect(controller.state.screen, WearScreenId.printerSelect);
+      expect(glasses.payloads.last.screenType, WearGlassesScreenType.printer);
+      expect(nav.goToCalls, <WearScreenId>[WearScreenId.printerSelect]);
     });
 
     test('direct print price tag command navigates from menu to printerSelect',
@@ -638,7 +634,7 @@ void main() {
       await controller.handleVoiceCommand(WearVoiceCommand.openPrintPriceTag);
 
       expect(controller.state.screen, WearScreenId.printerSelect);
-      expect(controller.state.menuFocusedIndex, 1);
+      expect(controller.state.menuFocusedIndex, 0);
       expect(nav.goToCalls, <WearScreenId>[WearScreenId.printerSelect]);
     });
 
@@ -671,7 +667,7 @@ void main() {
       await controller.handleVoiceCommand(WearVoiceCommand.openAvailability);
 
       expect(controller.state.screen, WearScreenId.availabilityInteraction);
-      expect(controller.state.menuFocusedIndex, 2);
+      expect(controller.state.menuFocusedIndex, 1);
       expect(
           nav.goToCalls, <WearScreenId>[WearScreenId.availabilityInteraction]);
     });
@@ -710,7 +706,7 @@ void main() {
           nav.goToCalls, <WearScreenId>[WearScreenId.availabilityDirectScan]);
     });
 
-    test('menu item 2 select navigates to availabilityInteraction', () async {
+    test('menu item 1 select navigates to availabilityInteraction', () async {
       final glasses = _FakeGlassesOutput();
       final nav = _FakeNavigationOutput();
       final controller = WearFlowController(
@@ -720,7 +716,6 @@ void main() {
       controller.setUiLifecycle(WearUiLifecycle.active);
       controller.enterScreen(WearScreenId.menu);
 
-      await controller.handleVoiceCommand(WearVoiceCommand.down);
       await controller.handleVoiceCommand(WearVoiceCommand.down);
       await controller.handleVoiceCommand(WearVoiceCommand.select);
 
@@ -735,7 +730,7 @@ void main() {
       );
     });
 
-    test('menu item 3 select navigates to help', () async {
+    test('menu item 2 select navigates to help', () async {
       final glasses = _FakeGlassesOutput();
       final nav = _FakeNavigationOutput();
       final controller = WearFlowController(
@@ -745,7 +740,6 @@ void main() {
       controller.setUiLifecycle(WearUiLifecycle.active);
       controller.enterScreen(WearScreenId.menu);
 
-      await controller.handleVoiceCommand(WearVoiceCommand.down);
       await controller.handleVoiceCommand(WearVoiceCommand.down);
       await controller.handleVoiceCommand(WearVoiceCommand.down);
       await controller.handleVoiceCommand(WearVoiceCommand.select);
@@ -755,7 +749,7 @@ void main() {
       expect(nav.goToCalls, <WearScreenId>[WearScreenId.help]);
     });
 
-    test('menu item 4 select navigates to settings', () async {
+    test('menu item 3 select navigates to settings', () async {
       final glasses = _FakeGlassesOutput();
       final nav = _FakeNavigationOutput();
       final controller = WearFlowController(
@@ -765,7 +759,7 @@ void main() {
       controller.setUiLifecycle(WearUiLifecycle.active);
       controller.enterScreen(WearScreenId.menu);
 
-      for (int i = 0; i < 4; i++) {
+      for (int i = 0; i < 3; i++) {
         await controller.handleVoiceCommand(WearVoiceCommand.down);
       }
       await controller.handleVoiceCommand(WearVoiceCommand.select);
@@ -898,7 +892,7 @@ void main() {
 
       controller.setUiLifecycle(WearUiLifecycle.active);
       controller.enterScreen(WearScreenId.menu);
-      controller.setMenuFocusedIndex(1);
+      controller.setMenuFocusedIndex(0);
 
       controller.handleVoiceCommand(WearVoiceCommand.select);
       await Future<void>.delayed(Duration.zero);
@@ -1032,7 +1026,7 @@ void main() {
       );
       controller.setUiLifecycle(WearUiLifecycle.active);
       controller.enterScreen(WearScreenId.menu);
-      controller.setMenuFocusedIndex(1);
+      controller.setMenuFocusedIndex(0);
 
       await controller.handleVoiceCommand(WearVoiceCommand.select);
 

@@ -91,6 +91,7 @@ class VoiceCommandParserService {
     'включить фонарик': WearVoiceCommand.flashlight,
     'выключить фонарик': WearVoiceCommand.flashlight,
     'люмус максима': WearVoiceCommand.flashlight,
+    'максима': WearVoiceCommand.flashlight,
   };
 
   static const Map<WearVoiceCommand, List<String>> _commandTokens =

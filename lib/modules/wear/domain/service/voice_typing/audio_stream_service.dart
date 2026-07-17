@@ -24,6 +24,7 @@ class AudioStreamService {
   int _chunksReceived = 0;
   int? _lastChunkAtMillis;
   int? _lastNonSilentChunkAtMillis;
+  int? _continuousZeroAudioStartedAtMillis;
   int? _startedAtMillis;
 
   final List<void Function(Uint8List)> _dataCallbacks = [];
@@ -34,6 +35,8 @@ class AudioStreamService {
   int get chunksReceived => _chunksReceived;
   int? get lastChunkAtMillis => _lastChunkAtMillis;
   int? get lastNonSilentChunkAtMillis => _lastNonSilentChunkAtMillis;
+  int? get continuousZeroAudioStartedAtMillis =>
+      _continuousZeroAudioStartedAtMillis;
   Stream<double> get audioLevelStream => _audioLevelController.stream;
 
   void addDataCallback(void Function(Uint8List) callback) {
@@ -58,12 +61,17 @@ class AudioStreamService {
     final int? lastNonSilentAgeMs = _lastNonSilentChunkAtMillis == null
         ? null
         : now - _lastNonSilentChunkAtMillis!;
+    final int? continuousZeroAudioAgeMs =
+        _continuousZeroAudioStartedAtMillis == null
+            ? null
+            : now - _continuousZeroAudioStartedAtMillis!;
     final int? runningForMs =
         _startedAtMillis == null ? null : now - _startedAtMillis!;
     return 'AudioStreamService{isRunning=$_isRunning, '
         'recorderIsRecording=$isRecording, callbacks=${_dataCallbacks.length}, '
         'chunks=$_chunksReceived, lastChunkAgeMs=$lastChunkAgeMs, '
         'lastNonSilentAgeMs=$lastNonSilentAgeMs, '
+        'continuousZeroAudioAgeMs=$continuousZeroAudioAgeMs, '
         'runningForMs=$runningForMs}';
   }
 
@@ -87,8 +95,9 @@ class AudioStreamService {
 
     _chunksReceived = 0;
     _lastChunkAtMillis = null;
+    _continuousZeroAudioStartedAtMillis = null;
     _startedAtMillis = DateTime.now().millisecondsSinceEpoch;
-    _lastNonSilentChunkAtMillis = _startedAtMillis;
+    _lastNonSilentChunkAtMillis = null;
     print('[AudioStreamService] startStream begin at $_startedAtMillis');
 
     final audioStream = await _audioRecorder.startStream(
@@ -122,6 +131,11 @@ class AudioStreamService {
         if (stats.peak > 0.0001) {
           _lastNonSilentChunkAtMillis = _lastChunkAtMillis;
         }
+        if (stats.peak == 0.0) {
+          _continuousZeroAudioStartedAtMillis ??= _lastChunkAtMillis;
+        } else {
+          _continuousZeroAudioStartedAtMillis = null;
+        }
         if (_chunksReceived == 1 || _chunksReceived % 200 == 0) {
           print(
             '[AudioStreamService] chunk#$_chunksReceived '
@@ -137,10 +151,12 @@ class AudioStreamService {
         }
       },
       onError: (Object error, StackTrace stackTrace) {
+        _isRunning = false;
         print('[AudioStreamService] stream error: $error\n$stackTrace');
         _errorCallback?.call(error, stackTrace);
       },
       onDone: () {
+        _isRunning = false;
         print('[AudioStreamService] audio stream done');
       },
     );
@@ -162,6 +178,7 @@ class AudioStreamService {
     _errorCallback = null;
     _isRunning = false;
     _startedAtMillis = null;
+    _continuousZeroAudioStartedAtMillis = null;
     _setAudioLevel(0.0);
     print('[AudioStreamService] stop done');
   }

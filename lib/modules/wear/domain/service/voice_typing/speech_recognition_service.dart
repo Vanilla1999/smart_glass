@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
 import 'package:vosk_flutter_service/vosk_flutter.dart' as vosk;
 
@@ -11,98 +11,100 @@ class SpeechRecognitionService {
   static const int _slowRecognizerLatencyMs = 150;
   static const int _slowAudioQueueDelayMs = 200;
 
+  SpeechRecognitionService({
+    AudioStreamService? audioStreamService,
+    List<String> commandGrammar = const <String>[],
+  })  : _audioStream = audioStreamService ?? AudioStreamService(),
+        _commandGrammar = List<String>.unmodifiable(
+          commandGrammar
+              .map((String item) => item.trim())
+              .where((String item) => item.isNotEmpty),
+        ),
+        _freeTextEnabled = commandGrammar.isEmpty;
+
   final vosk.VoskFlutterPlugin _vosk = vosk.VoskFlutterPlugin.instance();
   final vosk.ModelLoader _modelLoader = vosk.ModelLoader();
-  final StreamController<String> _resultsController =
-      StreamController<String>.broadcast();
-  final StreamController<String> _partialResultsController =
-      StreamController<String>.broadcast();
   final AudioStreamService _audioStream;
+  final List<String> _commandGrammar;
 
-  String _freePartialText = '';
-  String _grammarPartialText = '';
+  final StreamController<String> _commandResultsController =
+      StreamController<String>.broadcast();
+  final StreamController<String> _commandPartialResultsController =
+      StreamController<String>.broadcast();
+  final StreamController<String> _freeTextResultsController =
+      StreamController<String>.broadcast();
+  final StreamController<String> _freeTextPartialResultsController =
+      StreamController<String>.broadcast();
+
+  String _commandPartialText = '';
+  String _freeTextPartialText = '';
+  bool _freeTextEnabled;
   bool _isSessionActive = false;
   bool _isListening = false;
-  Future<void> _audioProcessing = Future<void>.value();
+  Future<void> _commandAudioProcessing = Future<void>.value();
+  Future<void> _freeTextAudioProcessing = Future<void>.value();
   Future<void> _lifecycleOperation = Future<void>.value();
-  int _processedChunks = 0;
+  int _freeTextEpoch = 0;
   int? _lastProcessedChunkAtMillis;
-  int _audioQueueTotalDelayMs = 0;
-  int _audioQueueMaxDelayMs = 0;
-  int _slowAudioQueueChunks = 0;
-  int _recognizerChunks = 0;
-  int _recognizerTotalLatencyMs = 0;
-  int _recognizerMaxLatencyMs = 0;
-  int _slowRecognizerChunks = 0;
-  int _recognitionModeEpoch = 0;
-  List<String>? _recognitionGrammar;
+  final _RecognitionMetrics _commandMetrics = _RecognitionMetrics();
+  final _RecognitionMetrics _freeTextMetrics = _RecognitionMetrics();
 
   vosk.Model? _model;
+  vosk.Recognizer? _commandRecognizer;
   vosk.Recognizer? _freeTextRecognizer;
-  vosk.Recognizer? _grammarRecognizer;
-  List<String>? _grammarRecognizerGrammar;
 
-  SpeechRecognitionService({AudioStreamService? audioStreamService})
-      : _audioStream = audioStreamService ?? AudioStreamService();
-
-  Stream<String> get resultsStream => _resultsController.stream;
-  Stream<String> get partialResultsStream => _partialResultsController.stream;
-  bool get isPrepared => _model != null && _freeTextRecognizer != null;
+  Stream<String> get commandResultsStream => _commandResultsController.stream;
+  Stream<String> get commandPartialResultsStream =>
+      _commandPartialResultsController.stream;
+  Stream<String> get freeTextResultsStream => _freeTextResultsController.stream;
+  Stream<String> get freeTextPartialResultsStream =>
+      _freeTextPartialResultsController.stream;
+  bool get isPrepared =>
+      _model != null &&
+      _freeTextRecognizer != null &&
+      (_commandGrammar.isEmpty || _commandRecognizer != null);
   bool get isSessionActive => _isSessionActive;
   bool get isListening => _isListening;
-  bool get usesFreeTextRecognition => _recognitionGrammar == null;
+  bool get usesFreeTextRecognition => _freeTextEnabled;
   int? get lastAudioChunkAtMillis => _audioStream.lastChunkAtMillis;
   int? get lastNonSilentAudioChunkAtMillis =>
       _audioStream.lastNonSilentChunkAtMillis;
+  int? get continuousZeroAudioStartedAtMillis =>
+      _audioStream.continuousZeroAudioStartedAtMillis;
   AudioStreamService get audioStreamService => _audioStream;
 
-  Future<void> setRecognitionGrammar(List<String>? grammar) async {
-    final int startedAt = DateTime.now().millisecondsSinceEpoch;
-    final List<String>? filtered = grammar
-        ?.map((String item) => item.trim())
-        .where((String item) => item.isNotEmpty)
-        .toList(growable: false);
-    final List<String>? next = filtered == null || filtered.isEmpty
-        ? null
-        : List<String>.unmodifiable(filtered);
-    final bool nextUsesFreeText = next == null;
+  Future<void> setFreeTextEnabled(bool enabled) {
+    if (_freeTextEnabled == enabled) {
+      print(
+        '[SpeechRecognitionService] setFreeTextEnabled skipped '
+        'enabled=$enabled',
+      );
+      return Future<void>.value();
+    }
 
-    await _runLifecycleOperation('setRecognitionGrammar', () async {
-      final bool recognizerMatches = next == null ||
-          (_grammarRecognizer != null &&
-              listEquals(_grammarRecognizerGrammar, next));
-      if (listEquals(_recognitionGrammar, next) && recognizerMatches) {
-        print(
-          '[SpeechRecognitionService] setRecognitionGrammar skipped '
-          'mode=${nextUsesFreeText ? 'freeText' : 'grammar'} '
-          'size=${next?.length ?? 0}',
-        );
-        return;
-      }
-
-      if (_model == null) {
-        _publishRecognitionMode(next);
-        return;
-      }
-
-      await _serializeWithAudioProcessing(() async {
-        if (next == null) {
-          await _freeTextRecognizer?.reset();
-          _freePartialText = '';
-        } else {
-          await _createGrammarRecognizer(next);
-          await _grammarRecognizer!.reset();
-          _grammarPartialText = '';
-        }
-        _publishRecognitionMode(next);
-      });
-    });
-    final int finishedAt = DateTime.now().millisecondsSinceEpoch;
+    _freeTextEnabled = enabled;
+    final int epoch = ++_freeTextEpoch;
+    _freeTextPartialText = '';
     print(
-      '[SpeechRecognitionService] setRecognitionGrammar done '
-      'mode=${nextUsesFreeText ? 'freeText' : 'grammar'} '
-      'totalMs=${finishedAt - startedAt} listening=$_isListening',
+      '[SpeechRecognitionService] freeText enabled=$enabled epoch=$epoch',
     );
+    if (!enabled || _freeTextRecognizer == null) {
+      return Future<void>.value();
+    }
+
+    final Future<void> next = _freeTextAudioProcessing.then((_) async {
+      if (!_freeTextEnabled || epoch != _freeTextEpoch) return;
+      await _freeTextRecognizer?.reset();
+    });
+    _freeTextAudioProcessing = next.catchError(
+      (Object error, StackTrace stackTrace) {
+        print(
+          '[SpeechRecognitionService] freeText reset error: '
+          '$error\n$stackTrace',
+        );
+      },
+    );
+    return next;
   }
 
   Future<bool> requestMicrophonePermission() {
@@ -116,7 +118,7 @@ class SpeechRecognitionService {
   Future<void> _prepareUnlocked() async {
     print('[SpeechRecognitionService] prepare begin isPrepared=$isPrepared');
     await _ensureModelInitialized();
-    if (_freeTextRecognizer == null) {
+    if (!isPrepared) {
       print('[SpeechRecognitionService] prepare create recognizers begin');
       await _createRecognizers();
       print('[SpeechRecognitionService] prepare create recognizers done');
@@ -127,28 +129,28 @@ class SpeechRecognitionService {
     }
 
     _isSessionActive = false;
-    _freePartialText = '';
-    _grammarPartialText = '';
+    _commandPartialText = '';
+    _freeTextPartialText = '';
     print('[SpeechRecognitionService] prepare done');
   }
 
   Future<void> startSession() async {
-    if (_freeTextRecognizer == null || _model == null) {
+    if (!isPrepared || _model == null) {
       throw StateError(
         'Сначала подготовьте модель вызовом prepare() перед стартом сессии.',
       );
     }
 
     await _resetRecognizers();
-    _freePartialText = '';
-    _grammarPartialText = '';
+    _commandPartialText = '';
+    _freeTextPartialText = '';
     _isSessionActive = true;
   }
 
   Future<void> stopSession() async {
     _isSessionActive = false;
-    _freePartialText = '';
-    _grammarPartialText = '';
+    _commandPartialText = '';
+    _freeTextPartialText = '';
   }
 
   Future<void> startListening() async {
@@ -176,13 +178,14 @@ class SpeechRecognitionService {
       await operation();
       print('[SpeechRecognitionService] lifecycle operation done: $label');
     });
-    _lifecycleOperation =
-        next.catchError((Object error, StackTrace stackTrace) {
-      print(
-        '[SpeechRecognitionService] lifecycle operation failed: '
-        '$label error=$error\n$stackTrace',
-      );
-    });
+    _lifecycleOperation = next.catchError(
+      (Object error, StackTrace stackTrace) {
+        print(
+          '[SpeechRecognitionService] lifecycle operation failed: '
+          '$label error=$error\n$stackTrace',
+        );
+      },
+    );
     return next;
   }
 
@@ -197,7 +200,7 @@ class SpeechRecognitionService {
     }
     print('[SpeechRecognitionService] requesting microphone permission...');
     final int permissionStartedAt = DateTime.now().millisecondsSinceEpoch;
-    final hasPermission = await requestMicrophonePermission();
+    final bool hasPermission = await requestMicrophonePermission();
     final int permissionFinishedAt = DateTime.now().millisecondsSinceEpoch;
     print('[SpeechRecognitionService] permission result: $hasPermission');
     print(
@@ -220,9 +223,9 @@ class SpeechRecognitionService {
     try {
       print('[SpeechRecognitionService] starting session...');
       await startSession();
-      _processedChunks = 0;
       _lastProcessedChunkAtMillis = null;
-      _resetPerformanceMetrics();
+      _commandMetrics.reset();
+      _freeTextMetrics.reset();
 
       print('[SpeechRecognitionService] adding audio callback...');
       _audioStream.addDataCallback(_onAudioChunk);
@@ -260,12 +263,15 @@ class SpeechRecognitionService {
     }
     print('[SpeechRecognitionService] removing audio callback...');
     _audioStream.removeDataCallback(_onAudioChunk);
-    final int audioProcessingStartedAt = DateTime.now().millisecondsSinceEpoch;
-    await _audioProcessing;
-    final int audioProcessingFinishedAt = DateTime.now().millisecondsSinceEpoch;
+    final int processingStartedAt = DateTime.now().millisecondsSinceEpoch;
+    await Future.wait<void>(<Future<void>>[
+      _commandAudioProcessing,
+      _freeTextAudioProcessing,
+    ]);
+    final int processingFinishedAt = DateTime.now().millisecondsSinceEpoch;
     print(
       '[SpeechRecognitionService] wait audio processing durationMs='
-      '${audioProcessingFinishedAt - audioProcessingStartedAt}',
+      '${processingFinishedAt - processingStartedAt}',
     );
     final int audioStopStartedAt = DateTime.now().millisecondsSinceEpoch;
     await _audioStream.stop();
@@ -286,225 +292,191 @@ class SpeechRecognitionService {
         ? null
         : now - _lastProcessedChunkAtMillis!;
     final String audio = await _audioStream.diagnostics();
-    final bool usesFreeText = _recognitionGrammar == null;
-    final int queueAverageMs =
-        _processedChunks == 0 ? 0 : _audioQueueTotalDelayMs ~/ _processedChunks;
-    final int recognizerAverageMs = _recognizerChunks == 0
-        ? 0
-        : _recognizerTotalLatencyMs ~/ _recognizerChunks;
     return 'SpeechRecognitionService{isListening=$_isListening, '
         'isSessionActive=$_isSessionActive, isPrepared=$isPrepared, '
-        'mode=${usesFreeText ? 'freeText' : 'grammar'}, '
-        'freeRecognizer=${_freeTextRecognizer != null}, '
-        'grammarRecognizer=${_grammarRecognizer != null}, '
-        'processedChunks=$_processedChunks, '
-        'queueAvgMs=$queueAverageMs, queueMaxMs=$_audioQueueMaxDelayMs, '
-        'slowQueueChunks=$_slowAudioQueueChunks, '
-        'recognizerAvgMs=$recognizerAverageMs, '
-        'recognizerMaxMs=$_recognizerMaxLatencyMs, '
-        'slowRecognizerChunks=$_slowRecognizerChunks, '
+        'freeTextEnabled=$_freeTextEnabled, '
+        'commandRecognizer=${_commandRecognizer != null}, '
+        'freeTextRecognizer=${_freeTextRecognizer != null}, '
+        'command=${_commandMetrics.describe()}, '
+        'freeText=${_freeTextMetrics.describe()}, '
         'lastProcessedAgeMs=$lastProcessedAgeMs, audio=$audio}';
   }
 
   void _onAudioChunk(Uint8List bytes) {
-    final int modeEpoch = _recognitionModeEpoch;
+    _enqueueCommandChunk(bytes);
+    if (_freeTextEnabled) {
+      _enqueueFreeTextChunk(bytes, _freeTextEpoch);
+    }
+  }
+
+  Future<void> processAudioChunk(Uint8List bytes) async {
+    final List<Future<void>> processing = <Future<void>>[];
+    if (_commandRecognizer != null) {
+      processing.add(_enqueueCommandChunk(bytes));
+    }
+    if (_freeTextEnabled) {
+      processing.add(_enqueueFreeTextChunk(bytes, _freeTextEpoch));
+    }
+    await Future.wait<void>(processing);
+  }
+
+  Future<void> _enqueueCommandChunk(Uint8List bytes) {
+    if (_commandRecognizer == null) return Future<void>.value();
     final int queuedAt = DateTime.now().millisecondsSinceEpoch;
-    _audioProcessing = _audioProcessing
-        .then((_) => _processAudioChunk(
-              bytes,
-              modeEpoch: modeEpoch,
-              queuedAt: queuedAt,
-            ))
-        .catchError((Object error, StackTrace stackTrace) {
-      print('[SpeechRecognitionService] processAudioChunk error: $error');
-    });
-  }
-
-  Future<void> dispose() async {
-    _isListening = false;
-    _isSessionActive = false;
-    await _audioProcessing.catchError((Object error, StackTrace stackTrace) {});
-    await _audioStream.dispose();
-    await _disposeRecognizers();
-    _model?.dispose();
-    _model = null;
-    await _resultsController.close();
-    await _partialResultsController.close();
-  }
-
-  Future<void> processAudioChunk(Uint8List bytes) {
-    return _processAudioChunk(
-      bytes,
-      modeEpoch: _recognitionModeEpoch,
-      queuedAt: DateTime.now().millisecondsSinceEpoch,
+    final Future<void> next = _commandAudioProcessing.then(
+      (_) => _processRecognizerChunk(
+        source: _RecognitionSource.command,
+        recognizer: _commandRecognizer!,
+        bytes: bytes,
+        queuedAt: queuedAt,
+        epoch: null,
+      ),
     );
+    _commandAudioProcessing = next.catchError(
+      (Object error, StackTrace stackTrace) {
+        print('[SpeechRecognitionService] command chunk error: $error');
+      },
+    );
+    return next;
   }
 
-  Future<void> _processAudioChunk(
-    Uint8List bytes, {
-    required int modeEpoch,
+  Future<void> _enqueueFreeTextChunk(Uint8List bytes, int epoch) {
+    if (_freeTextRecognizer == null) return Future<void>.value();
+    final int queuedAt = DateTime.now().millisecondsSinceEpoch;
+    final Future<void> next = _freeTextAudioProcessing.then(
+      (_) => _processRecognizerChunk(
+        source: _RecognitionSource.freeText,
+        recognizer: _freeTextRecognizer!,
+        bytes: bytes,
+        queuedAt: queuedAt,
+        epoch: epoch,
+      ),
+    );
+    _freeTextAudioProcessing = next.catchError(
+      (Object error, StackTrace stackTrace) {
+        print('[SpeechRecognitionService] freeText chunk error: $error');
+      },
+    );
+    return next;
+  }
+
+  Future<void> _processRecognizerChunk({
+    required _RecognitionSource source,
+    required vosk.Recognizer recognizer,
+    required Uint8List bytes,
     required int queuedAt,
+    required int? epoch,
   }) async {
     if (!_isSessionActive) {
       throw StateError(
         'Сессия распознавания не запущена. Вызовите startSession() перед обработкой аудио.',
       );
     }
+    if (bytes.lengthInBytes < 2 || !_canProcess(source, epoch)) return;
 
-    if (bytes.lengthInBytes < 2) {
-      return;
-    }
-    if (modeEpoch != _recognitionModeEpoch) {
-      print(
-        '[SpeechRecognitionService] drop stale audio chunk '
-        'epoch=$modeEpoch currentEpoch=$_recognitionModeEpoch',
-      );
-      return;
-    }
-    _processedChunks++;
+    final _RecognitionMetrics metrics = _metrics(source);
+    metrics.processedChunks++;
     final int processingStartedAt = DateTime.now().millisecondsSinceEpoch;
     final int queueDelayMs = processingStartedAt - queuedAt;
-    _audioQueueTotalDelayMs += queueDelayMs;
-    if (queueDelayMs > _audioQueueMaxDelayMs) {
-      _audioQueueMaxDelayMs = queueDelayMs;
-    }
-    if (queueDelayMs > _slowAudioQueueDelayMs) {
-      _slowAudioQueueChunks++;
-    }
+    metrics.recordQueueDelay(queueDelayMs, _slowAudioQueueDelayMs);
     _lastProcessedChunkAtMillis = processingStartedAt;
-    if (_processedChunks == 1 || _processedChunks % 200 == 0) {
+    if (metrics.processedChunks == 1 || metrics.processedChunks % 200 == 0) {
       print(
-        '[SpeechRecognitionService] processing chunk#$_processedChunks '
-        'bytes=${bytes.lengthInBytes} at=$_lastProcessedChunkAtMillis '
-        'queueDelayMs=$queueDelayMs epoch=$modeEpoch',
+        '[SpeechRecognitionService] processing source=${source.label} '
+        'chunk#${metrics.processedChunks} bytes=${bytes.lengthInBytes} '
+        'queueDelayMs=$queueDelayMs epoch=$epoch',
       );
     } else if (queueDelayMs > _slowAudioQueueDelayMs) {
       print(
-        '[SpeechRecognitionService] slow audio queue chunk#$_processedChunks '
-        'queueDelayMs=$queueDelayMs epoch=$modeEpoch currentEpoch=$_recognitionModeEpoch',
-      );
-    }
-    final freeTextRecognizer = _freeTextRecognizer;
-    if (freeTextRecognizer == null) {
-      throw StateError(
-        'Распознаватель не инициализирован. Вызовите prepare() перед использованием.',
+        '[SpeechRecognitionService] slow audio queue source=${source.label} '
+        'chunk#${metrics.processedChunks} queueDelayMs=$queueDelayMs '
+        'epoch=$epoch currentEpoch=$_freeTextEpoch',
       );
     }
 
-    final bool usesFreeText = _recognitionGrammar == null;
-    final grammarRecognizer = _grammarRecognizer;
-    if (usesFreeText) {
-      _logActiveRecognizer(
-        source: _RecognitionSource.freeText,
-        modeEpoch: modeEpoch,
-        queueDelayMs: queueDelayMs,
-      );
-      await _processRecognizer(
-        source: _RecognitionSource.freeText,
-        recognizer: freeTextRecognizer,
-        bytes: bytes,
-        emitResults: true,
-        modeEpoch: modeEpoch,
-        queueDelayMs: queueDelayMs,
-      );
-      return;
-    }
-
-    if (grammarRecognizer == null ||
-        !listEquals(_grammarRecognizerGrammar, _recognitionGrammar)) {
-      _logActiveRecognizer(
-        source: _RecognitionSource.grammar,
-        modeEpoch: modeEpoch,
-        queueDelayMs: queueDelayMs,
-        fallback: true,
-      );
-      return;
-    }
-
-    _logActiveRecognizer(
-      source: _RecognitionSource.grammar,
-      modeEpoch: modeEpoch,
-      queueDelayMs: queueDelayMs,
-    );
-    await _processRecognizer(
-      source: _RecognitionSource.grammar,
-      recognizer: grammarRecognizer,
-      bytes: bytes,
-      emitResults: true,
-      modeEpoch: modeEpoch,
-      queueDelayMs: queueDelayMs,
-    );
-  }
-
-  Future<void> _processRecognizer({
-    required _RecognitionSource source,
-    required vosk.Recognizer recognizer,
-    required Uint8List bytes,
-    required bool emitResults,
-    required int modeEpoch,
-    required int queueDelayMs,
-  }) async {
-    final t0 = DateTime.now().millisecondsSinceEpoch;
-    final isResultReady = await recognizer.acceptWaveformBytes(bytes);
+    final int startedAt = DateTime.now().millisecondsSinceEpoch;
+    final bool isResultReady = await recognizer.acceptWaveformBytes(bytes);
     final int acceptedAt = DateTime.now().millisecondsSinceEpoch;
-    final int latencyMs = acceptedAt - t0;
-    _recognizerChunks++;
-    _recognizerTotalLatencyMs += latencyMs;
-    if (latencyMs > _recognizerMaxLatencyMs) {
-      _recognizerMaxLatencyMs = latencyMs;
-    }
+    final int latencyMs = acceptedAt - startedAt;
+    metrics.recordRecognizerLatency(latencyMs, _slowRecognizerLatencyMs);
     if (latencyMs > _slowRecognizerLatencyMs) {
-      _slowRecognizerChunks++;
       print(
         '[SpeechRecognitionService] slow recognizer source=${source.label} '
         'latencyMs=$latencyMs queueDelayMs=$queueDelayMs '
-        'chunk#$_processedChunks emitResults=$emitResults',
+        'chunk#${metrics.processedChunks}',
       );
     }
+
     if (isResultReady) {
       final int resultStartedAt = DateTime.now().millisecondsSinceEpoch;
-      final resultJson = await recognizer.getResult();
+      final String resultJson = await recognizer.getResult();
       final int resultFinishedAt = DateTime.now().millisecondsSinceEpoch;
-      final resultText = _extractText(resultJson, preferredKeys: const [
-        'text',
-      ]);
+      final String resultText = _extractText(
+        resultJson,
+        preferredKeys: const <String>['text'],
+      );
       if (resultText.isNotEmpty) {
-        final t1 = DateTime.now().millisecondsSinceEpoch;
+        final int finishedAt = DateTime.now().millisecondsSinceEpoch;
         print(
-          '[VOSK][FINAL][${source.label}] $resultText at $t1 '
+          '[VOSK][FINAL][${source.label}] $resultText at $finishedAt '
           '(queueDelayMs=$queueDelayMs, acceptMs=$latencyMs, '
           'resultMs=${resultFinishedAt - resultStartedAt}, '
-          'chunkTotalMs=${t1 - t0}, emitResults=$emitResults)',
+          'chunkTotalMs=${finishedAt - startedAt})',
         );
-        if (_canEmitRecognizerResult(source, emitResults, modeEpoch) &&
-            !_resultsController.isClosed) {
-          _resultsController.add(resultText);
-        }
+        _emitResult(source, resultText, epoch: epoch, partial: false);
       }
       _setPartialText(source, '');
       return;
     }
 
     final int partialStartedAt = DateTime.now().millisecondsSinceEpoch;
-    final partialResultJson = await recognizer.getPartialResult();
+    final String partialJson = await recognizer.getPartialResult();
     final int partialFinishedAt = DateTime.now().millisecondsSinceEpoch;
-    final partialText = _extractText(partialResultJson, preferredKeys: const [
-      'partial',
-    ]);
+    final String partialText = _extractText(
+      partialJson,
+      preferredKeys: const <String>['partial'],
+    );
     if (partialText.isNotEmpty && partialText != _partialText(source)) {
-      final t1 = DateTime.now().millisecondsSinceEpoch;
+      final int finishedAt = DateTime.now().millisecondsSinceEpoch;
       print(
-        '[VOSK][PARTIAL][${source.label}] $partialText at $t1 '
+        '[VOSK][PARTIAL][${source.label}] $partialText at $finishedAt '
         '(queueDelayMs=$queueDelayMs, acceptMs=$latencyMs, '
         'partialMs=${partialFinishedAt - partialStartedAt}, '
-        'chunkTotalMs=${t1 - t0}, emitResults=$emitResults)',
+        'chunkTotalMs=${finishedAt - startedAt})',
       );
-      if (_canEmitRecognizerResult(source, emitResults, modeEpoch) &&
-          !_partialResultsController.isClosed) {
-        _partialResultsController.add(partialText);
-      }
+      _emitResult(source, partialText, epoch: epoch, partial: true);
     }
     _setPartialText(source, partialText);
+  }
+
+  bool _canProcess(_RecognitionSource source, int? epoch) {
+    return switch (source) {
+      _RecognitionSource.command => _commandRecognizer != null,
+      _RecognitionSource.freeText =>
+        _freeTextEnabled && epoch == _freeTextEpoch,
+    };
+  }
+
+  void _emitResult(
+    _RecognitionSource source,
+    String text, {
+    required int? epoch,
+    required bool partial,
+  }) {
+    if (!_canProcess(source, epoch)) {
+      print(
+        '[SpeechRecognitionService] suppress stale result '
+        'source=${source.label} epoch=$epoch currentEpoch=$_freeTextEpoch',
+      );
+      return;
+    }
+    final StreamController<String> controller = switch ((source, partial)) {
+      (_RecognitionSource.command, false) => _commandResultsController,
+      (_RecognitionSource.command, true) => _commandPartialResultsController,
+      (_RecognitionSource.freeText, false) => _freeTextResultsController,
+      (_RecognitionSource.freeText, true) => _freeTextPartialResultsController,
+    };
+    if (!controller.isClosed) controller.add(text);
   }
 
   Future<void> _ensureModelInitialized() async {
@@ -512,10 +484,10 @@ class SpeechRecognitionService {
       print('[SpeechRecognitionService] model already initialized');
       return;
     }
-
     print(
-        '[SpeechRecognitionService] load model asset begin path=$_modelAssetPath');
-    final modelPath = await _modelLoader.loadFromAssets(_modelAssetPath);
+      '[SpeechRecognitionService] load model asset begin path=$_modelAssetPath',
+    );
+    final String modelPath = await _modelLoader.loadFromAssets(_modelAssetPath);
     print('[SpeechRecognitionService] load model asset done path=$modelPath');
     print('[SpeechRecognitionService] create model begin');
     _model = await _vosk.createModel(modelPath);
@@ -523,181 +495,89 @@ class SpeechRecognitionService {
   }
 
   Future<void> _createRecognizers() async {
-    await _createFreeTextRecognizer();
-    final List<String>? grammar = _recognitionGrammar;
-    if (grammar != null && grammar.isNotEmpty) {
-      await _createGrammarRecognizer(grammar);
-    }
-  }
-
-  Future<void> _createFreeTextRecognizer() async {
-    final model = _model;
-    if (model == null) {
-      throw StateError('Vosk модель не инициализирована.');
-    }
+    final vosk.Model? model = _model;
+    if (model == null) throw StateError('Vosk модель не инициализирована.');
 
     _freeTextRecognizer ??= await _vosk.createRecognizer(
       model: model,
       sampleRate: _sampleRate,
     );
-  }
-
-  Future<void> _createGrammarRecognizer(List<String> grammar) async {
-    final model = _model;
-    if (model == null) {
-      throw StateError('Vosk модель не инициализирована.');
-    }
-    if (grammar.isEmpty) {
-      return;
-    }
-    if (_grammarRecognizer != null) {
-      if (listEquals(_grammarRecognizerGrammar, grammar)) {
-        return;
-      }
-    }
+    if (_commandGrammar.isEmpty || _commandRecognizer != null) return;
 
     final int startedAt = DateTime.now().millisecondsSinceEpoch;
-    final recognizer = await _vosk.createRecognizer(
+    final vosk.Recognizer recognizer = await _vosk.createRecognizer(
       model: model,
       sampleRate: _sampleRate,
     );
     try {
       print(
-        '[SpeechRecognitionService] applying grammar size=${grammar.length}',
+        '[SpeechRecognitionService] applying command grammar '
+        'size=${_commandGrammar.length}',
       );
-      await recognizer.setGrammar(grammar);
+      await recognizer.setGrammar(_commandGrammar);
     } catch (_) {
       await recognizer.dispose();
       rethrow;
     }
-    final vosk.Recognizer? previous = _grammarRecognizer;
-    _grammarRecognizer = recognizer;
-    _grammarRecognizerGrammar = List<String>.unmodifiable(grammar);
-    await previous?.dispose();
+    _commandRecognizer = recognizer;
     final int finishedAt = DateTime.now().millisecondsSinceEpoch;
     print(
-      '[SpeechRecognitionService] grammar recognizer ready '
+      '[SpeechRecognitionService] command recognizer ready '
       'durationMs=${finishedAt - startedAt}',
     );
   }
 
-  Future<void> _disposeGrammarRecognizer() async {
-    final recognizer = _grammarRecognizer;
-    _grammarRecognizer = null;
-    _grammarRecognizerGrammar = null;
-    if (recognizer != null) {
-      await recognizer.dispose();
-    }
-  }
-
-  Future<void> _disposeRecognizers() async {
-    final freeTextRecognizer = _freeTextRecognizer;
-    _freeTextRecognizer = null;
-    if (freeTextRecognizer != null) {
-      await freeTextRecognizer.dispose();
-    }
-    await _disposeGrammarRecognizer();
-  }
-
-  Future<void> _serializeWithAudioProcessing(
-    Future<void> Function() operation,
-  ) async {
-    final Future<void> next = _audioProcessing.then((_) => operation());
-    _audioProcessing = next.catchError((Object error, StackTrace stackTrace) {
-      print('[SpeechRecognitionService] serialized operation error: $error');
-    });
-    await next;
-  }
-
-  bool _canEmitRecognizerResult(
-    _RecognitionSource source,
-    bool requestedEmit,
-    int modeEpoch,
-  ) {
-    if (!requestedEmit || modeEpoch != _recognitionModeEpoch) {
-      print(
-        '[SpeechRecognitionService] suppress recognizer result '
-        'source=${source.label} requestedEmit=$requestedEmit '
-        'resultEpoch=$modeEpoch currentEpoch=$_recognitionModeEpoch',
-      );
-      return false;
-    }
-    final bool usesFreeText = _recognitionGrammar == null;
-    final bool canEmit = switch (source) {
-      _RecognitionSource.freeText => usesFreeText,
-      _RecognitionSource.grammar => !usesFreeText &&
-          _grammarRecognizer != null &&
-          listEquals(_grammarRecognizerGrammar, _recognitionGrammar),
-    };
-    if (!canEmit) {
-      print(
-        '[SpeechRecognitionService] suppress recognizer result '
-        'source=${source.label} activeMode=${usesFreeText ? 'freeText' : 'grammar'} '
-        'grammarRecognizer=${_grammarRecognizer != null}',
-      );
-    }
-    return canEmit;
-  }
-
-  void _logActiveRecognizer({
-    required _RecognitionSource source,
-    required int modeEpoch,
-    required int queueDelayMs,
-    bool fallback = false,
-  }) {
-    if (_processedChunks != 1 && _processedChunks % 200 != 0 && !fallback) {
-      return;
-    }
-    print(
-      '[SpeechRecognitionService] active recognizer chunk#$_processedChunks '
-      'source=${source.label} mode=${_recognitionGrammar == null ? 'freeText' : 'grammar'} '
-      'epoch=$modeEpoch currentEpoch=$_recognitionModeEpoch '
-      'queueDelayMs=$queueDelayMs fallback=$fallback',
-    );
-  }
-
   Future<void> _resetRecognizers() async {
-    await Future.wait<void>([
+    await Future.wait<void>(<Future<void>>[
+      if (_commandRecognizer != null) _commandRecognizer!.reset(),
       if (_freeTextRecognizer != null) _freeTextRecognizer!.reset(),
-      if (_grammarRecognizer != null) _grammarRecognizer!.reset(),
     ]);
   }
 
-  void _publishRecognitionMode(List<String>? grammar) {
-    final bool previousUsesFreeText = _recognitionGrammar == null;
-    _recognitionGrammar = grammar;
-    _recognitionModeEpoch++;
-    print(
-      '[SpeechRecognitionService] recognition mode '
-      '${previousUsesFreeText ? 'freeText' : 'grammar'} -> '
-      '${grammar == null ? 'freeText' : 'grammar'} '
-      'size=${grammar?.length ?? 0} epoch=$_recognitionModeEpoch',
-    );
+  Future<void> dispose() async {
+    _isListening = false;
+    _isSessionActive = false;
+    await Future.wait<void>(<Future<void>>[
+      _commandAudioProcessing.catchError(
+        (Object error, StackTrace stackTrace) {},
+      ),
+      _freeTextAudioProcessing.catchError(
+        (Object error, StackTrace stackTrace) {},
+      ),
+    ]);
+    await _audioStream.dispose();
+    await _commandRecognizer?.dispose();
+    await _freeTextRecognizer?.dispose();
+    _commandRecognizer = null;
+    _freeTextRecognizer = null;
+    _model?.dispose();
+    _model = null;
+    await _commandResultsController.close();
+    await _commandPartialResultsController.close();
+    await _freeTextResultsController.close();
+    await _freeTextPartialResultsController.close();
   }
 
-  void _resetPerformanceMetrics() {
-    _audioQueueTotalDelayMs = 0;
-    _audioQueueMaxDelayMs = 0;
-    _slowAudioQueueChunks = 0;
-    _recognizerChunks = 0;
-    _recognizerTotalLatencyMs = 0;
-    _recognizerMaxLatencyMs = 0;
-    _slowRecognizerChunks = 0;
+  _RecognitionMetrics _metrics(_RecognitionSource source) {
+    return switch (source) {
+      _RecognitionSource.command => _commandMetrics,
+      _RecognitionSource.freeText => _freeTextMetrics,
+    };
   }
 
   String _partialText(_RecognitionSource source) {
     return switch (source) {
-      _RecognitionSource.freeText => _freePartialText,
-      _RecognitionSource.grammar => _grammarPartialText,
+      _RecognitionSource.command => _commandPartialText,
+      _RecognitionSource.freeText => _freeTextPartialText,
     };
   }
 
   void _setPartialText(_RecognitionSource source, String value) {
     switch (source) {
+      case _RecognitionSource.command:
+        _commandPartialText = value;
       case _RecognitionSource.freeText:
-        _freePartialText = value;
-      case _RecognitionSource.grammar:
-        _grammarPartialText = value;
+        _freeTextPartialText = value;
     }
   }
 
@@ -705,37 +585,76 @@ class SpeechRecognitionService {
     final dynamic decoded;
     try {
       decoded = jsonDecode(json);
-    } catch (error) {
+    } catch (_) {
       throw FormatException('Vosk вернул невалидный JSON: $json');
     }
-    // print('[GOT TEXT TO EXTRACT]: $decoded');
     if (decoded is! Map<dynamic, dynamic>) {
       throw const FormatException('Vosk вернул неожиданный формат результата.');
     }
-
-    for (final key in preferredKeys) {
-      final value = decoded[key];
-      if (value is String && value.trim().isNotEmpty) {
-        return value.trim();
-      }
+    for (final String key in preferredKeys) {
+      final dynamic value = decoded[key];
+      if (value is String && value.trim().isNotEmpty) return value.trim();
     }
-
-    for (final key in const ['text', 'partial']) {
-      final value = decoded[key];
-      if (value is String && value.trim().isNotEmpty) {
-        return value.trim();
-      }
+    for (final String key in const <String>['text', 'partial']) {
+      final dynamic value = decoded[key];
+      if (value is String && value.trim().isNotEmpty) return value.trim();
     }
-
     return '';
   }
 }
 
 enum _RecognitionSource {
-  freeText('freeText'),
-  grammar('grammar');
+  command('command'),
+  freeText('freeText');
 
   const _RecognitionSource(this.label);
 
   final String label;
+}
+
+class _RecognitionMetrics {
+  int processedChunks = 0;
+  int queueTotalMs = 0;
+  int queueMaxMs = 0;
+  int slowQueueChunks = 0;
+  int recognizerChunks = 0;
+  int recognizerTotalMs = 0;
+  int recognizerMaxMs = 0;
+  int slowRecognizerChunks = 0;
+
+  void recordQueueDelay(int value, int slowThreshold) {
+    queueTotalMs += value;
+    if (value > queueMaxMs) queueMaxMs = value;
+    if (value > slowThreshold) slowQueueChunks++;
+  }
+
+  void recordRecognizerLatency(int value, int slowThreshold) {
+    recognizerChunks++;
+    recognizerTotalMs += value;
+    if (value > recognizerMaxMs) recognizerMaxMs = value;
+    if (value > slowThreshold) slowRecognizerChunks++;
+  }
+
+  String describe() {
+    final int queueAverage =
+        processedChunks == 0 ? 0 : queueTotalMs ~/ processedChunks;
+    final int recognizerAverage =
+        recognizerChunks == 0 ? 0 : recognizerTotalMs ~/ recognizerChunks;
+    return '{processedChunks=$processedChunks, queueAvgMs=$queueAverage, '
+        'queueMaxMs=$queueMaxMs, slowQueueChunks=$slowQueueChunks, '
+        'recognizerAvgMs=$recognizerAverage, '
+        'recognizerMaxMs=$recognizerMaxMs, '
+        'slowRecognizerChunks=$slowRecognizerChunks}';
+  }
+
+  void reset() {
+    processedChunks = 0;
+    queueTotalMs = 0;
+    queueMaxMs = 0;
+    slowQueueChunks = 0;
+    recognizerChunks = 0;
+    recognizerTotalMs = 0;
+    recognizerMaxMs = 0;
+    slowRecognizerChunks = 0;
+  }
 }

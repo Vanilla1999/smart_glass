@@ -1,15 +1,16 @@
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
-import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
 
 class WearVoiceSession {
   WearVoiceSession._();
 
   static final WearVoiceSession I = WearVoiceSession._();
-
   bool _shouldListen = false;
+  bool _captureSilenced = false;
   int _listeningGeneration = 0;
   Future<void> _operation = Future<void>.value();
+  final VoiceCaptureRecoveryGate _zeroAudioRecovery =
+      VoiceCaptureRecoveryGate();
 
   bool get isListening =>
       WearDependencies.I.speechRecognitionService.isListening;
@@ -18,15 +19,18 @@ class WearVoiceSession {
     return WearDependencies.I.speechRecognitionService.diagnostics();
   }
 
+  void setCaptureSilenced(bool silenced) {
+    _captureSilenced = silenced;
+  }
+
   Future<void> configureForScreen(WearScreenId screen) async {
     final bool freeText = _usesFreeTextRecognition(screen);
     print(
       '[WearVoiceSession] configureForScreen screen=$screen '
       'mode=${freeText ? 'freeText' : 'grammar'}',
     );
-    await WearDependencies.I.speechRecognitionService.setRecognitionGrammar(
-      freeText ? null : VoiceCommandParserService.grammarPhrases,
-    );
+    await WearDependencies.I.speechRecognitionService
+        .setFreeTextEnabled(freeText);
   }
 
   Future<void> start() async {
@@ -40,6 +44,7 @@ class WearVoiceSession {
         return;
       }
       try {
+        _zeroAudioRecovery.reset();
         await WearDependencies.I.ensureVoiceTypingPrepared();
         if (!_isCurrentListeningRequest(generation)) return;
         await WearDependencies.I.speechRecognitionService.startListening();
@@ -57,6 +62,8 @@ class WearVoiceSession {
 
   Future<void> stop() async {
     _shouldListen = false;
+    _captureSilenced = false;
+    _zeroAudioRecovery.reset();
     _listeningGeneration++;
     return _enqueue(() async {
       print('[WearVoiceSession] stop requested, isListening=$isListening');
@@ -113,13 +120,24 @@ class WearVoiceSession {
     final int? lastNonSilentAudioAt = service.lastNonSilentAudioChunkAtMillis;
     final int? lastNonSilentAudioAgeMs =
         lastNonSilentAudioAt == null ? null : now - lastNonSilentAudioAt;
+    final int? zeroAudioStartedAt = service.continuousZeroAudioStartedAtMillis;
+    final int? continuousZeroAudioAgeMs =
+        zeroAudioStartedAt == null ? null : now - zeroAudioStartedAt;
     print(
       '[WearVoiceSession] health-check reason=$reason '
       'isListening=${service.isListening} lastAudioAgeMs=$lastAudioAgeMs '
       'lastNonSilentAudioAgeMs=$lastNonSilentAudioAgeMs '
+      'continuousZeroAudioAgeMs=$continuousZeroAudioAgeMs '
       'diagnostics=${await diagnostics()}',
     );
     if (!_isCurrentListeningRequest(generation)) return;
+
+    if (_captureSilenced) {
+      print(
+        '[WearVoiceSession] health-check deferred: Android is silencing capture',
+      );
+      return;
+    }
 
     if (!service.isListening) {
       await start();
@@ -128,6 +146,19 @@ class WearVoiceSession {
 
     if (lastAudioAgeMs == null || lastAudioAgeMs > 3000) {
       await restart(reason: '$reason staleAudioAgeMs=$lastAudioAgeMs');
+      return;
+    }
+
+    final bool hasCurrentNonSilentAudio =
+        lastAudioAt != null && lastNonSilentAudioAt == lastAudioAt;
+    if (_zeroAudioRecovery.shouldRestart(
+      continuousZeroAudioAgeMs: continuousZeroAudioAgeMs,
+      captureSilenced: _captureSilenced,
+      hasCurrentNonSilentAudio: hasCurrentNonSilentAudio,
+    )) {
+      await restart(
+        reason: '$reason continuousZeroAudioAgeMs=$continuousZeroAudioAgeMs',
+      );
     }
   }
 
@@ -142,5 +173,34 @@ class WearVoiceSession {
         true,
       _ => false,
     };
+  }
+}
+
+class VoiceCaptureRecoveryGate {
+  static const int zeroAudioThresholdMs = 5000;
+
+  bool _armed = true;
+
+  bool shouldRestart({
+    required int? continuousZeroAudioAgeMs,
+    required bool captureSilenced,
+    required bool hasCurrentNonSilentAudio,
+  }) {
+    if (hasCurrentNonSilentAudio) {
+      _armed = true;
+      return false;
+    }
+    if (captureSilenced ||
+        continuousZeroAudioAgeMs == null ||
+        continuousZeroAudioAgeMs < zeroAudioThresholdMs ||
+        !_armed) {
+      return false;
+    }
+    _armed = false;
+    return true;
+  }
+
+  void reset() {
+    _armed = true;
   }
 }

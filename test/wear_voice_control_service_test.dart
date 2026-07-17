@@ -55,122 +55,123 @@ void main() {
       service.commandStream.listen(emitted.add);
 
       now = 1000;
-      speech.emitResult('вверх');
+      speech.emitCommandResult('вверх');
       await Future<void>.delayed(Duration.zero);
 
       expect(emitted, <WearVoiceCommand>[WearVoiceCommand.up]);
     });
 
-    test('unsafe partial command waits for final result', () async {
+    test('fixed command emits immediately from grammar partial', () async {
       final WearVoiceControlService service = createService();
       final List<WearVoiceCommand> emitted = <WearVoiceCommand>[];
       service.commandStream.listen(emitted.add);
 
       now = 1000;
-      speech.emitPartial('назад');
+      speech.emitCommandPartial('да');
       await Future<void>.delayed(Duration.zero);
 
-      expect(emitted, isEmpty);
+      expect(emitted, <WearVoiceCommand>[WearVoiceCommand.yes]);
 
       now = 1100;
-      speech.emitResult('назад страница');
+      speech.emitCommandResult('да');
       await Future<void>.delayed(Duration.zero);
 
-      expect(emitted, <WearVoiceCommand>[WearVoiceCommand.previousPage]);
+      expect(emitted, <WearVoiceCommand>[WearVoiceCommand.yes]);
     });
 
-    test('overlapping print partial does not run before final command',
+    test('print command emits from partial and matching final is suppressed',
         () async {
       final WearVoiceControlService service = createService();
       final List<WearVoiceCommand> emitted = <WearVoiceCommand>[];
       service.commandStream.listen(emitted.add);
 
       now = 1000;
-      speech.emitPartial('печать');
+      speech.emitCommandPartial('печать');
       await Future<void>.delayed(Duration.zero);
-      expect(emitted, isEmpty);
+      expect(emitted, <WearVoiceCommand>[WearVoiceCommand.print]);
 
       now = 1100;
-      speech.emitResult('печать ценника');
+      speech.emitCommandResult('печать');
       await Future<void>.delayed(Duration.zero);
 
-      expect(emitted, <WearVoiceCommand>[WearVoiceCommand.openPrintPriceTag]);
+      expect(emitted, <WearVoiceCommand>[WearVoiceCommand.print]);
     });
 
-    test('partial command never executes before final result', () async {
+    test('free-text command never executes', () async {
       final WearVoiceControlService service = createService();
       final List<WearVoiceCommand> emitted = <WearVoiceCommand>[];
       service.commandStream.listen(emitted.add);
 
       now = 1000;
-      speech.emitPartial('вверх');
+      speech.emitFreeTextPartial('вверх');
       await Future<void>.delayed(Duration.zero);
       expect(emitted, isEmpty);
 
       now = 1100;
-      speech.emitResult('вверх');
+      speech.emitFreeTextResult('вверх');
       await Future<void>.delayed(Duration.zero);
 
-      expect(emitted, <WearVoiceCommand>[WearVoiceCommand.up]);
+      expect(emitted, isEmpty);
     });
 
     test(
         'grammar partial command emits immediately and matching final is suppressed',
         () async {
-      speech.usesFreeText = false;
       final WearVoiceControlService service = createService();
       final List<WearVoiceCommand> emitted = <WearVoiceCommand>[];
       service.commandStream.listen(emitted.add);
 
       now = 1000;
-      speech.emitPartial('вверх');
+      speech.emitCommandPartial('вверх');
       await Future<void>.delayed(Duration.zero);
 
       expect(emitted, <WearVoiceCommand>[WearVoiceCommand.up]);
 
       now = 1600;
-      speech.emitResult('вверх');
+      speech.emitCommandResult('вверх');
       await Future<void>.delayed(Duration.zero);
 
       expect(emitted, <WearVoiceCommand>[WearVoiceCommand.up]);
     });
 
-    test('grammar corrected final is emitted after a different partial',
+    test('grammar corrected final is suppressed after emitted partial',
         () async {
-      speech.usesFreeText = false;
       final WearVoiceControlService service = createService();
       final List<WearVoiceCommand> emitted = <WearVoiceCommand>[];
       service.commandStream.listen(emitted.add);
 
       now = 1000;
-      speech.emitPartial('да');
+      speech.emitCommandPartial('да');
       await Future<void>.delayed(Duration.zero);
 
       now = 1400;
-      speech.emitResult('далее');
+      speech.emitCommandResult('далее');
       await Future<void>.delayed(Duration.zero);
 
       expect(
         emitted,
-        <WearVoiceCommand>[WearVoiceCommand.yes, WearVoiceCommand.nextPage],
+        <WearVoiceCommand>[WearVoiceCommand.yes],
       );
     });
 
-    test('corrected final is the only command that executes', () async {
+    test('corrected final does not execute a second command', () async {
       final WearVoiceControlService service = createService();
       final List<WearVoiceCommand> emitted = <WearVoiceCommand>[];
       service.commandStream.listen(emitted.add);
 
       now = 1000;
-      speech.emitPartial('да');
+      speech.emitCommandPartial('да');
       await Future<void>.delayed(Duration.zero);
-      expect(emitted, isEmpty);
+      expect(emitted, <WearVoiceCommand>[WearVoiceCommand.yes]);
 
       now = 1400;
-      speech.emitResult('далее');
+      speech.emitCommandResult('далее');
       await Future<void>.delayed(Duration.zero);
 
-      expect(emitted, <WearVoiceCommand>[WearVoiceCommand.nextPage]);
+      expect(
+        emitted,
+        <WearVoiceCommand>[WearVoiceCommand.yes],
+      );
     });
 
     test('free-text phrase containing command token stays a phrase', () async {
@@ -181,7 +182,7 @@ void main() {
       service.phraseStream.listen(phrases.add);
 
       now = 1000;
-      speech.emitResult('сбер продукт');
+      speech.emitFreeTextResult('сбер продукт');
       await Future<void>.delayed(Duration.zero);
 
       expect(commands, isEmpty);
@@ -194,7 +195,7 @@ void main() {
       service.commandStream.listen(emitted.add);
 
       now = 1000;
-      speech.emitResult('выбрать');
+      speech.emitCommandResult('выбрать');
       await Future<void>.delayed(Duration.zero);
 
       expect(emitted, <WearVoiceCommand>[WearVoiceCommand.select]);
@@ -206,7 +207,7 @@ void main() {
       service.phraseStream.listen(emitted.add);
 
       now = 1000;
-      speech.emitResult('чудо творожок');
+      speech.emitFreeTextResult('чудо творожок');
       await Future<void>.delayed(Duration.zero);
 
       expect(emitted, <String>['чудо творожок']);
@@ -220,7 +221,7 @@ void main() {
       service.partialPhraseStream.listen(partialPhrases.add);
 
       now = 1000;
-      speech.emitPartial('безалкогольное');
+      speech.emitFreeTextPartial('безалкогольное');
       await Future<void>.delayed(Duration.zero);
 
       expect(phrases, isEmpty);
@@ -233,7 +234,7 @@ void main() {
       service.partialPhraseStream.listen(partialPhrases.add);
 
       now = 1000;
-      speech.emitPartial('чудо');
+      speech.emitFreeTextPartial('чудо');
       await Future<void>.delayed(Duration.zero);
 
       expect(partialPhrases, isEmpty);
@@ -245,18 +246,36 @@ void main() {
       service.partialPhraseStream.listen(partialPhrases.add);
 
       now = 1000;
-      speech.emitPartial('безалкогольное');
+      speech.emitFreeTextPartial('безалкогольное');
       await Future<void>.delayed(Duration.zero);
 
       now = 1100;
-      speech.emitPartial('безалкогольное');
+      speech.emitFreeTextPartial('безалкогольное');
       await Future<void>.delayed(Duration.zero);
 
       now = 1400;
-      speech.emitPartial('безалкогольное');
+      speech.emitFreeTextPartial('безалкогольное');
       await Future<void>.delayed(Duration.zero);
 
       expect(partialPhrases, <String>['безалкогольное', 'безалкогольное']);
+    });
+
+    test('dual recognition emits a command only once', () async {
+      final WearVoiceControlService service = createService();
+      final List<WearVoiceCommand> commands = <WearVoiceCommand>[];
+      service.commandStream.listen(commands.add);
+
+      now = 1000;
+      speech.emitCommandPartial('вниз');
+      speech.emitFreeTextPartial('вниз');
+      await Future<void>.delayed(Duration.zero);
+
+      now = 1500;
+      speech.emitCommandResult('вниз');
+      speech.emitFreeTextResult('вниз');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(commands, <WearVoiceCommand>[WearVoiceCommand.down]);
     });
   });
 }
@@ -279,6 +298,9 @@ class _FakeAudioStreamService implements AudioStreamService {
 
   @override
   int? get lastNonSilentChunkAtMillis => null;
+
+  @override
+  int? get continuousZeroAudioStartedAtMillis => null;
 
   @override
   void addDataCallback(void Function(Uint8List) callback) {}
@@ -309,12 +331,16 @@ class _FakeAudioStreamService implements AudioStreamService {
 }
 
 class _FakeSpeechRecognitionService implements SpeechRecognitionService {
-  final StreamController<String> _resultsController =
+  final StreamController<String> _commandResultsController =
       StreamController<String>.broadcast();
-  final StreamController<String> _partialController =
+  final StreamController<String> _commandPartialController =
+      StreamController<String>.broadcast();
+  final StreamController<String> _freeTextResultsController =
+      StreamController<String>.broadcast();
+  final StreamController<String> _freeTextPartialController =
       StreamController<String>.broadcast();
   bool listening = false;
-  bool usesFreeText = true;
+  bool freeTextEnabled = true;
   int startListeningCalls = 0;
   int stopListeningCalls = 0;
   int startSessionCalls = 0;
@@ -323,10 +349,18 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   Never get audioStreamService => throw UnsupportedError('Not used in test');
 
   @override
-  Stream<String> get resultsStream => _resultsController.stream;
+  Stream<String> get commandResultsStream => _commandResultsController.stream;
 
   @override
-  Stream<String> get partialResultsStream => _partialController.stream;
+  Stream<String> get commandPartialResultsStream =>
+      _commandPartialController.stream;
+
+  @override
+  Stream<String> get freeTextResultsStream => _freeTextResultsController.stream;
+
+  @override
+  Stream<String> get freeTextPartialResultsStream =>
+      _freeTextPartialController.stream;
 
   @override
   bool get isPrepared => true;
@@ -338,7 +372,7 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   bool get isListening => listening;
 
   @override
-  bool get usesFreeTextRecognition => usesFreeText;
+  bool get usesFreeTextRecognition => freeTextEnabled;
 
   @override
   int? get lastAudioChunkAtMillis => null;
@@ -346,12 +380,23 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   @override
   int? get lastNonSilentAudioChunkAtMillis => null;
 
-  void emitResult(String text) {
-    _resultsController.add(text);
+  @override
+  int? get continuousZeroAudioStartedAtMillis => null;
+
+  void emitCommandResult(String text) {
+    _commandResultsController.add(text);
   }
 
-  void emitPartial(String text) {
-    _partialController.add(text);
+  void emitCommandPartial(String text) {
+    _commandPartialController.add(text);
+  }
+
+  void emitFreeTextResult(String text) {
+    _freeTextResultsController.add(text);
+  }
+
+  void emitFreeTextPartial(String text) {
+    _freeTextPartialController.add(text);
   }
 
   @override
@@ -384,7 +429,9 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   Future<void> restartListening({required String reason}) async {}
 
   @override
-  Future<void> setRecognitionGrammar(List<String>? grammar) async {}
+  Future<void> setFreeTextEnabled(bool enabled) async {
+    freeTextEnabled = enabled;
+  }
 
   @override
   Future<String> diagnostics() async => 'fake';
@@ -394,7 +441,9 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
 
   @override
   Future<void> dispose() async {
-    await _resultsController.close();
-    await _partialController.close();
+    await _commandResultsController.close();
+    await _commandPartialController.close();
+    await _freeTextResultsController.close();
+    await _freeTextPartialController.close();
   }
 }

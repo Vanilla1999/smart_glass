@@ -33,6 +33,7 @@ void main() {
         'готово': WearVoiceCommand.finish,
         'фонарик': WearVoiceCommand.flashlight,
         'люмус максима': WearVoiceCommand.flashlight,
+        'максима': WearVoiceCommand.flashlight,
         'подтвердить': WearVoiceCommand.select,
         'принять': WearVoiceCommand.select,
         'печать ценника': WearVoiceCommand.openPrintPriceTag,
@@ -106,6 +107,7 @@ void main() {
           contains('включить фонарик'));
       expect(
           VoiceCommandParserService.grammarPhrases, contains('люмус максима'));
+      expect(VoiceCommandParserService.grammarPhrases, contains('максима'));
       expect(VoiceCommandParserService.grammarPhrases,
           contains('следующая страница'));
       expect(VoiceCommandParserService.grammarPhrases,

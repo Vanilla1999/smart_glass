@@ -7,13 +7,41 @@ import 'package:smart_glasses/features/glasses/presentation/widgets/wear/wear_gl
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 
-class WearGlassesScreen extends StatelessWidget {
+class WearGlassesScreen extends StatefulWidget {
   const WearGlassesScreen({super.key});
+
+  @override
+  State<WearGlassesScreen> createState() => _WearGlassesScreenState();
+}
+
+class _WearGlassesScreenState extends State<WearGlassesScreen> {
+  int _scheduledUpdateId = -1;
+
+  void _logMenuFrame(WearGlassesState state) {
+    if (state.screenType != WearGlassesScreenType.menu ||
+        state.updateId == _scheduledUpdateId) {
+      return;
+    }
+    _scheduledUpdateId = state.updateId;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final int renderedAtMillis = DateTime.now().millisecondsSinceEpoch;
+      // ignore: avoid_print
+      print(
+        '[WearGlassesScreen] menu frame rendered update#${state.updateId} '
+        'selectedIndex=${state.selectedIndex} '
+        'payloadReceivedAt=${state.payloadReceivedAtMillis} '
+        'receiveToFrameMs='
+        '${renderedAtMillis - state.payloadReceivedAtMillis} '
+        'at=$renderedAtMillis',
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<WearGlassesCubit, WearGlassesState>(
       builder: (BuildContext context, WearGlassesState state) {
+        _logMenuFrame(state);
         return WearGlassesScaffold(
           child: Stack(
             children: <Widget>[

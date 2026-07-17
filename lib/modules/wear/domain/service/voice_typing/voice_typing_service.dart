@@ -31,7 +31,8 @@ class VoiceTypingService {
         _speechRecognitionService = speechRecognitionService,
         _numberParserService = numberParserService,
         _ownsSpeechRecognitionService = ownsSpeechRecognitionService {
-    _recognitionSubscription = _speechRecognitionService.resultsStream.listen(
+    _recognitionSubscription =
+        _speechRecognitionService.freeTextResultsStream.listen(
       _onRecognitionResult,
       onError: _onRecognitionError,
     );

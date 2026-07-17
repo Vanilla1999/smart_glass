@@ -3,7 +3,10 @@ package ru.tander.smart_glasses
 import android.app.Presentation
 import android.content.Context
 import android.hardware.display.DisplayManager
+import android.media.AudioManager
+import android.media.MediaRecorder
 import android.os.Bundle
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -32,6 +35,7 @@ class MainActivity : FlutterFragmentActivity() {
     private var engineGroup: FlutterEngineGroup? = null
     private var glassesEngine: FlutterEngine? = null
     private var glassesChannel: MethodChannel? = null
+    private var appChannel: MethodChannel? = null
     private var glassesPresentation: GlassesPresentation? = null
     private var displayManager: DisplayManager? = null
     private var currentCounter = 0
@@ -41,6 +45,9 @@ class MainActivity : FlutterFragmentActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val pendingWearResults = mutableSetOf<BoundedResult>()
     private var pendingWearShowResult: BoundedResult? = null
+    private var audioManager: AudioManager? = null
+    private var audioRecordingCallback: AudioManager.AudioRecordingCallback? = null
+    private var lastAudioCaptureSilenced: Boolean? = null
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -65,8 +72,8 @@ class MainActivity : FlutterFragmentActivity() {
             Log.d("SmartWear", "Secondary engine pre-warmed")
         }
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app_channel")
-            .setMethodCallHandler { call, result ->
+        appChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app_channel")
+        appChannel?.setMethodCallHandler { call, result ->
                 when (call.method) {
                     "showGlassesInitialization" -> {
                         Log.d("SmartWear", "showGlassesInitialization called")
@@ -122,6 +129,46 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+        registerAudioRecordingMonitor()
+    }
+
+    private fun registerAudioRecordingMonitor() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            Log.d("VoiceCapture", "silence monitoring unavailable below Android 10")
+            return
+        }
+        val manager = getSystemService(AudioManager::class.java)
+        val callback = object : AudioManager.AudioRecordingCallback() {
+            override fun onRecordingConfigChanged(configs: List<android.media.AudioRecordingConfiguration>) {
+                val ownRecordings = configs.filter {
+                    it.clientAudioSource == MediaRecorder.AudioSource.VOICE_RECOGNITION
+                }
+                if (ownRecordings.isEmpty()) {
+                    Log.d("VoiceCapture", "VOICE_RECOGNITION recording config removed")
+                    if (lastAudioCaptureSilenced == true) {
+                        appChannel?.invokeMethod("audioCaptureSilencedChanged", false)
+                    }
+                    lastAudioCaptureSilenced = null
+                    return
+                }
+
+                val silenced = ownRecordings.any { it.isClientSilenced }
+                Log.d(
+                    "VoiceCapture",
+                    "recording configs=" + ownRecordings.joinToString { config ->
+                        "session=${config.clientAudioSessionId}, " +
+                            "source=${config.clientAudioSource}, " +
+                            "silenced=${config.isClientSilenced}"
+                    },
+                )
+                if (silenced == lastAudioCaptureSilenced) return
+                lastAudioCaptureSilenced = silenced
+                appChannel?.invokeMethod("audioCaptureSilencedChanged", silenced)
+            }
+        }
+        audioManager = manager
+        audioRecordingCallback = callback
+        manager.registerAudioRecordingCallback(callback, mainHandler)
     }
 
     private fun copyPhotoToAppStorage(uri: String, result: MethodChannel.Result) {
@@ -382,6 +429,14 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onDestroy() {
         invalidatePendingWearShow()
         supersedePendingWearResults()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            audioRecordingCallback?.let { callback ->
+                audioManager?.unregisterAudioRecordingCallback(callback)
+            }
+        }
+        audioRecordingCallback = null
+        audioManager = null
+        appChannel = null
         super.onDestroy()
         glassesPresentation?.dismiss()
         glassesEngine?.destroy()

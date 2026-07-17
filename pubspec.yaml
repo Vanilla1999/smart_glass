@@ -2,7 +2,7 @@ name: smart_glasses
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: ^3.6.0
@@ -19,7 +19,7 @@ dependencies:
   multi_scanner:
     git:
       url: https://coderepo.corp.tander.ru/rmr_team/libraries/multiscanner.git
-      ref: 3.17.0-service
+      ref: 3.17.2-service
 
   flutter_riverpod: ^2.6.1
   flutter_svg:
