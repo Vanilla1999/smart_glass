@@ -6,28 +6,28 @@ void main() {
     final VoiceCaptureRecoveryGate gate = VoiceCaptureRecoveryGate();
 
     expect(
-      gate.shouldRestart(
+      gate.nextAction(
         continuousZeroAudioAgeMs: 4999,
         captureSilenced: false,
         hasCurrentNonSilentAudio: false,
       ),
-      isFalse,
+      VoiceCaptureRecoveryAction.none,
     );
     expect(
-      gate.shouldRestart(
+      gate.nextAction(
         continuousZeroAudioAgeMs: 5000,
         captureSilenced: true,
         hasCurrentNonSilentAudio: false,
       ),
-      isFalse,
+      VoiceCaptureRecoveryAction.none,
     );
     expect(
-      gate.shouldRestart(
+      gate.nextAction(
         continuousZeroAudioAgeMs: 5000,
         captureSilenced: false,
         hasCurrentNonSilentAudio: false,
       ),
-      isTrue,
+      VoiceCaptureRecoveryAction.restart,
     );
   });
 
@@ -35,36 +35,36 @@ void main() {
     final VoiceCaptureRecoveryGate gate = VoiceCaptureRecoveryGate();
 
     expect(
-      gate.shouldRestart(
+      gate.nextAction(
         continuousZeroAudioAgeMs: 5000,
         captureSilenced: false,
         hasCurrentNonSilentAudio: false,
       ),
-      isTrue,
+      VoiceCaptureRecoveryAction.restart,
     );
     expect(
-      gate.shouldRestart(
+      gate.nextAction(
         continuousZeroAudioAgeMs: 10000,
         captureSilenced: false,
         hasCurrentNonSilentAudio: false,
       ),
-      isFalse,
+      VoiceCaptureRecoveryAction.none,
     );
     expect(
-      gate.shouldRestart(
+      gate.nextAction(
         continuousZeroAudioAgeMs: null,
         captureSilenced: false,
         hasCurrentNonSilentAudio: true,
       ),
-      isFalse,
+      VoiceCaptureRecoveryAction.none,
     );
     expect(
-      gate.shouldRestart(
+      gate.nextAction(
         continuousZeroAudioAgeMs: 5000,
         captureSilenced: false,
         hasCurrentNonSilentAudio: false,
       ),
-      isTrue,
+      VoiceCaptureRecoveryAction.restart,
     );
   });
 
