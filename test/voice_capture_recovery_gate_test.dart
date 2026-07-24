@@ -68,44 +68,39 @@ void main() {
     );
   });
 
-  test('startup waits for audio captured after the recorder starts', () {
+  test('startup becomes ready after technical PCM readiness without speech',
+      () {
     final VoiceCaptureStartupGate gate = VoiceCaptureStartupGate();
 
     expect(
       gate.isReady(
         captureStartedAtMillis: 1000,
-        lastNonSilentAudioAtMillis: 999,
-        nowMillis: 8000,
+        chunksReceived: 2,
+        lastAudioAtMillis: 1001,
+        nowMillis: 1001,
       ),
       isFalse,
     );
     expect(
       gate.isReady(
         captureStartedAtMillis: 1000,
-        lastNonSilentAudioAtMillis: 1001,
-        nowMillis: 7999,
-      ),
-      isFalse,
-    );
-    expect(
-      gate.isReady(
-        captureStartedAtMillis: 1000,
-        lastNonSilentAudioAtMillis: 1001,
-        nowMillis: 8000,
+        chunksReceived: 3,
+        lastAudioAtMillis: 1001,
+        nowMillis: 1001,
       ),
       isTrue,
     );
     expect(
       gate.isTimedOut(
         captureStartedAtMillis: 1000,
-        nowMillis: 10999,
+        nowMillis: 2999,
       ),
       isFalse,
     );
     expect(
       gate.isTimedOut(
         captureStartedAtMillis: 1000,
-        nowMillis: 11000,
+        nowMillis: 3000,
       ),
       isTrue,
     );

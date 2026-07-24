@@ -1,18 +1,52 @@
 import 'dart:async';
 
+import 'package:smart_glasses/core/services/method_channel_service.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
+import 'package:smart_glasses/modules/wear/services/voice_state.dart';
 
 class WearVoiceSession {
-  WearVoiceSession._();
+  WearVoiceSession({
+    SpeechRecognitionService? speechRecognitionService,
+    Future<void> Function()? ensurePrepared,
+    Future<void> Function({
+      required bool active,
+      required String source,
+      required int captureId,
+    })? updateNativeCaptureMonitor,
+    int Function()? nowMillis,
+    Future<void> Function(Duration duration)? delay,
+    Timer Function(Duration duration, void Function() callback)? scheduleRetry,
+  })  : _speechRecognitionService = speechRecognitionService,
+        _ensurePrepared = ensurePrepared,
+        _updateNativeCaptureMonitorOverride = updateNativeCaptureMonitor,
+        _nowMillis = nowMillis ?? (() => DateTime.now().millisecondsSinceEpoch),
+        _delay = delay ?? Future<void>.delayed,
+        _scheduleRetry = scheduleRetry ?? Timer.new;
 
-  static final WearVoiceSession I = WearVoiceSession._();
+  static final WearVoiceSession I = WearVoiceSession();
+  final SpeechRecognitionService? _speechRecognitionService;
+  final Future<void> Function()? _ensurePrepared;
+  final Future<void> Function({
+    required bool active,
+    required String source,
+    required int captureId,
+  })? _updateNativeCaptureMonitorOverride;
+  final int Function() _nowMillis;
+  final Future<void> Function(Duration duration) _delay;
+  final Timer Function(Duration duration, void Function() callback)
+      _scheduleRetry;
   bool _shouldListen = false;
   bool _captureSilenced = false;
   int _listeningGeneration = 0;
   Future<void> _operation = Future<void>.value();
   Future<void> _startupOperation = Future<void>.value();
-  Future<void>? _restartOperation;
+  final VoiceSingleFlight _restartSingleFlight = VoiceSingleFlight();
+  Timer? _retryTimer;
+  VoiceState _state = const VoiceState.disabled();
+  final StreamController<VoiceState> _stateController =
+      StreamController<VoiceState>.broadcast();
   final StreamController<bool> _reconnectingController =
       StreamController<bool>.broadcast();
   final StreamController<String?> _reconnectErrorController =
@@ -21,18 +55,42 @@ class WearVoiceSession {
   final VoiceCaptureRecoveryGate _zeroAudioRecovery =
       VoiceCaptureRecoveryGate();
 
-  bool get isListening =>
-      WearDependencies.I.speechRecognitionService.isListening;
+  SpeechRecognitionService get _speech =>
+      _speechRecognitionService ?? WearDependencies.I.speechRecognitionService;
+  Future<void> _prepare() =>
+      _ensurePrepared?.call() ?? WearDependencies.I.ensureVoiceTypingPrepared();
+
+  bool get isListening => _speech.isListening;
+  VoiceState get state => _state;
+  Stream<VoiceState> get stateStream => _stateController.stream;
 
   Stream<bool> get reconnectingStream => _reconnectingController.stream;
   Stream<String?> get reconnectErrorStream => _reconnectErrorController.stream;
+  bool get forceHardRestartOnResume =>
+      _speech.deviceProfile.forceHardRestartOnResume;
+  bool get forceHardRestartAfterUnsilence =>
+      _speech.deviceProfile.forceHardRestartAfterUnsilence;
+  bool get forceHardRestartOnRouteChange =>
+      _speech.deviceProfile.forceHardRestartOnRouteChange;
 
   Future<String> diagnostics() {
-    return WearDependencies.I.speechRecognitionService.diagnostics();
+    return _speech.diagnostics();
   }
 
   void setCaptureSilenced(bool silenced) {
+    final bool wasSilenced = _captureSilenced;
     _captureSilenced = silenced;
+    if (silenced) {
+      _emit(VoicePhase.suspendedBySystem, reason: 'android_capture_silenced');
+      return;
+    }
+    if (wasSilenced && _shouldListen) {
+      if (forceHardRestartAfterUnsilence) {
+        unawaited(restart(reason: 'android_audio_capture_unsilenced'));
+      } else {
+        unawaited(ensureHealthy(reason: 'android_audio_capture_unsilenced'));
+      }
+    }
   }
 
   Future<void> configureForScreen(WearScreenId screen) async {
@@ -41,39 +99,58 @@ class WearVoiceSession {
       '[WearVoiceSession] configureForScreen screen=$screen '
       'mode=${freeText ? 'freeText' : 'grammar'}',
     );
-    await WearDependencies.I.speechRecognitionService
-        .setFreeTextEnabled(freeText);
+    await _speech.setFreeTextEnabled(freeText);
   }
 
   Future<void> start() async {
     _shouldListen = true;
+    _retryTimer?.cancel();
+    _retryTimer = null;
     final int generation = ++_listeningGeneration;
     final Future<void> startup = _enqueue(() async {
       print('[WearVoiceSession] start requested, isListening=$isListening');
       if (!_isCurrentListeningRequest(generation)) return;
       if (isListening) {
+        _emit(VoicePhase.ready,
+            reason: 'already_listening', resetAttempt: true);
         print('[WearVoiceSession] start skipped: ${await diagnostics()}');
         return;
       }
       try {
+        _emit(VoicePhase.preparing, reason: 'start');
         _zeroAudioRecovery.reset();
-        await WearDependencies.I.ensureVoiceTypingPrepared();
+        await _prepare();
         if (!_isCurrentListeningRequest(generation)) return;
-        final int captureStartedAtMillis =
-            DateTime.now().millisecondsSinceEpoch;
-        await WearDependencies.I.speechRecognitionService.startListening();
+        await _speech.startListening();
         if (!_isCurrentListeningRequest(generation)) {
-          await WearDependencies.I.speechRecognitionService.stopListening();
+          await _speech.stopListening();
+          await _updateNativeCaptureMonitor(active: false);
           return;
         }
-        await _waitForCaptureReady(
+        await _updateNativeCaptureMonitor(active: true);
+        final bool ready = await _waitForCaptureReady(
           generation: generation,
-          captureStartedAtMillis: captureStartedAtMillis,
+          captureStartedAtMillis: _captureStartedAtMillis(),
         );
+        if (!ready ||
+            !_isCurrentListeningRequest(generation) ||
+            _captureSilenced) {
+          return;
+        }
+        _emit(VoicePhase.ready, reason: 'start_ready', resetAttempt: true);
         print('[WearVoiceSession] started: ${await diagnostics()}');
       } catch (error, stackTrace) {
-        await WearDependencies.I.speechRecognitionService.stopListening();
+        try {
+          await _speech.stopListening();
+          await _updateNativeCaptureMonitor(active: false);
+        } catch (cleanupError, cleanupStackTrace) {
+          print(
+            '[WearVoiceSession] start cleanup failed: '
+            '$cleanupError\n$cleanupStackTrace',
+          );
+        }
         print('[WearVoiceSession] start failed: $error\n$stackTrace');
+        _markUnavailable(reason: 'start_failed', error: error);
         rethrow;
       }
     });
@@ -86,12 +163,16 @@ class WearVoiceSession {
   Future<void> stop() async {
     _shouldListen = false;
     _captureSilenced = false;
+    _retryTimer?.cancel();
+    _retryTimer = null;
     _zeroAudioRecovery.reset();
     _listeningGeneration++;
     return _enqueue(() async {
       print('[WearVoiceSession] stop requested, isListening=$isListening');
       try {
-        await WearDependencies.I.speechRecognitionService.stopListening();
+        await _speech.stopListening();
+        await _updateNativeCaptureMonitor(active: false);
+        _emit(VoicePhase.disabled, reason: 'stop', resetAttempt: true);
         print('[WearVoiceSession] stopped: ${await diagnostics()}');
       } catch (error, stackTrace) {
         print('[WearVoiceSession] stop failed: $error\n$stackTrace');
@@ -100,51 +181,65 @@ class WearVoiceSession {
   }
 
   Future<void> restart({required String reason}) async {
-    final Future<void>? pendingRestart = _restartOperation;
+    final Future<void>? pendingRestart = _restartSingleFlight.pending;
     if (pendingRestart != null) {
       print('[WearVoiceSession] restart joined reason=$reason');
       return pendingRestart;
     }
-    _shouldListen = true;
-    final int generation = ++_listeningGeneration;
-    _setReconnectError(null);
-    _setReconnecting(true);
-    late final Future<void> restartOperation;
-    try {
-      restartOperation = _enqueue(() async {
-        print('[WearVoiceSession] restart requested reason=$reason');
-        if (!_isCurrentListeningRequest(generation)) return;
-        try {
-          _zeroAudioRecovery.reset();
-          await WearDependencies.I.ensureVoiceTypingPrepared();
+    return _restartSingleFlight.run(() async {
+      _shouldListen = true;
+      _retryTimer?.cancel();
+      _retryTimer = null;
+      final int generation = ++_listeningGeneration;
+      _setReconnectError(null);
+      _setReconnecting(true);
+      _emit(VoicePhase.reconnecting, reason: reason);
+      try {
+        await _enqueue(() async {
+          print('[WearVoiceSession] restart requested reason=$reason');
           if (!_isCurrentListeningRequest(generation)) return;
-          final int captureStartedAtMillis =
-              DateTime.now().millisecondsSinceEpoch;
-          await WearDependencies.I.speechRecognitionService
-              .restartListening(reason: reason);
-          if (!_isCurrentListeningRequest(generation)) {
-            await WearDependencies.I.speechRecognitionService.stopListening();
-            return;
+          try {
+            _zeroAudioRecovery.reset();
+            await _prepare();
+            if (!_isCurrentListeningRequest(generation)) return;
+            await _speech.restartListening(reason: reason);
+            if (!_isCurrentListeningRequest(generation)) {
+              await _speech.stopListening();
+              await _updateNativeCaptureMonitor(active: false);
+              return;
+            }
+            await _updateNativeCaptureMonitor(active: true);
+            final bool ready = await _waitForCaptureReady(
+              generation: generation,
+              captureStartedAtMillis: _captureStartedAtMillis(),
+            );
+            if (!ready ||
+                !_isCurrentListeningRequest(generation) ||
+                _captureSilenced) {
+              return;
+            }
+            _emit(VoicePhase.ready, reason: reason, resetAttempt: true);
+            print('[WearVoiceSession] restarted: ${await diagnostics()}');
+          } catch (error, stackTrace) {
+            print('[WearVoiceSession] restart failed: $error\n$stackTrace');
+            _zeroAudioRecovery.reset();
+            try {
+              await _speech.stopListening();
+              await _updateNativeCaptureMonitor(active: false);
+              await _speech.audioStreamService.recreateRecorder();
+            } catch (cleanupError, cleanupStackTrace) {
+              print(
+                '[WearVoiceSession] restart cleanup failed: '
+                '$cleanupError\n$cleanupStackTrace',
+              );
+            }
+            _markUnavailable(reason: reason, error: error);
           }
-          await _waitForCaptureReady(
-            generation: generation,
-            captureStartedAtMillis: captureStartedAtMillis,
-          );
-          print('[WearVoiceSession] restarted: ${await diagnostics()}');
-        } catch (error, stackTrace) {
-          print('[WearVoiceSession] restart failed: $error\n$stackTrace');
-          _zeroAudioRecovery.reset();
-          _setReconnectError('Голосовое управление недоступно');
-        }
-      });
-      _restartOperation = restartOperation;
-      await restartOperation;
-    } finally {
-      if (identical(_restartOperation, restartOperation)) {
-        _restartOperation = null;
+        });
+      } finally {
+        _setReconnecting(false);
       }
-      _setReconnecting(false);
-    }
+    });
   }
 
   void _setReconnecting(bool reconnecting) {
@@ -170,39 +265,43 @@ class WearVoiceSession {
     return _shouldListen && generation == _listeningGeneration;
   }
 
-  Future<void> _waitForCaptureReady({
+  Future<bool> _waitForCaptureReady({
     required int generation,
     required int captureStartedAtMillis,
   }) async {
     final VoiceCaptureStartupGate gate = VoiceCaptureStartupGate();
-    final service = WearDependencies.I.speechRecognitionService;
+    final service = _speech;
 
     while (_isCurrentListeningRequest(generation)) {
-      final int now = DateTime.now().millisecondsSinceEpoch;
-      final int? lastNonSilentAt = service.lastNonSilentAudioChunkAtMillis;
+      if (_captureSilenced) return false;
+      final int now = _nowMillis();
+      final int? lastAudioAt = service.lastAudioChunkAtMillis;
       if (gate.isReady(
         captureStartedAtMillis: captureStartedAtMillis,
-        lastNonSilentAudioAtMillis: lastNonSilentAt,
+        chunksReceived: service.audioChunksReceived,
+        lastAudioAtMillis: lastAudioAt,
         nowMillis: now,
       )) {
         print(
           '[WearVoiceSession] capture ready '
-          'lastNonSilentAudioAtMillis=$lastNonSilentAt '
+          'lastAudioAtMillis=$lastAudioAt '
+          'chunks=${service.audioChunksReceived} '
           'stabilizedForMs=${now - captureStartedAtMillis}',
         );
-        return;
+        return true;
       }
       if (gate.isTimedOut(
         captureStartedAtMillis: captureStartedAtMillis,
         nowMillis: now,
       )) {
         throw StateError(
-          'Микрофон не передал аудио за '
+          'Микрофон не передал PCM-чанки за '
           '${VoiceCaptureStartupGate.timeoutMs} мс.',
         );
       }
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await _delay(const Duration(milliseconds: 100));
     }
+    return false;
   }
 
   Future<void> _enqueue(Future<void> Function() operation) {
@@ -215,9 +314,13 @@ class WearVoiceSession {
 
   Future<void> ensureHealthy({required String reason}) async {
     if (!_shouldListen) return;
+    if (_state.phase == VoicePhase.unavailable && _retryTimer != null) {
+      print('[WearVoiceSession] health-check deferred: retry is scheduled');
+      return;
+    }
     final int generation = _listeningGeneration;
-    final service = WearDependencies.I.speechRecognitionService;
-    final int now = DateTime.now().millisecondsSinceEpoch;
+    final service = _speech;
+    final int now = _nowMillis();
     final int? lastAudioAt = service.lastAudioChunkAtMillis;
     final int? lastAudioAgeMs = lastAudioAt == null ? null : now - lastAudioAt;
     final int? lastNonSilentAudioAt = service.lastNonSilentAudioChunkAtMillis;
@@ -243,11 +346,11 @@ class WearVoiceSession {
     }
 
     if (!service.isListening) {
-      await start();
+      await restart(reason: '$reason recorder_not_listening');
       return;
     }
 
-    if (lastAudioAgeMs == null || lastAudioAgeMs > 3000) {
+    if (VoiceCaptureHealthGate.hasStaleAudio(lastAudioAgeMs)) {
       await restart(reason: '$reason staleAudioAgeMs=$lastAudioAgeMs');
       return;
     }
@@ -266,6 +369,74 @@ class WearVoiceSession {
     }
   }
 
+  void _emit(
+    VoicePhase phase, {
+    required String reason,
+    Object? error,
+    bool resetAttempt = false,
+    int? nextRetryAt,
+  }) {
+    final int now = _nowMillis();
+    _state = VoiceState(
+      phase: phase,
+      captureEpoch: _listeningGeneration,
+      attempt: resetAttempt ? 0 : _state.attempt,
+      reason: reason,
+      lastTransitionAt: now,
+      lastError: error?.toString(),
+      nextRetryAt: nextRetryAt,
+    );
+    if (!_stateController.isClosed) _stateController.add(_state);
+  }
+
+  void _markUnavailable({required String reason, required Object error}) {
+    final int nextAttempt = _state.attempt + 1;
+    final Duration delay = _retryDelay(nextAttempt);
+    final int retryAt = _nowMillis() + delay.inMilliseconds;
+    _state = _state.copyWith(
+      phase: VoicePhase.unavailable,
+      attempt: nextAttempt,
+      reason: reason,
+      lastTransitionAt: _nowMillis(),
+      lastError: error.toString(),
+      nextRetryAt: retryAt,
+    );
+    if (!_stateController.isClosed) _stateController.add(_state);
+    _setReconnectError('Голосовое управление недоступно');
+    _retryTimer?.cancel();
+    if (!_shouldListen || _captureSilenced) return;
+    _retryTimer = _scheduleRetry(delay, () {
+      _retryTimer = null;
+      if (!_shouldListen || _captureSilenced) return;
+      unawaited(restart(reason: 'retry_attempt_$nextAttempt'));
+    });
+  }
+
+  int _captureStartedAtMillis() {
+    return _speech.captureStartedAtMillis ?? _nowMillis();
+  }
+
+  Future<void> _updateNativeCaptureMonitor({required bool active}) {
+    final service = _speech;
+    final update = _updateNativeCaptureMonitorOverride;
+    if (update != null) {
+      return update(
+        active: active,
+        source: service.deviceProfile.audioSource.name,
+        captureId: service.audioCaptureId,
+      );
+    }
+    return MethodChannelService().updateVoiceCaptureMonitor(
+      active: active,
+      source: service.deviceProfile.audioSource.name,
+      captureId: service.audioCaptureId,
+    );
+  }
+
+  Duration _retryDelay(int attempt) {
+    return VoiceRetryPolicy.delayFor(attempt);
+  }
+
   bool _usesFreeTextRecognition(WearScreenId screen) {
     return switch (screen) {
       WearScreenId.printerSelect ||
@@ -277,6 +448,47 @@ class WearVoiceSession {
         true,
       _ => false,
     };
+  }
+}
+
+class VoiceSingleFlight {
+  Future<void>? _pending;
+
+  Future<void>? get pending => _pending;
+
+  Future<void> run(Future<void> Function() operation) {
+    final Future<void>? pending = _pending;
+    if (pending != null) return pending;
+
+    late final Future<void> next;
+    next = Future<void>.microtask(operation).whenComplete(() {
+      if (identical(_pending, next)) _pending = null;
+    });
+    _pending = next;
+    return next;
+  }
+}
+
+class VoiceCaptureHealthGate {
+  static const int staleAudioThresholdMs = 3000;
+
+  static bool hasStaleAudio(int? lastAudioAgeMs) {
+    return lastAudioAgeMs == null || lastAudioAgeMs > staleAudioThresholdMs;
+  }
+}
+
+class VoiceRetryPolicy {
+  static const List<Duration> _delays = <Duration>[
+    Duration(seconds: 1),
+    Duration(seconds: 1),
+    Duration(seconds: 3),
+    Duration(seconds: 10),
+    Duration(seconds: 30),
+    Duration(seconds: 60),
+  ];
+
+  static Duration delayFor(int attempt) {
+    return _delays[(attempt - 1).clamp(0, _delays.length - 1)];
   }
 }
 
@@ -310,17 +522,18 @@ class VoiceCaptureRecoveryGate {
 }
 
 class VoiceCaptureStartupGate {
-  static const int stabilizationMs = 7000;
-  static const int timeoutMs = 10000;
+  static const int requiredChunks = 3;
+  static const int timeoutMs = 2000;
 
   bool isReady({
     required int captureStartedAtMillis,
-    required int? lastNonSilentAudioAtMillis,
+    required int chunksReceived,
+    required int? lastAudioAtMillis,
     required int nowMillis,
   }) {
-    return lastNonSilentAudioAtMillis != null &&
-        lastNonSilentAudioAtMillis >= captureStartedAtMillis &&
-        nowMillis - captureStartedAtMillis >= stabilizationMs;
+    return chunksReceived >= requiredChunks &&
+        lastAudioAtMillis != null &&
+        lastAudioAtMillis >= captureStartedAtMillis;
   }
 
   bool isTimedOut({

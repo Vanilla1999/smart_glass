@@ -8,6 +8,10 @@ void main() {
 
     cubit.update(<String, dynamic>{
       'visible': true,
+      'revision': 1,
+      'phase': 'reconnecting',
+      'reason': 'resume',
+      'attempt': 1,
       'message': 'Переподключаем\nголосовое управление',
     });
 
@@ -17,9 +21,29 @@ void main() {
 
     cubit.update(<String, dynamic>{
       'visible': true,
+      'revision': 2,
+      'phase': 'unavailable',
       'message': 'Голосовое управление недоступно',
     });
 
     expect(cubit.state.isError, isTrue);
+
+    cubit.update(<String, dynamic>{
+      'visible': false,
+      'revision': 1,
+      'phase': 'preparing',
+    });
+
+    expect(cubit.state.visible, isTrue);
+    expect(cubit.state.revision, 2);
+
+    cubit.update(<String, dynamic>{
+      'visible': false,
+      'revision': 2,
+      'phase': 'preparing',
+    });
+
+    expect(cubit.state.visible, isTrue);
+    expect(cubit.state.revision, 2);
   });
 }

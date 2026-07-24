@@ -3,6 +3,19 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:record/record.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_device_profile.dart';
+
+class VoiceRecorderLifecycle {
+  static Future<void> recreate({
+    required Future<void> Function() stop,
+    required Future<void> Function() dispose,
+    required void Function() create,
+  }) async {
+    await stop();
+    await dispose();
+    create();
+  }
+}
 
 class AudioStreamService {
   static const double _liveGainMultiplier = 3.0;
@@ -14,10 +27,18 @@ class AudioStreamService {
   static const int _startupDiagnosticsDurationMs = 10000;
   static const int _startupDiagnosticsIntervalMs = 500;
 
-  AudioStreamService({AudioRecorder? audioRecorder})
-      : _audioRecorder = audioRecorder ?? AudioRecorder();
+  AudioStreamService({
+    AudioRecorder? audioRecorder,
+    AudioRecorder Function()? audioRecorderFactory,
+    VoiceDeviceProfile? deviceProfile,
+  })  : _audioRecorderFactory = audioRecorderFactory ?? AudioRecorder.new,
+        _deviceProfile = deviceProfile ?? VoiceDeviceProfile.resolve(),
+        _audioRecorder =
+            audioRecorder ?? (audioRecorderFactory ?? AudioRecorder.new)();
 
-  final AudioRecorder _audioRecorder;
+  final AudioRecorder Function() _audioRecorderFactory;
+  final VoiceDeviceProfile _deviceProfile;
+  AudioRecorder _audioRecorder;
   final StreamController<double> _audioLevelController =
       StreamController<double>.broadcast();
   StreamSubscription<Uint8List>? _audioSubscription;
@@ -33,6 +54,7 @@ class AudioStreamService {
   int _startupDiagnosticsChunks = 0;
   double _startupDiagnosticsMaxRms = 0.0;
   double _startupDiagnosticsMaxPeak = 0.0;
+  int _captureId = 0;
 
   final List<void Function(Uint8List)> _dataCallbacks = [];
   void Function(Object error, StackTrace stackTrace)? _errorCallback;
@@ -44,6 +66,9 @@ class AudioStreamService {
   int? get lastNonSilentChunkAtMillis => _lastNonSilentChunkAtMillis;
   int? get continuousZeroAudioStartedAtMillis =>
       _continuousZeroAudioStartedAtMillis;
+  int? get captureStartedAtMillis => _startedAtMillis;
+  int get captureId => _captureId;
+  VoiceDeviceProfile get deviceProfile => _deviceProfile;
   Stream<double> get audioLevelStream => _audioLevelController.stream;
 
   void addDataCallback(void Function(Uint8List) callback) {
@@ -74,7 +99,7 @@ class AudioStreamService {
             : now - _continuousZeroAudioStartedAtMillis!;
     final int? runningForMs =
         _startedAtMillis == null ? null : now - _startedAtMillis!;
-    return 'AudioStreamService{isRunning=$_isRunning, '
+    return 'AudioStreamService{captureId=$_captureId, isRunning=$_isRunning, '
         'recorderIsRecording=$isRecording, callbacks=${_dataCallbacks.length}, '
         'chunks=$_chunksReceived, lastChunkAgeMs=$lastChunkAgeMs, '
         'lastNonSilentAgeMs=$lastNonSilentAgeMs, '
@@ -100,21 +125,28 @@ class AudioStreamService {
       return;
     }
 
+    _captureId++;
     _chunksReceived = 0;
     _lastChunkAtMillis = null;
     _continuousZeroAudioStartedAtMillis = null;
     _startedAtMillis = DateTime.now().millisecondsSinceEpoch;
     _lastNonSilentChunkAtMillis = null;
     _beginStartupDiagnostics();
-    print('[AudioStreamService] startStream begin at $_startedAtMillis');
+    print(
+      '[VoiceCapture#$_captureId] start at $_startedAtMillis '
+      'profile=${_deviceProfile.id} source=${_deviceProfile.audioSource.name}',
+    );
 
     final audioStream = await _audioRecorder.startStream(
-      const RecordConfig(
+      RecordConfig(
         encoder: AudioEncoder.pcm16bits,
         sampleRate: 16000,
         numChannels: 1,
         androidConfig: AndroidRecordConfig(
-          audioSource: AndroidAudioSource.voiceCommunication,
+          audioSource: _deviceProfile.androidAudioSource,
+          manageBluetooth: _deviceProfile.manageBluetooth,
+          speakerphone: _deviceProfile.speakerphone,
+          audioManagerMode: _deviceProfile.audioManagerMode,
           service: AndroidService(
             title: 'Smart Glasses',
             content: 'Голосовое управление активно',
@@ -132,25 +164,32 @@ class AudioStreamService {
 
     _audioSubscription = audioStream.listen(
       (Uint8List bytes) {
+        if (bytes.lengthInBytes < 2) {
+          print('[VoiceCapture#$_captureId] ignored empty PCM stream event');
+          return;
+        }
+        final _PcmStats rawStats = _pcmStats(bytes);
         final boostedBytes = _boostPcm16(bytes);
         _chunksReceived++;
         _lastChunkAtMillis = DateTime.now().millisecondsSinceEpoch;
         final _PcmStats stats = _pcmStats(boostedBytes);
-        if (stats.peak > 0.0001) {
+        if (rawStats.peak > 0.0) {
           _lastNonSilentChunkAtMillis = _lastChunkAtMillis;
         }
-        if (stats.peak == 0.0) {
+        if (rawStats.peak == 0.0) {
           _continuousZeroAudioStartedAtMillis ??= _lastChunkAtMillis;
         } else {
           _continuousZeroAudioStartedAtMillis = null;
         }
-        _logStartupDiagnostics(stats);
+        _logStartupDiagnostics(rawStats, stats);
         if (_chunksReceived == 1 || _chunksReceived % 200 == 0) {
           print(
-            '[AudioStreamService] chunk#$_chunksReceived '
+            '[VoiceCapture#$_captureId] chunk#$_chunksReceived '
             'bytes=${boostedBytes.lengthInBytes} callbacks=${_dataCallbacks.length} '
-            'rms=${stats.rms.toStringAsFixed(5)} '
-            'peak=${stats.peak.toStringAsFixed(5)} '
+            'rawRms=${rawStats.rms.toStringAsFixed(5)} '
+            'rawPeak=${rawStats.peak.toStringAsFixed(5)} '
+            'postGainRms=${stats.rms.toStringAsFixed(5)} '
+            'postGainPeak=${stats.peak.toStringAsFixed(5)} '
             'at=$_lastChunkAtMillis',
           );
         }
@@ -166,16 +205,18 @@ class AudioStreamService {
       },
       onDone: () {
         _isRunning = false;
-        print('[AudioStreamService] audio stream done');
+        final StateError error = StateError('Audio stream ended unexpectedly');
+        print('[VoiceCapture#$_captureId] audio stream done');
+        _errorCallback?.call(error, StackTrace.current);
       },
     );
 
     _isRunning = true;
-    print('[AudioStreamService] startStream done');
+    print('[VoiceCapture#$_captureId] start done');
   }
 
   Future<void> stop() async {
-    print('[AudioStreamService] stop begin: ${await diagnostics()}');
+    print('[VoiceCapture#$_captureId] stop begin: ${await diagnostics()}');
     await _audioSubscription?.cancel();
     _audioSubscription = null;
 
@@ -189,7 +230,16 @@ class AudioStreamService {
     _startedAtMillis = null;
     _continuousZeroAudioStartedAtMillis = null;
     _setAudioLevel(0.0);
-    print('[AudioStreamService] stop done');
+    print('[VoiceCapture#$_captureId] stop done');
+  }
+
+  Future<void> recreateRecorder() async {
+    await VoiceRecorderLifecycle.recreate(
+      stop: stop,
+      dispose: _audioRecorder.dispose,
+      create: () => _audioRecorder = _audioRecorderFactory(),
+    );
+    print('[VoiceCapture#$_captureId] recorder released and recreated');
   }
 
   Future<void> pauseCallbacks() async {
@@ -268,7 +318,7 @@ class AudioStreamService {
     );
   }
 
-  void _logStartupDiagnostics(_PcmStats stats) {
+  void _logStartupDiagnostics(_PcmStats rawStats, _PcmStats postGainStats) {
     final int? startedAt = _startupDiagnosticsStartedAtMillis;
     final int? now = _lastChunkAtMillis;
     if (startedAt == null || now == null) return;
@@ -279,17 +329,20 @@ class AudioStreamService {
     }
 
     _startupDiagnosticsChunks++;
-    _startupDiagnosticsMaxRms = math.max(_startupDiagnosticsMaxRms, stats.rms);
+    _startupDiagnosticsMaxRms =
+        math.max(_startupDiagnosticsMaxRms, rawStats.rms);
     _startupDiagnosticsMaxPeak =
-        math.max(_startupDiagnosticsMaxPeak, stats.peak);
+        math.max(_startupDiagnosticsMaxPeak, rawStats.peak);
     final int nextAt = _startupDiagnosticsNextAtMillis ?? now;
     if (now < nextAt) return;
 
     print(
-      '[AudioStreamService] startup audio offsetMs=$offsetMs '
+      '[VoiceCapture#$_captureId] startup audio offsetMs=$offsetMs '
       'chunks=$_startupDiagnosticsChunks '
-      'rms=${stats.rms.toStringAsFixed(5)} '
-      'peak=${stats.peak.toStringAsFixed(5)} '
+      'rawRms=${rawStats.rms.toStringAsFixed(5)} '
+      'rawPeak=${rawStats.peak.toStringAsFixed(5)} '
+      'postGainRms=${postGainStats.rms.toStringAsFixed(5)} '
+      'postGainPeak=${postGainStats.peak.toStringAsFixed(5)} '
       'windowMaxRms=${_startupDiagnosticsMaxRms.toStringAsFixed(5)} '
       'windowMaxPeak=${_startupDiagnosticsMaxPeak.toStringAsFixed(5)}',
     );

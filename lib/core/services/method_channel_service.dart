@@ -100,16 +100,44 @@ class MethodChannelService {
   /// Updates the voice availability overlay without replacing wear content.
   Future<void> updateWearVoiceOverlay({
     required bool visible,
+    required String phase,
+    required String reason,
+    required int attempt,
+    required int revision,
     String? message,
   }) async {
     try {
       await _appChannel
           .invokeMethod('updateWearVoiceOverlay', <String, dynamic>{
         'visible': visible,
+        'version': 1,
+        'revision': revision,
+        'phase': phase,
+        'reason': reason,
+        'attempt': attempt,
         'message': message,
       });
     } catch (e) {
       print('Error updating wear voice overlay: $e');
+      rethrow;
+    }
+  }
+
+  /// Configures native silencing diagnostics for the active recorder capture.
+  Future<void> updateVoiceCaptureMonitor({
+    required bool active,
+    required String source,
+    required int captureId,
+  }) async {
+    try {
+      await _appChannel
+          .invokeMethod('updateVoiceCaptureMonitor', <String, dynamic>{
+        'active': active,
+        'source': source,
+        'captureId': captureId,
+      });
+    } catch (e) {
+      print('Error updating voice capture monitor: $e');
       rethrow;
     }
   }

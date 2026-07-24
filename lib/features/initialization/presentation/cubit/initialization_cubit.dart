@@ -85,6 +85,8 @@ class InitializationCubit extends Cubit<InitializationState> {
   }
   
   void _updateState() {
+    if (isClosed) return;
+
     final newState = InitializationInProgress(
       scannerReady: _scannerReady,
       voiceReady: _voiceReady,

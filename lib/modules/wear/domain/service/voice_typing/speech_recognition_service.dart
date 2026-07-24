@@ -3,7 +3,38 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_device_profile.dart';
 import 'package:vosk_flutter_service/vosk_flutter.dart' as vosk;
+
+class VoiceRecognitionCaptureEpoch {
+  int _current = 0;
+
+  int get current => _current;
+
+  int begin() => ++_current;
+
+  void invalidate() => _current++;
+
+  bool isCurrent(int value) => value == _current;
+}
+
+class VoiceRecognitionProcessingQueue {
+  const VoiceRecognitionProcessingQueue({
+    this.stopTimeout = const Duration(seconds: 2),
+  });
+
+  final Duration stopTimeout;
+
+  Future<bool> waitForIdle({
+    required Future<void> command,
+    required Future<void> freeText,
+  }) {
+    return Future.any<bool>(<Future<bool>>[
+      Future.wait<void>(<Future<void>>[command, freeText]).then((_) => true),
+      Future<bool>.delayed(stopTimeout, () => false),
+    ]);
+  }
+}
 
 class SpeechRecognitionService {
   static const int _sampleRate = 16000;
@@ -45,6 +76,9 @@ class SpeechRecognitionService {
   Future<void> _freeTextAudioProcessing = Future<void>.value();
   Future<void> _lifecycleOperation = Future<void>.value();
   int _freeTextEpoch = 0;
+  final VoiceRecognitionCaptureEpoch _captureEpoch =
+      VoiceRecognitionCaptureEpoch();
+  void Function(Uint8List)? _audioCallback;
   int? _lastProcessedChunkAtMillis;
   final _RecognitionMetrics _commandMetrics = _RecognitionMetrics();
   final _RecognitionMetrics _freeTextMetrics = _RecognitionMetrics();
@@ -71,7 +105,11 @@ class SpeechRecognitionService {
       _audioStream.lastNonSilentChunkAtMillis;
   int? get continuousZeroAudioStartedAtMillis =>
       _audioStream.continuousZeroAudioStartedAtMillis;
+  int get audioChunksReceived => _audioStream.chunksReceived;
+  int get audioCaptureId => _audioStream.captureId;
+  int? get captureStartedAtMillis => _audioStream.captureStartedAtMillis;
   AudioStreamService get audioStreamService => _audioStream;
+  VoiceDeviceProfile get deviceProfile => _audioStream.deviceProfile;
 
   Future<void> setFreeTextEnabled(bool enabled) {
     if (_freeTextEnabled == enabled) {
@@ -165,6 +203,7 @@ class SpeechRecognitionService {
     await _runLifecycleOperation('restartListening reason=$reason', () async {
       print('[SpeechRecognitionService] restartListening reason=$reason');
       await _stopListeningUnlocked();
+      await _audioStream.recreateRecorder();
       await _startListeningUnlocked();
     });
   }
@@ -223,17 +262,20 @@ class SpeechRecognitionService {
     try {
       print('[SpeechRecognitionService] starting session...');
       await startSession();
+      final int captureEpoch = _captureEpoch.begin();
       _lastProcessedChunkAtMillis = null;
       _commandMetrics.reset();
       _freeTextMetrics.reset();
 
       print('[SpeechRecognitionService] adding audio callback...');
-      _audioStream.addDataCallback(_onAudioChunk);
+      _audioCallback = (Uint8List bytes) => _onAudioChunk(bytes, captureEpoch);
+      _audioStream.addDataCallback(_audioCallback!);
       print('[SpeechRecognitionService] starting audio stream...');
       final int audioStartStartedAt = DateTime.now().millisecondsSinceEpoch;
       await _audioStream.start(
         onError: (Object error, StackTrace stackTrace) {
           print('[AudioStream] error: $error');
+          _isListening = false;
         },
       );
       final int audioStartFinishedAt = DateTime.now().millisecondsSinceEpoch;
@@ -244,7 +286,7 @@ class SpeechRecognitionService {
       _isListening = true;
       print('[SpeechRecognitionService] now listening: ${await diagnostics()}');
     } catch (_) {
-      _audioStream.removeDataCallback(_onAudioChunk);
+      _removeAudioCallback();
       await _audioStream.stop();
       await stopSession();
       _isListening = false;
@@ -258,16 +300,32 @@ class SpeechRecognitionService {
       '_isListening=$_isListening, diagnostics=${await diagnostics()}',
     );
     if (!_isListening && !_isSessionActive && !_audioStream.isRunning) {
-      _audioStream.removeDataCallback(_onAudioChunk);
+      _removeAudioCallback();
       return;
     }
     print('[SpeechRecognitionService] removing audio callback...');
-    _audioStream.removeDataCallback(_onAudioChunk);
+    _captureEpoch.invalidate();
+    _removeAudioCallback();
     final int processingStartedAt = DateTime.now().millisecondsSinceEpoch;
-    await Future.wait<void>(<Future<void>>[
-      _commandAudioProcessing,
-      _freeTextAudioProcessing,
-    ]);
+    final bool processingFinished =
+        await const VoiceRecognitionProcessingQueue().waitForIdle(
+      command: _commandAudioProcessing,
+      freeText: _freeTextAudioProcessing,
+    );
+    if (!processingFinished) {
+      // The old epoch cannot emit results after this point. Drop its blocked
+      // serial queues and recognizers so a new capture never shares native
+      // recognizers with a blocked operation from the old capture.
+      final Future<void> commandProcessing = _commandAudioProcessing;
+      final Future<void> freeTextProcessing = _freeTextAudioProcessing;
+      _commandAudioProcessing = Future<void>.value();
+      _freeTextAudioProcessing = Future<void>.value();
+      await _replaceRecognizersAfterTimedOutProcessing(
+        commandProcessing: commandProcessing,
+        freeTextProcessing: freeTextProcessing,
+      );
+      print('[SpeechRecognitionService] audio processing stop timed out');
+    }
     final int processingFinishedAt = DateTime.now().millisecondsSinceEpoch;
     print(
       '[SpeechRecognitionService] wait audio processing durationMs='
@@ -302,25 +360,28 @@ class SpeechRecognitionService {
         'lastProcessedAgeMs=$lastProcessedAgeMs, audio=$audio}';
   }
 
-  void _onAudioChunk(Uint8List bytes) {
-    _enqueueCommandChunk(bytes);
+  void _onAudioChunk(Uint8List bytes, int captureEpoch) {
+    if (!_isSessionActive || !_captureEpoch.isCurrent(captureEpoch)) return;
+    _enqueueCommandChunk(bytes, captureEpoch);
     if (_freeTextEnabled) {
-      _enqueueFreeTextChunk(bytes, _freeTextEpoch);
+      _enqueueFreeTextChunk(bytes, _freeTextEpoch, captureEpoch);
     }
   }
 
   Future<void> processAudioChunk(Uint8List bytes) async {
     final List<Future<void>> processing = <Future<void>>[];
     if (_commandRecognizer != null) {
-      processing.add(_enqueueCommandChunk(bytes));
+      processing.add(_enqueueCommandChunk(bytes, _captureEpoch.current));
     }
     if (_freeTextEnabled) {
-      processing.add(_enqueueFreeTextChunk(bytes, _freeTextEpoch));
+      processing.add(
+        _enqueueFreeTextChunk(bytes, _freeTextEpoch, _captureEpoch.current),
+      );
     }
     await Future.wait<void>(processing);
   }
 
-  Future<void> _enqueueCommandChunk(Uint8List bytes) {
+  Future<void> _enqueueCommandChunk(Uint8List bytes, int captureEpoch) {
     if (_commandRecognizer == null) return Future<void>.value();
     final int queuedAt = DateTime.now().millisecondsSinceEpoch;
     final Future<void> next = _commandAudioProcessing.then(
@@ -330,6 +391,7 @@ class SpeechRecognitionService {
         bytes: bytes,
         queuedAt: queuedAt,
         epoch: null,
+        captureEpoch: captureEpoch,
       ),
     );
     _commandAudioProcessing = next.catchError(
@@ -340,7 +402,11 @@ class SpeechRecognitionService {
     return next;
   }
 
-  Future<void> _enqueueFreeTextChunk(Uint8List bytes, int epoch) {
+  Future<void> _enqueueFreeTextChunk(
+    Uint8List bytes,
+    int epoch,
+    int captureEpoch,
+  ) {
     if (_freeTextRecognizer == null) return Future<void>.value();
     final int queuedAt = DateTime.now().millisecondsSinceEpoch;
     final Future<void> next = _freeTextAudioProcessing.then(
@@ -350,6 +416,7 @@ class SpeechRecognitionService {
         bytes: bytes,
         queuedAt: queuedAt,
         epoch: epoch,
+        captureEpoch: captureEpoch,
       ),
     );
     _freeTextAudioProcessing = next.catchError(
@@ -366,13 +433,16 @@ class SpeechRecognitionService {
     required Uint8List bytes,
     required int queuedAt,
     required int? epoch,
+    int? captureEpoch,
   }) async {
     if (!_isSessionActive) {
       throw StateError(
         'Сессия распознавания не запущена. Вызовите startSession() перед обработкой аудио.',
       );
     }
-    if (bytes.lengthInBytes < 2 || !_canProcess(source, epoch)) return;
+    if (bytes.lengthInBytes < 2 || !_canProcess(source, epoch, captureEpoch)) {
+      return;
+    }
 
     final _RecognitionMetrics metrics = _metrics(source);
     metrics.processedChunks++;
@@ -423,9 +493,17 @@ class SpeechRecognitionService {
           'resultMs=${resultFinishedAt - resultStartedAt}, '
           'chunkTotalMs=${finishedAt - startedAt})',
         );
-        _emitResult(source, resultText, epoch: epoch, partial: false);
+        _emitResult(
+          source,
+          resultText,
+          epoch: epoch,
+          captureEpoch: captureEpoch,
+          partial: false,
+        );
       }
-      _setPartialText(source, '');
+      if (_canProcess(source, epoch, captureEpoch)) {
+        _setPartialText(source, '');
+      }
       return;
     }
 
@@ -444,12 +522,29 @@ class SpeechRecognitionService {
         'partialMs=${partialFinishedAt - partialStartedAt}, '
         'chunkTotalMs=${finishedAt - startedAt})',
       );
-      _emitResult(source, partialText, epoch: epoch, partial: true);
+      _emitResult(
+        source,
+        partialText,
+        epoch: epoch,
+        captureEpoch: captureEpoch,
+        partial: true,
+      );
     }
-    _setPartialText(source, partialText);
+    if (_canProcess(source, epoch, captureEpoch)) {
+      _setPartialText(source, partialText);
+    }
   }
 
-  bool _canProcess(_RecognitionSource source, int? epoch) {
+  bool _canProcess(
+    _RecognitionSource source,
+    int? epoch,
+    int? captureEpoch,
+  ) {
+    if (!_isSessionActive ||
+        captureEpoch == null ||
+        !_captureEpoch.isCurrent(captureEpoch)) {
+      return false;
+    }
     return switch (source) {
       _RecognitionSource.command => _commandRecognizer != null,
       _RecognitionSource.freeText =>
@@ -461,9 +556,10 @@ class SpeechRecognitionService {
     _RecognitionSource source,
     String text, {
     required int? epoch,
+    required int? captureEpoch,
     required bool partial,
   }) {
-    if (!_canProcess(source, epoch)) {
+    if (!_canProcess(source, epoch, captureEpoch)) {
       print(
         '[SpeechRecognitionService] suppress stale result '
         'source=${source.label} epoch=$epoch currentEpoch=$_freeTextEpoch',
@@ -477,6 +573,12 @@ class SpeechRecognitionService {
       (_RecognitionSource.freeText, true) => _freeTextPartialResultsController,
     };
     if (!controller.isClosed) controller.add(text);
+  }
+
+  void _removeAudioCallback() {
+    final void Function(Uint8List)? callback = _audioCallback;
+    if (callback != null) _audioStream.removeDataCallback(callback);
+    _audioCallback = null;
   }
 
   Future<void> _ensureModelInitialized() async {
@@ -525,6 +627,30 @@ class SpeechRecognitionService {
       '[SpeechRecognitionService] command recognizer ready '
       'durationMs=${finishedAt - startedAt}',
     );
+  }
+
+  Future<void> _replaceRecognizersAfterTimedOutProcessing({
+    required Future<void> commandProcessing,
+    required Future<void> freeTextProcessing,
+  }) async {
+    final vosk.Recognizer? oldCommand = _commandRecognizer;
+    final vosk.Recognizer? oldFreeText = _freeTextRecognizer;
+    _commandRecognizer = null;
+    _freeTextRecognizer = null;
+    await _createRecognizers();
+
+    unawaited(Future.wait<void>(<Future<void>>[
+      commandProcessing.catchError((Object _, StackTrace __) {}),
+      freeTextProcessing.catchError((Object _, StackTrace __) {}),
+    ]).then((_) async {
+      await oldCommand?.dispose();
+      await oldFreeText?.dispose();
+    }).catchError((Object error, StackTrace stackTrace) {
+      print(
+        '[SpeechRecognitionService] timed-out recognizer cleanup failed: '
+        '$error\n$stackTrace',
+      );
+    }));
   }
 
   Future<void> _resetRecognizers() async {

@@ -7,6 +7,7 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voi
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_control_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_device_profile.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_typing_service.dart';
 
 void main() {
@@ -291,6 +292,15 @@ class _FakeAudioStreamService implements AudioStreamService {
   int get chunksReceived => 0;
 
   @override
+  int get captureId => 0;
+
+  @override
+  int? get captureStartedAtMillis => null;
+
+  @override
+  VoiceDeviceProfile get deviceProfile => VoiceDeviceProfile.defaultProfile;
+
+  @override
   bool get isRunning => false;
 
   @override
@@ -313,6 +323,9 @@ class _FakeAudioStreamService implements AudioStreamService {
 
   @override
   Future<void> dispose() async {}
+
+  @override
+  Future<void> recreateRecorder() async {}
 
   @override
   Future<void> pauseCallbacks() async {}
@@ -382,6 +395,18 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
 
   @override
   int? get continuousZeroAudioStartedAtMillis => null;
+
+  @override
+  int get audioChunksReceived => 0;
+
+  @override
+  int get audioCaptureId => 0;
+
+  @override
+  int? get captureStartedAtMillis => null;
+
+  @override
+  VoiceDeviceProfile get deviceProfile => VoiceDeviceProfile.defaultProfile;
 
   void emitCommandResult(String text) {
     _commandResultsController.add(text);

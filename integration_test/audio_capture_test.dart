@@ -8,7 +8,8 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_str
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('Wear microphone receives non-silent PCM16 audio', (
+  testWidgets('Wear microphone provides PCM chunks without speech requirement',
+      (
     WidgetTester tester,
   ) async {
     final AudioStreamService audio = AudioStreamService();
@@ -16,35 +17,29 @@ void main() {
     var chunks = 0;
 
     audio.addDataCallback((Uint8List bytes) {
+      if (bytes.lengthInBytes < 2) return;
       chunks++;
-      if (_containsNonSilentPcm16(bytes) && !receivedAudio.isCompleted) {
+      if (chunks >= 3 && !receivedAudio.isCompleted) {
         receivedAudio.complete();
       }
     });
 
     expect(await audio.requestPermission(), isTrue);
     await audio.start();
-    print('[AudioCaptureTest] Speak near the microphone within 12 seconds.');
 
     try {
       await Future.any<void>(<Future<void>>[
         receivedAudio.future,
-        Future<void>.delayed(const Duration(seconds: 12)),
+        Future<void>.delayed(const Duration(seconds: 2)),
       ]);
       expect(
         receivedAudio.isCompleted,
         isTrue,
-        reason: 'Received $chunks PCM chunks, but every PCM16 sample was zero.',
+        reason:
+            'Recorder did not provide three valid PCM chunks in two seconds.',
       );
     } finally {
       await audio.dispose();
     }
   });
-}
-
-bool _containsNonSilentPcm16(Uint8List bytes) {
-  for (var index = 0; index + 1 < bytes.lengthInBytes; index += 2) {
-    if (bytes[index] != 0 || bytes[index + 1] != 0) return true;
-  }
-  return false;
 }

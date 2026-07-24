@@ -764,7 +764,8 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       expect(glassesOutput.payloads.last.title, 'Выбор раздела');
     });
 
-    test('voice startup loader is not overwritten by auth status', () async {
+    test('wear payload continues updating during voice startup overlay',
+        () async {
       WearStatusIconReporter.I.beginVoiceStartup();
       addTearDown(WearStatusIconReporter.I.endVoiceStartup);
 
@@ -778,9 +779,9 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       );
 
       expect(
-          WearStatusIconReporter.I.lastPayload?.title, 'Голосовое управление');
-      expect(WearStatusIconReporter.I.lastPayload?.statusText,
-          'Запускаем голос...');
+        WearStatusIconReporter.I.lastPayload?.title,
+        'Голосовое управление',
+      );
 
       await WearStatusIconReporter.I.send(
         WearGlassesPayload.status(
@@ -792,10 +793,7 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       );
       await WearStatusIconReporter.I.sendFast(WearGlassesPayload.menu());
 
-      expect(
-          WearStatusIconReporter.I.lastPayload?.title, 'Голосовое управление');
-      expect(WearStatusIconReporter.I.lastPayload?.statusText,
-          'Запускаем голос...');
+      expect(WearStatusIconReporter.I.lastPayload?.title, 'Выбор раздела');
 
       WearStatusIconReporter.I.endVoiceStartup();
       await WearStatusIconReporter.I.sendFast(WearGlassesPayload.menu());
@@ -803,7 +801,7 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       expect(WearStatusIconReporter.I.lastPayload?.title, 'Выбор раздела');
     });
 
-    test('old startup completion cannot end a newer startup guard', () async {
+    test('startup tokens do not block ordinary wear payload updates', () async {
       final int oldStartup = WearStatusIconReporter.I.beginVoiceStartup();
       final int currentStartup = WearStatusIconReporter.I.beginVoiceStartup();
       await WearStatusIconReporter.I.sendFast(
@@ -817,10 +815,7 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       WearStatusIconReporter.I.endVoiceStartup(oldStartup);
       await WearStatusIconReporter.I.sendFast(WearGlassesPayload.menu());
 
-      expect(
-        WearStatusIconReporter.I.lastPayload?.title,
-        'Голосовое управление',
-      );
+      expect(WearStatusIconReporter.I.lastPayload?.title, 'Выбор раздела');
       WearStatusIconReporter.I.endVoiceStartup(currentStartup);
     });
 
@@ -1289,6 +1284,18 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
 
   @override
   int? get continuousZeroAudioStartedAtMillis => null;
+
+  @override
+  int get audioChunksReceived => 0;
+
+  @override
+  int get audioCaptureId => 0;
+
+  @override
+  int? get captureStartedAtMillis => null;
+
+  @override
+  Never get deviceProfile => throw UnsupportedError('Not used in test');
 
   @override
   Future<void> setFreeTextEnabled(bool enabled) async {}

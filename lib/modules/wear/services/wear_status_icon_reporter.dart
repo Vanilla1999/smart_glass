@@ -397,13 +397,8 @@ class WearStatusIconReporter {
   }
 
   bool _shouldDeferForVoiceStartup(WearGlassesPayload payload) {
-    return _voiceStartupActive && !_isVoiceStartupPayload(payload);
-  }
-
-  bool _isVoiceStartupPayload(WearGlassesPayload payload) {
-    return payload.screenType == WearGlassesScreenType.status &&
-        payload.phase == WearGlassesPhase.loading &&
-        payload.title == 'Голосовое управление' &&
-        payload.statusText == 'Запускаем голос...';
+    // Voice status is now an independent overlay. Content updates must continue
+    // underneath it, otherwise a startup overlay can restore stale wear data.
+    return false;
   }
 }

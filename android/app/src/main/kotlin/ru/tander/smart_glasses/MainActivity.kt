@@ -41,6 +41,7 @@ class MainActivity : FlutterFragmentActivity() {
     private var currentCounter = 0
     private var currentRecognizedText = ""
     private var currentWearGlassesPayload: Map<*, *>? = null
+    private var currentWearVoiceOverlayPayload: Map<*, *>? = null
     private var wearProjectionGeneration = 0
     private val mainHandler = Handler(Looper.getMainLooper())
     private val pendingWearResults = mutableSetOf<BoundedResult>()
@@ -48,6 +49,8 @@ class MainActivity : FlutterFragmentActivity() {
     private var audioManager: AudioManager? = null
     private var audioRecordingCallback: AudioManager.AudioRecordingCallback? = null
     private var lastAudioCaptureSilenced: Boolean? = null
+    private var monitoredAudioSource: Int? = null
+    private var monitoredCaptureId: Int? = null
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -111,6 +114,10 @@ class MainActivity : FlutterFragmentActivity() {
                         Log.d("SmartWear", "updateWearVoiceOverlay called: $payload")
                         updateWearVoiceOverlay(payload, result)
                     }
+                    "updateVoiceCaptureMonitor" -> {
+                        val payload = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
+                        updateVoiceCaptureMonitor(payload, result)
+                    }
                     "hideWearGlasses" -> {
                         Log.d("SmartWear", "hideWearGlasses called")
                         hideWearGlasses(result)
@@ -145,11 +152,12 @@ class MainActivity : FlutterFragmentActivity() {
         val manager = getSystemService(AudioManager::class.java)
         val callback = object : AudioManager.AudioRecordingCallback() {
             override fun onRecordingConfigChanged(configs: List<android.media.AudioRecordingConfiguration>) {
-                val ownRecordings = configs.filter {
-                    it.clientAudioSource == MediaRecorder.AudioSource.VOICE_COMMUNICATION
+                val source = monitoredAudioSource
+                val ownRecordings = if (source == null) emptyList() else configs.filter {
+                    it.clientAudioSource == source
                 }
                 if (ownRecordings.isEmpty()) {
-                    Log.d("VoiceCapture", "VOICE_COMMUNICATION recording config removed")
+                    Log.d("VoiceCapture", "monitored recording config removed captureId=$monitoredCaptureId source=$source")
                     if (lastAudioCaptureSilenced == true) {
                         appChannel?.invokeMethod("audioCaptureSilencedChanged", false)
                     }
@@ -163,7 +171,11 @@ class MainActivity : FlutterFragmentActivity() {
                     "recording configs=" + ownRecordings.joinToString { config ->
                         "session=${config.clientAudioSessionId}, " +
                             "source=${config.clientAudioSource}, " +
-                            "silenced=${config.isClientSilenced}"
+                            "silenced=${config.isClientSilenced}, " +
+                            "clientFormat=${config.clientFormat}, " +
+                            "deviceFormat=${config.format}, " +
+                            "routedDevice=${config.audioDevice?.productName}, " +
+                            "audioMode=${manager.mode}"
                     },
                 )
                 if (silenced == lastAudioCaptureSilenced) return
@@ -174,6 +186,34 @@ class MainActivity : FlutterFragmentActivity() {
         audioManager = manager
         audioRecordingCallback = callback
         manager.registerAudioRecordingCallback(callback, mainHandler)
+    }
+
+    private fun updateVoiceCaptureMonitor(payload: Map<*, *>, result: MethodChannel.Result) {
+        val active = payload["active"] == true
+        if (!active) {
+            monitoredAudioSource = null
+            monitoredCaptureId = null
+            lastAudioCaptureSilenced = null
+            result.success(true)
+            return
+        }
+        val source = when (payload["source"] as? String) {
+            "voiceCommunication" -> MediaRecorder.AudioSource.VOICE_COMMUNICATION
+            "voiceRecognition" -> MediaRecorder.AudioSource.VOICE_RECOGNITION
+            "microphone" -> MediaRecorder.AudioSource.MIC
+            else -> {
+                result.error("INVALID_AUDIO_SOURCE", "Unknown recorder source", null)
+                return
+            }
+        }
+        monitoredAudioSource = source
+        monitoredCaptureId = payload["captureId"] as? Int
+        lastAudioCaptureSilenced = null
+        Log.d(
+            "VoiceCapture",
+            "monitor captureId=$monitoredCaptureId source=$source",
+        )
+        result.success(true)
     }
 
     private fun copyPhotoToAppStorage(uri: String, result: MethodChannel.Result) {
@@ -213,6 +253,12 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val packageInfo = packageManager.getPackageInfo(packageName, 0)
+        Log.d(
+            "VoiceCapture",
+            "build versionName=${packageInfo.versionName} versionCode=${packageInfo.longVersionCode} " +
+                "manufacturer=${Build.MANUFACTURER} model=${Build.MODEL} sdk=${Build.VERSION.SDK_INT}",
+        )
         displayManager = getSystemService(DISPLAY_SERVICE) as DisplayManager
 
         // Логируем информацию о всех подключенных дисплеях
@@ -226,11 +272,12 @@ class MainActivity : FlutterFragmentActivity() {
         if (displays != null && displays.size > 1) {
             val secondaryDisplay = displays[displays.size - 1]
 
-            glassesPresentation?.dismiss()
             currentWearGlassesPayload = null
+            currentWearVoiceOverlayPayload = null
+            glassesPresentation?.dismiss()
 
             if (glassesEngine != null) {
-                glassesPresentation = GlassesPresentation(this, secondaryDisplay, glassesEngine!!)
+                glassesPresentation = createGlassesPresentation(secondaryDisplay, glassesEngine!!)
                 glassesPresentation?.show()
                 Log.d("SmartWear", "Glasses presentation shown, navigating to initialization")
                 glassesChannel?.invokeMethod("navigateToRoute", "/initialization")
@@ -261,7 +308,7 @@ class MainActivity : FlutterFragmentActivity() {
                 return
             }
             if (glassesPresentation == null) {
-                glassesPresentation = GlassesPresentation(this, secondaryDisplay, engine)
+                glassesPresentation = createGlassesPresentation(secondaryDisplay, engine)
                 glassesPresentation?.show()
             }
 
@@ -290,11 +337,16 @@ class MainActivity : FlutterFragmentActivity() {
                     if (!pendingResult.isPending()) {
                         return
                     }
-                    channel.invokeMethod(
-                        "navigateToRoute",
-                        "/wear",
-                        pendingResult
-                    )
+                    channel.invokeMethod("navigateToRoute", "/wear", object : MethodChannel.Result {
+                        override fun success(value: Any?) {
+                            applyCurrentWearVoiceOverlay()
+                            pendingResult.success(value)
+                        }
+                        override fun error(code: String, message: String?, details: Any?) {
+                            pendingResult.error(code, message, details)
+                        }
+                        override fun notImplemented() = pendingResult.notImplemented()
+                    })
                 }
 
                 override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
@@ -323,14 +375,21 @@ class MainActivity : FlutterFragmentActivity() {
             result.error("GLASSES_ENGINE_UNAVAILABLE", "Secondary Flutter channel is unavailable", null)
             return
         }
-        channel.invokeMethod(
-            "updateWearGlasses",
-            payload,
-            BoundedResult(result, "updateWearGlasses")
-        )
+        val pendingResult = BoundedResult(result, "updateWearGlasses")
+        channel.invokeMethod("updateWearGlasses", payload, object : MethodChannel.Result {
+            override fun success(value: Any?) {
+                applyCurrentWearVoiceOverlay()
+                pendingResult.success(value)
+            }
+            override fun error(code: String, message: String?, details: Any?) {
+                pendingResult.error(code, message, details)
+            }
+            override fun notImplemented() = pendingResult.notImplemented()
+        })
     }
 
     private fun updateWearVoiceOverlay(payload: Map<*, *>, result: MethodChannel.Result) {
+        currentWearVoiceOverlayPayload = if (payload["visible"] == true) payload else null
         val channel = glassesChannel
         if (channel == null) {
             result.error("GLASSES_ENGINE_UNAVAILABLE", "Secondary Flutter channel is unavailable", null)
@@ -346,6 +405,7 @@ class MainActivity : FlutterFragmentActivity() {
     private fun hideWearGlasses(result: MethodChannel.Result) {
         invalidatePendingWearShow()
         currentWearGlassesPayload = null
+        currentWearVoiceOverlayPayload = null
         val channel = glassesChannel
         if (channel == null) {
             result.error("GLASSES_ENGINE_UNAVAILABLE", "Secondary Flutter channel is unavailable", null)
@@ -356,6 +416,55 @@ class MainActivity : FlutterFragmentActivity() {
             "/empty",
             BoundedResult(result, "navigateToRoute")
         )
+    }
+
+    private fun createGlassesPresentation(
+        display: Display,
+        engine: FlutterEngine,
+    ): GlassesPresentation {
+        return GlassesPresentation(this, display, engine) {
+            glassesPresentation = null
+            if (currentWearGlassesPayload != null && !isFinishing && !isDestroyed) {
+                mainHandler.post { restoreWearProjection() }
+            }
+        }
+    }
+
+    private fun restoreWearProjection() {
+        val payload = currentWearGlassesPayload ?: return
+        if (glassesPresentation != null) return
+        val displays = displayManager?.getDisplays() ?: return
+        if (displays.size <= 1) return
+        val engine = glassesEngine ?: return
+        val channel = glassesChannel ?: return
+        val secondaryDisplay = displays[displays.size - 1]
+        glassesPresentation = createGlassesPresentation(secondaryDisplay, engine)
+        glassesPresentation?.show()
+        channel.invokeMethod("updateWearGlasses", payload, object : MethodChannel.Result {
+            override fun success(value: Any?) {
+                channel.invokeMethod("navigateToRoute", "/wear", object : MethodChannel.Result {
+                    override fun success(value: Any?) = applyCurrentWearVoiceOverlay()
+                    override fun error(code: String, message: String?, details: Any?) {
+                        Log.e("SmartWear", "restore wear navigation failed $code: $message")
+                    }
+                    override fun notImplemented() {
+                        Log.e("SmartWear", "restore wear navigation not implemented")
+                    }
+                })
+            }
+            override fun error(code: String, message: String?, details: Any?) {
+                Log.e("SmartWear", "restore wear payload failed $code: $message")
+            }
+            override fun notImplemented() {
+                Log.e("SmartWear", "restore wear payload not implemented")
+            }
+        })
+    }
+
+    private fun applyCurrentWearVoiceOverlay() {
+        val payload = currentWearVoiceOverlayPayload ?: return
+        if (payload["visible"] != true) return
+        glassesChannel?.invokeMethod("updateWearVoiceOverlay", payload)
     }
 
     private fun invalidatePendingWearShow() {
@@ -455,6 +564,8 @@ class MainActivity : FlutterFragmentActivity() {
         audioRecordingCallback = null
         audioManager = null
         appChannel = null
+        currentWearGlassesPayload = null
+        currentWearVoiceOverlayPayload = null
         super.onDestroy()
         glassesPresentation?.dismiss()
         glassesEngine?.destroy()
@@ -563,7 +674,8 @@ class MainActivity : FlutterFragmentActivity() {
 class GlassesPresentation(
     context: Context,
     display: Display,
-    private val flutterEngine: FlutterEngine
+    private val flutterEngine: FlutterEngine,
+    private val onDetached: () -> Unit,
 ) : Presentation(context, display) {
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -582,5 +694,6 @@ class GlassesPresentation(
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         flutterEngine.lifecycleChannel.appIsPaused()
+        onDetached()
     }
 }

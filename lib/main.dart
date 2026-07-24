@@ -10,12 +10,22 @@ import 'package:smart_glasses/app/di/dependencies_container.dart';
 import 'package:smart_glasses/app/glasses/glasses_runtime_app.dart';
 import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
 
+const String _gitSha =
+    String.fromEnvironment('GIT_SHA', defaultValue: 'unknown');
+const String _buildTimestamp =
+    String.fromEnvironment('BUILD_TIMESTAMP', defaultValue: 'unknown');
+const String _gitDirty =
+    String.fromEnvironment('GIT_DIRTY', defaultValue: 'unknown');
+const String _sourcePatchSha =
+    String.fromEnvironment('SOURCE_PATCH_SHA', defaultValue: 'unknown');
+
 @pragma('vm:entry-point')
 void glassesMain() {
   _runGuarded(
     entryPointName: 'glassesMain',
     body: () async {
       WidgetsFlutterBinding.ensureInitialized();
+      _logBuildFingerprint('glassesMain');
       runApp(const GlassesRuntimeApp());
     },
   );
@@ -30,6 +40,7 @@ void main() {
 
 Future<void> _main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  _logBuildFingerprint('main');
 
   if (kDebugMode) {
     await _debugLogDevelopEnvAsset();
@@ -55,6 +66,20 @@ Future<void> _main() async {
       dependencies: dependencies,
       child: const MyApp(),
     ),
+  );
+}
+
+void _logBuildFingerprint(String entryPoint) {
+  final String mode = kReleaseMode
+      ? 'release'
+      : kProfileMode
+          ? 'profile'
+          : 'debug';
+  print(
+    '[VoiceBuild] entry=$entryPoint gitSha=$_gitSha '
+    'buildTimestamp=$_buildTimestamp gitDirty=$_gitDirty '
+    'sourcePatchSha=$_sourcePatchSha mode=$mode '
+    'platform=${defaultTargetPlatform.name}',
   );
 }
 
