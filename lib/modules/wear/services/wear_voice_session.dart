@@ -199,7 +199,7 @@ class WearVoiceSession {
           print('[WearVoiceSession] restart requested reason=$reason');
           if (!_isCurrentListeningRequest(generation)) return;
           try {
-            _zeroAudioRecovery.reset();
+            _zeroAudioRecovery.rearmAfterRestart();
             await _prepare();
             if (!_isCurrentListeningRequest(generation)) return;
             await _speech.restartListening(reason: reason);
@@ -357,16 +357,48 @@ class WearVoiceSession {
 
     final bool hasCurrentNonSilentAudio =
         lastAudioAt != null && lastNonSilentAudioAt == lastAudioAt;
-    if (_zeroAudioRecovery.shouldRestart(
+    switch (_zeroAudioRecovery.nextAction(
       continuousZeroAudioAgeMs: continuousZeroAudioAgeMs,
       captureSilenced: _captureSilenced,
       hasCurrentNonSilentAudio: hasCurrentNonSilentAudio,
     )) {
-      await restart(
-        reason: '$reason continuousZeroAudioAgeMs=$continuousZeroAudioAgeMs',
-      );
-      return;
+      case VoiceCaptureRecoveryAction.none:
+        return;
+      case VoiceCaptureRecoveryAction.restart:
+        await restart(
+          reason: '$reason continuousZeroAudioAgeMs=$continuousZeroAudioAgeMs',
+        );
+        return;
+      case VoiceCaptureRecoveryAction.requireMicrophoneReconnect:
+        await _requireMicrophoneReconnect(
+          reason: '$reason continuousZeroAudioAgeMs=$continuousZeroAudioAgeMs',
+        );
+        return;
     }
+  }
+
+  Future<void> _requireMicrophoneReconnect({required String reason}) async {
+    print('[WearVoiceSession] microphone reconnect required reason=$reason');
+    _shouldListen = false;
+    _listeningGeneration++;
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    await _enqueue(() async {
+      try {
+        await _speech.stopListening();
+        await _updateNativeCaptureMonitor(active: false);
+      } catch (error, stackTrace) {
+        print(
+          '[WearVoiceSession] microphone reconnect cleanup failed: '
+          '$error\n$stackTrace',
+        );
+      }
+      _emit(
+        VoicePhase.microphoneReconnectRequired,
+        reason: reason,
+        error: StateError('Микрофон не передаёт аудио после перезапуска.'),
+      );
+    });
   }
 
   void _emit(
@@ -494,31 +526,49 @@ class VoiceRetryPolicy {
 
 class VoiceCaptureRecoveryGate {
   static const int zeroAudioThresholdMs = 5000;
+  static const int maxAutomaticRestarts = 1;
 
   bool _armed = true;
+  int _automaticRestarts = 0;
 
-  bool shouldRestart({
+  VoiceCaptureRecoveryAction nextAction({
     required int? continuousZeroAudioAgeMs,
     required bool captureSilenced,
     required bool hasCurrentNonSilentAudio,
   }) {
     if (hasCurrentNonSilentAudio) {
       _armed = true;
-      return false;
+      _automaticRestarts = 0;
+      return VoiceCaptureRecoveryAction.none;
     }
     if (captureSilenced ||
         continuousZeroAudioAgeMs == null ||
         continuousZeroAudioAgeMs < zeroAudioThresholdMs ||
         !_armed) {
-      return false;
+      return VoiceCaptureRecoveryAction.none;
     }
     _armed = false;
-    return true;
+    if (_automaticRestarts >= maxAutomaticRestarts) {
+      return VoiceCaptureRecoveryAction.requireMicrophoneReconnect;
+    }
+    _automaticRestarts++;
+    return VoiceCaptureRecoveryAction.restart;
+  }
+
+  void rearmAfterRestart() {
+    _armed = true;
   }
 
   void reset() {
     _armed = true;
+    _automaticRestarts = 0;
   }
+}
+
+enum VoiceCaptureRecoveryAction {
+  none,
+  restart,
+  requireMicrophoneReconnect,
 }
 
 class VoiceCaptureStartupGate {

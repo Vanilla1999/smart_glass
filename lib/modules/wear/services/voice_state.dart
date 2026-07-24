@@ -5,6 +5,7 @@ enum VoicePhase {
   suspendedBySystem,
   reconnecting,
   unavailable,
+  microphoneReconnectRequired,
 }
 
 class VoiceState {

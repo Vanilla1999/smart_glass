@@ -444,6 +444,18 @@ class _WearModuleAppState extends State<WearModuleApp>
     );
   }
 
+  void _retryMicrophoneAfterReconnect() {
+    unawaited(
+      WearVoiceSession.I
+          .start()
+          .catchError((Object error, StackTrace stackTrace) {
+        print(
+          '[WearModuleApp] microphone retry failed: $error\n$stackTrace',
+        );
+      }),
+    );
+  }
+
   void _onVoiceStateChanged(VoiceState state) {
     _setVoiceState(state);
   }
@@ -459,6 +471,8 @@ class _WearModuleAppState extends State<WearModuleApp>
         VoicePhase.suspendedBySystem =>
           'Переподключаем\nголосовое управление',
         VoicePhase.unavailable => 'Голосовое управление недоступно',
+        VoicePhase.microphoneReconnectRequired =>
+          'Переподключите\nочки или микрофон',
         VoicePhase.disabled || VoicePhase.ready => null,
       },
       phase: state.phase.name,
@@ -731,11 +745,20 @@ class _WearModuleAppState extends State<WearModuleApp>
         app,
         if (WearSession.isAuthorized &&
             (_voiceState.phase == VoicePhase.preparing ||
-                _voiceState.phase == VoicePhase.unavailable))
+                _voiceState.phase == VoicePhase.unavailable ||
+                _voiceState.phase == VoicePhase.microphoneReconnectRequired))
           Positioned.fill(
             child: _VoiceStartupOverlay(
-              isError: _voiceState.phase == VoicePhase.unavailable,
-              message: _voiceState.lastError,
+              isError: _voiceState.phase == VoicePhase.unavailable ||
+                  _voiceState.phase == VoicePhase.microphoneReconnectRequired,
+              message: _voiceState.phase ==
+                      VoicePhase.microphoneReconnectRequired
+                  ? 'Переподключите очки или микрофон.\nПосле этого проверьте голос снова.'
+                  : _voiceState.lastError,
+              onRetry:
+                  _voiceState.phase == VoicePhase.microphoneReconnectRequired
+                      ? _retryMicrophoneAfterReconnect
+                      : null,
             ),
           ),
         if (WearSession.isAuthorized &&
@@ -793,11 +816,13 @@ class _VoiceStartupOverlay extends StatelessWidget {
     this.isError = false,
     this.message,
     this.isReconnecting = false,
+    this.onRetry,
   });
 
   final bool isError;
   final String? message;
   final bool isReconnecting;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -826,6 +851,13 @@ class _VoiceStartupOverlay extends StatelessWidget {
                 style: WearTypography.lable,
                 textAlign: TextAlign.center,
               ),
+              if (onRetry != null) ...<Widget>[
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: onRetry,
+                  child: const Text('Проверить снова'),
+                ),
+              ],
               if (!isError) ...<Widget>[
                 const SizedBox(height: 8),
                 Text(
