@@ -9,6 +9,7 @@ import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_loggi
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
+import 'package:smart_glasses/modules/wear/services/wear_voice_session.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
@@ -121,7 +122,7 @@ class _WearStatusScreenState extends State<WearStatusScreen>
     });
   }
 
-  void _runAutoActionIfDue({required String source}) {
+  Future<void> _runAutoActionIfDue({required String source}) async {
     if (_autoActionDone || !mounted) return;
     final WearStatusScreenArgs? a = widget.args;
     final Duration? after = a?.autoAfter;
@@ -154,6 +155,17 @@ class _WearStatusScreenState extends State<WearStatusScreen>
     );
 
     if (action == WearStatusAutoAction.pop) {
+      if (a.kind == WearStatusKind.success) {
+        try {
+          await WearVoiceSession.I.waitForStartup();
+        } catch (error, stackTrace) {
+          print(
+            '[BACK-DEBUG] WearStatusScreen: voice startup failed before pop '
+            'error=$error\n$stackTrace',
+          );
+        }
+        if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
+      }
       context.pop();
       return;
     }

@@ -14,24 +14,26 @@ class GlassesCoordinatorCubit extends Cubit<GlassesCoordinatorState> {
     required this.onUpdateScreen1RecognizedText,
     required this.onUpdateScreen2RecognizedText,
     required this.onUpdateWearGlasses,
+    this.onUpdateWearVoiceOverlay = _ignoreWearVoiceOverlay,
   })  : _methodChannelService = methodChannelService,
         super(const GlassesCoordinatorInitial());
 
   final MethodChannelService _methodChannelService;
-  
+
   // Navigation callbacks
   final Function(String route) onNavigateToScreen;
   final Function() onNavigateHome;
-  
+
   // Screen 1 data callbacks
   final Function(int counter) onUpdateScreen1Counter;
   final Function(String text) onUpdateScreen1RecognizedText;
-  
+
   // Screen 2 data callbacks
   final Function(String text) onUpdateScreen2RecognizedText;
 
   // Wear projection callbacks
   final Function(Map<String, dynamic> payload) onUpdateWearGlasses;
+  final Function(Map<String, dynamic> payload) onUpdateWearVoiceOverlay;
 
   String _currentRoute = '/';
 
@@ -47,8 +49,9 @@ class GlassesCoordinatorCubit extends Cubit<GlassesCoordinatorState> {
   Future<dynamic> _handleMethodCall(MethodCall call) async {
     // TODO: Replace with proper logging framework
     // ignore: avoid_print
-    print("GlassesCoordinator: received method=${call.method}, args=${call.arguments}");
-    
+    print(
+        "GlassesCoordinator: received method=${call.method}, args=${call.arguments}");
+
     switch (call.method) {
       case 'navigateToScreen':
         _handleNavigateToScreen(call.arguments);
@@ -64,6 +67,9 @@ class GlassesCoordinatorCubit extends Cubit<GlassesCoordinatorState> {
         break;
       case 'updateWearGlasses':
         _handleUpdateWearGlasses(call.arguments);
+        break;
+      case 'updateWearVoiceOverlay':
+        _handleUpdateWearVoiceOverlay(call.arguments);
         break;
     }
   }
@@ -119,4 +125,12 @@ class GlassesCoordinatorCubit extends Cubit<GlassesCoordinatorState> {
       onUpdateWearGlasses(Map<String, dynamic>.from(arguments));
     }
   }
+
+  void _handleUpdateWearVoiceOverlay(dynamic arguments) {
+    if (arguments is Map) {
+      onUpdateWearVoiceOverlay(Map<String, dynamic>.from(arguments));
+    }
+  }
+
+  static void _ignoreWearVoiceOverlay(Map<String, dynamic> payload) {}
 }

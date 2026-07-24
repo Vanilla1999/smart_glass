@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_glasses_cubit.dart';
 import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_glasses_state.dart';
+import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_voice_overlay_cubit.dart';
 import 'package:smart_glasses/features/glasses/presentation/widgets/wear/wear_glasses_scaffold.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
@@ -39,36 +40,88 @@ class _WearGlassesScreenState extends State<WearGlassesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<WearGlassesCubit, WearGlassesState>(
-      builder: (BuildContext context, WearGlassesState state) {
-        _logMenuFrame(state);
-        return WearGlassesScaffold(
-          child: Stack(
+    return BlocBuilder<WearVoiceOverlayCubit, WearVoiceOverlayState>(
+      builder: (BuildContext context, WearVoiceOverlayState overlay) {
+        return BlocBuilder<WearGlassesCubit, WearGlassesState>(
+          builder: (BuildContext context, WearGlassesState state) {
+            _logMenuFrame(state);
+            return WearGlassesScaffold(
+              child: Stack(
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.only(top: 20),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.max,
+                        children: <Widget>[
+                          _TitleBlock(state: state),
+                          const SizedBox(height: 12),
+                          Expanded(child: _Body(state: state)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.topRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 8, right: 8),
+                      child: _StatusBar(state: state),
+                    ),
+                  ),
+                  if (overlay.visible) _VoiceOverlay(overlay: overlay),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _VoiceOverlay extends StatelessWidget {
+  const _VoiceOverlay({required this.overlay});
+
+  final WearVoiceOverlayState overlay;
+
+  @override
+  Widget build(BuildContext context) {
+    final String message =
+        overlay.message ?? 'Переподключаем\nголосовое управление';
+    return Positioned.fill(
+      child: ColoredBox(
+        color: const Color(0xE6000000),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.only(top: 20),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.max,
-                    children: <Widget>[
-                      _TitleBlock(state: state),
-                      const SizedBox(height: 12),
-                      Expanded(child: _Body(state: state)),
-                    ],
+              if (overlay.isError)
+                const Icon(Icons.error_outline,
+                    color: Colors.redAccent, size: 56)
+              else
+                const SizedBox(
+                  width: 52,
+                  height: 52,
+                  child: CircularProgressIndicator(
+                    color: WearGlassesScaffold.accentColor,
+                    strokeWidth: 5,
                   ),
                 ),
-              ),
-              Align(
-                alignment: Alignment.topRight,
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 8, right: 8),
-                  child: _StatusBar(state: state),
+              const SizedBox(height: 20),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: WearGlassesScaffold.accentColor,
+                  fontSize: 28,
+                  height: 1.2,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

@@ -11,6 +11,8 @@ class AudioStreamService {
   static const double _noiseFloor = 0.03;
   static const double _attackSmoothing = 0.45;
   static const double _releaseSmoothing = 0.15;
+  static const int _startupDiagnosticsDurationMs = 10000;
+  static const int _startupDiagnosticsIntervalMs = 500;
 
   AudioStreamService({AudioRecorder? audioRecorder})
       : _audioRecorder = audioRecorder ?? AudioRecorder();
@@ -26,6 +28,11 @@ class AudioStreamService {
   int? _lastNonSilentChunkAtMillis;
   int? _continuousZeroAudioStartedAtMillis;
   int? _startedAtMillis;
+  int? _startupDiagnosticsStartedAtMillis;
+  int? _startupDiagnosticsNextAtMillis;
+  int _startupDiagnosticsChunks = 0;
+  double _startupDiagnosticsMaxRms = 0.0;
+  double _startupDiagnosticsMaxPeak = 0.0;
 
   final List<void Function(Uint8List)> _dataCallbacks = [];
   void Function(Object error, StackTrace stackTrace)? _errorCallback;
@@ -98,6 +105,7 @@ class AudioStreamService {
     _continuousZeroAudioStartedAtMillis = null;
     _startedAtMillis = DateTime.now().millisecondsSinceEpoch;
     _lastNonSilentChunkAtMillis = null;
+    _beginStartupDiagnostics();
     print('[AudioStreamService] startStream begin at $_startedAtMillis');
 
     final audioStream = await _audioRecorder.startStream(
@@ -106,7 +114,7 @@ class AudioStreamService {
         sampleRate: 16000,
         numChannels: 1,
         androidConfig: AndroidRecordConfig(
-          audioSource: AndroidAudioSource.voiceRecognition,
+          audioSource: AndroidAudioSource.voiceCommunication,
           service: AndroidService(
             title: 'Smart Glasses',
             content: 'Голосовое управление активно',
@@ -136,6 +144,7 @@ class AudioStreamService {
         } else {
           _continuousZeroAudioStartedAtMillis = null;
         }
+        _logStartupDiagnostics(stats);
         if (_chunksReceived == 1 || _chunksReceived % 200 == 0) {
           print(
             '[AudioStreamService] chunk#$_chunksReceived '
@@ -243,6 +252,51 @@ class AudioStreamService {
     if (!_audioLevelController.isClosed) {
       _audioLevelController.add(value);
     }
+  }
+
+  void _beginStartupDiagnostics() {
+    _startupDiagnosticsStartedAtMillis = _startedAtMillis;
+    _startupDiagnosticsNextAtMillis =
+        (_startedAtMillis ?? 0) + _startupDiagnosticsIntervalMs;
+    _startupDiagnosticsChunks = 0;
+    _startupDiagnosticsMaxRms = 0.0;
+    _startupDiagnosticsMaxPeak = 0.0;
+    print(
+      '[AudioStreamService] startup audio diagnostics armed '
+      'durationMs=$_startupDiagnosticsDurationMs '
+      'intervalMs=$_startupDiagnosticsIntervalMs',
+    );
+  }
+
+  void _logStartupDiagnostics(_PcmStats stats) {
+    final int? startedAt = _startupDiagnosticsStartedAtMillis;
+    final int? now = _lastChunkAtMillis;
+    if (startedAt == null || now == null) return;
+    final int offsetMs = now - startedAt;
+    if (offsetMs > _startupDiagnosticsDurationMs) {
+      _startupDiagnosticsStartedAtMillis = null;
+      return;
+    }
+
+    _startupDiagnosticsChunks++;
+    _startupDiagnosticsMaxRms = math.max(_startupDiagnosticsMaxRms, stats.rms);
+    _startupDiagnosticsMaxPeak =
+        math.max(_startupDiagnosticsMaxPeak, stats.peak);
+    final int nextAt = _startupDiagnosticsNextAtMillis ?? now;
+    if (now < nextAt) return;
+
+    print(
+      '[AudioStreamService] startup audio offsetMs=$offsetMs '
+      'chunks=$_startupDiagnosticsChunks '
+      'rms=${stats.rms.toStringAsFixed(5)} '
+      'peak=${stats.peak.toStringAsFixed(5)} '
+      'windowMaxRms=${_startupDiagnosticsMaxRms.toStringAsFixed(5)} '
+      'windowMaxPeak=${_startupDiagnosticsMaxPeak.toStringAsFixed(5)}',
+    );
+    _startupDiagnosticsNextAtMillis = now + _startupDiagnosticsIntervalMs;
+    _startupDiagnosticsChunks = 0;
+    _startupDiagnosticsMaxRms = 0.0;
+    _startupDiagnosticsMaxPeak = 0.0;
   }
 
   Uint8List _boostPcm16(Uint8List bytes) {

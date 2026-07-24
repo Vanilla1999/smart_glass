@@ -67,4 +67,47 @@ void main() {
       isTrue,
     );
   });
+
+  test('startup waits for audio captured after the recorder starts', () {
+    final VoiceCaptureStartupGate gate = VoiceCaptureStartupGate();
+
+    expect(
+      gate.isReady(
+        captureStartedAtMillis: 1000,
+        lastNonSilentAudioAtMillis: 999,
+        nowMillis: 8000,
+      ),
+      isFalse,
+    );
+    expect(
+      gate.isReady(
+        captureStartedAtMillis: 1000,
+        lastNonSilentAudioAtMillis: 1001,
+        nowMillis: 7999,
+      ),
+      isFalse,
+    );
+    expect(
+      gate.isReady(
+        captureStartedAtMillis: 1000,
+        lastNonSilentAudioAtMillis: 1001,
+        nowMillis: 8000,
+      ),
+      isTrue,
+    );
+    expect(
+      gate.isTimedOut(
+        captureStartedAtMillis: 1000,
+        nowMillis: 10999,
+      ),
+      isFalse,
+    );
+    expect(
+      gate.isTimedOut(
+        captureStartedAtMillis: 1000,
+        nowMillis: 11000,
+      ),
+      isTrue,
+    );
+  });
 }

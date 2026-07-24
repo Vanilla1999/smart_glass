@@ -106,6 +106,11 @@ class MainActivity : FlutterFragmentActivity() {
                         Log.d("SmartWear", "updateWearGlasses called: $payload")
                         updateWearGlasses(payload, result)
                     }
+                    "updateWearVoiceOverlay" -> {
+                        val payload = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
+                        Log.d("SmartWear", "updateWearVoiceOverlay called: $payload")
+                        updateWearVoiceOverlay(payload, result)
+                    }
                     "hideWearGlasses" -> {
                         Log.d("SmartWear", "hideWearGlasses called")
                         hideWearGlasses(result)
@@ -141,10 +146,10 @@ class MainActivity : FlutterFragmentActivity() {
         val callback = object : AudioManager.AudioRecordingCallback() {
             override fun onRecordingConfigChanged(configs: List<android.media.AudioRecordingConfiguration>) {
                 val ownRecordings = configs.filter {
-                    it.clientAudioSource == MediaRecorder.AudioSource.VOICE_RECOGNITION
+                    it.clientAudioSource == MediaRecorder.AudioSource.VOICE_COMMUNICATION
                 }
                 if (ownRecordings.isEmpty()) {
-                    Log.d("VoiceCapture", "VOICE_RECOGNITION recording config removed")
+                    Log.d("VoiceCapture", "VOICE_COMMUNICATION recording config removed")
                     if (lastAudioCaptureSilenced == true) {
                         appChannel?.invokeMethod("audioCaptureSilencedChanged", false)
                     }
@@ -322,6 +327,19 @@ class MainActivity : FlutterFragmentActivity() {
             "updateWearGlasses",
             payload,
             BoundedResult(result, "updateWearGlasses")
+        )
+    }
+
+    private fun updateWearVoiceOverlay(payload: Map<*, *>, result: MethodChannel.Result) {
+        val channel = glassesChannel
+        if (channel == null) {
+            result.error("GLASSES_ENGINE_UNAVAILABLE", "Secondary Flutter channel is unavailable", null)
+            return
+        }
+        channel.invokeMethod(
+            "updateWearVoiceOverlay",
+            payload,
+            BoundedResult(result, "updateWearVoiceOverlay")
         )
     }
 

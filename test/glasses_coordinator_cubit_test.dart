@@ -23,6 +23,7 @@ void main() {
     String lastScreen1Text = '';
     String lastScreen2Text = '';
     Map<String, dynamic>? lastWearPayload;
+    Map<String, dynamic>? lastVoiceOverlay;
 
     setUp(() {
       TestWidgetsFlutterBinding.ensureInitialized();
@@ -34,6 +35,7 @@ void main() {
       lastScreen1Text = '';
       lastScreen2Text = '';
       lastWearPayload = null;
+      lastVoiceOverlay = null;
 
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(
@@ -72,6 +74,9 @@ void main() {
         },
         onUpdateWearGlasses: (Map<String, dynamic> payload) {
           lastWearPayload = payload;
+        },
+        onUpdateWearVoiceOverlay: (Map<String, dynamic> payload) {
+          lastVoiceOverlay = payload;
         },
       );
     }
@@ -144,8 +149,7 @@ void main() {
       );
     });
 
-    test('navigateToScreen with route map calls onNavigateToScreen',
-        () async {
+    test('navigateToScreen with route map calls onNavigateToScreen', () async {
       final GlassesCoordinatorCubit cubit = createCubit();
       addTearDown(cubit.close);
 
@@ -176,6 +180,23 @@ void main() {
       );
 
       expect(lastWearPayload, payload);
+    });
+
+    test('updateWearVoiceOverlay forwards map payload to callback', () async {
+      final GlassesCoordinatorCubit cubit = createCubit();
+      addTearDown(cubit.close);
+
+      await cubit.init();
+      final Map<String, dynamic> payload = <String, dynamic>{
+        'visible': true,
+        'message': 'Переподключаем голосовое управление',
+      };
+      await simulateIncomingMethodCall(
+        channel,
+        MethodCall('updateWearVoiceOverlay', payload),
+      );
+
+      expect(lastVoiceOverlay, payload);
     });
 
     test('recognized text routes to screen1 on default route', () async {

@@ -37,6 +37,8 @@ class WearModuleApp extends StatefulWidget {
     this.onStopVoice,
     this.onRestartVoice,
     this.audioCaptureSilencedStream,
+    this.voiceReconnectingStream,
+    this.voiceReconnectErrorStream,
   });
 
   final ValueChanged<GoRouter>? onRouterReady;
@@ -50,6 +52,8 @@ class WearModuleApp extends StatefulWidget {
   final Future<void> Function()? onStopVoice;
   final Future<void> Function(String reason)? onRestartVoice;
   final Stream<bool>? audioCaptureSilencedStream;
+  final Stream<bool>? voiceReconnectingStream;
+  final Stream<String?>? voiceReconnectErrorStream;
 
   @override
   State<WearModuleApp> createState() => _WearModuleAppState();
@@ -65,6 +69,8 @@ class _WearModuleAppState extends State<WearModuleApp>
   StreamSubscription<dynamic>? _authorizedSub;
   StreamSubscription<void>? _clearedSub;
   StreamSubscription<bool>? _audioCaptureSilencedSub;
+  StreamSubscription<bool>? _voiceReconnectingSub;
+  StreamSubscription<String?>? _voiceReconnectErrorSub;
   Timer? _voiceHealthTimer;
   bool _voiceStarted = false;
   bool _voiceStarting = false;
@@ -73,6 +79,9 @@ class _WearModuleAppState extends State<WearModuleApp>
   int _consumedPartialPhraseAt = 0;
   int? _voiceStartupToken;
   bool? _audioCaptureSilenced;
+  bool _voiceReconnecting = false;
+  String? _voiceReconnectError;
+  bool _restartVoiceAfterInterruption = false;
 
   static const int _finalPhraseSuppressMs = 1500;
 
@@ -123,6 +132,13 @@ class _WearModuleAppState extends State<WearModuleApp>
     flow.setUiLifecycle(WearUiLifecycle.active);
     _voiceSub = _voiceCommands.listen(
       (WearVoiceCommand command) async {
+        if (_voiceReconnecting || _voiceReconnectError != null) {
+          print(
+            '[WearModuleApp] suppress voice command during reconnect '
+            'command=$command',
+          );
+          return;
+        }
         final int startedAt = DateTime.now().millisecondsSinceEpoch;
         print(
           '[WearModuleApp] voice command received command=$command '
@@ -141,6 +157,10 @@ class _WearModuleAppState extends State<WearModuleApp>
     );
     _voicePhraseSub = _voicePhrases.listen(
       (String phrase) async {
+        if (_voiceReconnecting || _voiceReconnectError != null) {
+          print('[WearModuleApp] suppress voice phrase during reconnect');
+          return;
+        }
         final int startedAt = DateTime.now().millisecondsSinceEpoch;
         if (_shouldSuppressFinalPhrase(phrase, startedAt)) {
           print(
@@ -166,6 +186,10 @@ class _WearModuleAppState extends State<WearModuleApp>
     );
     _voicePartialPhraseSub = _voicePartialPhrases.listen(
       (String phrase) async {
+        if (_voiceReconnecting || _voiceReconnectError != null) {
+          print('[WearModuleApp] suppress voice partial during reconnect');
+          return;
+        }
         final int startedAt = DateTime.now().millisecondsSinceEpoch;
         if (_shouldSuppressConsumedPartialPhrase(phrase, startedAt)) {
           print(
@@ -199,6 +223,23 @@ class _WearModuleAppState extends State<WearModuleApp>
     _audioCaptureSilencedSub = (widget.audioCaptureSilencedStream ??
             MethodChannelService().audioCaptureSilencedStream)
         .listen(_onAudioCaptureSilencedChanged);
+    _voiceReconnectingSub = (widget.voiceReconnectingStream ??
+            WearVoiceSession.I.reconnectingStream)
+        .listen((bool reconnecting) {
+      if (!mounted || _voiceReconnecting == reconnecting) return;
+      setState(() {
+        _voiceReconnecting = reconnecting;
+        if (reconnecting) _voiceReconnectError = null;
+      });
+      _syncGlassesVoiceOverlay();
+    });
+    _voiceReconnectErrorSub = (widget.voiceReconnectErrorStream ??
+            WearVoiceSession.I.reconnectErrorStream)
+        .listen((String? error) {
+      if (!mounted || _voiceReconnectError == error) return;
+      setState(() => _voiceReconnectError = error);
+      _syncGlassesVoiceOverlay();
+    });
     _flowStateSub = flow.stateStream.listen((WearFlowState state) {
       _configureVoiceForScreen(state.screen);
     });
@@ -311,6 +352,10 @@ class _WearModuleAppState extends State<WearModuleApp>
       _voiceStartError = null;
     });
     _voiceStartupToken = WearStatusIconReporter.I.beginVoiceStartup();
+    _updateGlassesVoiceOverlay(
+      visible: true,
+      message: 'Подготовка\nголосового управления',
+    );
     unawaited(
       WearStatusIconReporter.I.sendFast(
         WearGlassesPayload.loading(
@@ -332,8 +377,9 @@ class _WearModuleAppState extends State<WearModuleApp>
       } else {
         await WearVoiceSession.I.start();
       }
-      WearStatusIconReporter.I.endVoiceStartup(startupToken);
       if (!_isCurrentVoiceStartup(startupToken)) return;
+      WearStatusIconReporter.I.endVoiceStartup(startupToken);
+      _updateGlassesVoiceOverlay(visible: false);
       if (!WearSession.isAuthorized) {
         setState(() {
           _voiceStarting = false;
@@ -350,8 +396,12 @@ class _WearModuleAppState extends State<WearModuleApp>
     } catch (error, stackTrace) {
       print(
           '[WearModuleApp] voice start failed source=$source: $error\n$stackTrace');
-      WearStatusIconReporter.I.endVoiceStartup(startupToken);
       if (!_isCurrentVoiceStartup(startupToken)) return;
+      WearStatusIconReporter.I.endVoiceStartup(startupToken);
+      _updateGlassesVoiceOverlay(
+        visible: true,
+        message: 'Голосовое управление недоступно',
+      );
       setState(() {
         _voiceStarting = false;
         _voiceStartError = 'Голосовое управление не запустилось';
@@ -391,6 +441,28 @@ class _WearModuleAppState extends State<WearModuleApp>
     );
   }
 
+  void _syncGlassesVoiceOverlay() {
+    final String? message = _voiceReconnectError ??
+        (_voiceReconnecting ? 'Переподключаем\nголосовое управление' : null);
+    _updateGlassesVoiceOverlay(visible: message != null, message: message);
+  }
+
+  void _updateGlassesVoiceOverlay({
+    required bool visible,
+    String? message,
+  }) {
+    unawaited(
+      MethodChannelService()
+          .updateWearVoiceOverlay(visible: visible, message: message)
+          .catchError((Object error, StackTrace stackTrace) {
+        print(
+          '[WearModuleApp] update glasses voice overlay failed: '
+          '$error\n$stackTrace',
+        );
+      }),
+    );
+  }
+
   void _onAudioCaptureSilencedChanged(bool silenced) {
     if (_audioCaptureSilenced == silenced) return;
     final bool wasSilenced = _audioCaptureSilenced == true;
@@ -402,19 +474,35 @@ class _WearModuleAppState extends State<WearModuleApp>
     if (silenced ||
         !wasSilenced ||
         !_voiceStarted ||
-        !WearSession.isAuthorized ||
-        widget.onStartVoice != null) {
+        !WearSession.isAuthorized) {
       return;
     }
 
     Future<void>.delayed(const Duration(seconds: 1), () {
-      if (!mounted || !WearSession.isAuthorized) return;
-      _ensureVoiceHealthy('android_audio_capture_unsilenced');
+      if (!mounted ||
+          !WearSession.isAuthorized ||
+          _audioCaptureSilenced == true) {
+        return;
+      }
+      _restartVoiceAfterInterruption = false;
+      final Future<void> Function(String reason)? restartVoice =
+          widget.onRestartVoice;
+      if (restartVoice != null) {
+        unawaited(restartVoice('android_audio_capture_unsilenced'));
+        return;
+      }
+      if (widget.onStartVoice != null) return;
+      unawaited(
+        WearVoiceSession.I.restart(
+          reason: 'android_audio_capture_unsilenced',
+        ),
+      );
     });
   }
 
   void _stopVoiceForLogout() {
     _voiceStarted = false;
+    _updateGlassesVoiceOverlay(visible: false);
     _voiceHealthTimer?.cancel();
     _voiceHealthTimer = null;
     WearStatusIconReporter.I.endVoiceStartup(_voiceStartupToken);
@@ -454,7 +542,19 @@ class _WearModuleAppState extends State<WearModuleApp>
         final Future<void> Function(String reason)? restartVoice =
             widget.onRestartVoice;
         if (restartVoice != null) {
-          unawaited(restartVoice('app_lifecycle_resumed'));
+          final String reason = _restartVoiceAfterInterruption
+              ? 'app_lifecycle_resumed_after_interruption'
+              : 'app_lifecycle_resumed';
+          _restartVoiceAfterInterruption = false;
+          unawaited(restartVoice(reason));
+        } else if (_restartVoiceAfterInterruption &&
+            _audioCaptureSilenced != true) {
+          _restartVoiceAfterInterruption = false;
+          unawaited(
+            WearVoiceSession.I.restart(
+              reason: 'app_lifecycle_resumed_after_interruption',
+            ),
+          );
         } else {
           _ensureVoiceHealthy('app_lifecycle_resumed');
           Future<void>.delayed(const Duration(seconds: 1), () {
@@ -465,6 +565,9 @@ class _WearModuleAppState extends State<WearModuleApp>
       }
       return;
     }
+    // T2151 can keep delivering low-level noise after an interruption while
+    // VOICE_COMMUNICATION no longer captures speech.
+    _restartVoiceAfterInterruption = true;
     _flow.setUiLifecycle(
       WearUiLifecycle.inactive,
     );
@@ -480,6 +583,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   @override
   void dispose() {
     print('[VOICE-LIFECYCLE] WearModuleApp dispose');
+    _updateGlassesVoiceOverlay(visible: false);
     WearStatusIconReporter.I.endVoiceStartup(_voiceStartupToken);
     unawaited(
       WearStatusIconReporter.I.stop().catchError(
@@ -498,6 +602,8 @@ class _WearModuleAppState extends State<WearModuleApp>
     _voicePhraseSub?.cancel();
     _voicePartialPhraseSub?.cancel();
     _audioCaptureSilencedSub?.cancel();
+    _voiceReconnectingSub?.cancel();
+    _voiceReconnectErrorSub?.cancel();
     _flowStateSub?.cancel();
     _authorizedSub?.cancel();
     _clearedSub?.cancel();
@@ -529,6 +635,10 @@ class _WearModuleAppState extends State<WearModuleApp>
         if (didPop) {
           return;
         }
+        if (_voiceReconnecting || _voiceReconnectError != null) {
+          print('[WearModuleApp] suppress system back during voice reconnect');
+          return;
+        }
         if (_router.canPop()) {
           print(
               '[STACK-DEBUG] WearModuleApp: delegating system back to inner GoRouter.pop()');
@@ -552,6 +662,17 @@ class _WearModuleAppState extends State<WearModuleApp>
             child: _VoiceStartupOverlay(
               isError: _voiceStartError != null,
               message: _voiceStartError,
+            ),
+          ),
+        if (WearSession.isAuthorized &&
+            (_voiceReconnecting || _voiceReconnectError != null) &&
+            !_voiceStarting &&
+            _voiceStartError == null)
+          Positioned.fill(
+            child: _VoiceStartupOverlay(
+              isError: _voiceReconnectError != null,
+              message: _voiceReconnectError,
+              isReconnecting: _voiceReconnecting,
             ),
           ),
       ],
@@ -598,12 +719,14 @@ class _WearModuleAppState extends State<WearModuleApp>
 
 class _VoiceStartupOverlay extends StatelessWidget {
   const _VoiceStartupOverlay({
-    required this.isError,
-    required this.message,
+    this.isError = false,
+    this.message,
+    this.isReconnecting = false,
   });
 
   final bool isError;
   final String? message;
+  final bool isReconnecting;
 
   @override
   Widget build(BuildContext context) {
@@ -624,7 +747,11 @@ class _VoiceStartupOverlay extends StatelessWidget {
                 ),
               const SizedBox(height: 16),
               Text(
-                isError ? message! : 'Подготовка голосового\nуправления',
+                isError
+                    ? message!
+                    : isReconnecting
+                        ? 'Переподключаем голосовое\nуправление'
+                        : 'Подготовка голосового\nуправления',
                 style: WearTypography.lable,
                 textAlign: TextAlign.center,
               ),

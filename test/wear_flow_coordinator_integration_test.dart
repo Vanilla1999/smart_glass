@@ -606,7 +606,7 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       expect(stopVoiceCalls, 1);
     });
 
-    testWearWidget('silenced audio capture does not restart while silenced',
+    testWearWidget('unsilenced audio capture restarts voice once',
         (WidgetTester tester) async {
       final StreamController<bool> silencedEvents =
           StreamController<bool>.broadcast();
@@ -642,10 +642,13 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
 
       silencedEvents.add(false);
       await tester.pump(const Duration(seconds: 1));
+
+      expect(restartReasons, <String>['android_audio_capture_unsilenced']);
+
       silencedEvents.add(true);
       await tester.pump();
 
-      expect(restartReasons, isEmpty);
+      expect(restartReasons, <String>['android_audio_capture_unsilenced']);
     });
 
     testWearWidget('voice startup loader stays until voice start completes',
@@ -970,6 +973,116 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       await tester.pumpAndSettle();
 
       expect(routerFlow.state.menuFocusedIndex, 1);
+    });
+
+    testWearWidget('restarts voice after paused lifecycle resumes',
+        (WidgetTester tester) async {
+      WearSession.setUser(AuthenticatedUser(
+        idUser: 1,
+        idEmployee: 1,
+        name: 'Test User',
+      ));
+      addTearDown(WearSession.clear);
+      String? restartReason;
+
+      await tester.pumpWidget(
+        WearModuleApp(
+          flowController: WearFlowController(
+            glassesOutput: _TestGlassesOutput(),
+            navigationOutput: _FakeNavigationOutput(),
+          ),
+          routes: _testRoutes,
+          initialLocation: WearMenuScreen.route,
+          onStartVoice: () async {},
+          onStopVoice: () async {},
+          onRestartVoice: (String reason) async {
+            restartReason = reason;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+
+      expect(restartReason, 'app_lifecycle_resumed_after_interruption');
+    });
+
+    testWearWidget('shows voice reconnection overlay without changing route',
+        (WidgetTester tester) async {
+      WearSession.setUser(AuthenticatedUser(
+        idUser: 1,
+        idEmployee: 1,
+        name: 'Test User',
+      ));
+      addTearDown(WearSession.clear);
+      final StreamController<bool> reconnecting =
+          StreamController<bool>.broadcast(sync: true);
+      addTearDown(reconnecting.close);
+      final StreamController<String?> reconnectErrors =
+          StreamController<String?>.broadcast(sync: true);
+      addTearDown(reconnectErrors.close);
+      final StreamController<WearVoiceCommand> commands =
+          StreamController<WearVoiceCommand>.broadcast(sync: true);
+      addTearDown(commands.close);
+      final WearFlowController flow = WearFlowController(
+        glassesOutput: _TestGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      GoRouter? router;
+
+      await tester.pumpWidget(
+        WearModuleApp(
+          flowController: flow,
+          routes: _testRoutes,
+          initialLocation: WearMenuScreen.route,
+          voiceCommandStream: commands.stream,
+          onStartVoice: () async {},
+          onStopVoice: () async {},
+          onRestartVoice: (_) async {},
+          voiceReconnectingStream: reconnecting.stream,
+          voiceReconnectErrorStream: reconnectErrors.stream,
+          onRouterReady: (GoRouter value) => router = value,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      reconnecting.add(true);
+      await tester.pump();
+
+      expect(
+        find.text('Переподключаем голосовое\nуправление'),
+        findsOneWidget,
+      );
+      expect(router?.state.matchedLocation, WearMenuScreen.route);
+
+      commands.add(WearVoiceCommand.down);
+      await tester.pump();
+
+      expect(flow.state.menuFocusedIndex, 0);
+
+      reconnecting.add(false);
+      await tester.pump();
+
+      expect(
+        find.text('Переподключаем голосовое\nуправление'),
+        findsNothing,
+      );
+
+      reconnectErrors.add('Голосовое управление недоступно');
+      await tester.pump();
+
+      expect(find.text('Голосовое управление недоступно'), findsOneWidget);
+
+      reconnectErrors.add(null);
+      await tester.pump();
+
+      commands.add(WearVoiceCommand.down);
+      await tester.pump();
+
+      expect(flow.state.menuFocusedIndex, 1);
     });
   });
 

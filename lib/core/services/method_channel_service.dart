@@ -97,6 +97,23 @@ class MethodChannelService {
     }
   }
 
+  /// Updates the voice availability overlay without replacing wear content.
+  Future<void> updateWearVoiceOverlay({
+    required bool visible,
+    String? message,
+  }) async {
+    try {
+      await _appChannel
+          .invokeMethod('updateWearVoiceOverlay', <String, dynamic>{
+        'visible': visible,
+        'message': message,
+      });
+    } catch (e) {
+      print('Error updating wear voice overlay: $e');
+      rethrow;
+    }
+  }
+
   /// Hide wear projection screen on glasses.
   Future<void> hideWearGlasses() async {
     try {
