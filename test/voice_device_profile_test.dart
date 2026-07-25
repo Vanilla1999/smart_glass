@@ -19,7 +19,8 @@ void main() {
     expect(profile.id, 't2151');
     expect(profile.forceHardRestartOnResume, isTrue);
     expect(profile.forceHardRestartAfterUnsilence, isTrue);
-    expect(profile.forceHardRestartOnRouteChange, isTrue);
+    expect(profile.forceHardRestartOnAudioRouteChange, isTrue);
+    expect(profile.manageBluetooth, isFalse);
   });
 
   test('T2151 A/B profiles select the requested Android source', () {

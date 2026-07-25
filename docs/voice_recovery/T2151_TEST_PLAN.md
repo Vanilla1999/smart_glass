@@ -22,22 +22,31 @@ All three profile mappings are unit-tested. The debug APK has been built with `V
 
 ## Scenarios
 
-1. Perform 50-100 cold starts; remain silent during every startup.
-2. Perform 50-100 background-to-resume cycles.
-3. Lock and unlock the screen.
-4. Open and dismiss the notification shade.
-5. Exercise permission and system-dialog windows.
-6. Capture the microphone with another app, then return it to the application.
-7. Connect and disconnect each supported audio device.
-8. Run continuously for 8-12 hours.
-9. Send several dozen supported voice commands after each recovery.
-10. Verify the phone overlay for preparing, reconnecting, unavailable, and ready states.
-11. Verify the glasses overlay for the same states.
-12. Verify the underlying wear screen is retained while the overlay changes.
+1. Perform 50 cold starts; remain silent during every startup.
+2. Perform 100 background-to-resume cycles.
+3. Generate 20 `inactive`-only events, including 20 notification-shade interactions, and verify no restart.
+4. Perform 20 lock/unlock cycles.
+5. Capture the microphone with another app, then return capture.
+6. Perform 20 USB/UVC unplug/replug cycles; record old and new device IDs.
+7. Verify automatic voice recovery after every expected UVC reattach, then verify the manual retry fallback.
+8. Exercise exact-zero PCM, profile-gated route bounce, and camera-plus-audio recovery only when each experiment is enabled.
+9. Run continuously for 8-12 hours.
+10. Send 100 `вверх`, 100 `вниз`, 50 availability commands, and rapid mixed up/down series.
+11. Verify phone and glasses remain on the same screen after every navigation and recovery.
+12. Verify phone and glasses overlays for preparing, reconnecting, unavailable, waiting/reconnect, and ready states without replacing the wear screen.
 13. Recreate the glasses Presentation/secondary Flutter engine while an overlay is visible and verify it reappears.
 14. Verify logs never show two active recorder instances for the same process.
 15. Compare each configured audio-source profile under identical scenarios.
-16. Save routed-device, session, source, and silencing diagnostics for every observed recovery.
+16. Save routed-device, session, source, silencing diagnostics, and recovery result for every observed recovery.
+
+## Metrics
+
+- ASR partial latency p50/p95.
+- Command dispatch p50/p95.
+- Phone focus-frame p50/p95.
+- Glasses receive-to-frame p50/p95.
+- Authorization-to-ready and app-start-to-model-ready.
+- Recovery duration, recorder recreations, duplicate restart count, route mismatch count, zero-PCM incidents, and USB-reattach success rate.
 
 ## Acceptance Criteria
 
@@ -50,3 +59,7 @@ All three profile mappings are unit-tested. The debug APK has been built with `V
 - The overlay matches actual voice state and does not replace the active wear screen.
 - `updateWearGlasses` does not hide a visible glasses overlay.
 - A visible glasses overlay is reapplied after Presentation recreation.
+- There are zero false startup errors from silence, zero UI-route restarts, zero parallel recorders, and zero commands outside `VoicePhase.ready`.
+- `up`/`down` command handlers do not wait for glasses acknowledgement.
+- Ordinary low RMS never triggers recovery; no rapid restart loop occurs.
+- USB reattach restores voice automatically once the native device-event path is implemented and validated.

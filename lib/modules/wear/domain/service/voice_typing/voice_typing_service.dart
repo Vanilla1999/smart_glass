@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/number_parser_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 
 class VoiceTypingService {
@@ -32,7 +33,7 @@ class VoiceTypingService {
         _numberParserService = numberParserService,
         _ownsSpeechRecognitionService = ownsSpeechRecognitionService {
     _recognitionSubscription =
-        _speechRecognitionService.freeTextResultsStream.listen(
+        _speechRecognitionService.segmentedResultsStream.listen(
       _onRecognitionResult,
       onError: _onRecognitionError,
     );
@@ -45,7 +46,7 @@ class VoiceTypingService {
   final StreamController<String> _resultsController =
       StreamController<String>.broadcast();
 
-  StreamSubscription<String>? _recognitionSubscription;
+  StreamSubscription<SegmentedRecognitionResult>? _recognitionSubscription;
 
   Stream<String> get resultsStream => _resultsController.stream;
   Stream<double> get audioLevelStream => _audioStreamService.audioLevelStream;
@@ -83,8 +84,12 @@ class VoiceTypingService {
     }
   }
 
-  void _onRecognitionResult(String resultText) {
-    final output = _numberParserService.parseToNumber(resultText);
+  void _onRecognitionResult(SegmentedRecognitionResult result) {
+    if (result.lane != RecognitionLane.freeText ||
+        result.kind != RecognitionKind.finalResult) {
+      return;
+    }
+    final output = _numberParserService.parseToNumber(result.text);
     if (!_resultsController.isClosed) {
       _resultsController.add(output);
     }

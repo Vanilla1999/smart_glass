@@ -75,6 +75,7 @@ void main() {
     expect(
       gate.isReady(
         captureStartedAtMillis: 1000,
+        isCaptureRunning: true,
         chunksReceived: 2,
         lastAudioAtMillis: 1001,
         nowMillis: 1001,
@@ -84,11 +85,22 @@ void main() {
     expect(
       gate.isReady(
         captureStartedAtMillis: 1000,
+        isCaptureRunning: true,
         chunksReceived: 3,
         lastAudioAtMillis: 1001,
         nowMillis: 1001,
       ),
       isTrue,
+    );
+    expect(
+      gate.isReady(
+        captureStartedAtMillis: 1000,
+        isCaptureRunning: false,
+        chunksReceived: 3,
+        lastAudioAtMillis: 1001,
+        nowMillis: 1001,
+      ),
+      isFalse,
     );
     expect(
       gate.isTimedOut(

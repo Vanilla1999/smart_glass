@@ -12,7 +12,7 @@ class VoiceDeviceProfile {
     required this.audioSource,
     required this.forceHardRestartOnResume,
     required this.forceHardRestartAfterUnsilence,
-    required this.forceHardRestartOnRouteChange,
+    required this.forceHardRestartOnAudioRouteChange,
     required this.manageBluetooth,
     required this.speakerphone,
     required this.audioManagerMode,
@@ -23,7 +23,7 @@ class VoiceDeviceProfile {
     audioSource: VoiceAudioSource.voiceCommunication,
     forceHardRestartOnResume: false,
     forceHardRestartAfterUnsilence: true,
-    forceHardRestartOnRouteChange: false,
+    forceHardRestartOnAudioRouteChange: false,
     manageBluetooth: true,
     speakerphone: false,
     audioManagerMode: AudioManagerMode.modeNormal,
@@ -34,8 +34,8 @@ class VoiceDeviceProfile {
     audioSource: VoiceAudioSource.voiceCommunication,
     forceHardRestartOnResume: true,
     forceHardRestartAfterUnsilence: true,
-    forceHardRestartOnRouteChange: true,
-    manageBluetooth: true,
+    forceHardRestartOnAudioRouteChange: true,
+    manageBluetooth: false,
     speakerphone: false,
     audioManagerMode: AudioManagerMode.modeNormal,
   );
@@ -45,8 +45,8 @@ class VoiceDeviceProfile {
     audioSource: VoiceAudioSource.voiceRecognition,
     forceHardRestartOnResume: true,
     forceHardRestartAfterUnsilence: true,
-    forceHardRestartOnRouteChange: true,
-    manageBluetooth: true,
+    forceHardRestartOnAudioRouteChange: true,
+    manageBluetooth: false,
     speakerphone: false,
     audioManagerMode: AudioManagerMode.modeNormal,
   );
@@ -56,8 +56,8 @@ class VoiceDeviceProfile {
     audioSource: VoiceAudioSource.microphone,
     forceHardRestartOnResume: true,
     forceHardRestartAfterUnsilence: true,
-    forceHardRestartOnRouteChange: true,
-    manageBluetooth: true,
+    forceHardRestartOnAudioRouteChange: true,
+    manageBluetooth: false,
     speakerphone: false,
     audioManagerMode: AudioManagerMode.modeNormal,
   );
@@ -66,7 +66,9 @@ class VoiceDeviceProfile {
   final VoiceAudioSource audioSource;
   final bool forceHardRestartOnResume;
   final bool forceHardRestartAfterUnsilence;
-  final bool forceHardRestartOnRouteChange;
+
+  /// Only native audio-route events may use this policy; UI routes never do.
+  final bool forceHardRestartOnAudioRouteChange;
   final bool manageBluetooth;
   final bool speakerphone;
   final AudioManagerMode audioManagerMode;

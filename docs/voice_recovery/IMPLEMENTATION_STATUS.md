@@ -3,11 +3,78 @@
 ## Baseline
 
 - Branch: `main`
-- HEAD: `14899f0bd1467766c314b8a962863039923346c7`
+- HEAD: `9d0273daa6312e451e8b3300e5331d47d4023f8b`
 - Baseline command: `git status --short && git branch --show-current && git rev-parse HEAD`
-- Baseline result: clean worktree, branch `main`, SHA above.
+- Baseline result: clean worktree, branch `main`, SHA above. `git diff --check` returned no output.
 
 `DONE` requires implemented code, formatting, an automated test that was run, and no known code-level defect. T2151-only validation remains `DEVICE_PENDING`.
+
+## Final T2151 remediation
+
+The current remediation is governed by `docs/voice_recovery/T2151_REMEDIATION_PLAN.md`.
+
+| Area | Status | Changed files | Tests | Remaining hardware validation | Known limitations |
+|---|---|---|---|---|---|
+| P0 correctness | IN_PROGRESS | `voice_device_profile.dart`, `wear_voice_session.dart`, `wear_module_app.dart`, `wear_voice_control_service.dart` | `voice_device_profile_test.dart`, `wear_voice_control_service_test.dart`, `wear_flow_coordinator_integration_test.dart` | T2151 route/lifecycle behavior | Navigation transaction, capture validation, and retry-owner work remain. |
+| Navigation transaction | IN_PROGRESS | `wear_navigation_request.dart`, `wear_flow_controller.dart`, `wear_module_app.dart` | `wear_flow_controller_test.dart`, `wear_flow_coordinator_integration_test.dart` | Phone/glasses convergence on T2151 | Delivery is request-ID guarded and acknowledged by the matching route; optimistic flow/glasses projection is intentionally retained. |
+| P1 responsiveness | IN_PROGRESS | `wear_flow_controller.dart` | `wear_flow_controller_test.dart` | Command latency on T2151 | Latest-wins selection channel and rendering isolation remain. |
+| Vosk startup | IN_PROGRESS | Existing service | Existing tests only | Startup latency on T2151 | Free-text recognizer is currently eagerly created. |
+| P2 UVC recovery | IN_PROGRESS | Existing capture monitor | Existing recovery-gate tests | All USB/UVC claims | Native monitor is source-filtered, not session-correlated. |
+| Overlays | IN_PROGRESS | Existing overlay bridge | Existing cubit tests | Secondary engine recreation | Overlay behavior is not yet verified on T2151. |
+| Hardware | DEVICE_PENDING | N/A | N/A | Full T2151 matrix | T2151 is not currently connected through ADB. |
+
+### Remediation execution log
+
+#### P0.1 Route, profile, lifecycle, and command correction
+
+- Status: `IN_PROGRESS`.
+- Changed files: `lib/modules/wear/domain/service/voice_typing/voice_device_profile.dart`, `lib/modules/wear/services/wear_voice_session.dart`, `lib/modules/wear/presentation/widgets/wear_module_app.dart`, `lib/modules/wear/domain/service/voice_command/wear_voice_control_service.dart`.
+- Added/updated tests: `test/voice_device_profile_test.dart`, `test/wear_voice_control_service_test.dart`.
+- Commands run: `fvm flutter test test/voice_device_profile_test.dart test/wear_voice_control_service_test.dart`; `fvm flutter test test/wear_flow_coordinator_integration_test.dart`.
+- Result: 18 and 29 tests passed, respectively.
+- Implemented behavior: GoRouter changes no longer invoke microphone restart; the profile capability is named for native audio-route events; all T2151 profiles disable Bluetooth SCO management; `inactive` does not background the flow; `hidden`/`paused` suspend health checks and arm one resume recovery; partial/final command suppression now requires equal parsed commands.
+- Focused review: removed the obsolete session route-policy getter after verifying it had no valid caller.
+- Hardware remaining: verify T2151 USB/UVC routing and lifecycle behavior. `manageBluetooth: false` is safe configuration for an expected USB/UVC input but remains `DEVICE_PENDING` until tested.
+- Known limitations: no native audio-route event stream exists yet, so the renamed capability is not consumed.
+
+#### P1.1 Command/render decoupling
+
+- Status: `IN_PROGRESS`.
+- Changed files: `lib/modules/wear/application/wear_flow_controller.dart`.
+- Added test: `test/wear_flow_controller_test.dart` verifies menu down completes while glasses output remains blocked.
+- Command run: `fvm flutter test test/wear_flow_controller_test.dart`.
+- Result: 56 tests passed.
+- Implemented behavior: menu `up`/`down` updates local flow state immediately and sends glasses projection asynchronously.
+- Focused review: no follow-up code defect found; full-payload projection is still unbounded, therefore the revisioned latest-wins selection protocol remains `TODO`.
+- Hardware remaining: measure command handler and glasses frame latency on T2151.
+
+#### P0.2 Transactional navigation delivery
+
+- `WearNavigationRequest` now carries a monotonically increasing `requestId`.
+- Pending navigation remains stored until `WearModuleApp` observes the matching GoRouter route and calls `acknowledgeNavigation`.
+- A delivered request ID prevents duplicate dispatch during repeated lifecycle flushes; a delivery error restores eligibility for a later flush.
+- Newer requests replace older inactive requests, and stale acknowledgements are rejected.
+- The controller continues optimistic flow/glasses projection before route acknowledgement. Attempting strict post-ack projection caused 23 existing controller/integration regressions because screen actions depend on immediate destination state; this is now an explicit contract rather than an implicit race.
+- Review: no new correctness finding after the integration test confirmed `controller request -> GoRouter route -> matching ack -> pending clear`.
+- Verification: `fvm flutter test test/wear_flow_controller_test.dart test/wear_flow_coordinator_integration_test.dart` passed (88 tests); `git diff --check` passed.
+
+#### P0.3 Health-check ownership
+
+- `WearVoiceSession.ensureHealthy` now joins an existing health check through `VoiceSingleFlight`; concurrent timer/resume/capture-event checks cannot independently trigger sequential recovery decisions.
+- Existing restart single-flight remains the sole owner of an actual restart, and scheduled retries are cancelled when a restart begins.
+- Review: no new correctness finding. The guard covers concurrent health decisions; start/restart lifecycle ownership and T2151 hardware validation remain in progress.
+- Verification: `fvm flutter test test/wear_voice_session_test.dart test/voice_recovery_primitives_test.dart` passed (8 tests); targeted analyze reported only 22 existing `avoid_print` info; `git diff --check` passed.
+
+#### Current verification run
+
+- `fvm flutter pub get`: passed; 53 packages have newer incompatible versions and were not changed.
+- `fvm flutter analyze`: completed with 322 existing project info/warnings, primarily `avoid_print`; no compile error was reported. This is not a clean analyzer result.
+- `fvm flutter test`: passed, 163 tests.
+- `./gradlew :app:compileDebugKotlin`: passed. Gradle reported existing Kotlin-plugin, flat-directory, and deprecation warnings.
+- `./tool/build_voice_recovery_apk.sh t2151`: passed; output `build/app/outputs/flutter-apk/app-debug.apk`.
+- APK fingerprint: `sha=9d0273daa6312e451e8b3300e5331d47d4023f8b`, `dirty=true`, `patch=30966ef22f2cbb498d02ce4f36fbd707eb1f1b95b1dc06f1f54a92be4e328ed0`, `profile=t2151`.
+- `git diff --check`: passed.
+- Control-build fingerprint with `dirty=false`: `BLOCKED` because this remediation intentionally leaves uncommitted work and no separate clean checkout was created. The script output did not print a build timestamp, so timestamp presence is `TODO`.
 
 | ID | Task | Status | Evidence |
 |---|---|---|---|
@@ -19,18 +86,18 @@
 | V06 | Android capture silenced handling | DEVICE_PENDING | State moves to suspended and unsilence schedules one restart; widget coverage exists, native behavior requires T2151. |
 | V07 | Hard recorder recreation | DONE | `VoiceRecorderLifecycle` stops, disposes, then creates the replacement recorder; order is unit-tested. |
 | V08 | Single-flight recovery | DONE | `VoiceSingleFlight` is used by restart and tested with concurrent requests plus a later restart. Scheduled retry is cancelled when a restart begins. |
-| V09 | Retry with backoff | IN_PROGRESS | Health checks defer while an unavailable retry is scheduled and stale retry timers are cancelled, but production-path timer tests are still missing. |
+| V09 | Retry with backoff | DONE | `wear_voice_session_test.dart` verifies failed startup schedules the configured retry and only its callback initiates the next restart. |
 | V10 | Correct app lifecycle handling | DEVICE_PENDING | Only hidden/paused arm the resume restart; widget test passed for paused/resumed, T2151 validation remains. |
-| V11 | Safe Vosk pipeline stop | IN_PROGRESS | Timed-out work is isolated on replaced recognizers and stale partial mutations are suppressed; a blocking-recognizer integration test is still missing. |
+| V11 | Safe Vosk pipeline stop | DONE | `voice_recovery_primitives_test.dart` verifies timed-out processing isolation and capture-epoch invalidation before replacement capture work. |
 | V12 | Block commands outside ready | DONE | UI suppresses commands during reconnect/unavailable; full test suite passed. |
 | V13 | Phone overlay | DONE | Overlay derives from startup/recovery/unavailable state and preserves route; integration tests passed. |
-| V14 | Independent glasses overlay | IN_PROGRESS | Overlay revision is process-global and the cubit rejects equal/stale revisions; sender recreation is not yet tested through the bridge. |
+| V14 | Independent glasses overlay | DONE | `wear_flow_coordinator_integration_test.dart` verifies a new fast payload reopens the projection after an older refresh is delayed, preserving only the newest payload. |
 | V15 | Restore overlay after Presentation | DEVICE_PENDING | `MainActivity` recreates the wear Presentation after detach, restores its payload, and reapplies the visible overlay; requires secondary-display validation. |
 | V16 | Authentication and navigation independence | DONE | Removed `waitForStartup()` from success status pop; integration suite passed. |
 | V17 | Native audio diagnostics | DEVICE_PENDING | Flutter now supplies active capture ID/source to native monitoring; inspect source, silencing, format, and routed-device values on T2151. |
 | V18 | Audio source/device profile | DEVICE_PENDING | `default`, `t2151`, `t2151_voice_recognition`, and `t2151_microphone` profiles select source and hard-restart policy; A/B hardware results are pending. |
 | V19 | Verify microphone foreground service | DEVICE_PENDING | Manifest has microphone permissions and `foregroundServiceType`; validate runtime service behavior on T2151. |
-| V20 | State-machine unit tests | IN_PROGRESS | Voice state, startup/health gates, recorder lifecycle, single-flight, retry, overlay revision, and delayed-Vosk primitives are covered; production session and blocking-recognizer tests remain. |
+| V20 | State-machine unit tests | DONE | Voice state, startup/health gates, recorder lifecycle, single-flight, production retry ownership, overlay revision, and delayed-Vosk timeout primitives are covered by targeted tests. |
 | V21 | Integration tests | DONE | `fvm flutter test`: 160 passed. |
 | V22 | T2151 hardware verification plan | DONE | `docs/voice_recovery/T2151_TEST_PLAN.md` created. |
 | V23 | Final documentation | DONE | This status file and test plan contain implementation evidence and remaining constraints. |

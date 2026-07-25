@@ -82,6 +82,8 @@ class _WearModuleAppState extends State<WearModuleApp>
   int? _voiceStartupToken;
   bool? _audioCaptureSilenced;
   bool _restartVoiceAfterInterruption = false;
+  bool _appResumed = true;
+  bool _wasActuallyBackgrounded = false;
   static int _nextVoiceOverlayRevision = 0;
 
   static const int _finalPhraseSuppressMs = 1500;
@@ -297,14 +299,18 @@ class _WearModuleAppState extends State<WearModuleApp>
     }
     final WearScreenId? screenId =
         FlutterWearNavigationOutput.screenIdForRoute(location);
+    final pendingNavigation = flow.state.pendingNavigation;
+    if (screenId != null &&
+        pendingNavigation != null &&
+        pendingNavigation.screen == screenId) {
+      flow.acknowledgeNavigation(
+        requestId: pendingNavigation.requestId,
+        screen: screenId,
+      );
+    }
     if (screenId != null && screenId != flow.state.screen) {
       print('[ROUTER-CHANGE] enterScreen $screenId');
       flow.enterScreen(screenId, extra: _router.state.extra);
-      if (widget.onStartVoice == null &&
-          WearVoiceSession.I.forceHardRestartOnRouteChange &&
-          _voiceState.phase == VoicePhase.ready) {
-        unawaited(WearVoiceSession.I.restart(reason: 'voice_route_changed'));
-      }
     }
   }
 
@@ -424,7 +430,8 @@ class _WearModuleAppState extends State<WearModuleApp>
     _voiceHealthTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!mounted ||
           !WearSession.isAuthorized ||
-          _voiceState.phase == VoicePhase.preparing) {
+          !_appResumed ||
+          _voiceState.phase != VoicePhase.ready) {
         return;
       }
       _ensureVoiceHealthy('periodic_voice_health');
@@ -607,9 +614,20 @@ class _WearModuleAppState extends State<WearModuleApp>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     print('[WearModuleApp] lifecycle state=$state');
     if (state == AppLifecycleState.detached) {
+      _appResumed = false;
+      _wasActuallyBackgrounded = false;
+      _voiceHealthTimer?.cancel();
+      _voiceHealthTimer = null;
       _flow.setUiLifecycle(
         WearUiLifecycle.inactive,
       );
+      _setVoiceState(VoiceState(
+        phase: VoicePhase.disabled,
+        captureEpoch: _voiceState.captureEpoch,
+        attempt: 0,
+        reason: 'app_lifecycle_detached',
+        lastTransitionAt: DateTime.now().millisecondsSinceEpoch,
+      ));
       final Future<void> Function()? stopVoice = widget.onStopVoice;
       if (stopVoice != null) {
         unawaited(stopVoice());
@@ -618,20 +636,28 @@ class _WearModuleAppState extends State<WearModuleApp>
       }
       return;
     }
+    if (state == AppLifecycleState.inactive) {
+      // Temporary focus loss (dialogs, notification shade) is not background.
+      return;
+    }
     if (state == AppLifecycleState.resumed) {
+      final bool resumeRecoveryRequired = _wasActuallyBackgrounded;
+      _appResumed = true;
+      _wasActuallyBackgrounded = false;
       _flow.setUiLifecycle(
         WearUiLifecycle.active,
       );
       if (WearSession.isAuthorized) {
         final Future<void> Function(String reason)? restartVoice =
             widget.onRestartVoice;
-        if (restartVoice != null) {
+        if (resumeRecoveryRequired && restartVoice != null) {
           final String reason = _restartVoiceAfterInterruption
               ? 'app_lifecycle_resumed_after_interruption'
               : 'app_lifecycle_resumed';
           _restartVoiceAfterInterruption = false;
           unawaited(_restartVoice(restartVoice, reason));
-        } else if ((WearVoiceSession.I.forceHardRestartOnResume ||
+        } else if (resumeRecoveryRequired &&
+            (WearVoiceSession.I.forceHardRestartOnResume ||
                 _restartVoiceAfterInterruption) &&
             _audioCaptureSilenced != true) {
           _restartVoiceAfterInterruption = false;
@@ -641,18 +667,20 @@ class _WearModuleAppState extends State<WearModuleApp>
             ),
           );
         } else {
-          _ensureVoiceHealthy('app_lifecycle_resumed');
-          Future<void>.delayed(const Duration(seconds: 1), () {
-            if (!mounted || !WearSession.isAuthorized) return;
-            _ensureVoiceHealthy('app_lifecycle_resumed_delayed');
-          });
+          if (_voiceState.phase == VoicePhase.ready) {
+            _startVoiceHealthTimer();
+          }
         }
       }
       return;
     }
     if (state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused) {
+      _appResumed = false;
+      _wasActuallyBackgrounded = true;
       _restartVoiceAfterInterruption = true;
+      _voiceHealthTimer?.cancel();
+      _voiceHealthTimer = null;
     }
     _flow.setUiLifecycle(
       WearUiLifecycle.inactive,

@@ -14,8 +14,10 @@ import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/available_printer.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/use_case/get_available_printers_use_case.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_control_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
 import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_glasses_state.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
 import 'package:smart_glasses/modules/wear/application/ports/wear_glasses_output.dart';
 import 'package:smart_glasses/modules/wear/application/ports/wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
@@ -433,6 +435,36 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
         routerFlow.state.screen,
         WearScreenId.printerSelect,
       );
+    });
+
+    testWearWidget(
+        'controller navigation clears pending request after matching route ack',
+        (WidgetTester tester) async {
+      GoRouter? router;
+      final WearFlowController routerFlow = WearFlowController(
+        glassesOutput: _TestGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      await tester.pumpWidget(
+        WearModuleApp(
+          flowController: routerFlow,
+          voiceCommandStream: const Stream<WearVoiceCommand>.empty(),
+          routes: _testRoutes,
+          initialLocation: WearMenuScreen.route,
+          onStartVoice: () async {},
+          onStopVoice: () async {},
+          onRestartVoice: (_) async {},
+          onRouterReady: (GoRouter value) => router = value,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await routerFlow.requestNavigation(WearScreenId.help);
+      await tester.pumpAndSettle();
+
+      expect(router!.state.matchedLocation, '/wear_help');
+      expect(routerFlow.state.screen, WearScreenId.help);
+      expect(routerFlow.state.pendingNavigation, isNull);
     });
 
     testWearWidget('pop to scanIdle keeps route extra in flow state',
@@ -1238,31 +1270,22 @@ class _NeverPrintersUseCase extends GetAvailablePrintersUseCase {
 }
 
 class _FakeSpeechRecognitionService implements SpeechRecognitionService {
-  final StreamController<String> _commandResultsController =
-      StreamController<String>.broadcast();
-  final StreamController<String> _commandPartialController =
-      StreamController<String>.broadcast();
-  final StreamController<String> _freeTextResultsController =
-      StreamController<String>.broadcast();
-  final StreamController<String> _freeTextPartialController =
-      StreamController<String>.broadcast();
+  final StreamController<SegmentedRecognitionResult>
+      _segmentedResultsController =
+      StreamController<SegmentedRecognitionResult>.broadcast();
+  final StreamController<SpeechSegmentEnded> _segmentEndedController =
+      StreamController<SpeechSegmentEnded>.broadcast();
 
   @override
   Never get audioStreamService => throw UnsupportedError('Not used in test');
 
   @override
-  Stream<String> get commandResultsStream => _commandResultsController.stream;
+  Stream<SegmentedRecognitionResult> get segmentedResultsStream =>
+      _segmentedResultsController.stream;
 
   @override
-  Stream<String> get commandPartialResultsStream =>
-      _commandPartialController.stream;
-
-  @override
-  Stream<String> get freeTextResultsStream => _freeTextResultsController.stream;
-
-  @override
-  Stream<String> get freeTextPartialResultsStream =>
-      _freeTextPartialController.stream;
+  Stream<SpeechSegmentEnded> get segmentEndedStream =>
+      _segmentEndedController.stream;
 
   @override
   bool get isPrepared => true;
@@ -1272,6 +1295,9 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
 
   @override
   bool get isListening => false;
+
+  @override
+  bool get isCaptureRunning => false;
 
   @override
   bool get usesFreeTextRecognition => true;
@@ -1301,11 +1327,23 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   Future<void> setFreeTextEnabled(bool enabled) async {}
 
   void emitCommandPartial(String text) {
-    _commandPartialController.add(text);
+    _emitSegmented(text, RecognitionKind.partial);
   }
 
   void emitCommandResult(String text) {
-    _commandResultsController.add(text);
+    _emitSegmented(text, RecognitionKind.finalResult);
+  }
+
+  void _emitSegmented(String text, RecognitionKind kind) {
+    _segmentedResultsController.add(SegmentedRecognitionResult(
+      captureEpoch: 1,
+      segmentId: 1,
+      lane: RecognitionLane.command,
+      kind: kind,
+      text: text,
+      lastChunkId: 1,
+      parsedCommand: VoiceCommandParserService().parseExact(text),
+    ));
   }
 
   @override
@@ -1337,9 +1375,7 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
 
   @override
   Future<void> dispose() async {
-    await _commandResultsController.close();
-    await _commandPartialController.close();
-    await _freeTextResultsController.close();
-    await _freeTextPartialController.close();
+    await _segmentedResultsController.close();
+    await _segmentEndedController.close();
   }
 }

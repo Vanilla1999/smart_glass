@@ -2,7 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_segmenter.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_device_profile.dart';
 import 'package:vosk_flutter_service/vosk_flutter.dart' as vosk;
 
@@ -45,7 +48,9 @@ class SpeechRecognitionService {
   SpeechRecognitionService({
     AudioStreamService? audioStreamService,
     List<String> commandGrammar = const <String>[],
-  })  : _audioStream = audioStreamService ?? AudioStreamService(),
+    SpeechSegmenter? speechSegmenter,
+  })  : _audioStreamOverride = audioStreamService,
+        _speechSegmenter = speechSegmenter ?? SpeechSegmenter(),
         _commandGrammar = List<String>.unmodifiable(
           commandGrammar
               .map((String item) => item.trim())
@@ -53,19 +58,20 @@ class SpeechRecognitionService {
         ),
         _freeTextEnabled = commandGrammar.isEmpty;
 
-  final vosk.VoskFlutterPlugin _vosk = vosk.VoskFlutterPlugin.instance();
+  late final vosk.VoskFlutterPlugin _vosk = vosk.VoskFlutterPlugin.instance();
   final vosk.ModelLoader _modelLoader = vosk.ModelLoader();
-  final AudioStreamService _audioStream;
+  final AudioStreamService? _audioStreamOverride;
+  late final AudioStreamService _audioStream =
+      _audioStreamOverride ?? AudioStreamService();
   final List<String> _commandGrammar;
+  final SpeechSegmenter _speechSegmenter;
+  final VoiceCommandParserService _commandParser = VoiceCommandParserService();
 
-  final StreamController<String> _commandResultsController =
-      StreamController<String>.broadcast();
-  final StreamController<String> _commandPartialResultsController =
-      StreamController<String>.broadcast();
-  final StreamController<String> _freeTextResultsController =
-      StreamController<String>.broadcast();
-  final StreamController<String> _freeTextPartialResultsController =
-      StreamController<String>.broadcast();
+  final StreamController<SegmentedRecognitionResult>
+      _segmentedResultsController =
+      StreamController<SegmentedRecognitionResult>.broadcast(sync: true);
+  final StreamController<SpeechSegmentEnded> _segmentEndedController =
+      StreamController<SpeechSegmentEnded>.broadcast(sync: true);
 
   String _commandPartialText = '';
   String _freeTextPartialText = '';
@@ -87,18 +93,17 @@ class SpeechRecognitionService {
   vosk.Recognizer? _commandRecognizer;
   vosk.Recognizer? _freeTextRecognizer;
 
-  Stream<String> get commandResultsStream => _commandResultsController.stream;
-  Stream<String> get commandPartialResultsStream =>
-      _commandPartialResultsController.stream;
-  Stream<String> get freeTextResultsStream => _freeTextResultsController.stream;
-  Stream<String> get freeTextPartialResultsStream =>
-      _freeTextPartialResultsController.stream;
+  Stream<SegmentedRecognitionResult> get segmentedResultsStream =>
+      _segmentedResultsController.stream;
+  Stream<SpeechSegmentEnded> get segmentEndedStream =>
+      _segmentEndedController.stream;
   bool get isPrepared =>
       _model != null &&
       _freeTextRecognizer != null &&
       (_commandGrammar.isEmpty || _commandRecognizer != null);
   bool get isSessionActive => _isSessionActive;
   bool get isListening => _isListening;
+  bool get isCaptureRunning => _audioStream.isRunning;
   bool get usesFreeTextRecognition => _freeTextEnabled;
   int? get lastAudioChunkAtMillis => _audioStream.lastChunkAtMillis;
   int? get lastNonSilentAudioChunkAtMillis =>
@@ -263,6 +268,7 @@ class SpeechRecognitionService {
       print('[SpeechRecognitionService] starting session...');
       await startSession();
       final int captureEpoch = _captureEpoch.begin();
+      _speechSegmenter.begin(captureEpoch);
       _lastProcessedChunkAtMillis = null;
       _commandMetrics.reset();
       _freeTextMetrics.reset();
@@ -305,6 +311,7 @@ class SpeechRecognitionService {
     }
     print('[SpeechRecognitionService] removing audio callback...');
     _captureEpoch.invalidate();
+    _speechSegmenter.end(_captureEpoch.current - 1);
     _removeAudioCallback();
     final int processingStartedAt = DateTime.now().millisecondsSinceEpoch;
     final bool processingFinished =
@@ -362,26 +369,43 @@ class SpeechRecognitionService {
 
   void _onAudioChunk(Uint8List bytes, int captureEpoch) {
     if (!_isSessionActive || !_captureEpoch.isCurrent(captureEpoch)) return;
-    _enqueueCommandChunk(bytes, captureEpoch);
+    final SpeechSegment? segment = _speechSegmenter.add(bytes, captureEpoch);
+    if (segment == null) return;
+    _enqueueCommandChunk(bytes, captureEpoch, segment);
     if (_freeTextEnabled) {
-      _enqueueFreeTextChunk(bytes, _freeTextEpoch, captureEpoch);
+      _enqueueFreeTextChunk(bytes, _freeTextEpoch, captureEpoch, segment);
+    }
+    if (segment.isEndpoint) {
+      unawaited(_finishSegment(segment, captureEpoch).catchError(
+        (Object error, StackTrace stackTrace) {
+          print('[SpeechRecognitionService] segment finish error: $error');
+        },
+      ));
     }
   }
 
   Future<void> processAudioChunk(Uint8List bytes) async {
+    final int captureEpoch = _captureEpoch.current;
+    final SpeechSegment? segment = _speechSegmenter.add(bytes, captureEpoch);
+    if (segment == null) return;
     final List<Future<void>> processing = <Future<void>>[];
     if (_commandRecognizer != null) {
-      processing.add(_enqueueCommandChunk(bytes, _captureEpoch.current));
+      processing.add(_enqueueCommandChunk(bytes, captureEpoch, segment));
     }
     if (_freeTextEnabled) {
       processing.add(
-        _enqueueFreeTextChunk(bytes, _freeTextEpoch, _captureEpoch.current),
+        _enqueueFreeTextChunk(bytes, _freeTextEpoch, captureEpoch, segment),
       );
     }
     await Future.wait<void>(processing);
+    if (segment.isEndpoint) await _finishSegment(segment, captureEpoch);
   }
 
-  Future<void> _enqueueCommandChunk(Uint8List bytes, int captureEpoch) {
+  Future<void> _enqueueCommandChunk(
+    Uint8List bytes,
+    int captureEpoch,
+    SpeechSegment segment,
+  ) {
     if (_commandRecognizer == null) return Future<void>.value();
     final int queuedAt = DateTime.now().millisecondsSinceEpoch;
     final Future<void> next = _commandAudioProcessing.then(
@@ -392,6 +416,7 @@ class SpeechRecognitionService {
         queuedAt: queuedAt,
         epoch: null,
         captureEpoch: captureEpoch,
+        segment: segment,
       ),
     );
     _commandAudioProcessing = next.catchError(
@@ -406,6 +431,7 @@ class SpeechRecognitionService {
     Uint8List bytes,
     int epoch,
     int captureEpoch,
+    SpeechSegment segment,
   ) {
     if (_freeTextRecognizer == null) return Future<void>.value();
     final int queuedAt = DateTime.now().millisecondsSinceEpoch;
@@ -417,6 +443,7 @@ class SpeechRecognitionService {
         queuedAt: queuedAt,
         epoch: epoch,
         captureEpoch: captureEpoch,
+        segment: segment,
       ),
     );
     _freeTextAudioProcessing = next.catchError(
@@ -427,6 +454,85 @@ class SpeechRecognitionService {
     return next;
   }
 
+  Future<void> _finishSegment(SpeechSegment segment, int captureEpoch) async {
+    final List<Future<void>> lanes = <Future<void>>[];
+    if (_commandRecognizer != null) {
+      final Future<void> next = _commandAudioProcessing.then(
+        (_) => _closeRecognizerSegment(
+          source: _RecognitionSource.command,
+          recognizer: _commandRecognizer!,
+          epoch: null,
+          captureEpoch: captureEpoch,
+          segment: segment,
+        ),
+      );
+      _commandAudioProcessing = next.catchError(
+        (Object error, StackTrace stackTrace) {
+          print(
+              '[SpeechRecognitionService] command segment close error: $error');
+        },
+      );
+      lanes.add(next);
+    }
+    if (_freeTextEnabled && _freeTextRecognizer != null) {
+      final int epoch = _freeTextEpoch;
+      final Future<void> next = _freeTextAudioProcessing.then(
+        (_) => _closeRecognizerSegment(
+          source: _RecognitionSource.freeText,
+          recognizer: _freeTextRecognizer!,
+          epoch: epoch,
+          captureEpoch: captureEpoch,
+          segment: segment,
+        ),
+      );
+      _freeTextAudioProcessing = next.catchError(
+        (Object error, StackTrace stackTrace) {
+          print(
+              '[SpeechRecognitionService] freeText segment close error: $error');
+        },
+      );
+      lanes.add(next);
+    }
+    await Future.wait<void>(lanes);
+    if (_captureEpoch.isCurrent(captureEpoch) &&
+        !_segmentEndedController.isClosed) {
+      _segmentEndedController.add(SpeechSegmentEnded(
+        captureEpoch: captureEpoch,
+        segmentId: segment.segmentId,
+        endChunkId: segment.lastChunkId,
+      ));
+    }
+  }
+
+  Future<void> _closeRecognizerSegment({
+    required _RecognitionSource source,
+    required vosk.Recognizer recognizer,
+    required int? epoch,
+    required int captureEpoch,
+    required SpeechSegment segment,
+  }) async {
+    if (!_canProcess(source, epoch, captureEpoch)) return;
+    final String resultJson = await recognizer.getFinalResult();
+    final String text = _extractText(
+      resultJson,
+      preferredKeys: const <String>['text'],
+    );
+    if (text.isNotEmpty) {
+      _emitResult(
+        source,
+        text,
+        epoch: epoch,
+        captureEpoch: captureEpoch,
+        partial: false,
+        segment: segment,
+      );
+    }
+    if (_canProcess(source, epoch, captureEpoch)) {
+      await recognizer.reset();
+      _setPartialText(source, '');
+    }
+  }
+
   Future<void> _processRecognizerChunk({
     required _RecognitionSource source,
     required vosk.Recognizer recognizer,
@@ -434,6 +540,7 @@ class SpeechRecognitionService {
     required int queuedAt,
     required int? epoch,
     int? captureEpoch,
+    required SpeechSegment segment,
   }) async {
     if (!_isSessionActive) {
       throw StateError(
@@ -499,6 +606,7 @@ class SpeechRecognitionService {
           epoch: epoch,
           captureEpoch: captureEpoch,
           partial: false,
+          segment: segment,
         );
       }
       if (_canProcess(source, epoch, captureEpoch)) {
@@ -528,6 +636,7 @@ class SpeechRecognitionService {
         epoch: epoch,
         captureEpoch: captureEpoch,
         partial: true,
+        segment: segment,
       );
     }
     if (_canProcess(source, epoch, captureEpoch)) {
@@ -558,6 +667,7 @@ class SpeechRecognitionService {
     required int? epoch,
     required int? captureEpoch,
     required bool partial,
+    required SpeechSegment segment,
   }) {
     if (!_canProcess(source, epoch, captureEpoch)) {
       print(
@@ -566,13 +676,21 @@ class SpeechRecognitionService {
       );
       return;
     }
-    final StreamController<String> controller = switch ((source, partial)) {
-      (_RecognitionSource.command, false) => _commandResultsController,
-      (_RecognitionSource.command, true) => _commandPartialResultsController,
-      (_RecognitionSource.freeText, false) => _freeTextResultsController,
-      (_RecognitionSource.freeText, true) => _freeTextPartialResultsController,
-    };
-    if (!controller.isClosed) controller.add(text);
+    if (!_segmentedResultsController.isClosed) {
+      _segmentedResultsController.add(SegmentedRecognitionResult(
+        captureEpoch: segment.captureEpoch,
+        segmentId: segment.segmentId,
+        lane: source == _RecognitionSource.command
+            ? RecognitionLane.command
+            : RecognitionLane.freeText,
+        kind: partial ? RecognitionKind.partial : RecognitionKind.finalResult,
+        text: text,
+        lastChunkId: segment.lastChunkId,
+        parsedCommand: source == _RecognitionSource.command
+            ? _commandParser.parseExact(text)
+            : null,
+      ));
+    }
   }
 
   void _removeAudioCallback() {
@@ -678,10 +796,8 @@ class SpeechRecognitionService {
     _freeTextRecognizer = null;
     _model?.dispose();
     _model = null;
-    await _commandResultsController.close();
-    await _commandPartialResultsController.close();
-    await _freeTextResultsController.close();
-    await _freeTextPartialResultsController.close();
+    await _segmentedResultsController.close();
+    await _segmentEndedController.close();
   }
 
   _RecognitionMetrics _metrics(_RecognitionSource source) {

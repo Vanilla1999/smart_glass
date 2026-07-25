@@ -47,7 +47,72 @@ void main() {
       await controller.flushPendingNavigation();
 
       expect(navigation.goToCalls, <WearScreenId>[WearScreenId.help]);
+      expect(controller.state.pendingNavigation, isNotNull);
+      final int requestId = controller.state.pendingNavigation!.requestId;
+      expect(
+        controller.acknowledgeNavigation(
+          requestId: requestId,
+          screen: WearScreenId.help,
+        ),
+        isTrue,
+      );
       expect(controller.state.pendingNavigation, isNull);
+    });
+
+    test('does not deliver a request again before its route acknowledgement',
+        () async {
+      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: navigation,
+      );
+
+      controller.setUiLifecycle(WearUiLifecycle.inactive);
+      await controller.requestNavigation(WearScreenId.help);
+
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      await Future<void>.delayed(Duration.zero);
+      await controller.flushPendingNavigation();
+
+      expect(navigation.goToCalls, <WearScreenId>[WearScreenId.help]);
+      final int requestId = controller.state.pendingNavigation!.requestId;
+      expect(
+        controller.acknowledgeNavigation(
+          requestId: requestId,
+          screen: WearScreenId.menu,
+        ),
+        isFalse,
+      );
+      expect(controller.state.pendingNavigation, isNotNull);
+    });
+
+    test('acknowledges only the latest pending navigation request', () async {
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+
+      controller.setUiLifecycle(WearUiLifecycle.inactive);
+      await controller.requestNavigation(WearScreenId.help);
+      final int firstRequestId = controller.state.pendingNavigation!.requestId;
+      await controller.requestNavigation(WearScreenId.settings);
+      final int secondRequestId = controller.state.pendingNavigation!.requestId;
+
+      expect(secondRequestId, greaterThan(firstRequestId));
+      expect(
+        controller.acknowledgeNavigation(
+          requestId: firstRequestId,
+          screen: WearScreenId.help,
+        ),
+        isFalse,
+      );
+      expect(
+        controller.acknowledgeNavigation(
+          requestId: secondRequestId,
+          screen: WearScreenId.settings,
+        ),
+        isTrue,
+      );
     });
 
     test('handles availability interaction focus without widget callbacks',
@@ -910,6 +975,22 @@ void main() {
       expect(navigation.goToCalls.last, WearScreenId.homeConfirm);
     });
 
+    test('menu down does not await a blocking glasses render', () async {
+      final _BlockingGlassesOutput glasses = _BlockingGlassesOutput();
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: glasses,
+        navigationOutput: _FakeNavigationOutput(),
+      );
+
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.menu);
+
+      await controller.handleVoiceCommand(WearVoiceCommand.down);
+
+      expect(controller.state.menuFocusedIndex, 1);
+      expect(glasses.payloads.length, greaterThanOrEqualTo(1));
+    });
+
     test('flashlight command toggles scanner flashlight action', () async {
       int flashlightCalls = 0;
       final WearFlowController controller = WearFlowController(
@@ -1250,6 +1331,16 @@ class _ThrowingGlassesOutput implements WearGlassesOutput {
   @override
   Future<void> send(WearGlassesPayload payload) async {
     throw StateError('glasses unavailable');
+  }
+}
+
+class _BlockingGlassesOutput implements WearGlassesOutput {
+  final List<WearGlassesPayload> payloads = <WearGlassesPayload>[];
+
+  @override
+  Future<void> send(WearGlassesPayload payload) async {
+    payloads.add(payload);
+    await Future<void>.delayed(const Duration(seconds: 10));
   }
 }
 

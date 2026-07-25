@@ -98,6 +98,8 @@ class WearFlowController {
   final List<WearVoiceCommand> _commandQueue = <WearVoiceCommand>[];
   final WearFlashlightToggle _flashlightToggle;
   bool _isProcessingCommand = false;
+  int _nextNavigationRequestId = 0;
+  int? _deliveredNavigationRequestId;
 
   WearFlowState get state => _state;
 
@@ -363,17 +365,45 @@ class WearFlowController {
   Future<void> flushPendingNavigation() async {
     final WearNavigationRequest? request = _state.pendingNavigation;
     if (request == null || _uiLifecycle != WearUiLifecycle.active) return;
+    if (_deliveredNavigationRequestId == request.requestId) return;
     print('[WearFlowController] ui active flush pendingNavigation=$request');
+    _deliveredNavigationRequestId = request.requestId;
+    try {
+      if (request.popCurrent) {
+        await _navigationOutput.back();
+        return;
+      }
+      if (request.replaceCurrent) {
+        await _navigationOutput.home();
+        return;
+      }
+      await _navigationOutput.goTo(request.screen, extra: request.extra);
+    } catch (error, stackTrace) {
+      if (_state.pendingNavigation?.requestId == request.requestId) {
+        _deliveredNavigationRequestId = null;
+        _setState(_state.copyWith(error: error.toString()));
+      }
+      print(
+        '[WearFlowController] navigation delivery failed request=$request '
+        'error=$error\n$stackTrace',
+      );
+    }
+  }
+
+  bool acknowledgeNavigation({
+    required int requestId,
+    required WearScreenId screen,
+  }) {
+    final WearNavigationRequest? request = _state.pendingNavigation;
+    if (request == null ||
+        request.requestId != requestId ||
+        request.screen != screen) {
+      return false;
+    }
+    print('[WearFlowController] navigation acknowledged request=$request');
+    _deliveredNavigationRequestId = null;
     _setState(_state.copyWith(clearPendingNavigation: true));
-    if (request.popCurrent) {
-      await _navigationOutput.back();
-      return;
-    }
-    if (request.replaceCurrent) {
-      await _navigationOutput.home();
-      return;
-    }
-    await _navigationOutput.goTo(request.screen, extra: request.extra);
+    return true;
   }
 
   Future<void> _handleUp() async {
@@ -388,7 +418,7 @@ class WearFlowController {
     }
     final int next = math.max(0, _state.menuFocusedIndex - 1);
     _setState(_state.copyWith(focusedIndex: next, menuFocusedIndex: next));
-    await _renderGlasses();
+    unawaited(_renderGlasses());
   }
 
   Future<void> _handleDown() async {
@@ -403,7 +433,7 @@ class WearFlowController {
     }
     final int next = math.min(_menuItemCount - 1, _state.menuFocusedIndex + 1);
     _setState(_state.copyWith(focusedIndex: next, menuFocusedIndex: next));
-    await _renderGlasses();
+    unawaited(_renderGlasses());
   }
 
   Future<void> _handleSelect() async {
@@ -569,47 +599,45 @@ class WearFlowController {
     Object? extra,
     bool replaceCurrent = false,
   }) async {
-    final WearNavigationRequest request = WearNavigationRequest(
-      screen: target,
+    _queueNavigation(
+      target,
       extra: extra,
       replaceCurrent: replaceCurrent,
     );
-    _clearContextPayload(target, extra);
-    _setState(_stateForEnteredScreen(target, extra: extra));
-    unawaited(_renderGlasses());
-    if (_uiLifecycle == WearUiLifecycle.active) {
-      print('[WearFlowController] request navigation target=$request');
-      if (replaceCurrent) {
-        await _navigationOutput.home();
-      } else {
-        unawaited(_navigationOutput.goTo(target, extra: extra));
-      }
-      return;
-    }
-    print('[WearFlowController] ui inactive pendingNavigation=$request');
-    _setState(_state.copyWith(pendingNavigation: request));
   }
 
   Future<void> _returnToPreviousScreen(
     WearScreenId target, {
     Object? extra,
   }) async {
+    _queueNavigation(target, extra: extra, popCurrent: true);
+  }
+
+  void _queueNavigation(
+    WearScreenId target, {
+    Object? extra,
+    bool replaceCurrent = false,
+    bool popCurrent = false,
+  }) {
+    final WearNavigationRequest request = WearNavigationRequest(
+      requestId: ++_nextNavigationRequestId,
+      screen: target,
+      extra: extra,
+      replaceCurrent: replaceCurrent,
+      popCurrent: popCurrent,
+    );
     _clearContextPayload(target, extra);
-    _setState(_stateForEnteredScreen(target, extra: extra));
+    _setState(
+      _stateForEnteredScreen(target, extra: extra)
+          .copyWith(pendingNavigation: request),
+    );
     unawaited(_renderGlasses());
     if (_uiLifecycle == WearUiLifecycle.active) {
-      await _navigationOutput.back();
-      return;
+      print('[WearFlowController] request navigation target=$request');
+      unawaited(flushPendingNavigation());
+    } else {
+      print('[WearFlowController] ui inactive pendingNavigation=$request');
     }
-    _setState(
-      _state.copyWith(
-        pendingNavigation: WearNavigationRequest(
-          screen: target,
-          extra: extra,
-          popCurrent: true,
-        ),
-      ),
-    );
   }
 
   WearFlowState _stateForEnteredScreen(WearScreenId screen, {Object? extra}) {

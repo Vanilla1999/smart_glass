@@ -43,6 +43,7 @@ class WearVoiceSession {
   Future<void> _operation = Future<void>.value();
   Future<void> _startupOperation = Future<void>.value();
   final VoiceSingleFlight _restartSingleFlight = VoiceSingleFlight();
+  final VoiceSingleFlight _healthSingleFlight = VoiceSingleFlight();
   Timer? _retryTimer;
   VoiceState _state = const VoiceState.disabled();
   final StreamController<VoiceState> _stateController =
@@ -70,9 +71,6 @@ class WearVoiceSession {
       _speech.deviceProfile.forceHardRestartOnResume;
   bool get forceHardRestartAfterUnsilence =>
       _speech.deviceProfile.forceHardRestartAfterUnsilence;
-  bool get forceHardRestartOnRouteChange =>
-      _speech.deviceProfile.forceHardRestartOnRouteChange;
-
   Future<String> diagnostics() {
     return _speech.diagnostics();
   }
@@ -275,9 +273,13 @@ class WearVoiceSession {
     while (_isCurrentListeningRequest(generation)) {
       if (_captureSilenced) return false;
       final int now = _nowMillis();
+      if (!service.isListening || !service.isCaptureRunning) {
+        throw StateError('Захват аудио остановлен до получения PCM-чанков.');
+      }
       final int? lastAudioAt = service.lastAudioChunkAtMillis;
       if (gate.isReady(
         captureStartedAtMillis: captureStartedAtMillis,
+        isCaptureRunning: service.isCaptureRunning,
         chunksReceived: service.audioChunksReceived,
         lastAudioAtMillis: lastAudioAt,
         nowMillis: now,
@@ -313,6 +315,15 @@ class WearVoiceSession {
   }
 
   Future<void> ensureHealthy({required String reason}) async {
+    final Future<void>? pendingHealthCheck = _healthSingleFlight.pending;
+    if (pendingHealthCheck != null) {
+      print('[WearVoiceSession] health-check joined reason=$reason');
+      return pendingHealthCheck;
+    }
+    return _healthSingleFlight.run(() => _ensureHealthy(reason: reason));
+  }
+
+  Future<void> _ensureHealthy({required String reason}) async {
     if (!_shouldListen) return;
     if (_state.phase == VoicePhase.unavailable && _retryTimer != null) {
       print('[WearVoiceSession] health-check deferred: retry is scheduled');
@@ -577,11 +588,13 @@ class VoiceCaptureStartupGate {
 
   bool isReady({
     required int captureStartedAtMillis,
+    required bool isCaptureRunning,
     required int chunksReceived,
     required int? lastAudioAtMillis,
     required int nowMillis,
   }) {
-    return chunksReceived >= requiredChunks &&
+    return isCaptureRunning &&
+        chunksReceived >= requiredChunks &&
         lastAudioAtMillis != null &&
         lastAudioAtMillis >= captureStartedAtMillis;
   }
