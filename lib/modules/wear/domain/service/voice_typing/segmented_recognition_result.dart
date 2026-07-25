@@ -4,6 +4,18 @@ enum RecognitionLane { command, freeText }
 
 enum RecognitionKind { partial, finalResult }
 
+class SpeechSegmentStarted {
+  const SpeechSegmentStarted({
+    required this.captureEpoch,
+    required this.segmentId,
+    required this.startChunkId,
+  });
+
+  final int captureEpoch;
+  final int segmentId;
+  final int startChunkId;
+}
+
 class SpeechSegmentEnded {
   const SpeechSegmentEnded({
     required this.captureEpoch,

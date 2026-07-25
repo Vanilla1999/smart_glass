@@ -3,8 +3,10 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_control_service.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
@@ -36,7 +38,7 @@ void main() {
     late WearVoiceControlService service;
     late List<WearVoiceCommand> commands;
     late List<String> phrases;
-    late List<String> partialPhrases;
+    late List<String?> previews;
 
     setUp(() {
       speech = _FakeSpeechRecognitionService();
@@ -46,10 +48,10 @@ void main() {
       );
       commands = <WearVoiceCommand>[];
       phrases = <String>[];
-      partialPhrases = <String>[];
+      previews = <String?>[];
       service.commandStream.listen(commands.add);
       service.phraseStream.listen(phrases.add);
-      service.partialPhraseStream.listen(partialPhrases.add);
+      service.freeTextPreviewStream.listen(previews.add);
     });
 
     tearDown(() async {
@@ -77,7 +79,7 @@ void main() {
       );
       speech.emit(
           lane: RecognitionLane.freeText, text: 'прошлое', segmentId: 3);
-      expect(partialPhrases, isEmpty);
+      expect(previews, isEmpty);
       speech.emit(
         lane: RecognitionLane.command,
         text: 'прошлая страница',
@@ -124,6 +126,14 @@ void main() {
     });
 
     test('grammar final commits after a non-executing partial', () async {
+      WearScreenId screen = WearScreenId.printerSelect;
+      await service.dispose();
+      service = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => screen,
+      );
+      commands = <WearVoiceCommand>[];
+      service.commandStream.listen(commands.add);
       speech.emit(
         lane: RecognitionLane.command,
         kind: RecognitionKind.partial,
@@ -135,6 +145,233 @@ void main() {
       await _settle();
 
       expect(commands, <WearVoiceCommand>[WearVoiceCommand.print]);
+    });
+
+    test('exact fast alias executes immediately and final does not repeat',
+        () async {
+      WearScreenId screen = WearScreenId.availabilityInteraction;
+      await service.dispose();
+      service = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => screen,
+      );
+      commands = <WearVoiceCommand>[];
+      service.commandStream.listen(commands.add);
+
+      speech.emit(
+        lane: RecognitionLane.command,
+        kind: RecognitionKind.partial,
+        text: 'прямое',
+        segmentId: 8,
+      );
+      await _settle();
+      expect(commands, <WearVoiceCommand>[WearVoiceCommand.openDirectScan]);
+
+      speech.emit(
+        lane: RecognitionLane.command,
+        text: 'прямое сканирование',
+        segmentId: 8,
+      );
+      speech.emit(
+        lane: RecognitionLane.freeText,
+        text: 'прямое сканирование',
+        segmentId: 8,
+      );
+      speech.end(segmentId: 8);
+      await _settle();
+
+      expect(commands, <WearVoiceCommand>[WearVoiceCommand.openDirectScan]);
+      expect(phrases, isEmpty);
+    });
+
+    test('segment context uses the screen at VAD start', () async {
+      WearScreenId screen = WearScreenId.availabilityInteraction;
+      await service.dispose();
+      service = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => screen,
+      );
+      commands = <WearVoiceCommand>[];
+      service.commandStream.listen(commands.add);
+
+      speech.start(segmentId: 12);
+      screen = WearScreenId.productSelect;
+      speech.emit(
+        lane: RecognitionLane.command,
+        kind: RecognitionKind.partial,
+        text: 'прямое',
+        segmentId: 12,
+      );
+      await _settle();
+
+      expect(commands, <WearVoiceCommand>[WearVoiceCommand.openDirectScan]);
+    });
+
+    test('free-text partial is preview-only and a command clears it', () async {
+      WearScreenId screen = WearScreenId.availabilityInteraction;
+      await service.dispose();
+      service = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => screen,
+      );
+      previews = <String?>[];
+      phrases = <String>[];
+      service.freeTextPreviewStream.listen(previews.add);
+      service.phraseStream.listen(phrases.add);
+
+      speech.start(segmentId: 13);
+      speech.emit(
+        lane: RecognitionLane.freeText,
+        kind: RecognitionKind.partial,
+        text: 'прямое молоко',
+        segmentId: 13,
+      );
+      speech.emit(
+        lane: RecognitionLane.command,
+        kind: RecognitionKind.partial,
+        text: 'прямое',
+        segmentId: 13,
+      );
+      await _settle();
+
+      expect(previews, <String?>['прямое молоко', null]);
+      expect(phrases, isEmpty);
+    });
+
+    test('different final after a fast alias does not execute twice', () async {
+      WearScreenId screen = WearScreenId.menu;
+      await service.dispose();
+      service = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => screen,
+      );
+      commands = <WearVoiceCommand>[];
+      service.commandStream.listen(commands.add);
+
+      speech.emit(
+        lane: RecognitionLane.command,
+        kind: RecognitionKind.partial,
+        text: 'вверх',
+        segmentId: 10,
+      );
+      speech.emit(
+        lane: RecognitionLane.command,
+        text: 'вниз',
+        segmentId: 10,
+      );
+      speech.end(segmentId: 10);
+      await _settle();
+
+      expect(commands, <WearVoiceCommand>[WearVoiceCommand.up]);
+    });
+
+    test('menu print final resolves to opening the print section', () async {
+      speech.emit(
+        lane: RecognitionLane.command,
+        text: 'печать',
+        segmentId: 11,
+      );
+      speech.end(segmentId: 11);
+      await _settle();
+
+      expect(commands, <WearVoiceCommand>[WearVoiceCommand.openPrintPriceTag]);
+    });
+
+    test('alias from another screen remains available to free text', () async {
+      WearScreenId screen = WearScreenId.productSelect;
+      await service.dispose();
+      service = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => screen,
+      );
+      commands = <WearVoiceCommand>[];
+      phrases = <String>[];
+      service.commandStream.listen(commands.add);
+      service.phraseStream.listen(phrases.add);
+
+      speech.emit(
+        lane: RecognitionLane.command,
+        kind: RecognitionKind.partial,
+        text: 'прямое',
+        segmentId: 9,
+      );
+      speech.emit(
+        lane: RecognitionLane.freeText,
+        text: 'прямое молоко',
+        segmentId: 9,
+      );
+      speech.end(segmentId: 9);
+      await _settle();
+
+      expect(commands, isEmpty);
+      expect(phrases, <String>['прямое молоко']);
+    });
+
+    test('catalog rejects duplicate immediate aliases on one screen', () {
+      expect(
+        () => VoiceActionCatalog(actions: <VoiceActionEntry>[
+          VoiceActionEntry(
+            command: WearVoiceCommand.openList,
+            screens: <WearScreenId>{WearScreenId.menu},
+            fullPhrases: <String>{'список'},
+            fastAliases: <String>{'список'},
+            activationPolicy: VoiceActivationPolicy.immediateExactPartial,
+          ),
+          VoiceActionEntry(
+            command: WearVoiceCommand.openHelp,
+            screens: <WearScreenId>{WearScreenId.menu},
+            fullPhrases: <String>{'список помощи'},
+            fastAliases: <String>{'список'},
+            activationPolicy: VoiceActivationPolicy.immediateExactPartial,
+          ),
+        ]),
+        throwsArgumentError,
+      );
+    });
+
+    test('catalog resolves every agreed fast action alias', () {
+      final VoiceActionCatalog catalog = VoiceActionCatalog();
+
+      expect(
+        catalog.resolveFastAlias(WearScreenId.menu, 'печать'),
+        WearVoiceCommand.openPrintPriceTag,
+      );
+      expect(
+        catalog.resolveFastAlias(WearScreenId.menu, 'ценник'),
+        WearVoiceCommand.openPrintPriceTag,
+      );
+      expect(
+        catalog.resolveFastAlias(
+          WearScreenId.availabilityInteraction,
+          'список',
+        ),
+        WearVoiceCommand.openList,
+      );
+      expect(
+        catalog.resolveFastAlias(
+          WearScreenId.availabilityInteraction,
+          'товары',
+        ),
+        WearVoiceCommand.openList,
+      );
+      expect(
+        catalog.resolveFastAlias(
+          WearScreenId.availabilityInteraction,
+          'прямое',
+        ),
+        WearVoiceCommand.openDirectScan,
+      );
+      expect(
+        catalog.resolveFastAlias(
+          WearScreenId.availabilityInteraction,
+          'сканирование',
+        ),
+        WearVoiceCommand.openDirectScan,
+      );
+      expect(
+        catalog.resolveFastAlias(WearScreenId.productSelect, 'фото'),
+        WearVoiceCommand.takePhoto,
+      );
     });
 
     test('stale capture epoch is discarded after a newer epoch', () async {
@@ -221,6 +458,9 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
       StreamController<SegmentedRecognitionResult>.broadcast(sync: true);
   final StreamController<SpeechSegmentEnded> _ended =
       StreamController<SpeechSegmentEnded>.broadcast(sync: true);
+  final StreamController<SpeechSegmentStarted> _started =
+      StreamController<SpeechSegmentStarted>.broadcast(sync: true);
+  final Set<String> _startedSegments = <String>{};
   bool listening = false;
   int startListeningCalls = 0;
   int stopListeningCalls = 0;
@@ -230,6 +470,8 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
       _results.stream;
   @override
   Stream<SpeechSegmentEnded> get segmentEndedStream => _ended.stream;
+  @override
+  Stream<SpeechSegmentStarted> get segmentStartedStream => _started.stream;
   @override
   Never get audioStreamService => throw UnsupportedError('Not used in test');
   @override
@@ -264,6 +506,7 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
     int segmentId = 1,
     RecognitionKind kind = RecognitionKind.finalResult,
   }) {
+    start(captureEpoch: captureEpoch, segmentId: segmentId);
     _results.add(SegmentedRecognitionResult(
       captureEpoch: captureEpoch,
       segmentId: segmentId,
@@ -274,6 +517,16 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
       parsedCommand: lane == RecognitionLane.command
           ? VoiceCommandParserService().parseExact(text)
           : null,
+    ));
+  }
+
+  void start({int captureEpoch = 1, required int segmentId}) {
+    final String key = '$captureEpoch:$segmentId';
+    if (!_startedSegments.add(key)) return;
+    _started.add(SpeechSegmentStarted(
+      captureEpoch: captureEpoch,
+      segmentId: segmentId,
+      startChunkId: segmentId,
     ));
   }
 
@@ -316,6 +569,7 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   @override
   Future<void> dispose() async {
     await _results.close();
+    await _started.close();
     await _ended.close();
   }
 }

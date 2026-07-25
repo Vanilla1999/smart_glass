@@ -351,6 +351,34 @@ void main() {
       expect(glassesState.selectedIndex, 1);
       expect(flowController.state.menuFocusedIndex, 1);
     });
+
+    test('fast direct-scan alias navigates before the segment closes',
+        () async {
+      final _FakeSpeechRecognitionService speech =
+          _FakeSpeechRecognitionService();
+      final WearVoiceControlService voiceControl = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => flowController.state.screen,
+      );
+      addTearDown(voiceControl.dispose);
+      addTearDown(speech.dispose);
+      voiceControl.commandStream.listen(flowController.handleVoiceCommand);
+
+      flowController.setUiLifecycle(WearUiLifecycle.active);
+      flowController.enterScreen(WearScreenId.availabilityInteraction);
+      await Future<void>.delayed(Duration.zero);
+
+      speech.emitCommandPartial('прямое');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(flowController.state.screen, WearScreenId.availabilityDirectScan);
+
+      speech.emitCommandResult('прямое сканирование');
+      speech.endSegment();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(flowController.state.screen, WearScreenId.availabilityDirectScan);
+    });
   });
 
   group('WearModuleApp router integration', () {
@@ -541,15 +569,11 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       expect(routerFlow.state.menuFocusedIndex, 1);
     });
 
-    testWearWidget(
-        'final and repeated partial phrases are suppressed after '
-        'consumed partial', (WidgetTester tester) async {
+    testWearWidget('final voice phrase invokes the committed flow action',
+        (WidgetTester tester) async {
       final StreamController<String> voicePhrases =
           StreamController<String>.broadcast();
-      final StreamController<String> voicePartialPhrases =
-          StreamController<String>.broadcast();
       addTearDown(voicePhrases.close);
-      addTearDown(voicePartialPhrases.close);
       final WearFlowController routerFlow = WearFlowController(
         glassesOutput: _TestGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
@@ -560,7 +584,6 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
           flowController: routerFlow,
           voiceCommandStream: const Stream<WearVoiceCommand>.empty(),
           voicePhraseStream: voicePhrases.stream,
-          voicePartialPhraseStream: voicePartialPhrases.stream,
           routes: _testRoutes,
           initialLocation: WearMenuScreen.route,
           onStartVoice: () async {},
@@ -585,14 +608,11 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
         ),
       );
 
-      voicePartialPhrases.add('безалкоголь');
-      await tester.pumpAndSettle();
-      voicePartialPhrases.add('безалкогольное');
       voicePhrases.add('безалкогольное');
       await tester.pumpAndSettle();
 
-      expect(partialCalls, 1);
-      expect(finalCalls, 0);
+      expect(partialCalls, 0);
+      expect(finalCalls, 1);
     });
 
     testWearWidget('voice starts immediately when authorization completes',
@@ -962,7 +982,7 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       expect(WearStatusIconReporter.I.lastPayload?.title, 'Выбор раздела');
     });
 
-    testWearWidget('ASR command commits only after its segment closes',
+    testWearWidget('fast ASR alias updates flow before its segment closes',
         (WidgetTester tester) async {
       final _FakeSpeechRecognitionService speech =
           _FakeSpeechRecognitionService();
@@ -994,7 +1014,7 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       speech.emitCommandPartial('вниз');
       await tester.pumpAndSettle();
 
-      expect(routerFlow.state.menuFocusedIndex, 0);
+      expect(routerFlow.state.menuFocusedIndex, 1);
 
       speech.emitCommandResult('вниз');
       speech.endSegment();
@@ -1276,6 +1296,9 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
       StreamController<SegmentedRecognitionResult>.broadcast();
   final StreamController<SpeechSegmentEnded> _segmentEndedController =
       StreamController<SpeechSegmentEnded>.broadcast();
+  final StreamController<SpeechSegmentStarted> _segmentStartedController =
+      StreamController<SpeechSegmentStarted>.broadcast();
+  bool _segmentStarted = false;
 
   @override
   Never get audioStreamService => throw UnsupportedError('Not used in test');
@@ -1287,6 +1310,9 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   @override
   Stream<SpeechSegmentEnded> get segmentEndedStream =>
       _segmentEndedController.stream;
+  @override
+  Stream<SpeechSegmentStarted> get segmentStartedStream =>
+      _segmentStartedController.stream;
 
   @override
   bool get isPrepared => true;
@@ -1344,6 +1370,14 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   }
 
   void _emitSegmented(String text, RecognitionKind kind) {
+    if (!_segmentStarted) {
+      _segmentStarted = true;
+      _segmentStartedController.add(const SpeechSegmentStarted(
+        captureEpoch: 1,
+        segmentId: 1,
+        startChunkId: 1,
+      ));
+    }
     _segmentedResultsController.add(SegmentedRecognitionResult(
       captureEpoch: 1,
       segmentId: 1,
@@ -1385,6 +1419,7 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   @override
   Future<void> dispose() async {
     await _segmentedResultsController.close();
+    await _segmentStartedController.close();
     await _segmentEndedController.close();
   }
 }

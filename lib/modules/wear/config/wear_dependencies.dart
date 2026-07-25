@@ -48,21 +48,22 @@ class WearDependencies {
 
   void _initVoiceServices() {
     audioStreamService = AudioStreamService();
+    wearFlowController = WearFlowController(
+      glassesOutput: FlutterWearGlassesOutput(),
+      navigationOutput: NoopWearNavigationOutput(),
+    );
     speechRecognitionService = SpeechRecognitionService(
       audioStreamService: audioStreamService,
       commandGrammar: VoiceCommandParserService.grammarPhrases,
     );
     voiceControlService = WearVoiceControlService(
       speechRecognitionService: speechRecognitionService,
+      screenProvider: () => wearFlowController.state.screen,
     );
     voiceTypingService = VoiceTypingService(
       speechRecognitionService: speechRecognitionService,
       audioStreamService: audioStreamService,
       resolvedPhrases: voiceControlService.phraseStream,
-    );
-    wearFlowController = WearFlowController(
-      glassesOutput: FlutterWearGlassesOutput(),
-      navigationOutput: NoopWearNavigationOutput(),
     );
   }
 

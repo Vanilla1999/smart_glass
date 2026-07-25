@@ -1,4 +1,5 @@
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
 
 class VoiceCommandParserService {
   static const Map<String, WearVoiceCommand> _exactCommandMap =
@@ -175,7 +176,10 @@ class VoiceCommandParserService {
     ],
   };
 
-  static List<String> get grammarPhrases => _exactCommandMap.keys.toList();
+  static List<String> get grammarPhrases => <String>{
+        ..._exactCommandMap.keys,
+        ...VoiceActionCatalog().grammarPhrases,
+      }.toList(growable: false);
 
   WearVoiceCommand? parseExact(String text) {
     final String normalized = _normalize(text);

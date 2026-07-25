@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/recognition_arbiter.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
@@ -12,10 +14,14 @@ class WearVoiceControlService {
   WearVoiceControlService({
     required SpeechRecognitionService speechRecognitionService,
     VoiceCommandParserService? commandParserService,
+    VoiceActionCatalog? actionCatalog,
+    WearScreenId Function()? screenProvider,
     WearVoiceClock? clock,
   })  : _speechRecognitionService = speechRecognitionService,
         _arbiter = RecognitionArbiter(
           commandParserService: commandParserService,
+          actionCatalog: actionCatalog,
+          screenProvider: screenProvider,
         ) {
     print('[WearVoiceControlService] subscribing to ASR results');
     _recognitionSubscription =
@@ -31,6 +37,11 @@ class WearVoiceControlService {
       _onSegmentEnded,
       onError: _onRecognitionError,
     );
+    _segmentStartedSubscription =
+        _speechRecognitionService.segmentStartedStream.listen(
+      _arbiter.startSegment,
+      onError: _onRecognitionError,
+    );
   }
 
   final SpeechRecognitionService _speechRecognitionService;
@@ -39,36 +50,40 @@ class WearVoiceControlService {
       StreamController<WearVoiceCommand>.broadcast();
   final StreamController<String> _phraseController =
       StreamController<String>.broadcast();
-  final StreamController<String> _partialPhraseController =
-      StreamController<String>.broadcast();
+  final StreamController<String?> _freeTextPreviewController =
+      StreamController<String?>.broadcast();
   StreamSubscription<SegmentedRecognitionResult>? _recognitionSubscription;
+  StreamSubscription<SpeechSegmentStarted>? _segmentStartedSubscription;
   StreamSubscription<SpeechSegmentEnded>? _segmentEndedSubscription;
   int _emittedCommandSeq = 0;
 
   static const int _minPartialPhraseLength = 6;
   Stream<WearVoiceCommand> get commandStream => _commandController.stream;
   Stream<String> get phraseStream => _phraseController.stream;
-  Stream<String> get partialPhraseStream => _partialPhraseController.stream;
+  Stream<String?> get freeTextPreviewStream =>
+      _freeTextPreviewController.stream;
 
   void _onRecognitionResult(SegmentedRecognitionResult result) {
     final RecognitionArbitration? outcome = _arbiter.accept(result);
     if (outcome == null) return;
     if (outcome.command case final WearVoiceCommand command) {
+      if (outcome.clearPreview) _emitFreeTextPreview(null);
       _emitCommand(command, source: result.kind.name);
       return;
     }
+    if (outcome.preview case final String preview) {
+      _emitFreeTextPreview(preview);
+      return;
+    }
     if (outcome.phrase case final String phrase) {
-      if (outcome.isPartial) {
-        _emitPartialPhrase(phrase);
-      } else {
-        _emitPhrase(phrase);
-      }
+      _emitPhrase(phrase);
     }
   }
 
   void _onSegmentEnded(SpeechSegmentEnded ended) {
     final RecognitionArbitration? outcome = _arbiter.endSegment(ended);
     if (outcome?.command case final WearVoiceCommand command) {
+      if (outcome!.clearPreview) _emitFreeTextPreview(null);
       _emitCommand(command, source: 'segment_final');
       return;
     }
@@ -103,17 +118,21 @@ class WearVoiceControlService {
     _phraseController.add(trimmed);
   }
 
-  void _emitPartialPhrase(String phrase) {
+  void _emitFreeTextPreview(String? phrase) {
+    if (_freeTextPreviewController.isClosed) return;
+    if (phrase == null) {
+      _freeTextPreviewController.add(null);
+      return;
+    }
     final String trimmed = phrase.trim();
-    if (trimmed.length < _minPartialPhraseLength ||
-        _partialPhraseController.isClosed) {
+    if (trimmed.length < _minPartialPhraseLength) {
       return;
     }
     print(
-      '[WearVoiceControlService] emitting partial phrase: "$trimmed" '
-      'hasListener=${_partialPhraseController.hasListener}',
+      '[WearVoiceControlService] emitting free-text preview: "$trimmed" '
+      'hasListener=${_freeTextPreviewController.hasListener}',
     );
-    _partialPhraseController.add(trimmed);
+    _freeTextPreviewController.add(trimmed);
   }
 
   void _onRecognitionError(Object error, StackTrace stackTrace) {
@@ -125,10 +144,11 @@ class WearVoiceControlService {
 
   Future<void> dispose() async {
     await _recognitionSubscription?.cancel();
+    await _segmentStartedSubscription?.cancel();
     await _segmentEndedSubscription?.cancel();
     _arbiter.dispose();
     await _commandController.close();
     await _phraseController.close();
-    await _partialPhraseController.close();
+    await _freeTextPreviewController.close();
   }
 }

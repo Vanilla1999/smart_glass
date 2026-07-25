@@ -72,6 +72,8 @@ class SpeechRecognitionService {
       StreamController<SegmentedRecognitionResult>.broadcast(sync: true);
   final StreamController<SpeechSegmentEnded> _segmentEndedController =
       StreamController<SpeechSegmentEnded>.broadcast(sync: true);
+  final StreamController<SpeechSegmentStarted> _segmentStartedController =
+      StreamController<SpeechSegmentStarted>.broadcast(sync: true);
 
   String _commandPartialText = '';
   String _freeTextPartialText = '';
@@ -99,6 +101,8 @@ class SpeechRecognitionService {
       _segmentedResultsController.stream;
   Stream<SpeechSegmentEnded> get segmentEndedStream =>
       _segmentEndedController.stream;
+  Stream<SpeechSegmentStarted> get segmentStartedStream =>
+      _segmentStartedController.stream;
   bool get isPrepared =>
       _model != null &&
       _freeTextRecognizer != null &&
@@ -411,6 +415,7 @@ class SpeechRecognitionService {
       return;
     }
     if (segment.started) {
+      _emitSegmentStarted(segment);
       for (final _PcmFrame frame in _preRollFrames) {
         _enqueueSegmentFrame(frame.boosted, captureEpoch, segment);
       }
@@ -446,6 +451,7 @@ class SpeechRecognitionService {
     final int captureEpoch = _captureEpoch.current;
     final SpeechSegment? segment = _speechSegmenter.add(bytes, captureEpoch);
     if (segment == null) return;
+    if (segment.started) _emitSegmentStarted(segment);
     final List<Future<void>> processing = <Future<void>>[];
     if (_commandRecognizer != null) {
       processing.add(_enqueueCommandChunk(bytes, captureEpoch, segment));
@@ -585,6 +591,15 @@ class SpeechRecognitionService {
         freeTextLaneError: freeTextLaneError,
       ));
     }
+  }
+
+  void _emitSegmentStarted(SpeechSegment segment) {
+    if (_segmentStartedController.isClosed) return;
+    _segmentStartedController.add(SpeechSegmentStarted(
+      captureEpoch: segment.captureEpoch,
+      segmentId: segment.segmentId,
+      startChunkId: segment.lastChunkId,
+    ));
   }
 
   Future<void> _closeRecognizerSegment({
@@ -882,6 +897,7 @@ class SpeechRecognitionService {
     _model = null;
     await _segmentedResultsController.close();
     await _segmentEndedController.close();
+    await _segmentStartedController.close();
   }
 
   _RecognitionMetrics _metrics(_RecognitionSource source) {
