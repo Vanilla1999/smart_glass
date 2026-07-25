@@ -57,6 +57,8 @@ class AudioStreamService {
   int _captureId = 0;
 
   final List<void Function(Uint8List)> _dataCallbacks = [];
+  final List<void Function(Uint8List raw, Uint8List boosted)> _pcmCallbacks =
+      [];
   void Function(Object error, StackTrace stackTrace)? _errorCallback;
 
   bool get isRunning => _isRunning;
@@ -79,6 +81,17 @@ class AudioStreamService {
 
   void removeDataCallback(void Function(Uint8List) callback) {
     _dataCallbacks.remove(callback);
+  }
+
+  void addPcmCallback(
+      void Function(Uint8List raw, Uint8List boosted) callback) {
+    if (!_pcmCallbacks.contains(callback)) _pcmCallbacks.add(callback);
+  }
+
+  void removePcmCallback(
+    void Function(Uint8List raw, Uint8List boosted) callback,
+  ) {
+    _pcmCallbacks.remove(callback);
   }
 
   Future<bool> requestPermission() {
@@ -197,6 +210,12 @@ class AudioStreamService {
         for (final cb in List<void Function(Uint8List)>.of(_dataCallbacks)) {
           cb(boostedBytes);
         }
+        for (final cb
+            in List<void Function(Uint8List raw, Uint8List boosted)>.of(
+          _pcmCallbacks,
+        )) {
+          cb(bytes, boostedBytes);
+        }
       },
       onError: (Object error, StackTrace stackTrace) {
         _isRunning = false;
@@ -225,6 +244,7 @@ class AudioStreamService {
     }
 
     _dataCallbacks.clear();
+    _pcmCallbacks.clear();
     _errorCallback = null;
     _isRunning = false;
     _startedAtMillis = null;
@@ -246,6 +266,7 @@ class AudioStreamService {
     print(
         '[AudioStreamService] pauseCallbacks callbacks=${_dataCallbacks.length}');
     _dataCallbacks.clear();
+    _pcmCallbacks.clear();
     _errorCallback = null;
   }
 

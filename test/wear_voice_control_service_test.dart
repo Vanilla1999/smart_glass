@@ -36,6 +36,7 @@ void main() {
     late WearVoiceControlService service;
     late List<WearVoiceCommand> commands;
     late List<String> phrases;
+    late List<String> partialPhrases;
 
     setUp(() {
       speech = _FakeSpeechRecognitionService();
@@ -45,8 +46,10 @@ void main() {
       );
       commands = <WearVoiceCommand>[];
       phrases = <String>[];
+      partialPhrases = <String>[];
       service.commandStream.listen(commands.add);
       service.phraseStream.listen(phrases.add);
+      service.partialPhraseStream.listen(partialPhrases.add);
     });
 
     tearDown(() async {
@@ -64,7 +67,7 @@ void main() {
       expect(phrases, isEmpty);
     });
 
-    test('previous-page grammar partial suppresses free-text "прошлое"',
+    test('free-text partial cannot change UI before grammar resolves',
         () async {
       speech.emit(
         lane: RecognitionLane.command,
@@ -74,6 +77,12 @@ void main() {
       );
       speech.emit(
           lane: RecognitionLane.freeText, text: 'прошлое', segmentId: 3);
+      expect(partialPhrases, isEmpty);
+      speech.emit(
+        lane: RecognitionLane.command,
+        text: 'прошлая страница',
+        segmentId: 3,
+      );
       speech.end(segmentId: 3);
       await _settle();
 
@@ -114,8 +123,7 @@ void main() {
       expect(phrases, <String>['без сахара']);
     });
 
-    test('exact grammar partial executes and its final does not repeat',
-        () async {
+    test('grammar final commits after a non-executing partial', () async {
       speech.emit(
         lane: RecognitionLane.command,
         kind: RecognitionKind.partial,
@@ -123,6 +131,7 @@ void main() {
         segmentId: 7,
       );
       speech.emit(lane: RecognitionLane.command, text: 'печать', segmentId: 7);
+      speech.end(segmentId: 7);
       await _settle();
 
       expect(commands, <WearVoiceCommand>[WearVoiceCommand.print]);
@@ -132,6 +141,7 @@ void main() {
       speech.emit(
           lane: RecognitionLane.command, text: 'вверх', captureEpoch: 2);
       speech.emit(lane: RecognitionLane.command, text: 'вниз', captureEpoch: 1);
+      speech.end(segmentId: 1, captureEpoch: 2);
       await _settle();
 
       expect(commands, <WearVoiceCommand>[WearVoiceCommand.up]);
@@ -145,6 +155,7 @@ void main() {
         text: 'вверх',
         captureEpoch: 1,
       );
+      speech.end(segmentId: 1, captureEpoch: 2);
       await _settle();
 
       expect(commands, <WearVoiceCommand>[WearVoiceCommand.down]);
@@ -179,6 +190,13 @@ class _FakeAudioStreamService implements AudioStreamService {
   void addDataCallback(void Function(Uint8List) callback) {}
   @override
   void removeDataCallback(void Function(Uint8List) callback) {}
+  @override
+  void addPcmCallback(
+      void Function(Uint8List raw, Uint8List boosted) callback) {}
+  @override
+  void removePcmCallback(
+    void Function(Uint8List raw, Uint8List boosted) callback,
+  ) {}
   @override
   Future<String> diagnostics() async => 'fake';
   @override

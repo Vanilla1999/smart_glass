@@ -108,7 +108,7 @@ class WearVoiceSession {
     final Future<void> startup = _enqueue(() async {
       print('[WearVoiceSession] start requested, isListening=$isListening');
       if (!_isCurrentListeningRequest(generation)) return;
-      if (isListening) {
+      if (isListening && _speech.isCaptureRunning && !_captureSilenced) {
         _emit(VoicePhase.ready,
             reason: 'already_listening', resetAttempt: true);
         print('[WearVoiceSession] start skipped: ${await diagnostics()}');
@@ -133,6 +133,8 @@ class WearVoiceSession {
         if (!ready ||
             !_isCurrentListeningRequest(generation) ||
             _captureSilenced) {
+          await _speech.stopListening();
+          await _updateNativeCaptureMonitor(active: false);
           return;
         }
         _emit(VoicePhase.ready, reason: 'start_ready', resetAttempt: true);

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
@@ -19,18 +17,18 @@ class RecognitionArbitration {
   final bool isPartial;
 }
 
-/// Chooses at most one command for each capture segment, without timing rules.
+/// Resolves one capture segment only after the command lane has completed.
 class RecognitionArbiter {
   RecognitionArbiter({
     VoiceCommandParserService? commandParserService,
-    this.closedSegmentCleanupTimeout = const Duration(seconds: 2),
+    this.maxClosedSegments = 128,
   }) : _parser = commandParserService ?? VoiceCommandParserService();
 
   final VoiceCommandParserService _parser;
-  final Duration closedSegmentCleanupTimeout;
+  final int maxClosedSegments;
   final Map<String, _SegmentArbitrationState> _segments =
       <String, _SegmentArbitrationState>{};
-  final Map<String, Timer> _closedSegmentCleanup = <String, Timer>{};
+  final Map<String, void> _closedSegments = <String, void>{};
   int _currentCaptureEpoch = 0;
 
   RecognitionArbitration? accept(SegmentedRecognitionResult result) {
@@ -42,40 +40,41 @@ class RecognitionArbiter {
     }
 
     final String key = '${result.captureEpoch}:${result.segmentId}';
-    if (_closedSegmentCleanup.containsKey(key)) return null;
+    if (_closedSegments.containsKey(key)) return null;
     final _SegmentArbitrationState state =
         _segments.putIfAbsent(key, _SegmentArbitrationState.new);
     if (result.lane == RecognitionLane.command) {
       final WearVoiceCommand? command = result.parsedCommand;
-      if (command == null || state.claimedByCommand) return null;
-      state.claimedByCommand = true;
-      state.bufferedFreeText = null;
-      return RecognitionArbitration.command(command);
+      if (command == null || result.kind != RecognitionKind.finalResult) {
+        return null;
+      }
+      state.command = command;
+      return null;
     }
 
-    if (state.claimedByCommand || _parser.parseExact(result.text) != null) {
+    if (state.command != null || _parser.parseExact(result.text) != null) {
       return null;
     }
     final String text = result.text.trim();
     if (text.isEmpty) return null;
-    if (result.kind == RecognitionKind.finalResult) {
-      state.bufferedFreeText = text;
-      return null;
-    }
-    return RecognitionArbitration.phrase(
-      text,
-      isPartial: true,
-    );
+    // A live free-text result can alter focus/search before its sibling
+    // grammar result arrives. Keep only the newest candidate until closure.
+    state.bufferedFreeText = text;
+    return null;
   }
 
   RecognitionArbitration? endSegment(SpeechSegmentEnded ended) {
     if (ended.captureEpoch != _currentCaptureEpoch) return null;
     final String key = '${ended.captureEpoch}:${ended.segmentId}';
     final _SegmentArbitrationState? state = _segments.remove(key);
-    _closedSegmentCleanup[key] = Timer(closedSegmentCleanupTimeout, () {
-      _closedSegmentCleanup.remove(key);
-    });
-    if (state == null || state.claimedByCommand) return null;
+    _closedSegments[key] = null;
+    if (_closedSegments.length > maxClosedSegments) {
+      _closedSegments.remove(_closedSegments.keys.first);
+    }
+    if (state == null || !ended.commandLaneCompleted) return null;
+    final WearVoiceCommand? command = state.command;
+    if (command != null) return RecognitionArbitration.command(command);
+    if (!ended.freeTextLaneCompleted) return null;
     final String? phrase = state.bufferedFreeText;
     if (phrase == null) return null;
     return RecognitionArbitration.phrase(phrase, isPartial: false);
@@ -84,14 +83,11 @@ class RecognitionArbiter {
   void dispose() => _clearClosedSegments();
 
   void _clearClosedSegments() {
-    for (final Timer timer in _closedSegmentCleanup.values) {
-      timer.cancel();
-    }
-    _closedSegmentCleanup.clear();
+    _closedSegments.clear();
   }
 }
 
 class _SegmentArbitrationState {
-  bool claimedByCommand = false;
+  WearVoiceCommand? command;
   String? bufferedFreeText;
 }

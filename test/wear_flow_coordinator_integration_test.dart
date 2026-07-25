@@ -962,7 +962,7 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       expect(WearStatusIconReporter.I.lastPayload?.title, 'Выбор раздела');
     });
 
-    testWearWidget('ASR command partial reaches WearFlowController immediately',
+    testWearWidget('ASR command commits only after its segment closes',
         (WidgetTester tester) async {
       final _FakeSpeechRecognitionService speech =
           _FakeSpeechRecognitionService();
@@ -994,15 +994,16 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       speech.emitCommandPartial('вниз');
       await tester.pumpAndSettle();
 
-      expect(routerFlow.state.menuFocusedIndex, 1);
+      expect(routerFlow.state.menuFocusedIndex, 0);
 
       speech.emitCommandResult('вниз');
+      speech.endSegment();
       await tester.pumpAndSettle();
 
       expect(routerFlow.state.menuFocusedIndex, 1);
     });
 
-    testWearWidget('restarts voice after paused lifecycle resumes',
+    testWearWidget('injected resume recovery receives lifecycle reason',
         (WidgetTester tester) async {
       WearSession.setUser(AuthenticatedUser(
         idUser: 1,
@@ -1034,7 +1035,7 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pump();
 
-      expect(restartReason, 'app_lifecycle_resumed_after_interruption');
+      expect(restartReason, 'app_lifecycle_resumed');
     });
 
     testWearWidget('shows voice reconnection overlay without changing route',
@@ -1332,6 +1333,14 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
 
   void emitCommandResult(String text) {
     _emitSegmented(text, RecognitionKind.finalResult);
+  }
+
+  void endSegment() {
+    _segmentEndedController.add(const SpeechSegmentEnded(
+      captureEpoch: 1,
+      segmentId: 1,
+      endChunkId: 1,
+    ));
   }
 
   void _emitSegmented(String text, RecognitionKind kind) {

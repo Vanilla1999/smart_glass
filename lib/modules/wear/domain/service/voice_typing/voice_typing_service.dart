@@ -10,6 +10,7 @@ class VoiceTypingService {
     AudioStreamService? audioStreamService,
     SpeechRecognitionService? speechRecognitionService,
     NumberParserService? numberParserService,
+    Stream<String>? resolvedPhrases,
   }) {
     final AudioStreamService sharedAudio = audioStreamService ??
         speechRecognitionService?.audioStreamService ??
@@ -20,6 +21,7 @@ class VoiceTypingService {
           SpeechRecognitionService(audioStreamService: sharedAudio),
       numberParserService: numberParserService ?? NumberParserService(),
       ownsSpeechRecognitionService: speechRecognitionService == null,
+      resolvedPhrases: resolvedPhrases,
     );
   }
 
@@ -28,15 +30,23 @@ class VoiceTypingService {
     required SpeechRecognitionService speechRecognitionService,
     required NumberParserService numberParserService,
     required bool ownsSpeechRecognitionService,
+    Stream<String>? resolvedPhrases,
   })  : _audioStreamService = audioStreamService,
         _speechRecognitionService = speechRecognitionService,
         _numberParserService = numberParserService,
         _ownsSpeechRecognitionService = ownsSpeechRecognitionService {
-    _recognitionSubscription =
-        _speechRecognitionService.segmentedResultsStream.listen(
-      _onRecognitionResult,
-      onError: _onRecognitionError,
-    );
+    if (resolvedPhrases == null) {
+      _recognitionSubscription =
+          _speechRecognitionService.segmentedResultsStream.listen(
+        _onRecognitionResult,
+        onError: _onRecognitionError,
+      );
+    } else {
+      _recognitionSubscription = resolvedPhrases.listen(
+        _onResolvedPhrase,
+        onError: _onRecognitionError,
+      );
+    }
   }
 
   final AudioStreamService _audioStreamService;
@@ -46,7 +56,7 @@ class VoiceTypingService {
   final StreamController<String> _resultsController =
       StreamController<String>.broadcast();
 
-  StreamSubscription<SegmentedRecognitionResult>? _recognitionSubscription;
+  StreamSubscription<dynamic>? _recognitionSubscription;
 
   Stream<String> get resultsStream => _resultsController.stream;
   Stream<double> get audioLevelStream => _audioStreamService.audioLevelStream;
@@ -89,7 +99,11 @@ class VoiceTypingService {
         result.kind != RecognitionKind.finalResult) {
       return;
     }
-    final output = _numberParserService.parseToNumber(result.text);
+    _onResolvedPhrase(result.text);
+  }
+
+  void _onResolvedPhrase(String phrase) {
+    final output = _numberParserService.parseToNumber(phrase);
     if (!_resultsController.isClosed) {
       _resultsController.add(output);
     }

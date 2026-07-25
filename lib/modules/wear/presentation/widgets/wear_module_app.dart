@@ -657,8 +657,7 @@ class _WearModuleAppState extends State<WearModuleApp>
           _restartVoiceAfterInterruption = false;
           unawaited(_restartVoice(restartVoice, reason));
         } else if (resumeRecoveryRequired &&
-            (WearVoiceSession.I.forceHardRestartOnResume ||
-                _restartVoiceAfterInterruption) &&
+            WearVoiceSession.I.forceHardRestartOnResume &&
             _audioCaptureSilenced != true) {
           _restartVoiceAfterInterruption = false;
           unawaited(
@@ -667,6 +666,14 @@ class _WearModuleAppState extends State<WearModuleApp>
             ),
           );
         } else {
+          _restartVoiceAfterInterruption = false;
+          if (resumeRecoveryRequired && _audioCaptureSilenced != true) {
+            unawaited(
+              WearVoiceSession.I.ensureHealthy(
+                reason: 'app_lifecycle_resumed',
+              ),
+            );
+          }
           if (_voiceState.phase == VoicePhase.ready) {
             _startVoiceHealthTimer();
           }
@@ -678,7 +685,7 @@ class _WearModuleAppState extends State<WearModuleApp>
         state == AppLifecycleState.paused) {
       _appResumed = false;
       _wasActuallyBackgrounded = true;
-      _restartVoiceAfterInterruption = true;
+      _restartVoiceAfterInterruption = false;
       _voiceHealthTimer?.cancel();
       _voiceHealthTimer = null;
     }

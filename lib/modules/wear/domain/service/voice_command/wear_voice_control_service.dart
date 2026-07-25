@@ -68,6 +68,10 @@ class WearVoiceControlService {
 
   void _onSegmentEnded(SpeechSegmentEnded ended) {
     final RecognitionArbitration? outcome = _arbiter.endSegment(ended);
+    if (outcome?.command case final WearVoiceCommand command) {
+      _emitCommand(command, source: 'segment_final');
+      return;
+    }
     if (outcome?.phrase case final String phrase) {
       _emitPhrase(phrase);
     }

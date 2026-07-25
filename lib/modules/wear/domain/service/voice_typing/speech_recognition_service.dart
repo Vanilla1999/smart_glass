@@ -84,8 +84,10 @@ class SpeechRecognitionService {
   int _freeTextEpoch = 0;
   final VoiceRecognitionCaptureEpoch _captureEpoch =
       VoiceRecognitionCaptureEpoch();
-  void Function(Uint8List)? _audioCallback;
+  void Function(Uint8List raw, Uint8List boosted)? _audioCallback;
   int? _lastProcessedChunkAtMillis;
+  final List<_PcmFrame> _preRollFrames = <_PcmFrame>[];
+  static const int _preRollFrameCount = 10; // 200 ms at 20 ms VAD frames.
   final _RecognitionMetrics _commandMetrics = _RecognitionMetrics();
   final _RecognitionMetrics _freeTextMetrics = _RecognitionMetrics();
 
@@ -268,14 +270,20 @@ class SpeechRecognitionService {
       print('[SpeechRecognitionService] starting session...');
       await startSession();
       final int captureEpoch = _captureEpoch.begin();
+      _speechSegmenter.configure(
+        speechOnRms: _audioStream.deviceProfile.vadSpeechOnRms,
+        speechOffRms: _audioStream.deviceProfile.vadSpeechOffRms,
+      );
       _speechSegmenter.begin(captureEpoch);
+      _preRollFrames.clear();
       _lastProcessedChunkAtMillis = null;
       _commandMetrics.reset();
       _freeTextMetrics.reset();
 
       print('[SpeechRecognitionService] adding audio callback...');
-      _audioCallback = (Uint8List bytes) => _onAudioChunk(bytes, captureEpoch);
-      _audioStream.addDataCallback(_audioCallback!);
+      _audioCallback = (Uint8List raw, Uint8List boosted) =>
+          _onAudioChunk(raw, boosted, captureEpoch);
+      _audioStream.addPcmCallback(_audioCallback!);
       print('[SpeechRecognitionService] starting audio stream...');
       final int audioStartStartedAt = DateTime.now().millisecondsSinceEpoch;
       await _audioStream.start(
@@ -312,6 +320,7 @@ class SpeechRecognitionService {
     print('[SpeechRecognitionService] removing audio callback...');
     _captureEpoch.invalidate();
     _speechSegmenter.end(_captureEpoch.current - 1);
+    _preRollFrames.clear();
     _removeAudioCallback();
     final int processingStartedAt = DateTime.now().millisecondsSinceEpoch;
     final bool processingFinished =
@@ -367,20 +376,69 @@ class SpeechRecognitionService {
         'lastProcessedAgeMs=$lastProcessedAgeMs, audio=$audio}';
   }
 
-  void _onAudioChunk(Uint8List bytes, int captureEpoch) {
+  void _onAudioChunk(
+    Uint8List rawBytes,
+    Uint8List boostedBytes,
+    int captureEpoch,
+  ) {
     if (!_isSessionActive || !_captureEpoch.isCurrent(captureEpoch)) return;
-    final SpeechSegment? segment = _speechSegmenter.add(bytes, captureEpoch);
-    if (segment == null) return;
-    _enqueueCommandChunk(bytes, captureEpoch, segment);
-    if (_freeTextEnabled) {
-      _enqueueFreeTextChunk(bytes, _freeTextEpoch, captureEpoch, segment);
+    for (int offset = 0;
+        offset < rawBytes.lengthInBytes;
+        offset += _vadFrameBytes) {
+      final int end =
+          (offset + _vadFrameBytes).clamp(0, rawBytes.lengthInBytes).toInt();
+      _processAudioFrame(
+        Uint8List.sublistView(rawBytes, offset, end),
+        Uint8List.sublistView(boostedBytes, offset, end),
+        captureEpoch,
+      );
     }
+  }
+
+  static const int _vadFrameBytes = 640; // 20 ms at 16 kHz mono PCM16.
+
+  void _processAudioFrame(
+    Uint8List rawBytes,
+    Uint8List boostedBytes,
+    int captureEpoch,
+  ) {
+    final SpeechSegment? segment = _speechSegmenter.add(rawBytes, captureEpoch);
+    if (segment == null) {
+      _preRollFrames.add(_PcmFrame(boostedBytes));
+      if (_preRollFrames.length > _preRollFrameCount) {
+        _preRollFrames.removeAt(0);
+      }
+      return;
+    }
+    if (segment.started) {
+      for (final _PcmFrame frame in _preRollFrames) {
+        _enqueueSegmentFrame(frame.boosted, captureEpoch, segment);
+      }
+      _preRollFrames.clear();
+    }
+    _enqueueSegmentFrame(boostedBytes, captureEpoch, segment);
     if (segment.isEndpoint) {
       unawaited(_finishSegment(segment, captureEpoch).catchError(
         (Object error, StackTrace stackTrace) {
           print('[SpeechRecognitionService] segment finish error: $error');
         },
       ));
+    }
+  }
+
+  void _enqueueSegmentFrame(
+    Uint8List boostedBytes,
+    int captureEpoch,
+    SpeechSegment segment,
+  ) {
+    _enqueueCommandChunk(boostedBytes, captureEpoch, segment);
+    if (_freeTextEnabled) {
+      _enqueueFreeTextChunk(
+        boostedBytes,
+        _freeTextEpoch,
+        captureEpoch,
+        segment,
+      );
     }
   }
 
@@ -493,13 +551,38 @@ class SpeechRecognitionService {
       );
       lanes.add(next);
     }
-    await Future.wait<void>(lanes);
+    Object? commandLaneError;
+    Object? freeTextLaneError;
+    if (lanes.isNotEmpty) {
+      final List<Object?> errors = await Future.wait<Object?>(
+        lanes.map((Future<void> lane) async {
+          try {
+            await lane;
+            return null;
+          } catch (error, stackTrace) {
+            print('[SpeechRecognitionService] segment lane close error: '
+                '$error\n$stackTrace');
+            return error;
+          }
+        }),
+      );
+      if (_commandRecognizer != null && errors.isNotEmpty) {
+        commandLaneError = errors.first;
+      }
+      if (_freeTextEnabled && _freeTextRecognizer != null) {
+        freeTextLaneError = errors.last;
+      }
+    }
     if (_captureEpoch.isCurrent(captureEpoch) &&
         !_segmentEndedController.isClosed) {
       _segmentEndedController.add(SpeechSegmentEnded(
         captureEpoch: captureEpoch,
         segmentId: segment.segmentId,
         endChunkId: segment.lastChunkId,
+        commandLaneCompleted: commandLaneError == null,
+        freeTextLaneCompleted: freeTextLaneError == null,
+        commandLaneError: commandLaneError,
+        freeTextLaneError: freeTextLaneError,
       ));
     }
   }
@@ -694,8 +777,9 @@ class SpeechRecognitionService {
   }
 
   void _removeAudioCallback() {
-    final void Function(Uint8List)? callback = _audioCallback;
-    if (callback != null) _audioStream.removeDataCallback(callback);
+    final void Function(Uint8List raw, Uint8List boosted)? callback =
+        _audioCallback;
+    if (callback != null) _audioStream.removePcmCallback(callback);
     _audioCallback = null;
   }
 
@@ -852,6 +936,12 @@ enum _RecognitionSource {
   const _RecognitionSource(this.label);
 
   final String label;
+}
+
+class _PcmFrame {
+  const _PcmFrame(this.boosted);
+
+  final Uint8List boosted;
 }
 
 class _RecognitionMetrics {

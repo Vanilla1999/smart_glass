@@ -52,12 +52,13 @@ class WearDependencies {
       audioStreamService: audioStreamService,
       commandGrammar: VoiceCommandParserService.grammarPhrases,
     );
+    voiceControlService = WearVoiceControlService(
+      speechRecognitionService: speechRecognitionService,
+    );
     voiceTypingService = VoiceTypingService(
       speechRecognitionService: speechRecognitionService,
       audioStreamService: audioStreamService,
-    );
-    voiceControlService = WearVoiceControlService(
-      speechRecognitionService: speechRecognitionService,
+      resolvedPhrases: voiceControlService.phraseStream,
     );
     wearFlowController = WearFlowController(
       glassesOutput: FlutterWearGlassesOutput(),

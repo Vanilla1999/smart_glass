@@ -9,11 +9,19 @@ class SpeechSegmentEnded {
     required this.captureEpoch,
     required this.segmentId,
     required this.endChunkId,
+    this.commandLaneCompleted = true,
+    this.freeTextLaneCompleted = true,
+    this.commandLaneError,
+    this.freeTextLaneError,
   });
 
   final int captureEpoch;
   final int segmentId;
   final int endChunkId;
+  final bool commandLaneCompleted;
+  final bool freeTextLaneCompleted;
+  final Object? commandLaneError;
+  final Object? freeTextLaneError;
 }
 
 class SegmentedRecognitionResult {

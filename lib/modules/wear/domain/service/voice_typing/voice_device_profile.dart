@@ -16,6 +16,8 @@ class VoiceDeviceProfile {
     required this.manageBluetooth,
     required this.speakerphone,
     required this.audioManagerMode,
+    required this.vadSpeechOnRms,
+    required this.vadSpeechOffRms,
   });
 
   static const VoiceDeviceProfile defaultProfile = VoiceDeviceProfile(
@@ -27,6 +29,8 @@ class VoiceDeviceProfile {
     manageBluetooth: true,
     speakerphone: false,
     audioManagerMode: AudioManagerMode.modeNormal,
+    vadSpeechOnRms: 0.0010,
+    vadSpeechOffRms: 0.0007,
   );
 
   static const VoiceDeviceProfile t2151 = VoiceDeviceProfile(
@@ -38,6 +42,8 @@ class VoiceDeviceProfile {
     manageBluetooth: false,
     speakerphone: false,
     audioManagerMode: AudioManagerMode.modeNormal,
+    vadSpeechOnRms: 0.0008,
+    vadSpeechOffRms: 0.0005,
   );
 
   static const VoiceDeviceProfile t2151VoiceRecognition = VoiceDeviceProfile(
@@ -49,6 +55,8 @@ class VoiceDeviceProfile {
     manageBluetooth: false,
     speakerphone: false,
     audioManagerMode: AudioManagerMode.modeNormal,
+    vadSpeechOnRms: 0.0008,
+    vadSpeechOffRms: 0.0005,
   );
 
   static const VoiceDeviceProfile t2151Microphone = VoiceDeviceProfile(
@@ -60,6 +68,8 @@ class VoiceDeviceProfile {
     manageBluetooth: false,
     speakerphone: false,
     audioManagerMode: AudioManagerMode.modeNormal,
+    vadSpeechOnRms: 0.0008,
+    vadSpeechOffRms: 0.0005,
   );
 
   final String id;
@@ -72,6 +82,10 @@ class VoiceDeviceProfile {
   final bool manageBluetooth;
   final bool speakerphone;
   final AudioManagerMode audioManagerMode;
+
+  /// Raw PCM VAD thresholds. They are deliberately independent of recognizer gain.
+  final double vadSpeechOnRms;
+  final double vadSpeechOffRms;
 
   AndroidAudioSource get androidAudioSource => switch (audioSource) {
         VoiceAudioSource.voiceCommunication =>
