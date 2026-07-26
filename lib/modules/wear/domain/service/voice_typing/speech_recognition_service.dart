@@ -532,7 +532,10 @@ class SpeechRecognitionService {
 
   Future<void> _finishSegment(SpeechSegment segment, int captureEpoch) async {
     final List<Future<void>> lanes = <Future<void>>[];
-    if (_commandRecognizer != null) {
+    final bool hasCommandLane = _commandRecognizer != null;
+    final bool hasFreeTextLane =
+        _freeTextEnabled && _freeTextRecognizer != null;
+    if (hasCommandLane) {
       final Future<void> next = _commandAudioProcessing.then(
         (_) => _closeRecognizerSegment(
           source: _RecognitionSource.command,
@@ -550,7 +553,7 @@ class SpeechRecognitionService {
       );
       lanes.add(next);
     }
-    if (_freeTextEnabled && _freeTextRecognizer != null) {
+    if (hasFreeTextLane) {
       final int epoch = _freeTextEpoch;
       final Future<void> next = _freeTextAudioProcessing.then(
         (_) => _closeRecognizerSegment(
@@ -584,11 +587,12 @@ class SpeechRecognitionService {
           }
         }),
       );
-      if (_commandRecognizer != null && errors.isNotEmpty) {
-        commandLaneError = errors.first;
+      int errorIndex = 0;
+      if (hasCommandLane) {
+        commandLaneError = errors[errorIndex++];
       }
-      if (_freeTextEnabled && _freeTextRecognizer != null) {
-        freeTextLaneError = errors.last;
+      if (hasFreeTextLane) {
+        freeTextLaneError = errors[errorIndex];
       }
     }
     if (_captureEpoch.isCurrent(captureEpoch) &&
