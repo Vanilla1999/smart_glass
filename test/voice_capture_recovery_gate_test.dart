@@ -78,6 +78,9 @@ void main() {
         isCaptureRunning: true,
         chunksReceived: 2,
         lastAudioAtMillis: 1001,
+        lastNonSilentAudioAtMillis: null,
+        continuousZeroAudioStartedAtMillis: 1001,
+        requireNonZeroPcm: false,
         nowMillis: 1001,
       ),
       isFalse,
@@ -88,6 +91,9 @@ void main() {
         isCaptureRunning: true,
         chunksReceived: 3,
         lastAudioAtMillis: 1001,
+        lastNonSilentAudioAtMillis: null,
+        continuousZeroAudioStartedAtMillis: 1001,
+        requireNonZeroPcm: false,
         nowMillis: 1001,
       ),
       isTrue,
@@ -98,6 +104,9 @@ void main() {
         isCaptureRunning: false,
         chunksReceived: 3,
         lastAudioAtMillis: 1001,
+        lastNonSilentAudioAtMillis: null,
+        continuousZeroAudioStartedAtMillis: 1001,
+        requireNonZeroPcm: false,
         nowMillis: 1001,
       ),
       isFalse,
@@ -106,6 +115,7 @@ void main() {
       gate.isTimedOut(
         captureStartedAtMillis: 1000,
         nowMillis: 2999,
+        timeout: const Duration(milliseconds: 2000),
       ),
       isFalse,
     );
@@ -113,6 +123,71 @@ void main() {
       gate.isTimedOut(
         captureStartedAtMillis: 1000,
         nowMillis: 3000,
+        timeout: const Duration(milliseconds: 2000),
+      ),
+      isTrue,
+    );
+  });
+
+  test('T2151 voice recognition does not become ready from exact-zero PCM', () {
+    final VoiceCaptureStartupGate gate = VoiceCaptureStartupGate();
+
+    expect(
+      gate.isReady(
+        captureStartedAtMillis: 1000,
+        isCaptureRunning: true,
+        chunksReceived: 3,
+        lastAudioAtMillis: 1100,
+        lastNonSilentAudioAtMillis: null,
+        continuousZeroAudioStartedAtMillis: 1001,
+        requireNonZeroPcm: true,
+        nowMillis: 1100,
+      ),
+      isFalse,
+    );
+    expect(
+      gate.isWaitingForNonZeroPcm(
+        chunksReceived: 3,
+        continuousZeroAudioStartedAtMillis: 1001,
+      ),
+      isTrue,
+    );
+  });
+
+  test('low non-zero PCM makes T2151 voice recognition ready', () {
+    final VoiceCaptureStartupGate gate = VoiceCaptureStartupGate();
+
+    expect(
+      gate.isReady(
+        captureStartedAtMillis: 1000,
+        isCaptureRunning: true,
+        chunksReceived: 3,
+        lastAudioAtMillis: 1100,
+        lastNonSilentAudioAtMillis: 1100,
+        continuousZeroAudioStartedAtMillis: null,
+        requireNonZeroPcm: true,
+        nowMillis: 1100,
+      ),
+      isTrue,
+    );
+  });
+
+  test('exact-zero startup grace is measured from the first zero chunk', () {
+    final VoiceCaptureStartupGate gate = VoiceCaptureStartupGate();
+
+    expect(
+      gate.hasExceededExactZeroGrace(
+        continuousZeroAudioStartedAtMillis: 1000,
+        nowMillis: 2199,
+        grace: const Duration(milliseconds: 1200),
+      ),
+      isFalse,
+    );
+    expect(
+      gate.hasExceededExactZeroGrace(
+        continuousZeroAudioStartedAtMillis: 1000,
+        nowMillis: 2200,
+        grace: const Duration(milliseconds: 1200),
       ),
       isTrue,
     );

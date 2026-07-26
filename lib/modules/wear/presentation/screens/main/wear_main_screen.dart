@@ -32,7 +32,6 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
   @override
   void initState() {
     super.initState();
-    WearDependencies.I.warmupVoiceTypingInBackground();
     WearStatusIconReporter.I.start();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (WearSession.isAuthorized) {

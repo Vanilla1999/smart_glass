@@ -17,6 +17,22 @@ class SpeechSegment {
   final bool started;
 }
 
+class SpeechSegmentDiagnostics {
+  const SpeechSegmentDiagnostics({
+    required this.rms,
+    required this.noiseFloorRms,
+    required this.adaptiveOnRms,
+    required this.adaptiveOffRms,
+    required this.speaking,
+  });
+
+  final double rms;
+  final double noiseFloorRms;
+  final double adaptiveOnRms;
+  final double adaptiveOffRms;
+  final bool speaking;
+}
+
 /// Assigns one identity to every PCM chunk sent to both recognizer lanes.
 class SpeechSegmenter {
   SpeechSegmenter({
@@ -41,6 +57,15 @@ class SpeechSegmenter {
   int _silentSamples = 0;
   int _segmentSamples = 0;
   double _noiseFloorRms = 0.0002;
+  SpeechSegmentDiagnostics _lastDiagnostics = const SpeechSegmentDiagnostics(
+    rms: 0,
+    noiseFloorRms: 0.0002,
+    adaptiveOnRms: 0.001,
+    adaptiveOffRms: 0.0007,
+    speaking: false,
+  );
+
+  SpeechSegmentDiagnostics get lastDiagnostics => _lastDiagnostics;
 
   void configure({
     required double speechOnRms,
@@ -58,6 +83,13 @@ class SpeechSegmenter {
     _silentSamples = 0;
     _segmentSamples = 0;
     _noiseFloorRms = initialNoiseFloorRms;
+    _lastDiagnostics = SpeechSegmentDiagnostics(
+      rms: 0,
+      noiseFloorRms: _noiseFloorRms,
+      adaptiveOnRms: speechOnRms,
+      adaptiveOffRms: speechOffRms,
+      speaking: false,
+    );
   }
 
   SpeechSegment? add(Uint8List bytes, int captureEpoch) {
@@ -65,9 +97,21 @@ class SpeechSegmenter {
     final int chunkId = ++_nextChunkId;
     final int sampleCount = bytes.lengthInBytes ~/ 2;
     final double rms = _rms(bytes);
-    final bool speaking = _isSpeaking(rms);
+    final double adaptiveOn = (_noiseFloorRms * 2.5).clamp(speechOnRms, 1.0);
+    final double adaptiveOff = (_noiseFloorRms * 1.5).clamp(speechOffRms, 1.0);
+    final bool speaking =
+        _activeSegmentId == null ? rms >= adaptiveOn : rms >= adaptiveOff;
+    _lastDiagnostics = SpeechSegmentDiagnostics(
+      rms: rms,
+      noiseFloorRms: _noiseFloorRms,
+      adaptiveOnRms: adaptiveOn,
+      adaptiveOffRms: adaptiveOff,
+      speaking: speaking,
+    );
     if (!speaking) {
-      _noiseFloorRms = _noiseFloorRms * 0.95 + rms * 0.05;
+      if (rms <= _noiseFloorRms * 1.5) {
+        _noiseFloorRms = _noiseFloorRms * 0.95 + rms * 0.05;
+      }
       final int? segmentId = _activeSegmentId;
       if (segmentId == null) return null;
       _silentSamples += sampleCount;
@@ -114,12 +158,6 @@ class SpeechSegmenter {
       _silentSamples = 0;
       _segmentSamples = 0;
     }
-  }
-
-  bool _isSpeaking(double rms) {
-    final double adaptiveOn = (_noiseFloorRms * 3).clamp(speechOnRms, 1.0);
-    final double adaptiveOff = (_noiseFloorRms * 2).clamp(speechOffRms, 1.0);
-    return _activeSegmentId == null ? rms >= adaptiveOn : rms >= adaptiveOff;
   }
 
   int _durationToSamples(Duration duration) =>

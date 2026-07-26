@@ -21,14 +21,27 @@ void main() {
     expect(profile.forceHardRestartAfterUnsilence, isTrue);
     expect(profile.forceHardRestartOnAudioRouteChange, isTrue);
     expect(profile.manageBluetooth, isFalse);
+    expect(profile.selectUsbInputExplicitly, isTrue);
+    expect(profile.captureStartupWav, isTrue);
+    expect(profile.vadSpeechOnRms, 0.0005);
+    expect(profile.vadSpeechOffRms, 0.0003);
   });
 
   test('T2151 A/B profiles select the requested Android source', () {
+    final VoiceDeviceProfile recognition =
+        VoiceDeviceProfile.resolve(profileId: 't2151_voice_recognition');
     expect(
-      VoiceDeviceProfile.resolve(profileId: 't2151_voice_recognition')
-          .androidAudioSource,
+      recognition.androidAudioSource,
       AndroidAudioSource.voiceRecognition,
     );
+    expect(recognition.requireNonZeroPcmForStartup, isTrue);
+    expect(
+        recognition.exactZeroStartupGrace, const Duration(milliseconds: 1200));
+    expect(
+        recognition.recoveryCaptureTimeout, const Duration(milliseconds: 2500));
+    expect(recognition.maxStartupRecorderRecreates, 1);
+    expect(recognition.fallbackToVoiceCommunication, isTrue);
+    expect(recognition.captureStartupWav, isTrue);
     expect(
       VoiceDeviceProfile.resolve(profileId: 't2151_microphone')
           .androidAudioSource,

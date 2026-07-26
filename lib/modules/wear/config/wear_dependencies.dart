@@ -119,12 +119,6 @@ class WearDependencies {
     return _voiceTypingPrepareFuture!;
   }
 
-  void warmupVoiceTypingInBackground() {
-    ensureVoiceTypingPrepared().catchError((Object error, StackTrace _) {
-      print('WearDependencies: VOSK warmup failed: $error');
-    });
-  }
-
   // -------------------------
   // На следующий этап (принтеры/печать)
   // -------------------------

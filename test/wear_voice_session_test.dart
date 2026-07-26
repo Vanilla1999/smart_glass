@@ -132,6 +132,12 @@ class _FailingStartSpeechRecognitionService extends SpeechRecognitionService {
   int? get lastAudioChunkAtMillis => _listening ? 0 : null;
 
   @override
+  int? get lastNonSilentAudioChunkAtMillis => null;
+
+  @override
+  int? get continuousZeroAudioStartedAtMillis => null;
+
+  @override
   int? get captureStartedAtMillis => 0;
 
   @override

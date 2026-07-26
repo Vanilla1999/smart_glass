@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_device_profile.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_startup_wav_capture.dart';
 
 class VoiceRecorderLifecycle {
   static Future<void> recreate({
@@ -26,6 +29,7 @@ class AudioStreamService {
   static const double _releaseSmoothing = 0.15;
   static const int _startupDiagnosticsDurationMs = 10000;
   static const int _startupDiagnosticsIntervalMs = 500;
+  static const Duration _startupWavDuration = Duration(seconds: 8);
 
   AudioStreamService({
     AudioRecorder? audioRecorder,
@@ -37,7 +41,7 @@ class AudioStreamService {
             audioRecorder ?? (audioRecorderFactory ?? AudioRecorder.new)();
 
   final AudioRecorder Function() _audioRecorderFactory;
-  final VoiceDeviceProfile _deviceProfile;
+  VoiceDeviceProfile _deviceProfile;
   AudioRecorder _audioRecorder;
   final StreamController<double> _audioLevelController =
       StreamController<double>.broadcast();
@@ -55,6 +59,10 @@ class AudioStreamService {
   double _startupDiagnosticsMaxRms = 0.0;
   double _startupDiagnosticsMaxPeak = 0.0;
   int _captureId = 0;
+  InputDevice? _preferredInputDevice;
+  VoiceStartupWavCapture? _startupWavCapture;
+  String? _startupWavPath;
+  bool _startupWavSaved = false;
 
   final List<void Function(Uint8List)> _dataCallbacks = [];
   final List<void Function(Uint8List raw, Uint8List boosted)> _pcmCallbacks =
@@ -113,10 +121,16 @@ class AudioStreamService {
     final int? runningForMs =
         _startedAtMillis == null ? null : now - _startedAtMillis!;
     return 'AudioStreamService{captureId=$_captureId, isRunning=$_isRunning, '
-        'recorderIsRecording=$isRecording, callbacks=${_dataCallbacks.length}, '
+        'recorderIsRecording=$isRecording, '
+        'dataCallbacks=${_dataCallbacks.length}, '
+        'pcmCallbacks=${_pcmCallbacks.length}, '
         'chunks=$_chunksReceived, lastChunkAgeMs=$lastChunkAgeMs, '
         'lastNonSilentAgeMs=$lastNonSilentAgeMs, '
         'continuousZeroAudioAgeMs=$continuousZeroAudioAgeMs, '
+        'preferredInputDevice=${_preferredInputDevice?.label} '
+        'preferredInputDeviceId=${_preferredInputDevice?.id}, '
+        'startupWavPath=$_startupWavPath '
+        'startupWavBytes=${_startupWavCapture?.pcmBytes}, '
         'runningForMs=$runningForMs}';
   }
 
@@ -127,7 +141,8 @@ class AudioStreamService {
     if (_isRunning) {
       print(
         '[AudioStreamService] start called while running; '
-        'callbacks=${_dataCallbacks.length}',
+        'dataCallbacks=${_dataCallbacks.length} '
+        'pcmCallbacks=${_pcmCallbacks.length}',
       );
       if (onData != null) {
         addDataCallback(onData);
@@ -145,16 +160,19 @@ class AudioStreamService {
     _startedAtMillis = DateTime.now().millisecondsSinceEpoch;
     _lastNonSilentChunkAtMillis = null;
     _beginStartupDiagnostics();
+    await _beginStartupWavCapture();
     print(
       '[VoiceCapture#$_captureId] start at $_startedAtMillis '
       'profile=${_deviceProfile.id} source=${_deviceProfile.audioSource.name}',
     );
+    _preferredInputDevice = await _selectPreferredInputDevice();
 
     final audioStream = await _audioRecorder.startStream(
       RecordConfig(
         encoder: AudioEncoder.pcm16bits,
         sampleRate: 16000,
         numChannels: 1,
+        device: _preferredInputDevice,
         androidConfig: AndroidRecordConfig(
           audioSource: _deviceProfile.androidAudioSource,
           manageBluetooth: _deviceProfile.manageBluetooth,
@@ -182,6 +200,7 @@ class AudioStreamService {
           return;
         }
         final _PcmStats rawStats = _pcmStats(bytes);
+        _captureStartupWav(bytes);
         final boostedBytes = _boostPcm16(bytes);
         _chunksReceived++;
         _lastChunkAtMillis = DateTime.now().millisecondsSinceEpoch;
@@ -198,7 +217,9 @@ class AudioStreamService {
         if (_chunksReceived == 1 || _chunksReceived % 200 == 0) {
           print(
             '[VoiceCapture#$_captureId] chunk#$_chunksReceived '
-            'bytes=${boostedBytes.lengthInBytes} callbacks=${_dataCallbacks.length} '
+            'bytes=${boostedBytes.lengthInBytes} '
+            'dataCallbacks=${_dataCallbacks.length} '
+            'pcmCallbacks=${_pcmCallbacks.length} '
             'rawRms=${rawStats.rms.toStringAsFixed(5)} '
             'rawPeak=${rawStats.peak.toStringAsFixed(5)} '
             'postGainRms=${stats.rms.toStringAsFixed(5)} '
@@ -262,9 +283,82 @@ class AudioStreamService {
     print('[VoiceCapture#$_captureId] recorder released and recreated');
   }
 
-  Future<void> pauseCallbacks() async {
+  Future<InputDevice?> _selectPreferredInputDevice() async {
+    if (!_deviceProfile.selectUsbInputExplicitly) return null;
+    final List<InputDevice> devices = await _audioRecorder.listInputDevices();
+    InputDevice? selected;
+    for (final InputDevice device in devices) {
+      final String label = device.label.toLowerCase();
+      if (label.contains('usb') ||
+          label.contains('uvc') ||
+          label.contains('rockchip')) {
+        selected = device;
+        break;
+      }
+    }
     print(
-        '[AudioStreamService] pauseCallbacks callbacks=${_dataCallbacks.length}');
+      '[VoiceCapture#$_captureId] input devices=$devices '
+      'preferred=${selected?.label} id=${selected?.id}',
+    );
+    return selected;
+  }
+
+  Future<void> _beginStartupWavCapture() async {
+    _startupWavCapture = null;
+    _startupWavPath = null;
+    _startupWavSaved = false;
+    if (!_deviceProfile.captureStartupWav) return;
+
+    try {
+      final Directory directory = await getTemporaryDirectory();
+      final Directory captureDirectory =
+          Directory('${directory.path}/voice_capture');
+      await captureDirectory.create(recursive: true);
+      _startupWavCapture =
+          VoiceStartupWavCapture(duration: _startupWavDuration);
+      _startupWavPath = '${captureDirectory.path}/'
+          'capture_${_captureId}_${_startedAtMillis}_${_deviceProfile.id}.wav';
+      print(
+          '[VoiceCapture#$_captureId] startup WAV armed path=$_startupWavPath');
+    } catch (error, stackTrace) {
+      print(
+          '[VoiceCapture#$_captureId] startup WAV disabled: $error\n$stackTrace');
+    }
+  }
+
+  void _captureStartupWav(Uint8List rawBytes) {
+    final VoiceStartupWavCapture? capture = _startupWavCapture;
+    final String? path = _startupWavPath;
+    if (capture == null || path == null || _startupWavSaved) return;
+
+    capture.add(rawBytes);
+    if (!capture.hasReachedLimit) return;
+    _startupWavSaved = true;
+    unawaited(File(path).writeAsBytes(capture.toWavBytes(), flush: true).then(
+          (_) => print(
+            '[VoiceCapture#$_captureId] startup WAV saved '
+            'path=$path pcmBytes=${capture.pcmBytes}',
+          ),
+          onError: (Object error, StackTrace stackTrace) => print(
+            '[VoiceCapture#$_captureId] startup WAV save failed: '
+            '$error\n$stackTrace',
+          ),
+        ));
+  }
+
+  void useDeviceProfile(VoiceDeviceProfile profile) {
+    if (_isRunning) {
+      throw StateError(
+          'Cannot change the audio profile while capture is active.');
+    }
+    _deviceProfile = profile;
+    print('[AudioStreamService] active profile=${profile.id}');
+  }
+
+  Future<void> pauseCallbacks() async {
+    print('[AudioStreamService] pauseCallbacks '
+        'dataCallbacks=${_dataCallbacks.length} '
+        'pcmCallbacks=${_pcmCallbacks.length}');
     _dataCallbacks.clear();
     _pcmCallbacks.clear();
     _errorCallback = null;

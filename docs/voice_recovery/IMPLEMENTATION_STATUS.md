@@ -13,6 +13,38 @@
 
 The current remediation is governed by `docs/voice_recovery/T2151_REMEDIATION_PLAN.md`.
 
+`docs/voice_recovery/T2151_VOICE_RECOGNITION_ROLLOUT.md` records the
+VOICE_RECOGNITION experiment, its ready contract, recovery rules, native work,
+and device-validation matrix. It is `DEVICE_PENDING`; the existing
+VOICE_COMMUNICATION selection remains the release choice until that matrix
+passes.
+
+### VOICE_RECOGNITION startup experiment (2026-07-27)
+
+- Status: `IN_PROGRESS`; hardware validation is `DEVICE_PENDING`.
+- `t2151_voice_recognition` now requires non-zero raw PCM before `ready`.
+  Three exact-zero chunks keep the session in `waitingForAudioRoute`.
+- After 1200 ms of continuous exact-zero PCM, startup performs at most one
+  stop/dispose/recreate attempt after a 300 ms pause. A second exact-zero
+  startup switches to `t2151` / `VOICE_COMMUNICATION`.
+- `VoiceState` records requested profile, active profile, and
+  `startupExactZeroPcm` fallback reason. The next explicit cold start restores
+  the requested experimental profile.
+- Covered by `voice_capture_recovery_gate_test.dart`,
+  `voice_device_profile_test.dart`, `voice_state_test.dart`,
+  `wear_voice_session_test.dart`, and `voice_recovery_primitives_test.dart`.
+- Native UVC device selection, session diagnostics, USB device callbacks, WAV
+  capture, and post-authorization Vosk preparation/lazy free-text recognizer
+  are implemented. Their T2151 validation and the device matrix remain pending.
+
+### Preliminary audio-source decision (2026-07-27)
+
+- Selected profile: `VOICE_DEVICE_PROFILE=t2151` (`voiceCommunication`).
+- Evidence: one cold-start command run per profile on the connected T2151.
+- `voiceCommunication` delivered non-zero PCM immediately and dispatched five observed `up`/`down` commands in 425-708 ms from `VAD_START`.
+- `voiceRecognition` and `mic` both emitted exact-zero PCM for approximately 5-6 seconds after startup before speech was available.
+- This selects the release profile for continued device validation; it does not complete the full scenario matrix in `T2151_TEST_PLAN.md`.
+
 | Area | Status | Changed files | Tests | Remaining hardware validation | Known limitations |
 |---|---|---|---|---|---|
 | P0 correctness | IN_PROGRESS | `voice_device_profile.dart`, `wear_voice_session.dart`, `wear_module_app.dart`, `wear_voice_control_service.dart` | `voice_device_profile_test.dart`, `wear_voice_control_service_test.dart`, `wear_flow_coordinator_integration_test.dart` | T2151 route/lifecycle behavior | Navigation transaction, capture validation, and retry-owner work remain. |
@@ -21,7 +53,7 @@ The current remediation is governed by `docs/voice_recovery/T2151_REMEDIATION_PL
 | Vosk startup | IN_PROGRESS | Existing service | Existing tests only | Startup latency on T2151 | Free-text recognizer is currently eagerly created. |
 | P2 UVC recovery | IN_PROGRESS | Existing capture monitor | Existing recovery-gate tests | All USB/UVC claims | Native monitor is source-filtered, not session-correlated. |
 | Overlays | IN_PROGRESS | Existing overlay bridge | Existing cubit tests | Secondary engine recreation | Overlay behavior is not yet verified on T2151. |
-| Hardware | DEVICE_PENDING | N/A | N/A | Full T2151 matrix | T2151 is not currently connected through ADB. |
+| Hardware | DEVICE_PENDING | N/A | N/A | Full T2151 matrix | ADB connection is available; validation has not been run. |
 
 ### Remediation execution log
 
@@ -95,7 +127,7 @@ The current remediation is governed by `docs/voice_recovery/T2151_REMEDIATION_PL
 | V15 | Restore overlay after Presentation | DEVICE_PENDING | `MainActivity` recreates the wear Presentation after detach, restores its payload, and reapplies the visible overlay; requires secondary-display validation. |
 | V16 | Authentication and navigation independence | DONE | Removed `waitForStartup()` from success status pop; integration suite passed. |
 | V17 | Native audio diagnostics | DEVICE_PENDING | Flutter now supplies active capture ID/source to native monitoring; inspect source, silencing, format, and routed-device values on T2151. |
-| V18 | Audio source/device profile | DEVICE_PENDING | `default`, `t2151`, `t2151_voice_recognition`, and `t2151_microphone` profiles select source and hard-restart policy; A/B hardware results are pending. |
+| V18 | Audio source/device profile | IN_PROGRESS | Preliminary T2151 A/B selects `t2151`/`voiceCommunication`: immediate non-zero PCM and 425-708 ms command dispatch from `VAD_START`; `voiceRecognition` and `mic` had 5-6 s exact-zero startup PCM. Full scenario matrix remains pending. |
 | V19 | Verify microphone foreground service | DEVICE_PENDING | Manifest has microphone permissions and `foregroundServiceType`; validate runtime service behavior on T2151. |
 | V20 | State-machine unit tests | DONE | Voice state, startup/health gates, recorder lifecycle, single-flight, production retry ownership, overlay revision, and delayed-Vosk timeout primitives are covered by targeted tests. |
 | V21 | Integration tests | DONE | `fvm flutter test`: 160 passed. |

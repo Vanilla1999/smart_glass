@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -53,7 +51,6 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
     await prefs.setBool('WEAR_USE_MOCKS', true);
     await prefs.setBool('WEAR_MOCK_AUTH', true);
     WearDependencies.I.resetAuthDependencies();
-    unawaited(WearDependencies.I.ensureVoiceTypingPrepared());
 
     if (!context.mounted) {
       return;
@@ -97,7 +94,6 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
     WearDependencies.I.resetAuthDependencies();
 
     if (context.mounted) {
-      unawaited(WearDependencies.I.ensureVoiceTypingPrepared());
       print('[STACK-DEBUG] HomeScreen: pushing WearModuleApp real route');
       await Navigator.push<void>(
         context,
@@ -141,7 +137,6 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
     WearDependencies.I.resetAuthDependencies();
 
     if (context.mounted) {
-      unawaited(WearDependencies.I.ensureVoiceTypingPrepared());
       print('[STACK-DEBUG] HomeScreen: pushing WearModuleApp test route');
       await Navigator.push<void>(
         context,

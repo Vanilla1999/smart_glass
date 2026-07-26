@@ -67,6 +67,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   StreamSubscription<dynamic>? _authorizedSub;
   StreamSubscription<void>? _clearedSub;
   StreamSubscription<bool>? _audioCaptureSilencedSub;
+  StreamSubscription<Map<String, dynamic>>? _audioInputDeviceSub;
   StreamSubscription<bool>? _voiceReconnectingSub;
   StreamSubscription<String?>? _voiceReconnectErrorSub;
   StreamSubscription<VoiceState>? _voiceStateSub;
@@ -104,9 +105,6 @@ class _WearModuleAppState extends State<WearModuleApp>
     super.initState();
     print('[VOICE-LIFECYCLE] WearModuleApp initState');
     WidgetsBinding.instance.addObserver(this);
-    if (widget.onStartVoice == null) {
-      WearDependencies.I.warmupVoiceTypingInBackground();
-    }
     _router = GoRouter(
       initialLocation: widget.initialLocation ?? WearRoute.initialRoute,
       routes: widget.routes ?? WearRoute.goRouteWear,
@@ -168,6 +166,15 @@ class _WearModuleAppState extends State<WearModuleApp>
     _audioCaptureSilencedSub = (widget.audioCaptureSilencedStream ??
             MethodChannelService().audioCaptureSilencedStream)
         .listen(_onAudioCaptureSilencedChanged);
+    _audioInputDeviceSub = MethodChannelService().audioInputDeviceStream.listen(
+      (Map<String, dynamic> event) {
+        if (event['action'] == 'removed') {
+          unawaited(WearVoiceSession.I.handleUsbInputRemoved());
+        } else if (event['action'] == 'added') {
+          unawaited(WearVoiceSession.I.handleUsbInputAdded());
+        }
+      },
+    );
     _voiceReconnectingSub = widget.voiceReconnectingStream?.listen(
       (bool reconnecting) {
         _setVoiceState(_voiceState.copyWith(
@@ -285,7 +292,7 @@ class _WearModuleAppState extends State<WearModuleApp>
       _voiceStartRequested = false;
       if (widget.onStartVoice != null) {
         _setVoiceState(VoiceState(
-          phase: VoicePhase.preparing,
+          phase: VoicePhase.loadingModel,
           captureEpoch: _voiceState.captureEpoch,
           attempt: _voiceState.attempt,
           reason: source,
@@ -398,7 +405,9 @@ class _WearModuleAppState extends State<WearModuleApp>
     _updateGlassesVoiceOverlay(
       visible: !state.acceptsCommands && state.phase != VoicePhase.disabled,
       message: switch (state.phase) {
-        VoicePhase.preparing => 'Подготовка\nголосового управления',
+        VoicePhase.loadingModel => 'Подготовка\nголосового управления',
+        VoicePhase.startingRecorder => 'Запускаем\nмикрофон очков',
+        VoicePhase.waitingForAudioRoute => 'Подключаем\nмикрофон очков',
         VoicePhase.reconnecting ||
         VoicePhase.suspendedBySystem =>
           'Переподключаем\nголосовое управление',
@@ -647,6 +656,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     _voiceSub?.cancel();
     _voicePhraseSub?.cancel();
     _audioCaptureSilencedSub?.cancel();
+    _audioInputDeviceSub?.cancel();
     _voiceReconnectingSub?.cancel();
     _voiceReconnectErrorSub?.cancel();
     _voiceStateSub?.cancel();
@@ -703,7 +713,9 @@ class _WearModuleAppState extends State<WearModuleApp>
       children: <Widget>[
         app,
         if (WearSession.isAuthorized &&
-            (_voiceState.phase == VoicePhase.preparing ||
+            (_voiceState.phase == VoicePhase.loadingModel ||
+                _voiceState.phase == VoicePhase.startingRecorder ||
+                _voiceState.phase == VoicePhase.waitingForAudioRoute ||
                 _voiceState.phase == VoicePhase.unavailable ||
                 _voiceState.phase == VoicePhase.microphoneReconnectRequired))
           Positioned.fill(

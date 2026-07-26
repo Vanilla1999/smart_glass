@@ -451,6 +451,8 @@ class _FakeAudioStreamService implements AudioStreamService {
   }) async {}
   @override
   Future<void> stop() async {}
+  @override
+  void useDeviceProfile(VoiceDeviceProfile profile) {}
 }
 
 class _FakeSpeechRecognitionService implements SpeechRecognitionService {
@@ -498,6 +500,8 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   int? get captureStartedAtMillis => null;
   @override
   VoiceDeviceProfile get deviceProfile => VoiceDeviceProfile.defaultProfile;
+  @override
+  void useDeviceProfile(VoiceDeviceProfile profile) {}
 
   void emit({
     required RecognitionLane lane,

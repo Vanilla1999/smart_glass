@@ -13,8 +13,6 @@ void main() {
     test('parses exact Russian command aliases', () {
       const Map<String, WearVoiceCommand> cases = <String, WearVoiceCommand>{
         'вверх': WearVoiceCommand.up,
-        'бер': WearVoiceCommand.up,
-        'сбер': WearVoiceCommand.up,
         'на верх': WearVoiceCommand.up,
         'выше': WearVoiceCommand.up,
         'вниз': WearVoiceCommand.down,
@@ -120,6 +118,16 @@ void main() {
       expect(parser.parse('выбирать'), isNull);
       expect(parser.parse('стоп'), isNull);
       expect(parser.parse('конец'), isNull);
+    });
+
+    test('does not treat unstable recognition fragments as up', () {
+      expect(parser.parse('бер'), isNull);
+      expect(parser.parse('сбер'), isNull);
+      expect(VoiceCommandParserService.grammarPhrases, isNot(contains('бер')));
+      expect(
+        VoiceCommandParserService.grammarPhrases,
+        isNot(contains('сбер')),
+      );
     });
 
     test('returns null for empty or unknown text', () {

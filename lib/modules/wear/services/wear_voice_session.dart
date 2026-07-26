@@ -4,6 +4,7 @@ import 'package:smart_glasses/core/services/method_channel_service.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_device_profile.dart';
 import 'package:smart_glasses/modules/wear/services/voice_state.dart';
 
 class WearVoiceSession {
@@ -53,6 +54,10 @@ class WearVoiceSession {
   final StreamController<String?> _reconnectErrorController =
       StreamController<String?>.broadcast();
   int _pendingReconnects = 0;
+  VoiceDeviceProfile? _requestedStartupProfile;
+  String? _requestedProfileId;
+  String? _fallbackReason;
+  bool _waitingForUsbInput = false;
   final VoiceCaptureRecoveryGate _zeroAudioRecovery =
       VoiceCaptureRecoveryGate();
 
@@ -91,6 +96,26 @@ class WearVoiceSession {
     }
   }
 
+  Future<void> handleUsbInputRemoved() async {
+    if (!_shouldListen || _waitingForUsbInput) return;
+    _waitingForUsbInput = true;
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    _listeningGeneration++;
+    await _enqueue(() async {
+      await _speech.stopListening();
+      await _updateNativeCaptureMonitor(active: false);
+      _emit(VoicePhase.waitingForAudioRoute, reason: 'usb_input_removed');
+    });
+  }
+
+  Future<void> handleUsbInputAdded() async {
+    if (!_shouldListen || !_waitingForUsbInput) return;
+    _waitingForUsbInput = false;
+    await _delay(const Duration(seconds: 1));
+    if (_shouldListen) await start();
+  }
+
   Future<void> configureForScreen(WearScreenId screen) async {
     final bool freeText = _usesFreeTextRecognition(screen);
     print(
@@ -102,6 +127,13 @@ class WearVoiceSession {
 
   Future<void> start() async {
     _shouldListen = true;
+    final VoiceDeviceProfile? requestedProfile = _requestedStartupProfile;
+    if (_fallbackReason != null && requestedProfile != null) {
+      _speech.useDeviceProfile(requestedProfile);
+    }
+    _requestedStartupProfile ??= _speech.deviceProfile;
+    _requestedProfileId = _speech.deviceProfile.id;
+    _fallbackReason = null;
     _retryTimer?.cancel();
     _retryTimer = null;
     final int generation = ++_listeningGeneration;
@@ -115,30 +147,65 @@ class WearVoiceSession {
         return;
       }
       try {
-        _emit(VoicePhase.preparing, reason: 'start');
+        _emit(VoicePhase.loadingModel, reason: 'start');
         _zeroAudioRecovery.reset();
         await _prepare();
         if (!_isCurrentListeningRequest(generation)) return;
-        await _speech.startListening();
-        if (!_isCurrentListeningRequest(generation)) {
-          await _speech.stopListening();
-          await _updateNativeCaptureMonitor(active: false);
-          return;
+        var startupRecreates = 0;
+        while (_isCurrentListeningRequest(generation)) {
+          _emit(
+            startupRecreates == 0
+                ? VoicePhase.startingRecorder
+                : VoicePhase.reconnecting,
+            reason: startupRecreates == 0
+                ? 'start_recorder'
+                : 'startup_exact_zero_recreate_$startupRecreates',
+          );
+          if (startupRecreates == 0) {
+            await _speech.startListening();
+          } else {
+            await _delay(const Duration(milliseconds: 300));
+            await _speech.restartListening(
+              reason: 'startup_exact_zero_recreate_$startupRecreates',
+            );
+          }
+          if (!_isCurrentListeningRequest(generation)) {
+            await _speech.stopListening();
+            await _updateNativeCaptureMonitor(active: false);
+            return;
+          }
+          await _updateNativeCaptureMonitor(active: true);
+          try {
+            final bool ready = await _waitForCaptureReady(
+              generation: generation,
+              captureStartedAtMillis: _captureStartedAtMillis(),
+            );
+            if (!ready ||
+                !_isCurrentListeningRequest(generation) ||
+                _captureSilenced) {
+              await _speech.stopListening();
+              await _updateNativeCaptureMonitor(active: false);
+              return;
+            }
+            _emit(VoicePhase.ready, reason: 'start_ready', resetAttempt: true);
+            print('[WearVoiceSession] started: ${await diagnostics()}');
+            return;
+          } on VoiceExactZeroStartupFailure {
+            if (startupRecreates >=
+                _speech.deviceProfile.maxStartupRecorderRecreates) {
+              if (_speech.deviceProfile.fallbackToVoiceCommunication) {
+                await _speech.stopListening();
+                await _updateNativeCaptureMonitor(active: false);
+                _speech.useDeviceProfile(VoiceDeviceProfile.t2151);
+                _fallbackReason = 'startupExactZeroPcm';
+                startupRecreates = 0;
+                continue;
+              }
+              rethrow;
+            }
+            startupRecreates++;
+          }
         }
-        await _updateNativeCaptureMonitor(active: true);
-        final bool ready = await _waitForCaptureReady(
-          generation: generation,
-          captureStartedAtMillis: _captureStartedAtMillis(),
-        );
-        if (!ready ||
-            !_isCurrentListeningRequest(generation) ||
-            _captureSilenced) {
-          await _speech.stopListening();
-          await _updateNativeCaptureMonitor(active: false);
-          return;
-        }
-        _emit(VoicePhase.ready, reason: 'start_ready', resetAttempt: true);
-        print('[WearVoiceSession] started: ${await diagnostics()}');
       } catch (error, stackTrace) {
         try {
           await _speech.stopListening();
@@ -279,11 +346,17 @@ class WearVoiceSession {
         throw StateError('Захват аудио остановлен до получения PCM-чанков.');
       }
       final int? lastAudioAt = service.lastAudioChunkAtMillis;
+      final int? lastNonSilentAudioAt = service.lastNonSilentAudioChunkAtMillis;
+      final int? zeroAudioStartedAt =
+          service.continuousZeroAudioStartedAtMillis;
       if (gate.isReady(
         captureStartedAtMillis: captureStartedAtMillis,
         isCaptureRunning: service.isCaptureRunning,
         chunksReceived: service.audioChunksReceived,
         lastAudioAtMillis: lastAudioAt,
+        lastNonSilentAudioAtMillis: lastNonSilentAudioAt,
+        continuousZeroAudioStartedAtMillis: zeroAudioStartedAt,
+        requireNonZeroPcm: service.deviceProfile.requireNonZeroPcmForStartup,
         nowMillis: now,
       )) {
         print(
@@ -294,9 +367,28 @@ class WearVoiceSession {
         );
         return true;
       }
+      if (service.deviceProfile.requireNonZeroPcmForStartup &&
+          gate.isWaitingForNonZeroPcm(
+            chunksReceived: service.audioChunksReceived,
+            continuousZeroAudioStartedAtMillis: zeroAudioStartedAt,
+          )) {
+        _emit(
+          VoicePhase.waitingForAudioRoute,
+          reason: 'startup_exact_zero_pcm',
+        );
+      }
+      if (service.deviceProfile.requireNonZeroPcmForStartup &&
+          gate.hasExceededExactZeroGrace(
+            continuousZeroAudioStartedAtMillis: zeroAudioStartedAt,
+            nowMillis: now,
+            grace: service.deviceProfile.exactZeroStartupGrace,
+          )) {
+        throw const VoiceExactZeroStartupFailure();
+      }
       if (gate.isTimedOut(
         captureStartedAtMillis: captureStartedAtMillis,
         nowMillis: now,
+        timeout: service.deviceProfile.recoveryCaptureTimeout,
       )) {
         throw StateError(
           'Микрофон не передал PCM-чанки за '
@@ -430,6 +522,9 @@ class WearVoiceSession {
       lastTransitionAt: now,
       lastError: error?.toString(),
       nextRetryAt: nextRetryAt,
+      requestedProfile: _requestedProfileId,
+      activeProfile: _speech.deviceProfile.id,
+      fallbackReason: _fallbackReason,
     );
     if (!_stateController.isClosed) _stateController.add(_state);
   }
@@ -593,18 +688,50 @@ class VoiceCaptureStartupGate {
     required bool isCaptureRunning,
     required int chunksReceived,
     required int? lastAudioAtMillis,
+    required int? lastNonSilentAudioAtMillis,
+    required int? continuousZeroAudioStartedAtMillis,
+    required bool requireNonZeroPcm,
     required int nowMillis,
   }) {
     return isCaptureRunning &&
         chunksReceived >= requiredChunks &&
         lastAudioAtMillis != null &&
-        lastAudioAtMillis >= captureStartedAtMillis;
+        lastAudioAtMillis >= captureStartedAtMillis &&
+        (!requireNonZeroPcm ||
+            (lastNonSilentAudioAtMillis != null &&
+                lastNonSilentAudioAtMillis >= captureStartedAtMillis &&
+                continuousZeroAudioStartedAtMillis == null));
+  }
+
+  bool isWaitingForNonZeroPcm({
+    required int chunksReceived,
+    required int? continuousZeroAudioStartedAtMillis,
+  }) {
+    return chunksReceived >= requiredChunks &&
+        continuousZeroAudioStartedAtMillis != null;
+  }
+
+  bool hasExceededExactZeroGrace({
+    required int? continuousZeroAudioStartedAtMillis,
+    required int nowMillis,
+    required Duration grace,
+  }) {
+    return continuousZeroAudioStartedAtMillis != null &&
+        nowMillis - continuousZeroAudioStartedAtMillis >= grace.inMilliseconds;
   }
 
   bool isTimedOut({
     required int captureStartedAtMillis,
     required int nowMillis,
+    required Duration timeout,
   }) {
-    return nowMillis - captureStartedAtMillis >= timeoutMs;
+    return nowMillis - captureStartedAtMillis >= timeout.inMilliseconds;
   }
+}
+
+class VoiceExactZeroStartupFailure implements Exception {
+  const VoiceExactZeroStartupFailure();
+
+  @override
+  String toString() => 'VoiceExactZeroStartupFailure';
 }

@@ -1,6 +1,8 @@
 enum VoicePhase {
   disabled,
-  preparing,
+  loadingModel,
+  startingRecorder,
+  waitingForAudioRoute,
   ready,
   suspendedBySystem,
   reconnecting,
@@ -17,6 +19,9 @@ class VoiceState {
     required this.lastTransitionAt,
     this.lastError,
     this.nextRetryAt,
+    this.requestedProfile,
+    this.activeProfile,
+    this.fallbackReason,
   });
 
   const VoiceState.disabled()
@@ -26,7 +31,10 @@ class VoiceState {
         reason = 'initial',
         lastTransitionAt = 0,
         lastError = null,
-        nextRetryAt = null;
+        nextRetryAt = null,
+        requestedProfile = null,
+        activeProfile = null,
+        fallbackReason = null;
 
   final VoicePhase phase;
   final int captureEpoch;
@@ -35,6 +43,9 @@ class VoiceState {
   final int lastTransitionAt;
   final String? lastError;
   final int? nextRetryAt;
+  final String? requestedProfile;
+  final String? activeProfile;
+  final String? fallbackReason;
 
   bool get acceptsCommands => phase == VoicePhase.ready;
 
@@ -46,6 +57,9 @@ class VoiceState {
     int? lastTransitionAt,
     String? lastError,
     int? nextRetryAt,
+    String? requestedProfile,
+    String? activeProfile,
+    String? fallbackReason,
     bool clearError = false,
     bool clearRetry = false,
   }) {
@@ -57,6 +71,9 @@ class VoiceState {
       lastTransitionAt: lastTransitionAt ?? this.lastTransitionAt,
       lastError: clearError ? null : lastError ?? this.lastError,
       nextRetryAt: clearRetry ? null : nextRetryAt ?? this.nextRetryAt,
+      requestedProfile: requestedProfile ?? this.requestedProfile,
+      activeProfile: activeProfile ?? this.activeProfile,
+      fallbackReason: fallbackReason ?? this.fallbackReason,
     );
   }
 }

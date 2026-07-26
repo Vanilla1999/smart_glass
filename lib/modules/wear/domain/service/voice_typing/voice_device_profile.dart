@@ -16,6 +16,13 @@ class VoiceDeviceProfile {
     required this.manageBluetooth,
     required this.speakerphone,
     required this.audioManagerMode,
+    required this.requireNonZeroPcmForStartup,
+    required this.exactZeroStartupGrace,
+    required this.recoveryCaptureTimeout,
+    required this.maxStartupRecorderRecreates,
+    required this.fallbackToVoiceCommunication,
+    required this.selectUsbInputExplicitly,
+    required this.captureStartupWav,
     required this.vadSpeechOnRms,
     required this.vadSpeechOffRms,
   });
@@ -29,6 +36,13 @@ class VoiceDeviceProfile {
     manageBluetooth: true,
     speakerphone: false,
     audioManagerMode: AudioManagerMode.modeNormal,
+    requireNonZeroPcmForStartup: false,
+    exactZeroStartupGrace: Duration.zero,
+    recoveryCaptureTimeout: Duration(seconds: 2),
+    maxStartupRecorderRecreates: 0,
+    fallbackToVoiceCommunication: false,
+    selectUsbInputExplicitly: false,
+    captureStartupWav: false,
     vadSpeechOnRms: 0.0010,
     vadSpeechOffRms: 0.0007,
   );
@@ -42,8 +56,15 @@ class VoiceDeviceProfile {
     manageBluetooth: false,
     speakerphone: false,
     audioManagerMode: AudioManagerMode.modeNormal,
-    vadSpeechOnRms: 0.0008,
-    vadSpeechOffRms: 0.0005,
+    requireNonZeroPcmForStartup: false,
+    exactZeroStartupGrace: Duration.zero,
+    recoveryCaptureTimeout: Duration(seconds: 2),
+    maxStartupRecorderRecreates: 0,
+    fallbackToVoiceCommunication: false,
+    selectUsbInputExplicitly: true,
+    captureStartupWav: true,
+    vadSpeechOnRms: 0.0005,
+    vadSpeechOffRms: 0.0003,
   );
 
   static const VoiceDeviceProfile t2151VoiceRecognition = VoiceDeviceProfile(
@@ -55,6 +76,13 @@ class VoiceDeviceProfile {
     manageBluetooth: false,
     speakerphone: false,
     audioManagerMode: AudioManagerMode.modeNormal,
+    requireNonZeroPcmForStartup: true,
+    exactZeroStartupGrace: Duration(milliseconds: 1200),
+    recoveryCaptureTimeout: Duration(milliseconds: 2500),
+    maxStartupRecorderRecreates: 1,
+    fallbackToVoiceCommunication: true,
+    selectUsbInputExplicitly: true,
+    captureStartupWav: true,
     vadSpeechOnRms: 0.0008,
     vadSpeechOffRms: 0.0005,
   );
@@ -68,6 +96,13 @@ class VoiceDeviceProfile {
     manageBluetooth: false,
     speakerphone: false,
     audioManagerMode: AudioManagerMode.modeNormal,
+    requireNonZeroPcmForStartup: false,
+    exactZeroStartupGrace: Duration.zero,
+    recoveryCaptureTimeout: Duration(seconds: 2),
+    maxStartupRecorderRecreates: 0,
+    fallbackToVoiceCommunication: false,
+    selectUsbInputExplicitly: false,
+    captureStartupWav: false,
     vadSpeechOnRms: 0.0008,
     vadSpeechOffRms: 0.0005,
   );
@@ -82,6 +117,13 @@ class VoiceDeviceProfile {
   final bool manageBluetooth;
   final bool speakerphone;
   final AudioManagerMode audioManagerMode;
+  final bool requireNonZeroPcmForStartup;
+  final Duration exactZeroStartupGrace;
+  final Duration recoveryCaptureTimeout;
+  final int maxStartupRecorderRecreates;
+  final bool fallbackToVoiceCommunication;
+  final bool selectUsbInputExplicitly;
+  final bool captureStartupWav;
 
   /// Raw PCM VAD thresholds. They are deliberately independent of recognizer gain.
   final double vadSpeechOnRms;

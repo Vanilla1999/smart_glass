@@ -4,9 +4,10 @@ All checks in this document require a physical T2151 and remain `DEVICE_PENDING`
 
 ## Preparation
 
-1. Build the APK with `./tool/build_voice_recovery_apk.sh t2151` and install `build/app/outputs/flutter-apk/app-debug.apk`.
-2. Capture `adb logcat` filtered by `VoiceCapture`, `WearVoiceSession`, `AudioStreamService`, `SpeechRecognitionService`, and the Android bridge.
-3. Record the complete `[VoiceBuild]` line, device build, Android SDK, selected voice profile, audio source, capture ID, routed input device, and session diagnostics. Reject results whose `gitDirty` or `sourcePatchSha` do not match the tested APK record.
+1. Build the three release APKs with `./tool/build_t2151_voice_profiles_release.sh`.
+2. Install one APK at a time from `build/app/outputs/flutter-apk/voice-profiles/`.
+3. Capture `adb logcat` filtered by `VoiceCapture`, `WearVoiceSession`, `AudioStreamService`, `SpeechRecognitionService`, and the Android bridge.
+4. Record the device build, Android SDK, selected voice profile, audio source, capture ID, routed input device, VAD event values, and session diagnostics.
 
 ## Audio Source A/B Matrix
 
@@ -18,7 +19,7 @@ Build and test each profile under the same cold-start, resume, silencing, and lo
 | `VOICE_DEVICE_PROFILE=t2151_voice_recognition` | `voiceRecognition` | Compare speech capture after resume. |
 | `VOICE_DEVICE_PROFILE=t2151_microphone` | `mic` | Compare raw microphone route behavior. |
 
-All three profile mappings are unit-tested. The debug APK has been built with `VOICE_DEVICE_PROFILE=t2151`; build and test the other two profiles before comparing results.
+All three profile mappings are unit-tested. Test every profile before choosing a T2151 default.
 
 ## Scenarios
 

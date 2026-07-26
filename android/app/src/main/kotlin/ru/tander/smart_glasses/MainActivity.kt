@@ -4,6 +4,8 @@ import android.app.Presentation
 import android.content.Context
 import android.hardware.display.DisplayManager
 import android.media.AudioManager
+import android.media.AudioDeviceInfo
+import android.media.AudioDeviceCallback
 import android.media.MediaRecorder
 import android.os.Bundle
 import android.os.Build
@@ -48,6 +50,7 @@ class MainActivity : FlutterFragmentActivity() {
     private var pendingWearShowResult: BoundedResult? = null
     private var audioManager: AudioManager? = null
     private var audioRecordingCallback: AudioManager.AudioRecordingCallback? = null
+    private var audioDeviceCallback: AudioDeviceCallback? = null
     private var lastAudioCaptureSilenced: Boolean? = null
     private var monitoredAudioSource: Int? = null
     private var monitoredCaptureId: Int? = null
@@ -142,6 +145,37 @@ class MainActivity : FlutterFragmentActivity() {
                 }
             }
         registerAudioRecordingMonitor()
+        registerAudioInputMonitor()
+    }
+
+    private fun registerAudioInputMonitor() {
+        val manager = getSystemService(AudioManager::class.java)
+        val callback = object : AudioDeviceCallback() {
+            override fun onAudioDevicesAdded(devices: Array<AudioDeviceInfo>) {
+                notifyUsbInputDevices("added", devices)
+            }
+
+            override fun onAudioDevicesRemoved(devices: Array<AudioDeviceInfo>) {
+                notifyUsbInputDevices("removed", devices)
+            }
+        }
+        audioDeviceCallback = callback
+        manager.registerAudioDeviceCallback(callback, mainHandler)
+    }
+
+    private fun notifyUsbInputDevices(action: String, devices: Array<AudioDeviceInfo>) {
+        devices.filter { device ->
+            device.isSource && (device.type == AudioDeviceInfo.TYPE_USB_DEVICE ||
+                device.type == AudioDeviceInfo.TYPE_USB_HEADSET)
+        }.forEach { device ->
+            val payload = mapOf(
+                "action" to action,
+                "id" to device.id,
+                "name" to device.productName.toString(),
+            )
+            Log.d("VoiceCapture", "usb input $payload")
+            appChannel?.invokeMethod("audioInputDeviceChanged", payload)
+        }
     }
 
     private fun registerAudioRecordingMonitor() {
@@ -166,6 +200,20 @@ class MainActivity : FlutterFragmentActivity() {
                 }
 
                 val silenced = ownRecordings.any { it.isClientSilenced }
+                ownRecordings.forEach { config ->
+                    val payload = mapOf(
+                        "captureId" to monitoredCaptureId,
+                        "audioSessionId" to config.clientAudioSessionId,
+                        "requestedSource" to source,
+                        "activeSource" to config.clientAudioSource,
+                        "routedDevice" to config.audioDevice?.productName?.toString(),
+                        "clientFormat" to config.clientFormat.toString(),
+                        "deviceFormat" to config.format.toString(),
+                        "clientSilenced" to config.isClientSilenced,
+                    )
+                    Log.d("VoiceCapture", "diagnostics=$payload")
+                    appChannel?.invokeMethod("voiceCaptureDiagnostics", payload)
+                }
                 Log.d(
                     "VoiceCapture",
                     "recording configs=" + ownRecordings.joinToString { config ->
@@ -562,6 +610,10 @@ class MainActivity : FlutterFragmentActivity() {
             }
         }
         audioRecordingCallback = null
+        audioDeviceCallback?.let { callback ->
+            audioManager?.unregisterAudioDeviceCallback(callback)
+        }
+        audioDeviceCallback = null
         audioManager = null
         appChannel = null
         currentWearGlassesPayload = null

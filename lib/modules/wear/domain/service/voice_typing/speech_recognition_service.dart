@@ -116,9 +116,7 @@ class SpeechRecognitionService {
   Stream<SpeechSegmentStarted> get segmentStartedStream =>
       _segmentStartedController.stream;
   bool get isPrepared =>
-      _model != null &&
-      _freeTextRecognizer != null &&
-      (_commandGrammar.isEmpty || _commandRecognizer != null);
+      _model != null && (_commandGrammar.isEmpty || _commandRecognizer != null);
   bool get isSessionActive => _isSessionActive;
   bool get isListening => _isListening;
   bool get isCaptureRunning => _audioStream.isRunning;
@@ -133,6 +131,10 @@ class SpeechRecognitionService {
   int? get captureStartedAtMillis => _audioStream.captureStartedAtMillis;
   AudioStreamService get audioStreamService => _audioStream;
   VoiceDeviceProfile get deviceProfile => _audioStream.deviceProfile;
+
+  void useDeviceProfile(VoiceDeviceProfile profile) {
+    _audioStream.useDeviceProfile(profile);
+  }
 
   Future<void> setFreeTextEnabled(bool enabled) {
     if (_freeTextEnabled == enabled) {
@@ -149,8 +151,17 @@ class SpeechRecognitionService {
     print(
       '[SpeechRecognitionService] freeText enabled=$enabled epoch=$epoch',
     );
-    if (!enabled || _freeTextRecognizer == null) {
+    if (!enabled) {
       return Future<void>.value();
+    }
+
+    if (_freeTextRecognizer == null) {
+      return _runLifecycleOperation('createFreeTextRecognizer', () async {
+        if (_freeTextEnabled && _freeTextRecognizer == null) {
+          _freeTextRecognizer =
+              await _createRecognizer(_RecognitionSource.freeText);
+        }
+      });
     }
 
     final Future<void> next = _freeTextAudioProcessing.then((_) async {
@@ -427,6 +438,7 @@ class SpeechRecognitionService {
       return;
     }
     if (segment.started) {
+      _logVadEvent('VAD_START', segment);
       _emitSegmentStarted(segment);
       for (final _PcmFrame frame in _preRollFrames) {
         _enqueueSegmentFrame(frame.boosted, captureEpoch, segment);
@@ -435,12 +447,31 @@ class SpeechRecognitionService {
     }
     _enqueueSegmentFrame(boostedBytes, captureEpoch, segment);
     if (segment.isEndpoint) {
+      _logVadEvent('VAD_ENDPOINT', segment);
       unawaited(_finishSegment(segment, captureEpoch).catchError(
         (Object error, StackTrace stackTrace) {
           print('[SpeechRecognitionService] segment finish error: $error');
         },
       ));
     }
+  }
+
+  void _logVadEvent(String event, SpeechSegment segment) {
+    final SpeechSegmentDiagnostics diagnostics =
+        _speechSegmenter.lastDiagnostics;
+    final int now = DateTime.now().millisecondsSinceEpoch;
+    final int? captureStartedAt = _audioStream.captureStartedAtMillis;
+    final int? captureAgeMs =
+        captureStartedAt == null ? null : now - captureStartedAt;
+    print(
+      '[SpeechRecognitionService] $event '
+      'captureEpoch=${segment.captureEpoch} segmentId=${segment.segmentId} '
+      'chunkId=${segment.lastChunkId} captureAgeMs=$captureAgeMs '
+      'rawRms=${diagnostics.rms.toStringAsFixed(5)} '
+      'noiseFloorRms=${diagnostics.noiseFloorRms.toStringAsFixed(5)} '
+      'adaptiveOnRms=${diagnostics.adaptiveOnRms.toStringAsFixed(5)} '
+      'adaptiveOffRms=${diagnostics.adaptiveOffRms.toStringAsFixed(5)}',
+    );
   }
 
   void _enqueueSegmentFrame(
@@ -855,12 +886,13 @@ class SpeechRecognitionService {
   }
 
   Future<void> _createRecognizers() async {
-    _freeTextRecognizer ??= await _createRecognizer(
-      _RecognitionSource.freeText,
-    );
-    if (_commandGrammar.isEmpty || _commandRecognizer != null) return;
-
-    _commandRecognizer = await _createRecognizer(_RecognitionSource.command);
+    if (_commandGrammar.isNotEmpty && _commandRecognizer == null) {
+      _commandRecognizer = await _createRecognizer(_RecognitionSource.command);
+    }
+    if (_freeTextEnabled && _freeTextRecognizer == null) {
+      _freeTextRecognizer =
+          await _createRecognizer(_RecognitionSource.freeText);
+    }
   }
 
   Future<vosk.Recognizer> _createRecognizer(

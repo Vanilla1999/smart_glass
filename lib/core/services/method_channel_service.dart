@@ -18,18 +18,40 @@ class MethodChannelService {
       const MethodChannel(AppConstants.glassesChannelName);
   final StreamController<bool> _audioCaptureSilencedController =
       StreamController<bool>.broadcast();
+  final StreamController<Map<String, dynamic>> _audioInputDeviceController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>>
+      _voiceCaptureDiagnosticsController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<bool> get audioCaptureSilencedStream =>
       _audioCaptureSilencedController.stream;
+  Stream<Map<String, dynamic>> get audioInputDeviceStream =>
+      _audioInputDeviceController.stream;
+  Stream<Map<String, dynamic>> get voiceCaptureDiagnosticsStream =>
+      _voiceCaptureDiagnosticsController.stream;
 
   Future<void> _handleAppMethodCall(MethodCall call) async {
-    if (call.method != 'audioCaptureSilencedChanged') {
-      throw MissingPluginException(
-          'Unknown app channel method: ${call.method}');
-    }
-    final bool? silenced = call.arguments as bool?;
-    if (silenced != null && !_audioCaptureSilencedController.isClosed) {
-      _audioCaptureSilencedController.add(silenced);
+    switch (call.method) {
+      case 'audioCaptureSilencedChanged':
+        final bool? silenced = call.arguments as bool?;
+        if (silenced != null && !_audioCaptureSilencedController.isClosed) {
+          _audioCaptureSilencedController.add(silenced);
+        }
+      case 'audioInputDeviceChanged':
+        final Map<dynamic, dynamic>? arguments = call.arguments as Map?;
+        if (arguments != null && !_audioInputDeviceController.isClosed) {
+          _audioInputDeviceController.add(arguments.cast<String, dynamic>());
+        }
+      case 'voiceCaptureDiagnostics':
+        final Map<dynamic, dynamic>? arguments = call.arguments as Map?;
+        if (arguments != null && !_voiceCaptureDiagnosticsController.isClosed) {
+          _voiceCaptureDiagnosticsController
+              .add(arguments.cast<String, dynamic>());
+        }
+      default:
+        throw MissingPluginException(
+            'Unknown app channel method: ${call.method}');
     }
   }
 

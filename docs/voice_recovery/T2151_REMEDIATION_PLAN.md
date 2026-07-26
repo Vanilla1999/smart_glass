@@ -31,7 +31,7 @@
 3. Limit secondary-engine rebuilding to selected-list-item updates.
 4. Use a short/jump voice-focus path and a programmatic-scroll feedback guard.
 5. Add profile-specific PCM buffer sizing, diagnostics, and conservative T2151 A/B settings.
-6. Warm Vosk model and command recognizer before authorization without blocking `runApp`; defer free-text recognizer creation until needed.
+6. Prepare Vosk only after authorization when the voice session starts; defer free-text recognizer creation until needed.
 
 ## P2 UVC Recovery
 
