@@ -88,4 +88,17 @@ void main() {
 
     delayedVosk.complete();
   });
+
+  test('segment close guard times out a stuck native call', () async {
+    final Completer<void> stuckNativeCall = Completer<void>();
+
+    await expectLater(
+      VoiceRecognitionSegmentCloseGuard(
+        timeout: const Duration(milliseconds: 1),
+      ).run(stuckNativeCall.future),
+      throwsA(isA<TimeoutException>()),
+    );
+
+    stuckNativeCall.complete();
+  });
 }

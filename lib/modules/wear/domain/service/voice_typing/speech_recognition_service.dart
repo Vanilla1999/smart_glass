@@ -39,11 +39,23 @@ class VoiceRecognitionProcessingQueue {
   }
 }
 
+class VoiceRecognitionSegmentCloseGuard {
+  const VoiceRecognitionSegmentCloseGuard({
+    this.timeout = const Duration(seconds: 2),
+  });
+
+  final Duration timeout;
+
+  Future<T> run<T>(Future<T> operation) => operation.timeout(timeout);
+}
+
 class SpeechRecognitionService {
   static const int _sampleRate = 16000;
   static const String _modelAssetPath = 'assets/vosk-model-small-ru-0.22.zip';
   static const int _slowRecognizerLatencyMs = 150;
   static const int _slowAudioQueueDelayMs = 200;
+  static const VoiceRecognitionSegmentCloseGuard _segmentCloseGuard =
+      VoiceRecognitionSegmentCloseGuard();
 
   SpeechRecognitionService({
     AudioStreamService? audioStreamService,
@@ -609,25 +621,38 @@ class SpeechRecognitionService {
     required int captureEpoch,
     required SpeechSegment segment,
   }) async {
-    if (!_canProcess(source, epoch, captureEpoch)) return;
-    final String resultJson = await recognizer.getFinalResult();
-    final String text = _extractText(
-      resultJson,
-      preferredKeys: const <String>['text'],
-    );
-    if (text.isNotEmpty) {
-      _emitResult(
-        source,
-        text,
-        epoch: epoch,
-        captureEpoch: captureEpoch,
-        partial: false,
-        segment: segment,
-      );
+    if (!_canProcess(source, epoch, captureEpoch) ||
+        !_isCurrentRecognizer(source, recognizer)) {
+      return;
     }
-    if (_canProcess(source, epoch, captureEpoch)) {
-      await recognizer.reset();
-      _setPartialText(source, '');
+    try {
+      final String resultJson = await _segmentCloseGuard.run(
+        recognizer.getFinalResult(),
+      );
+      final String text = _extractText(
+        resultJson,
+        preferredKeys: const <String>['text'],
+      );
+      if (text.isNotEmpty) {
+        _emitResult(
+          source,
+          text,
+          epoch: epoch,
+          captureEpoch: captureEpoch,
+          partial: false,
+          segment: segment,
+        );
+      }
+      if (_canProcess(source, epoch, captureEpoch) &&
+          _isCurrentRecognizer(source, recognizer)) {
+        await _segmentCloseGuard.run(recognizer.reset());
+        _setPartialText(source, '');
+      }
+    } on TimeoutException {
+      // The native call may still be stuck. Detach this recognizer before the
+      // serial queue advances so a later segment cannot reuse it.
+      unawaited(_replaceTimedOutRecognizer(source, recognizer));
+      rethrow;
     }
   }
 
@@ -645,7 +670,9 @@ class SpeechRecognitionService {
         'Сессия распознавания не запущена. Вызовите startSession() перед обработкой аудио.',
       );
     }
-    if (bytes.lengthInBytes < 2 || !_canProcess(source, epoch, captureEpoch)) {
+    if (bytes.lengthInBytes < 2 ||
+        !_canProcess(source, epoch, captureEpoch) ||
+        !_isCurrentRecognizer(source, recognizer)) {
       return;
     }
 
@@ -759,6 +786,16 @@ class SpeechRecognitionService {
     };
   }
 
+  bool _isCurrentRecognizer(
+    _RecognitionSource source,
+    vosk.Recognizer recognizer,
+  ) {
+    return switch (source) {
+      _RecognitionSource.command => identical(_commandRecognizer, recognizer),
+      _RecognitionSource.freeText => identical(_freeTextRecognizer, recognizer),
+    };
+  }
+
   void _emitResult(
     _RecognitionSource source,
     String text, {
@@ -814,20 +851,26 @@ class SpeechRecognitionService {
   }
 
   Future<void> _createRecognizers() async {
-    final vosk.Model? model = _model;
-    if (model == null) throw StateError('Vosk модель не инициализирована.');
-
-    _freeTextRecognizer ??= await _vosk.createRecognizer(
-      model: model,
-      sampleRate: _sampleRate,
+    _freeTextRecognizer ??= await _createRecognizer(
+      _RecognitionSource.freeText,
     );
     if (_commandGrammar.isEmpty || _commandRecognizer != null) return;
+
+    _commandRecognizer = await _createRecognizer(_RecognitionSource.command);
+  }
+
+  Future<vosk.Recognizer> _createRecognizer(
+    _RecognitionSource source,
+  ) async {
+    final vosk.Model? model = _model;
+    if (model == null) throw StateError('Vosk модель не инициализирована.');
 
     final int startedAt = DateTime.now().millisecondsSinceEpoch;
     final vosk.Recognizer recognizer = await _vosk.createRecognizer(
       model: model,
       sampleRate: _sampleRate,
     );
+    if (source == _RecognitionSource.freeText) return recognizer;
     try {
       print(
         '[SpeechRecognitionService] applying command grammar '
@@ -838,12 +881,49 @@ class SpeechRecognitionService {
       await recognizer.dispose();
       rethrow;
     }
-    _commandRecognizer = recognizer;
     final int finishedAt = DateTime.now().millisecondsSinceEpoch;
     print(
       '[SpeechRecognitionService] command recognizer ready '
       'durationMs=${finishedAt - startedAt}',
     );
+    return recognizer;
+  }
+
+  Future<void> _replaceTimedOutRecognizer(
+    _RecognitionSource source,
+    vosk.Recognizer timedOutRecognizer,
+  ) async {
+    if (!_isCurrentRecognizer(source, timedOutRecognizer)) return;
+    switch (source) {
+      case _RecognitionSource.command:
+        _commandRecognizer = null;
+      case _RecognitionSource.freeText:
+        _freeTextRecognizer = null;
+    }
+
+    try {
+      final vosk.Recognizer replacement = await _createRecognizer(source);
+      switch (source) {
+        case _RecognitionSource.command:
+          _commandRecognizer ??= replacement;
+        case _RecognitionSource.freeText:
+          _freeTextRecognizer ??= replacement;
+      }
+    } catch (error, stackTrace) {
+      print(
+        '[SpeechRecognitionService] timed-out recognizer replacement failed: '
+        '$error\n$stackTrace',
+      );
+    }
+
+    unawaited(timedOutRecognizer.dispose().catchError(
+      (Object error, StackTrace stackTrace) {
+        print(
+          '[SpeechRecognitionService] timed-out recognizer dispose failed: '
+          '$error\n$stackTrace',
+        );
+      },
+    ));
   }
 
   Future<void> _replaceRecognizersAfterTimedOutProcessing({
