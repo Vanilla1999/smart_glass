@@ -861,6 +861,15 @@ class _StatusBar extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
+        _GlassesCrossableIcon(
+          available: state.voiceCommandsEnabled,
+          child: const Icon(
+            Icons.mic,
+            size: 20,
+            color: WearGlassesScaffold.accentColor,
+          ),
+        ),
+        if (state.showWifiIcon) const SizedBox(width: 12),
         if (state.showWifiIcon)
           _GlassesCrossableIcon(
             available: state.wifiAvailable,

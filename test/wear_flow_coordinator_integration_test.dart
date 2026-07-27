@@ -570,6 +570,60 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       expect(routerFlow.state.menuFocusedIndex, 1);
     });
 
+    testWearWidget(
+        'microphone pause suppresses commands and phrases until resumed',
+        (WidgetTester tester) async {
+      final StreamController<WearVoiceCommand> voiceCommands =
+          StreamController<WearVoiceCommand>.broadcast();
+      final StreamController<String> voicePhrases =
+          StreamController<String>.broadcast();
+      addTearDown(voiceCommands.close);
+      addTearDown(voicePhrases.close);
+      final WearFlowController routerFlow = WearFlowController(
+        glassesOutput: _TestGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      var phraseCalls = 0;
+
+      await tester.pumpWidget(
+        WearModuleApp(
+          flowController: routerFlow,
+          voiceCommandStream: voiceCommands.stream,
+          voicePhraseStream: voicePhrases.stream,
+          routes: _testRoutes,
+          initialLocation: WearMenuScreen.route,
+          onStartVoice: () async {},
+          onStopVoice: () async {},
+          onRestartVoice: (_) async {},
+        ),
+      );
+      await tester.pumpAndSettle();
+      routerFlow.registerScreenActions(
+        WearScreenId.menu,
+        WearScreenActionHandler(onPhrase: (String phrase) => phraseCalls++),
+      );
+
+      voiceCommands.add(WearVoiceCommand.stopMicrophone);
+      await tester.pumpAndSettle();
+      expect(WearStatusIconReporter.I.voiceCommandsEnabled.value, isFalse);
+
+      voiceCommands.add(WearVoiceCommand.down);
+      voicePhrases.add('безалкогольное');
+      await tester.pumpAndSettle();
+      expect(routerFlow.state.menuFocusedIndex, 0);
+      expect(phraseCalls, 0);
+
+      voiceCommands.add(WearVoiceCommand.startMicrophone);
+      await tester.pumpAndSettle();
+      expect(WearStatusIconReporter.I.voiceCommandsEnabled.value, isTrue);
+
+      voiceCommands.add(WearVoiceCommand.down);
+      voicePhrases.add('безалкогольное');
+      await tester.pumpAndSettle();
+      expect(routerFlow.state.menuFocusedIndex, 1);
+      expect(phraseCalls, 1);
+    });
+
     testWearWidget('final voice phrase invokes the committed flow action',
         (WidgetTester tester) async {
       final StreamController<String> voicePhrases =

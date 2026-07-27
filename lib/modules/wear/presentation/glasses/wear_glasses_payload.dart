@@ -43,6 +43,7 @@ class WearGlassesPayload {
     this.wifiLevel = 3,
     this.showPrinterIcon = false,
     this.printerAvailable = false,
+    this.voiceCommandsEnabled = true,
   });
 
   factory WearGlassesPayload.authWaitingBarcode() {
@@ -222,6 +223,7 @@ class WearGlassesPayload {
   final int wifiLevel;
   final bool showPrinterIcon;
   final bool printerAvailable;
+  final bool voiceCommandsEnabled;
 
   WearGlassesPayload copyWithStatusIcons({
     bool? showWifiIcon,
@@ -229,6 +231,7 @@ class WearGlassesPayload {
     int? wifiLevel,
     bool? showPrinterIcon,
     bool? printerAvailable,
+    bool? voiceCommandsEnabled,
   }) {
     return WearGlassesPayload(
       screenType: screenType,
@@ -252,6 +255,7 @@ class WearGlassesPayload {
       wifiLevel: wifiLevel ?? this.wifiLevel,
       showPrinterIcon: showPrinterIcon ?? this.showPrinterIcon,
       printerAvailable: printerAvailable ?? this.printerAvailable,
+      voiceCommandsEnabled: voiceCommandsEnabled ?? this.voiceCommandsEnabled,
     );
   }
 
@@ -278,6 +282,7 @@ class WearGlassesPayload {
       'wifiLevel': wifiLevel,
       'showPrinterIcon': showPrinterIcon,
       'printerAvailable': printerAvailable,
+      'voiceCommandsEnabled': voiceCommandsEnabled,
     };
   }
 }

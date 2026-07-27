@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
@@ -13,11 +15,13 @@ class WearStatusIconSnapshot {
     required this.wifi,
     required this.showPrinter,
     required this.printerAvailable,
+    this.voiceCommandsEnabled = true,
   });
 
   final WearWifiStatus wifi;
   final bool showPrinter;
   final bool printerAvailable;
+  final bool voiceCommandsEnabled;
 }
 
 class WearStatusIconReporter {
@@ -35,6 +39,7 @@ class WearStatusIconReporter {
     wifi: WearWifiStatus(isAvailable: false, level: 3),
     showPrinter: false,
     printerAvailable: false,
+    voiceCommandsEnabled: true,
   );
   WearGlassesPayload? _lastPayload;
   Timer? _timer;
@@ -47,11 +52,19 @@ class WearStatusIconReporter {
   bool _wasPrinterAvailable = true;
   bool _voiceStartupActive = false;
   bool _projectionVisible = false;
+  final ValueNotifier<bool> _voiceCommandsEnabled = ValueNotifier<bool>(true);
   WearScreenId Function()? _currentScreenForTesting;
   Future<WearStatusIconSnapshot> Function()? _refreshForTesting;
 
   WearStatusIconSnapshot get snapshot => _snapshot;
   WearGlassesPayload? get lastPayload => _lastPayload;
+  ValueListenable<bool> get voiceCommandsEnabled => _voiceCommandsEnabled;
+
+  void setVoiceCommandsEnabled(bool enabled) {
+    if (_voiceCommandsEnabled.value == enabled) return;
+    _voiceCommandsEnabled.value = enabled;
+    unawaited(refreshAndResend());
+  }
 
   void debugSetCurrentScreenProviderForTesting(
     WearScreenId Function()? currentScreen,
@@ -73,6 +86,7 @@ class WearStatusIconReporter {
   void endVoiceStartup([int? generation]) {
     if (generation != null && generation != _voiceStartupGeneration) return;
     _voiceStartupActive = false;
+    _voiceCommandsEnabled.value = true;
     if (generation == null) {
       _voiceStartupGeneration++;
     }
@@ -111,6 +125,7 @@ class WearStatusIconReporter {
     _payloadGeneration++;
     _wasWifiAvailable = true;
     _wasPrinterAvailable = true;
+    _voiceCommandsEnabled.value = true;
     if (!wearGlassesBridge.isEnabled) {
       _projectionOperation = Future<void>.value();
       return;
@@ -142,6 +157,7 @@ class WearStatusIconReporter {
         wifi: wifi,
         showPrinter: showPrinter,
         printerAvailable: printerAvailable,
+        voiceCommandsEnabled: _voiceCommandsEnabled.value,
       );
     }
     if (expectedGeneration != null &&
@@ -308,7 +324,8 @@ class WearStatusIconReporter {
     if (!_isCurrentOperation(lifecycleGeneration, payloadGeneration)) return;
     if (previous.wifi == next.wifi &&
         previous.showPrinter == next.showPrinter &&
-        previous.printerAvailable == next.printerAvailable) {
+        previous.printerAvailable == next.printerAvailable &&
+        previous.voiceCommandsEnabled == next.voiceCommandsEnabled) {
       return;
     }
 
@@ -332,6 +349,7 @@ class WearStatusIconReporter {
       wifiLevel: snapshot.wifi.level,
       showPrinterIcon: snapshot.showPrinter,
       printerAvailable: snapshot.printerAvailable,
+      voiceCommandsEnabled: snapshot.voiceCommandsEnabled,
     );
   }
 

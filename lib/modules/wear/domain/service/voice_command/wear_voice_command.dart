@@ -20,6 +20,7 @@ enum WearVoiceCommand {
   manualInput,
   print,
   takePhoto,
+  testPhoto,
   backToList,
   clear,
   save,
@@ -28,4 +29,6 @@ enum WearVoiceCommand {
   cancel,
   nextPage,
   previousPage,
+  stopMicrophone,
+  startMicrophone,
 }

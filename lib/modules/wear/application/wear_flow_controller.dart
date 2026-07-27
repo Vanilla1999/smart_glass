@@ -16,6 +16,7 @@ typedef WearFlowAction = FutureOr<void> Function();
 typedef WearFlowPhraseAction = FutureOr<void> Function(String phrase);
 typedef WearFlowPartialPhraseAction = FutureOr<bool> Function(String phrase);
 typedef WearFlashlightToggle = Future<void> Function();
+typedef WearPhotoCapture = Future<void> Function();
 
 class WearScreenActionHandler {
   const WearScreenActionHandler({
@@ -76,9 +77,11 @@ class WearFlowController {
     required WearGlassesOutput glassesOutput,
     required WearNavigationOutput navigationOutput,
     WearFlashlightToggle? flashlightToggle,
+    WearPhotoCapture? photoCapture,
   })  : _glassesOutput = glassesOutput,
         _navigationOutput = navigationOutput,
-        _flashlightToggle = flashlightToggle ?? _toggleScannerFlashlight;
+        _flashlightToggle = flashlightToggle ?? _toggleScannerFlashlight,
+        _photoCapture = photoCapture;
 
   static const int _menuItemCount = 4;
   static const int _homeConfirmItemCount = 2;
@@ -97,6 +100,7 @@ class WearFlowController {
       <WearScreenId, WearGlassesPayload>{};
   final List<WearVoiceCommand> _commandQueue = <WearVoiceCommand>[];
   final WearFlashlightToggle _flashlightToggle;
+  final WearPhotoCapture? _photoCapture;
   bool _isProcessingCommand = false;
   int _nextNavigationRequestId = 0;
   int? _deliveredNavigationRequestId;
@@ -318,6 +322,9 @@ class WearFlowController {
             await _invokeScreenAction(
                 _state.screen, (handler) => handler.onPhoto);
             break;
+          case WearVoiceCommand.testPhoto:
+            await _photoCapture?.call();
+            break;
           case WearVoiceCommand.backToList:
             await _invokeScreenAction(
               _state.screen,
@@ -352,6 +359,9 @@ class WearFlowController {
               _state.screen,
               (handler) => handler.onPreviousPage,
             );
+            break;
+          case WearVoiceCommand.stopMicrophone:
+          case WearVoiceCommand.startMicrophone:
             break;
         }
       } catch (error, stackTrace) {

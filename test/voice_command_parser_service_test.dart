@@ -41,6 +41,7 @@ void main() {
         'ручной ввод': WearVoiceCommand.manualInput,
         'сделать фото': WearVoiceCommand.takePhoto,
         'Фото': WearVoiceCommand.takePhoto,
+        'ТЕСТ ФОТО': WearVoiceCommand.testPhoto,
         'к списку': WearVoiceCommand.backToList,
         'прямое сканирование': WearVoiceCommand.openDirectScan,
         'отмена': WearVoiceCommand.cancel,
@@ -58,6 +59,9 @@ void main() {
         'предыдущую страницу': WearVoiceCommand.previousPage,
         'страница назад': WearVoiceCommand.previousPage,
         'назад страница': WearVoiceCommand.previousPage,
+        'стоп микрофон': WearVoiceCommand.stopMicrophone,
+        'останови микрофон': WearVoiceCommand.stopMicrophone,
+        'включи микрофон': WearVoiceCommand.startMicrophone,
       };
 
       for (final MapEntry<String, WearVoiceCommand> entry in cases.entries) {
@@ -110,6 +114,11 @@ void main() {
           contains('следующая страница'));
       expect(VoiceCommandParserService.grammarPhrases,
           contains('прошлая страница'));
+      expect(
+          VoiceCommandParserService.grammarPhrases, contains('стоп микрофон'));
+      expect(VoiceCommandParserService.grammarPhrases,
+          contains('включи микрофон'));
+      expect(VoiceCommandParserService.grammarPhrases, contains('тест фото'));
     });
 
     test('does not parse partial words as commands', () {

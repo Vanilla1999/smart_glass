@@ -75,6 +75,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   Timer? _voiceHealthTimer;
   VoiceState _voiceState = const VoiceState.disabled();
   bool _voiceStartRequested = false;
+  bool _voiceCommandsEnabled = true;
   int? _voiceStartupToken;
   bool? _audioCaptureSilenced;
   bool _restartVoiceAfterInterruption = false;
@@ -115,10 +116,23 @@ class _WearModuleAppState extends State<WearModuleApp>
     );
     widget.onRouterReady?.call(_router);
     final flow = _flow;
+    WearStatusIconReporter.I.setVoiceCommandsEnabled(_voiceCommandsEnabled);
     flow.setNavigationOutput(FlutterWearNavigationOutput(router: _router));
     flow.setUiLifecycle(WearUiLifecycle.active);
     _voiceSub = _voiceCommands.listen(
       (WearVoiceCommand command) async {
+        if (command == WearVoiceCommand.stopMicrophone) {
+          _setVoiceCommandsEnabled(false);
+          return;
+        }
+        if (command == WearVoiceCommand.startMicrophone) {
+          _setVoiceCommandsEnabled(true);
+          return;
+        }
+        if (!_voiceCommandsEnabled) {
+          print('[WearModuleApp] suppress voice command: microphone paused');
+          return;
+        }
         if (!_voiceState.acceptsCommands) {
           print(
             '[WearModuleApp] suppress voice command during reconnect '
@@ -144,6 +158,10 @@ class _WearModuleAppState extends State<WearModuleApp>
     );
     _voicePhraseSub = _voicePhrases.listen(
       (String phrase) async {
+        if (!_voiceCommandsEnabled) {
+          print('[WearModuleApp] suppress voice phrase: microphone paused');
+          return;
+        }
         if (!_voiceState.acceptsCommands) {
           print('[WearModuleApp] suppress voice phrase during reconnect');
           return;
@@ -440,6 +458,13 @@ class _WearModuleAppState extends State<WearModuleApp>
       reason: state.reason,
       attempt: state.attempt,
     );
+  }
+
+  void _setVoiceCommandsEnabled(bool enabled) {
+    if (_voiceCommandsEnabled == enabled) return;
+    setState(() => _voiceCommandsEnabled = enabled);
+    WearStatusIconReporter.I.setVoiceCommandsEnabled(enabled);
+    print('[WearModuleApp] voice commands enabled=$enabled');
   }
 
   void _updateGlassesVoiceOverlay({

@@ -51,6 +51,7 @@ class WearDependencies {
     wearFlowController = WearFlowController(
       glassesOutput: FlutterWearGlassesOutput(),
       navigationOutput: NoopWearNavigationOutput(),
+      photoCapture: photoStore.captureLatestPhoto,
     );
     speechRecognitionService = SpeechRecognitionService(
       audioStreamService: audioStreamService,

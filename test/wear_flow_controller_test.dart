@@ -1285,6 +1285,23 @@ void main() {
       expect(photoCalls, 1);
     });
 
+    test('test photo command captures a photo on every screen', () async {
+      var photoCaptures = 0;
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+        photoCapture: () async => photoCaptures++,
+      );
+      controller.setUiLifecycle(WearUiLifecycle.active);
+
+      controller.enterScreen(WearScreenId.menu);
+      await controller.handleVoiceCommand(WearVoiceCommand.testPhoto);
+      controller.enterScreen(WearScreenId.help);
+      await controller.handleVoiceCommand(WearVoiceCommand.testPhoto);
+
+      expect(photoCaptures, 2);
+    });
+
     test('yes command falls back to select when screen has no yes action',
         () async {
       int selectCalls = 0;

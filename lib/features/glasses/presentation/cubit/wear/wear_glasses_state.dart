@@ -25,6 +25,7 @@ class WearGlassesState {
     this.wifiLevel = 3,
     this.showPrinterIcon = false,
     this.printerAvailable = false,
+    this.voiceCommandsEnabled = true,
   });
 
   factory WearGlassesState.initial() {
@@ -66,6 +67,8 @@ class WearGlassesState {
       wifiLevel: _int(payload['wifiLevel'], fallback: 3).clamp(0, 3),
       showPrinterIcon: _bool(payload['showPrinterIcon']),
       printerAvailable: _bool(payload['printerAvailable']),
+      voiceCommandsEnabled:
+          _bool(payload['voiceCommandsEnabled'], fallback: true),
     );
   }
 
@@ -92,6 +95,7 @@ class WearGlassesState {
   final int wifiLevel;
   final bool showPrinterIcon;
   final bool printerAvailable;
+  final bool voiceCommandsEnabled;
 
   static WearGlassesScreenType _screenType(dynamic raw) {
     return WearGlassesScreenType.values.firstWhere(

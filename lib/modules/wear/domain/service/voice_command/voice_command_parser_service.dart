@@ -47,6 +47,7 @@ class VoiceCommandParserService {
     'печать': WearVoiceCommand.print,
     'сделать фото': WearVoiceCommand.takePhoto,
     'фото': WearVoiceCommand.takePhoto,
+    'тест фото': WearVoiceCommand.testPhoto,
     'к списку': WearVoiceCommand.backToList,
     'список': WearVoiceCommand.openList,
     'прямое сканирование': WearVoiceCommand.openDirectScan,
@@ -74,6 +75,10 @@ class VoiceCommandParserService {
     'предыдущую страницу': WearVoiceCommand.previousPage,
     'страница назад': WearVoiceCommand.previousPage,
     'назад страница': WearVoiceCommand.previousPage,
+    'стоп микрофон': WearVoiceCommand.stopMicrophone,
+    'останови микрофон': WearVoiceCommand.stopMicrophone,
+    'включи микрофон': WearVoiceCommand.startMicrophone,
+    'включить микрофон': WearVoiceCommand.startMicrophone,
     'не надо': WearVoiceCommand.no,
     'назад': WearVoiceCommand.back,
     'вернуться': WearVoiceCommand.back,
@@ -154,6 +159,7 @@ class VoiceCommandParserService {
     WearVoiceCommand.manualInput: <String>['ручной ввод'],
     WearVoiceCommand.print: <String>['напечатать', 'печать'],
     WearVoiceCommand.takePhoto: <String>['сделать фото', 'фото'],
+    WearVoiceCommand.testPhoto: <String>['тест фото'],
     WearVoiceCommand.backToList: <String>['к списку'],
     WearVoiceCommand.openList: <String>['список'],
     WearVoiceCommand.openDirectScan: <String>['прямое сканирование'],
@@ -169,6 +175,14 @@ class VoiceCommandParserService {
       'следующая страница',
       'дальше',
       'далее',
+    ],
+    WearVoiceCommand.stopMicrophone: <String>[
+      'стоп микрофон',
+      'останови микрофон',
+    ],
+    WearVoiceCommand.startMicrophone: <String>[
+      'включи микрофон',
+      'включить микрофон',
     ],
   };
 

@@ -38,11 +38,10 @@ void main() {
     expect(recognition.requireNonZeroPcmForStartup, isTrue);
     expect(
       recognition.exactZeroStartupGrace,
-      const Duration(milliseconds: 1500),
+      const Duration(seconds: 15),
     );
-    expect(
-        recognition.recoveryCaptureTimeout, const Duration(milliseconds: 2500));
-    expect(recognition.maxStartupRecorderRecreates, 1);
+    expect(recognition.recoveryCaptureTimeout, const Duration(seconds: 15));
+    expect(recognition.maxStartupRecorderRecreates, 0);
     expect(
       recognition.postRecreateExactZeroStartupGrace,
       const Duration(milliseconds: 3000),

@@ -114,7 +114,8 @@ void main() {
       expect(speech.startCalls, 2);
     });
 
-    test('does not retry after terminal exact-zero startup failure', () async {
+    test('waits for T2151 microphone before the terminal exact-zero verdict',
+        () async {
       final _ExactZeroSpeechRecognitionService speech =
           _ExactZeroSpeechRecognitionService();
       void Function()? scheduledRetry;
@@ -137,11 +138,12 @@ void main() {
 
       await session.start();
 
+      expect(now, greaterThanOrEqualTo(15000));
       expect(session.state.phase, VoicePhase.unavailable);
       expect(session.state.reason, 'startup_exact_zero_terminal');
       expect(scheduledRetry, isNull);
       expect(speech.startCalls, 1);
-      expect(speech.restartCalls, 1);
+      expect(speech.restartCalls, 0);
     });
   });
 }

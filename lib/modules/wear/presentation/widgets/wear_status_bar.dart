@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_svg_icon.dart';
 import 'package:smart_glasses/modules/wear/services/wear_printer_status_service.dart';
+import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/services/wear_wifi_status_service.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
@@ -79,6 +80,14 @@ class _WearStatusBarState extends State<WearStatusBar> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
+        ValueListenableBuilder<bool>(
+          valueListenable: WearStatusIconReporter.I.voiceCommandsEnabled,
+          builder: (BuildContext context, bool enabled, Widget? child) {
+            return _CrossableIcon(available: enabled, child: child!);
+          },
+          child: const Icon(Icons.mic, size: 20, color: WearStatusBar._online),
+        ),
+        const SizedBox(width: 12),
         _WifiStatusIcon(
           available: _wifi.isAvailable,
           level: _wifi.level,

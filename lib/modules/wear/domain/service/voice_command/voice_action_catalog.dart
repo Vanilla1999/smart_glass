@@ -149,5 +149,12 @@ class VoiceActionCatalog {
       fastAliases: <String>{'фото'},
       activationPolicy: VoiceActivationPolicy.immediateExactPartial,
     ),
+    VoiceActionEntry(
+      command: WearVoiceCommand.testPhoto,
+      screens: WearScreenId.values.toSet(),
+      fullPhrases: <String>{'тест фото'},
+      fastAliases: <String>{'тест фото'},
+      activationPolicy: VoiceActivationPolicy.immediateExactPartial,
+    ),
   ];
 }
