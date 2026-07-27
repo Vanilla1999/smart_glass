@@ -17,6 +17,7 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voi
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
 import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_glasses_state.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_device_profile.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
 import 'package:smart_glasses/modules/wear/application/ports/wear_glasses_output.dart';
 import 'package:smart_glasses/modules/wear/application/ports/wear_navigation_output.dart';
@@ -1346,6 +1347,18 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
 
   @override
   int? get captureStartedAtMillis => null;
+
+  @override
+  bool get hasExpectedInputDevice => true;
+
+  @override
+  String? get preferredInputDeviceId => null;
+
+  @override
+  String? get preferredInputDeviceLabel => null;
+
+  @override
+  void useDeviceProfile(VoiceDeviceProfile profile) {}
 
   @override
   Never get deviceProfile => throw UnsupportedError('Not used in test');

@@ -62,6 +62,7 @@ class VoiceState {
     String? fallbackReason,
     bool clearError = false,
     bool clearRetry = false,
+    bool clearFallbackReason = false,
   }) {
     return VoiceState(
       phase: phase ?? this.phase,
@@ -73,7 +74,8 @@ class VoiceState {
       nextRetryAt: clearRetry ? null : nextRetryAt ?? this.nextRetryAt,
       requestedProfile: requestedProfile ?? this.requestedProfile,
       activeProfile: activeProfile ?? this.activeProfile,
-      fallbackReason: fallbackReason ?? this.fallbackReason,
+      fallbackReason:
+          clearFallbackReason ? null : fallbackReason ?? this.fallbackReason,
     );
   }
 }

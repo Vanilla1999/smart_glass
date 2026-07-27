@@ -1,0 +1,820 @@
+Ты работаешь как senior Flutter/Android engineer над постоянным голосовым
+управлением для смарт-очков T2151.
+
+Репозиторий:
+https://github.com/Vanilla1999/smart_glass.git
+
+Текущая реализация должна содержать коммит:
+a9fbf5d Add T2151 voice capture recovery
+
+Сначала проверь фактический HEAD:
+
+git status --short
+git branch --show-current
+git rev-parse HEAD
+git log -5 --oneline
+git diff --check
+
+Не ограничивайся ревью или планом. Внеси изменения, добавь тесты, запусти
+проверки и обнови документацию.
+
+Не делай push, merge или rebase.
+Не переписывай Git history.
+Не форкай record, record_android или vosk_flutter_service.
+Не запускай Vosk до авторизации.
+Не меняй существующую логику авторизации и навигации без необходимости.
+
+======================================================================
+ЗАФИКСИРОВАННЫЕ ПРОДУКТОВЫЕ РЕШЕНИЯ
+======================================================================
+
+1. Голосовое управление запускается только после успешной авторизации.
+2. Основной профиль T2151:
+   VOICE_RECOGNITION.
+3. Автоматически переключаться на VOICE_COMMUNICATION запрещено.
+4. Профиль VOICE_COMMUNICATION можно оставить для отдельной A/B-сборки,
+   но production VOICE_RECOGNITION никогда не должен переключаться на него
+   автоматически.
+5. Микрофон должен использоваться именно с очков:
+   USB-Audio - UVC.
+6. Если UVC input отсутствует, нельзя незаметно использовать встроенный
+   микрофон T2151.
+7. Обычная тишина не является неисправностью.
+8. Абсолютно нулевой цифровой PCM является признаком неготового или зависшего
+   аудиотракта.
+9. После первой exact-zero ошибки разрешён один полный recreate recorder.
+10. После повторной ошибки приложение остаётся на VOICE_RECOGNITION,
+    показывает недоступность или необходимость переподключить очки и выполняет
+    ограниченные повторные попытки с backoff.
+11. Команды разрешены только в VoicePhase.ready.
+12. Hardware-проверки без настоящего T2151 отмечаются DEVICE_PENDING.
+
+======================================================================
+ГЛАВНАЯ ПРОБЛЕМА ТЕКУЩЕЙ РЕАЛИЗАЦИИ
+======================================================================
+
+Сейчас профиль t2151_voice_recognition имеет приблизительно такую политику:
+
+- requireNonZeroPcmForStartup=true;
+- exactZeroStartupGrace=1200 мс;
+- maxStartupRecorderRecreates=1;
+- fallbackToVoiceCommunication=true.
+
+Последовательность:
+
+VOICE_RECOGNITION capture #1
+→ exact-zero около 1200–1500 мс
+→ recreate
+
+VOICE_RECOGNITION capture #2
+→ exact-zero около 1200–1300 мс
+→ capture останавливается
+
+VOICE_COMMUNICATION capture #3
+→ становится ready.
+
+Это слишком агрессивно.
+
+В предыдущем аппаратном прогоне второй VOICE_RECOGNITION recorder:
+
+- начал давать ненулевой PCM примерно через 1082 мс;
+- дал VAD_START примерно через 1314 мс;
+- успешно распознал команду.
+
+Следовательно, вторая попытка сейчас может быть остановлена почти в момент,
+когда аудиотракт начинает оживать.
+
+Нужно использовать разные grace/timeout для первой и второй попыток.
+
+======================================================================
+P0. STRICT VOICE_RECOGNITION STARTUP POLICY
+======================================================================
+
+1. Убрать автоматический fallback на VOICE_COMMUNICATION.
+
+В production-профиле:
+
+fallbackToVoiceCommunication=false
+
+Удалить прямое автоматическое выполнение:
+
+_speech.useDeviceProfile(VoiceDeviceProfile.t2151)
+
+из startup recovery.
+
+Можно оставить коммуникационный профиль как отдельную A/B-конфигурацию, но
+не переключаться на него внутри WearVoiceSession.
+
+Предпочтительный вариант:
+
+enum VoiceSourceFallbackPolicy {
+  disabled,
+  automaticDiagnostic,
+}
+
+Для t2151_voice_recognition:
+
+fallbackPolicy=VoiceSourceFallbackPolicy.disabled
+
+Не добавляй сложную абстракцию, если достаточно удалить автоматическую ветку.
+Главное — production не должен менять source.
+
+2. Разделить timeout первой и второй попыток.
+
+Не использовать один exactZeroStartupGrace для всех попыток.
+
+Добавить в VoiceDeviceProfile либо отдельную recovery policy:
+
+initialExactZeroGrace
+postRecreateExactZeroGrace
+initialCaptureTimeout
+postRecreateCaptureTimeout
+maxStartupRecorderRecreates
+
+Начальные значения:
+
+initialExactZeroGrace:
+  1500 мс
+
+postRecreateExactZeroGrace:
+  3000 мс
+
+initialCaptureTimeout:
+  не меньше 2500 мс
+
+postRecreateCaptureTimeout:
+  не меньше 4000 мс
+
+maxStartupRecorderRecreates:
+  1
+
+Важно:
+
+postRecreateCaptureTimeout должен быть больше postRecreateExactZeroGrace.
+
+Нельзя оставить timeout=2500 мс и grace=3000 мс.
+
+3. Новая последовательность startup.
+
+Попытка 1:
+
+VOICE_RECOGNITION
+→ найти UVC input
+→ запустить recorder
+→ ждать пригодный PCM
+→ exact-zero допускается до 1500 мс.
+
+Если поток остаётся exact-zero:
+
+→ stop stream;
+→ stop AudioRecord;
+→ dispose AudioRecorder;
+→ создать новый AudioRecorder;
+→ пауза 300–500 мс;
+→ заново перечислить input devices;
+→ заново выбрать UVC;
+→ начать попытку 2.
+
+Попытка 2:
+
+VOICE_RECOGNITION
+→ ждать ненулевой PCM до 3000 мс.
+
+Если появляется любой ненулевой raw PCM текущего capture:
+
+→ ready.
+
+Если exact-zero сохраняется:
+
+→ полностью остановить recorder;
+→ VoicePhase.microphoneReconnectRequired
+   либо VoicePhase.unavailable;
+→ не переключаться на VOICE_COMMUNICATION;
+→ назначить retry с backoff;
+→ все retry используют VOICE_RECOGNITION.
+
+4. Ready-контракт.
+
+VoicePhase.ready можно публиковать только если одновременно выполнено:
+
+- запрос start/restart всё ещё актуален;
+- capture generation актуальна;
+- recorder формально запущен;
+- stream работает;
+- Android не сообщает clientSilenced=true;
+- получено минимум 3 PCM-чанка текущего capture;
+- lastAudioChunk относится к текущему capture;
+- существует lastNonSilentAudioChunk после старта текущего capture;
+- continuousZeroAudioStartedAtMillis == null;
+- выбран ожидаемый USB/UVC input;
+- если native routed-device диагностика уже доступна, фактический route
+  соответствует USB/UVC input.
+
+Не требовать:
+
+- речи пользователя;
+- высокого RMS;
+- результата Vosk;
+- распознанной команды;
+- VAD_START.
+
+Ненулевой аппаратный шум является достаточным подтверждением работающего
+цифрового тракта.
+
+5. Уже запущенный recorder.
+
+Удалить ложную логику:
+
+if (isListening && isCaptureRunning && !silenced) {
+  emit ready;
+  return;
+}
+
+Формально запущенный recorder может отдавать нулевой PCM.
+
+Вместо этого добавить:
+
+CaptureHealthSnapshot inspectCurrentCapture()
+
+Проверять:
+
+- свежий lastAudioChunk;
+- ненулевой PCM текущего capture;
+- отсутствие continuous exact-zero;
+- актуальный capture ID;
+- отсутствие silencing;
+- ожидаемый input/route.
+
+Если capture здоров:
+- оставить его;
+- не выполнять restart.
+
+Если capture нездоров:
+- запустить общий recovery pipeline.
+
+======================================================================
+P0. ЕДИНЫЙ START/RESTART RECOVERY PIPELINE
+======================================================================
+
+Сейчас полный recreate/fallback orchestration реализован главным образом в
+start(), а restart() использует другую упрощённую схему.
+
+Это нужно исправить.
+
+Создать один внутренний метод, например:
+
+Future<void> _startCaptureWithRecovery({
+  required int generation,
+  required String reason,
+  required VoiceStartupKind kind,
+})
+
+или эквивалентный метод без лишней архитектуры.
+
+Его должны использовать:
+
+- initial start после авторизации;
+- app resume;
+- Android unsilence;
+- runtime exact-zero recovery;
+- stale stream recovery;
+- USB reattach;
+- retry после unavailable.
+
+Все пути должны иметь одинаковую политику:
+
+VOICE_RECOGNITION attempt 1
+→ один hard recreate
+→ VOICE_RECOGNITION attempt 2
+→ ready либо unavailable/reconnectRequired.
+
+Ни один runtime-путь не должен автоматически переходить на
+VOICE_COMMUNICATION.
+
+Single-flight должен гарантировать:
+
+- один start/restart одновременно;
+- resume + health + USB event не создают несколько recorder;
+- старый generation не может опубликовать ready;
+- старый retry timer отменяется при ручном или системном restart.
+
+======================================================================
+P0. ОБЯЗАТЕЛЬНЫЙ UVC INPUT
+======================================================================
+
+Сейчас при отсутствии найденного USB input AudioStreamService может передать:
+
+device=null
+
+После этого Android способен выбрать встроенный микрофон.
+
+Это запрещено для T2151 voice control.
+
+1. Добавить profile fields:
+
+requireExpectedInputDevice=true
+
+expectedInputLabelTokens:
+- usb-audio
+- uvc
+
+2. Перед startStream:
+
+- вызвать listInputDevices();
+- найти подходящий UVC input;
+- использовать детерминированный выбор;
+- залогировать все устройства;
+- сохранить preferredInputDeviceId и label.
+
+3. Если expected input не найден:
+
+- не запускать recorder с device=null;
+- не переходить в ready;
+- VoicePhase.waitingForAudioRoute;
+- ждать USB added event;
+- либо завершить попытку typed-ошибкой VoiceInputDeviceUnavailable.
+
+4. Не использовать built-in microphone как fallback.
+
+5. После каждого recreate и USB reattach заново выполнять listInputDevices().
+Старый USB device ID нельзя считать постоянным.
+
+6. `_selectPreferredInputDevice()` не должен выбирать первое устройство только
+по общему `label.contains('usb')`, если присутствуют несколько USB input.
+
+Добавить детерминированный приоритет:
+
+1. exact/normalized label USB-Audio - UVC;
+2. label содержит UVC;
+3. label содержит USB-Audio;
+4. только после этого допустимый documented fallback.
+
+Если найдено несколько равноприоритетных кандидатов:
+- залогировать ambiguity;
+- не выбирать случайно;
+- вернуть typed error.
+
+======================================================================
+P0. NATIVE ROUTED DEVICE БЕЗ FORK
+======================================================================
+
+Не форкай record_android.
+
+Используй уже добавленные:
+
+- AudioManager.AudioRecordingCallback;
+- AudioDeviceCallback;
+- voiceCaptureDiagnosticsStream.
+
+Расширить native diagnostics payload:
+
+captureId
+audioSessionId
+requestedSource
+clientAudioSource
+routedDeviceId
+routedDeviceType
+routedDeviceName
+clientSilenced
+clientFormat
+deviceFormat
+audioManagerMode
+
+Не называй clientAudioSource полем activeSource, если это то же client source.
+
+Создать на Dart-стороне небольшой store, например:
+
+VoiceCaptureDiagnosticsStore
+
+Он должен хранить latest diagnostics для текущего capture.
+
+Правила:
+
+- принимать diagnostics только для текущего captureId;
+- старые capture events игнорировать;
+- сохранять routed device;
+- использовать routed device при startup readiness, если событие получено;
+- если routedDevice явно не UVC — не публиковать ready;
+- если native diagnostics задерживается, дать bounded timeout, но не зависать.
+
+Поскольку прямой native session ID из record plugin недоступен, честно
+задокументировать инвариант:
+
+- приложение поддерживает только один активный AudioRecord;
+- native callback фильтруется по source;
+- Dart captureId является логической меткой;
+- это не строгая session-level корреляция.
+
+Не заявлять, что audioSessionId связан с captureId, если это технически не так.
+
+======================================================================
+P0. USB DEVICE EVENTS
+======================================================================
+
+Сейчас WearModuleApp реагирует на любое USB audio added/removed событие.
+
+Исправить.
+
+Передавать в WearVoiceSession:
+
+action
+deviceId
+deviceName
+deviceType
+routeRevision
+
+Удаление USB должно останавливать capture только если удалено:
+
+- preferred input device;
+- actual routed device;
+- ожидаемый UVC input.
+
+Отключение другого USB-микрофона не должно трогать текущий capture.
+
+Добавить monotonic route revision/generation.
+
+Сценарий race:
+
+USB added
+→ начинается delay 1000 мс
+→ USB removed
+→ старый delayed callback не должен запускать recorder.
+
+После delay повторно проверить:
+
+- revision всё ещё актуален;
+- UVC всё ещё присутствует;
+- waitingForUsbInput=false только после подтверждения;
+- приложение всё ещё авторизовано;
+- текущий request generation актуален.
+
+USB reattach:
+
+USB removed
+→ VoicePhase.waitingForAudioRoute
+→ recorder остановлен
+
+USB added
+→ подождать 800–1500 мс
+→ заново перечислить input devices
+→ выбрать новый UVC device ID
+→ запустить общий strict VOICE_RECOGNITION recovery pipeline.
+
+======================================================================
+P1. STATE И OVERLAY
+======================================================================
+
+1. Не публиковать одинаковый waitingForAudioRoute каждые 100 мс.
+
+Добавить:
+
+_emitIfChanged(...)
+
+Состояние должно публиковаться только если изменилось хотя бы одно:
+
+- phase;
+- reason;
+- attempt;
+- captureEpoch;
+- relevant error.
+
+Технические показатели ожидания писать в агрегированный диагностический лог,
+а не создавать новую overlay revision каждые 100 мс.
+
+2. Ожидаемая последовательность overlay:
+
+loadingModel:
+  Подготовка голосового управления
+
+startingRecorder:
+  Запускаем микрофон очков
+
+waitingForAudioRoute:
+  Подключаем микрофон очков
+
+reconnecting:
+  Переподключаем голосовое управление
+
+microphoneReconnectRequired:
+  Переподключите очки или микрофон
+
+unavailable:
+  Голосовое управление недоступно
+
+ready:
+  overlay скрыт.
+
+3. VoiceState должен корректно содержать:
+
+requestedProfile=t2151_voice_recognition
+activeProfile=t2151_voice_recognition
+fallbackReason=null
+
+Автоматической смены activeProfile на t2151 быть не должно.
+
+Добавить возможность явно очищать fallbackReason в VoiceState.copyWith,
+если поле осталось от предыдущей реализации.
+
+======================================================================
+P1. DIAGNOSTIC WAV
+======================================================================
+
+Сейчас startup WAV может записываться и в release.
+
+Это запрещено.
+
+Добавить compile-time flag:
+
+const bool voiceCaptureWavDiagnostics =
+    bool.fromEnvironment(
+      'VOICE_CAPTURE_WAV_DIAGNOSTICS',
+      defaultValue: false,
+    );
+
+Обычная release-сборка:
+
+captureStartupWav=false
+
+Диагностическая сборка:
+
+--dart-define=VOICE_CAPTURE_WAV_DIAGNOSTICS=true
+
+Дополнительные правила:
+
+- app-private cache;
+- максимум 3–5 файлов;
+- удалять старые файлы;
+- сохранять partial WAV при раннем exact-zero failure;
+- в имени файла указывать captureId/profile/reason;
+- не хранить raw audio бессрочно;
+- не включать запись в обычный production APK.
+
+Не удаляй полезную WAV-диагностику — сделай её безопасной и явно включаемой.
+
+======================================================================
+P1. RUNTIME ZERO-PCM POLICY
+======================================================================
+
+Сделать runtime recovery profile-specific.
+
+Для t2151_voice_recognition:
+
+- stale PCM threshold: около 3000 мс;
+- continuous exact-zero threshold после ready: около 5000 мс;
+- максимум один automatic hard recreate;
+- после повторного exact-zero:
+  microphoneReconnectRequired;
+- после USB reattach retry снова разрешён.
+
+Обычный низкий RMS:
+- ничего не делать.
+
+Ненулевой шум:
+- capture считается технически живым.
+
+clientSilenced=true:
+- suspendedBySystem;
+- restart-loop запрещён.
+
+clientSilenced true → false:
+- один strict VOICE_RECOGNITION recovery.
+
+======================================================================
+ОБЯЗАТЕЛЬНЫЕ ТЕСТЫ
+======================================================================
+
+Добавь orchestration tests, а не только unit-тесты helper-классов.
+
+Используй fake SpeechRecognitionService / fake AudioStreamService / fake clock.
+
+T01. Три exact-zero PCM chunk не переводят strict VOICE_RECOGNITION в ready.
+
+T02. Низкий ненулевой PCM переводит capture в ready без речи пользователя.
+
+T03. Первая попытка остаётся exact-zero 1500 мс:
+- выполняется ровно один hard recreate.
+
+T04. Вторая попытка получает ненулевой PCM через 1300 мс:
+- становится ready;
+- source остаётся VOICE_RECOGNITION;
+- никакого VOICE_COMMUNICATION fallback.
+
+T05. Вторая попытка остаётся exact-zero 2999 мс:
+- ещё не завершается ошибкой.
+
+T06. Вторая попытка остаётся exact-zero 3000+ мс:
+- unavailable или microphoneReconnectRequired;
+- activeProfile остаётся t2151_voice_recognition.
+
+T07. Post-recreate timeout больше post-recreate grace.
+
+T08. Startup и resume используют одинаковый recovery pipeline.
+
+T09. Resume exact-zero:
+- один recreate;
+- затем success или unavailable;
+- source не меняется.
+
+T10. Unsilence exact-zero использует ту же policy.
+
+T11. Runtime exact-zero использует ту же strict source policy.
+
+T12. UVC input отсутствует:
+- startStream не вызывается с device=null;
+- ready не публикуется;
+- built-in microphone не используется.
+
+T13. UVC input найден:
+- именно его ID передаётся в RecordConfig.
+
+T14. После USB reattach старый device ID не используется.
+
+T15. Удаление постороннего USB input не останавливает active capture.
+
+T16. Удаление active UVC input останавливает capture и показывает overlay.
+
+T17. USB added, затем removed во время HAL delay:
+- recorder не запускается старым callback.
+
+T18. Native routedDevice mismatch:
+- ready не публикуется.
+
+T19. Старый captureId native diagnostics игнорируется.
+
+T20. Повторный start при здоровом capture:
+- restart не выполняется.
+
+T21. Повторный start при zombie/exact-zero capture:
+- выполняется recovery;
+- ложный ready отсутствует.
+
+T22. waitingForAudioRoute публикуется один раз, а не каждые 100 мс.
+
+T23. VoiceState requestedProfile и activeProfile остаются
+t2151_voice_recognition.
+
+T24. Обычная production-сборка не включает WAV diagnostics.
+
+T25. Diagnostic flag включает WAV.
+
+T26. Partial WAV сохраняется при startup exact-zero failure.
+
+T27. Logout во время второй попытки:
+- recorder остановлен;
+- retry отменён;
+- ready не публикуется.
+
+T28. Одновременные resume + health + USB event:
+- существует не более одного active recorder.
+
+======================================================================
+ПРОВЕРКИ
+======================================================================
+
+Запусти:
+
+fvm dart format <изменённые Dart-файлы>
+
+fvm flutter pub get
+
+fvm flutter analyze
+
+fvm flutter test
+
+fvm flutter test \
+  test/voice_capture_recovery_gate_test.dart \
+  test/wear_voice_session_test.dart \
+  test/voice_device_profile_test.dart \
+  test/voice_recovery_primitives_test.dart
+
+./gradlew :app:compileDebugKotlin
+
+git diff --check
+
+Собери strict APK:
+
+fvm flutter build apk --release \
+  --dart-define=VOICE_DEVICE_PROFILE=t2151_voice_recognition
+
+Собери отдельный diagnostic APK только при необходимости:
+
+fvm flutter build apk --release \
+  --dart-define=VOICE_DEVICE_PROFILE=t2151_voice_recognition \
+  --dart-define=VOICE_CAPTURE_WAV_DIAGNOSTICS=true
+
+Не утверждай, что GitHub Actions прошли, если workflow run отсутствует.
+
+Не утверждай, что T2151 проверен, если APK не запускался на устройстве.
+
+======================================================================
+ДОКУМЕНТАЦИЯ
+======================================================================
+
+Обнови:
+
+docs/voice_recovery/IMPLEMENTATION_STATUS.md
+docs/voice_recovery/T2151_VOICE_RECOGNITION_ROLLOUT.md
+docs/voice_recovery/T2151_TEST_PLAN.md
+
+Зафиксируй:
+
+- текущий HEAD;
+- strict VOICE_RECOGNITION policy;
+- automatic VOICE_COMMUNICATION fallback отключён;
+- startup только после авторизации;
+- fork библиотек не использован;
+- initial grace=1500 мс;
+- post-recreate grace=3000 мс;
+- один recreate;
+- UVC input обязателен;
+- built-in microphone fallback запрещён;
+- WAV выключен в production;
+- hardware status=DEVICE_PENDING.
+
+Не оставляй старое утверждение, что после второй exact-zero попытки приложение
+автоматически переключается на VOICE_COMMUNICATION.
+
+======================================================================
+КРИТЕРИИ DONE
+======================================================================
+
+Code-level задача может быть DONE только если:
+
+1. strict VOICE_RECOGNITION не переключается на другой source;
+2. initial и post-recreate grace разделены;
+3. второй capture может ждать минимум 3000 мс;
+4. все start/restart пути используют общий recovery pipeline;
+5. UVC input обязателен;
+6. отсутствует fallback на встроенный микрофон;
+7. USB events фильтруются по устройству;
+8. overlay не спамится каждые 100 мс;
+9. WAV выключен в production;
+10. orchestration tests реально запущены;
+11. flutter test прошёл;
+12. Kotlin compilation прошла;
+13. git diff --check чистый.
+
+Аппаратная часть остаётся DEVICE_PENDING до реального T2151.
+
+======================================================================
+ФИНАЛЬНЫЙ ОТЧЁТ
+======================================================================
+
+Выведи отчёт на русском языке:
+
+# Итог
+
+- фактический HEAD;
+- главные изменённые механизмы;
+- почему убран automatic fallback;
+- startup sequence;
+- runtime recovery sequence.
+
+# Изменённые файлы
+
+Для каждого:
+- что было;
+- что стало;
+- почему.
+
+# State machine
+
+Покажи точные переходы:
+
+loadingModel
+→ startingRecorder
+→ waitingForAudioRoute
+→ reconnecting
+→ ready
+
+и failure path:
+
+waitingForAudioRoute
+→ reconnecting
+→ waitingForAudioRoute
+→ microphoneReconnectRequired/unavailable.
+
+# Тесты
+
+Для каждой команды:
+- команда;
+- passed/failed/blocked;
+- число тестов;
+- ошибки и warnings.
+
+# Не выполнено
+
+Только реальные DEVICE_PENDING/BLOCKED задачи.
+
+# Инструкция T2151
+
+Дай точный список логов, которые должны появиться при:
+
+1. успешной первой попытке;
+2. successful recreate;
+3. двух exact-zero попытках;
+4. USB unplug/replug;
+5. background/resume.
+
+Не писать «микрофон полностью исправлен», пока strict VOICE_RECOGNITION
+не проверен на настоящем T2151.

@@ -1,5 +1,13 @@
 # T2151 VOICE_RECOGNITION Rollout Plan
 
+## Strict policy update
+
+Production never changes source automatically: `VOICE_RECOGNITION` requires
+the UVC input. Exact-zero waits 1500 ms, performs one hard recreate, then the
+second `VOICE_RECOGNITION` attempt waits 3000 ms (4000 ms capture timeout).
+Failure is unavailable/reconnect, not `VOICE_COMMUNICATION` fallback. WAV
+diagnostics require `VOICE_CAPTURE_WAV_DIAGNOSTICS=true`.
+
 ## Decision
 
 `VOICE_RECOGNITION` is the primary experimental T2151 profile. Android defines

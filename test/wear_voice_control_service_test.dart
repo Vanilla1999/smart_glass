@@ -412,6 +412,12 @@ class _FakeAudioStreamService implements AudioStreamService {
   @override
   int get captureId => 0;
   @override
+  bool get hasExpectedInputDevice => true;
+  @override
+  String? get preferredInputDeviceId => null;
+  @override
+  String? get preferredInputDeviceLabel => null;
+  @override
   int? get captureStartedAtMillis => null;
   @override
   VoiceDeviceProfile get deviceProfile => VoiceDeviceProfile.defaultProfile;
@@ -498,6 +504,12 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   int get audioCaptureId => 0;
   @override
   int? get captureStartedAtMillis => null;
+  @override
+  bool get hasExpectedInputDevice => true;
+  @override
+  String? get preferredInputDeviceId => null;
+  @override
+  String? get preferredInputDeviceLabel => null;
   @override
   VoiceDeviceProfile get deviceProfile => VoiceDeviceProfile.defaultProfile;
   @override

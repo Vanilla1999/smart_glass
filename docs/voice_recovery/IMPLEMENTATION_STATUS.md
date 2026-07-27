@@ -1,5 +1,16 @@
 # Voice Recovery Implementation Status
 
+## Strict VOICE_RECOGNITION update
+
+- Current base HEAD: `a9fbf5d`; strict changes are uncommitted work in progress.
+- Startup is post-authorization only, uses mandatory `USB-Audio - UVC`, and
+  rejects missing/ambiguous UVC instead of using the T2151 built-in microphone.
+- Automatic `VOICE_COMMUNICATION` fallback is disabled. Initial grace is 1500
+  ms; one recreate is allowed; post-recreate grace/timeout are 3000/4000 ms.
+- WAV is disabled in ordinary release builds and requires
+  `VOICE_CAPTURE_WAV_DIAGNOSTICS=true`.
+- Hardware validation remains `DEVICE_PENDING`.
+
 ## Baseline
 
 - Branch: `main`

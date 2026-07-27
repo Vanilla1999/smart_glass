@@ -79,6 +79,11 @@ class AudioStreamService {
   int? get captureStartedAtMillis => _startedAtMillis;
   int get captureId => _captureId;
   VoiceDeviceProfile get deviceProfile => _deviceProfile;
+  String? get preferredInputDeviceId => _preferredInputDevice?.id;
+  String? get preferredInputDeviceLabel => _preferredInputDevice?.label;
+  bool get hasExpectedInputDevice =>
+      !_deviceProfile.requireExpectedInputDevice ||
+      _preferredInputDevice != null;
   Stream<double> get audioLevelStream => _audioLevelController.stream;
 
   void addDataCallback(void Function(Uint8List) callback) {
@@ -166,6 +171,10 @@ class AudioStreamService {
       'profile=${_deviceProfile.id} source=${_deviceProfile.audioSource.name}',
     );
     _preferredInputDevice = await _selectPreferredInputDevice();
+    if (_deviceProfile.requireExpectedInputDevice &&
+        _preferredInputDevice == null) {
+      throw const VoiceInputDeviceUnavailable();
+    }
 
     final audioStream = await _audioRecorder.startStream(
       RecordConfig(
@@ -286,15 +295,28 @@ class AudioStreamService {
   Future<InputDevice?> _selectPreferredInputDevice() async {
     if (!_deviceProfile.selectUsbInputExplicitly) return null;
     final List<InputDevice> devices = await _audioRecorder.listInputDevices();
-    InputDevice? selected;
-    for (final InputDevice device in devices) {
+    final List<InputDevice> candidates = devices.where((InputDevice device) {
       final String label = device.label.toLowerCase();
-      if (label.contains('usb') ||
-          label.contains('uvc') ||
-          label.contains('rockchip')) {
-        selected = device;
-        break;
-      }
+      return label.contains('uvc') || label.contains('usb-audio');
+    }).toList();
+    int priority(InputDevice device) {
+      final String label =
+          device.label.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+      if (label == 'usb-audio - uvc') return 0;
+      if (label.contains('uvc')) return 1;
+      return 2;
+    }
+
+    candidates.sort(
+      (InputDevice left, InputDevice right) =>
+          priority(left).compareTo(priority(right)),
+    );
+    final InputDevice? selected = candidates.isEmpty ? null : candidates.first;
+    if (candidates.length > 1 &&
+        priority(candidates[0]) == priority(candidates[1])) {
+      throw VoiceInputDeviceAmbiguous(
+        candidates.map((InputDevice device) => device.label),
+      );
     }
     print(
       '[VoiceCapture#$_captureId] input devices=$devices '
@@ -515,4 +537,21 @@ class _PcmStats {
 
   final double rms;
   final double peak;
+}
+
+class VoiceInputDeviceUnavailable implements Exception {
+  const VoiceInputDeviceUnavailable();
+
+  @override
+  String toString() =>
+      'VoiceInputDeviceUnavailable: USB-Audio - UVC input is unavailable.';
+}
+
+class VoiceInputDeviceAmbiguous implements Exception {
+  const VoiceInputDeviceAmbiguous(this.labels);
+
+  final Iterable<String> labels;
+
+  @override
+  String toString() => 'VoiceInputDeviceAmbiguous: ${labels.join(', ')}';
 }

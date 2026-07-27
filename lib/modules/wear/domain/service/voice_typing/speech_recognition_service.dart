@@ -129,6 +129,10 @@ class SpeechRecognitionService {
   int get audioChunksReceived => _audioStream.chunksReceived;
   int get audioCaptureId => _audioStream.captureId;
   int? get captureStartedAtMillis => _audioStream.captureStartedAtMillis;
+  bool get hasExpectedInputDevice => _audioStream.hasExpectedInputDevice;
+  String? get preferredInputDeviceId => _audioStream.preferredInputDeviceId;
+  String? get preferredInputDeviceLabel =>
+      _audioStream.preferredInputDeviceLabel;
   AudioStreamService get audioStreamService => _audioStream;
   VoiceDeviceProfile get deviceProfile => _audioStream.deviceProfile;
 

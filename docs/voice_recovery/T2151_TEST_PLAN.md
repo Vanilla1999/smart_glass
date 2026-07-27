@@ -1,5 +1,12 @@
 # T2151 Voice Recovery Test Plan
 
+## Strict profile update
+
+Verify UVC selection, absence of built-in-microphone fallback, 1500 ms initial
+grace, one recreate, and 3000 ms second-attempt grace. Default release builds
+must not create WAV files; use `VOICE_CAPTURE_WAV_DIAGNOSTICS=true` only for
+diagnostic APKs. All hardware evidence remains `DEVICE_PENDING`.
+
 All checks in this document require a physical T2151 and remain `DEVICE_PENDING` until their evidence is recorded in `IMPLEMENTATION_STATUS.md`. The profile selection code, voice state/overlay integration, and debug APK build are complete; this plan verifies their behavior on the device.
 
 ## Preparation

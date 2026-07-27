@@ -54,6 +54,7 @@ class MainActivity : FlutterFragmentActivity() {
     private var lastAudioCaptureSilenced: Boolean? = null
     private var monitoredAudioSource: Int? = null
     private var monitoredCaptureId: Int? = null
+    private var audioRouteRevision = 0
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -168,10 +169,13 @@ class MainActivity : FlutterFragmentActivity() {
             device.isSource && (device.type == AudioDeviceInfo.TYPE_USB_DEVICE ||
                 device.type == AudioDeviceInfo.TYPE_USB_HEADSET)
         }.forEach { device ->
+            audioRouteRevision++
             val payload = mapOf(
                 "action" to action,
-                "id" to device.id,
-                "name" to device.productName.toString(),
+                "deviceId" to device.id,
+                "deviceName" to device.productName.toString(),
+                "deviceType" to device.type,
+                "routeRevision" to audioRouteRevision,
             )
             Log.d("VoiceCapture", "usb input $payload")
             appChannel?.invokeMethod("audioInputDeviceChanged", payload)
@@ -205,11 +209,14 @@ class MainActivity : FlutterFragmentActivity() {
                         "captureId" to monitoredCaptureId,
                         "audioSessionId" to config.clientAudioSessionId,
                         "requestedSource" to source,
-                        "activeSource" to config.clientAudioSource,
-                        "routedDevice" to config.audioDevice?.productName?.toString(),
+                        "clientAudioSource" to config.clientAudioSource,
+                        "routedDeviceId" to config.audioDevice?.id,
+                        "routedDeviceType" to config.audioDevice?.type,
+                        "routedDeviceName" to config.audioDevice?.productName?.toString(),
                         "clientFormat" to config.clientFormat.toString(),
                         "deviceFormat" to config.format.toString(),
                         "clientSilenced" to config.isClientSilenced,
+                        "audioManagerMode" to manager.mode,
                     )
                     Log.d("VoiceCapture", "diagnostics=$payload")
                     appChannel?.invokeMethod("voiceCaptureDiagnostics", payload)

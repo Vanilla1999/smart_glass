@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 import 'package:smart_glasses/modules/wear/services/wear_voice_session.dart';
+import 'package:smart_glasses/modules/wear/services/voice_capture_diagnostics_store.dart';
 
 void main() {
   test('health gate restarts for missing or stale PCM only', () {
@@ -100,5 +101,23 @@ void main() {
     );
 
     stuckNativeCall.complete();
+  });
+
+  test(
+      'native diagnostics ignore stale captures and reject an explicit non-UVC route',
+      () {
+    final VoiceCaptureDiagnosticsStore store = VoiceCaptureDiagnosticsStore();
+    store.beginCapture(2);
+    store.accept(<String, dynamic>{
+      'captureId': 1,
+      'routedDeviceName': 'T2151 built-in microphone',
+    });
+    expect(store.latest, isNull);
+
+    store.accept(<String, dynamic>{
+      'captureId': 2,
+      'routedDeviceName': 'T2151 built-in microphone',
+    });
+    expect(store.hasExplicitNonUvcRoute, isTrue);
   });
 }

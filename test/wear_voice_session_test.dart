@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_device_profile.dart';
+import 'package:smart_glasses/modules/wear/services/voice_state.dart';
 import 'package:smart_glasses/modules/wear/services/wear_voice_session.dart';
 
 void main() {
@@ -105,12 +106,73 @@ void main() {
       await expectLater(session.start(), throwsStateError);
 
       expect(scheduledDelay, const Duration(seconds: 1));
-      expect(speech.restartCalls, 0);
+      expect(speech.startCalls, 1);
 
       scheduledRetry!.call();
       await Future<void>.delayed(Duration.zero);
 
+      expect(speech.startCalls, 2);
+    });
+
+    test('does not retry after terminal exact-zero startup failure', () async {
+      final _ExactZeroSpeechRecognitionService speech =
+          _ExactZeroSpeechRecognitionService();
+      void Function()? scheduledRetry;
+      int now = 0;
+      final WearVoiceSession session = WearVoiceSession(
+        speechRecognitionService: speech,
+        ensurePrepared: () async {},
+        nowMillis: () => now,
+        delay: (_) async => now += 2000,
+        updateNativeCaptureMonitor: ({
+          required bool active,
+          required String source,
+          required int captureId,
+        }) async {},
+        scheduleRetry: (_, callback) {
+          scheduledRetry = callback;
+          return _FakeTimer();
+        },
+      );
+
+      await session.start();
+
+      expect(session.state.phase, VoicePhase.unavailable);
+      expect(session.state.reason, 'startup_exact_zero_terminal');
+      expect(scheduledRetry, isNull);
+      expect(speech.startCalls, 1);
       expect(speech.restartCalls, 1);
+    });
+
+    test('defers exact-zero validation until authorization release', () async {
+      final _ExactZeroSpeechRecognitionService speech =
+          _ExactZeroSpeechRecognitionService();
+      int now = 0;
+      final WearVoiceSession session = WearVoiceSession(
+        speechRecognitionService: speech,
+        ensurePrepared: () async {},
+        nowMillis: () => now,
+        delay: (_) async => now += 2000,
+        updateNativeCaptureMonitor: ({
+          required bool active,
+          required String source,
+          required int captureId,
+        }) async {},
+      );
+
+      final Future<void> startup =
+          session.start(deferReadinessUntilAuthorized: true);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(speech.startCalls, 1);
+      expect(speech.restartCalls, 0);
+      expect(session.state.reason, 'awaiting_authorization');
+
+      session.releaseDeferredStartupValidation();
+      await startup;
+
+      expect(speech.restartCalls, 1);
+      expect(session.state.reason, 'startup_exact_zero_terminal');
     });
   });
 }
@@ -118,6 +180,7 @@ void main() {
 class _FailingStartSpeechRecognitionService extends SpeechRecognitionService {
   bool _listening = false;
   int restartCalls = 0;
+  int startCalls = 0;
 
   @override
   bool get isListening => _listening;
@@ -144,15 +207,89 @@ class _FailingStartSpeechRecognitionService extends SpeechRecognitionService {
   int get audioCaptureId => 0;
 
   @override
+  bool get hasExpectedInputDevice => true;
+
+  @override
+  String? get preferredInputDeviceId => '33';
+
+  @override
+  String? get preferredInputDeviceLabel => 'USB-Audio - UVC';
+
+  @override
   VoiceDeviceProfile get deviceProfile => VoiceDeviceProfile.defaultProfile;
 
   @override
   Future<void> startListening() async {
-    throw StateError('start failed');
+    startCalls++;
+    if (startCalls == 1) throw StateError('start failed');
+    _listening = true;
   }
 
   @override
   Future<void> stopListening() async {}
+
+  @override
+  Future<void> restartListening({required String reason}) async {
+    restartCalls++;
+    _listening = true;
+  }
+
+  @override
+  Future<String> diagnostics() async => 'fake';
+}
+
+class _ExactZeroSpeechRecognitionService extends SpeechRecognitionService {
+  bool _listening = false;
+  int restartCalls = 0;
+  int startCalls = 0;
+
+  @override
+  bool get isListening => _listening;
+
+  @override
+  bool get isCaptureRunning => _listening;
+
+  @override
+  int get audioChunksReceived => _listening ? 3 : 0;
+
+  @override
+  int? get lastAudioChunkAtMillis => _listening ? 0 : null;
+
+  @override
+  int? get lastNonSilentAudioChunkAtMillis => null;
+
+  @override
+  int? get continuousZeroAudioStartedAtMillis => _listening ? 0 : null;
+
+  @override
+  int? get captureStartedAtMillis => 0;
+
+  @override
+  int get audioCaptureId => startCalls;
+
+  @override
+  bool get hasExpectedInputDevice => true;
+
+  @override
+  String? get preferredInputDeviceId => '142';
+
+  @override
+  String? get preferredInputDeviceLabel => 'USB-Audio - UVC';
+
+  @override
+  VoiceDeviceProfile get deviceProfile =>
+      VoiceDeviceProfile.t2151VoiceRecognition;
+
+  @override
+  Future<void> startListening() async {
+    startCalls++;
+    _listening = true;
+  }
+
+  @override
+  Future<void> stopListening() async {
+    _listening = false;
+  }
 
   @override
   Future<void> restartListening({required String reason}) async {

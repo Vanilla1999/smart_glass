@@ -1,5 +1,10 @@
 import 'package:record/record.dart';
 
+const bool voiceCaptureWavDiagnostics = bool.fromEnvironment(
+  'VOICE_CAPTURE_WAV_DIAGNOSTICS',
+  defaultValue: false,
+);
+
 enum VoiceAudioSource {
   voiceCommunication,
   voiceRecognition,
@@ -19,9 +24,12 @@ class VoiceDeviceProfile {
     required this.requireNonZeroPcmForStartup,
     required this.exactZeroStartupGrace,
     required this.recoveryCaptureTimeout,
+    required this.postRecreateExactZeroStartupGrace,
+    required this.postRecreateCaptureTimeout,
     required this.maxStartupRecorderRecreates,
     required this.fallbackToVoiceCommunication,
     required this.selectUsbInputExplicitly,
+    required this.requireExpectedInputDevice,
     required this.captureStartupWav,
     required this.vadSpeechOnRms,
     required this.vadSpeechOffRms,
@@ -39,9 +47,12 @@ class VoiceDeviceProfile {
     requireNonZeroPcmForStartup: false,
     exactZeroStartupGrace: Duration.zero,
     recoveryCaptureTimeout: Duration(seconds: 2),
+    postRecreateExactZeroStartupGrace: Duration.zero,
+    postRecreateCaptureTimeout: Duration(seconds: 2),
     maxStartupRecorderRecreates: 0,
     fallbackToVoiceCommunication: false,
     selectUsbInputExplicitly: false,
+    requireExpectedInputDevice: false,
     captureStartupWav: false,
     vadSpeechOnRms: 0.0010,
     vadSpeechOffRms: 0.0007,
@@ -59,10 +70,13 @@ class VoiceDeviceProfile {
     requireNonZeroPcmForStartup: false,
     exactZeroStartupGrace: Duration.zero,
     recoveryCaptureTimeout: Duration(seconds: 2),
+    postRecreateExactZeroStartupGrace: Duration.zero,
+    postRecreateCaptureTimeout: Duration(seconds: 2),
     maxStartupRecorderRecreates: 0,
     fallbackToVoiceCommunication: false,
     selectUsbInputExplicitly: true,
-    captureStartupWav: true,
+    requireExpectedInputDevice: true,
+    captureStartupWav: voiceCaptureWavDiagnostics,
     vadSpeechOnRms: 0.0005,
     vadSpeechOffRms: 0.0003,
   );
@@ -77,12 +91,15 @@ class VoiceDeviceProfile {
     speakerphone: false,
     audioManagerMode: AudioManagerMode.modeNormal,
     requireNonZeroPcmForStartup: true,
-    exactZeroStartupGrace: Duration(milliseconds: 1200),
+    exactZeroStartupGrace: Duration(milliseconds: 1500),
     recoveryCaptureTimeout: Duration(milliseconds: 2500),
+    postRecreateExactZeroStartupGrace: Duration(milliseconds: 3000),
+    postRecreateCaptureTimeout: Duration(milliseconds: 4000),
     maxStartupRecorderRecreates: 1,
-    fallbackToVoiceCommunication: true,
+    fallbackToVoiceCommunication: false,
     selectUsbInputExplicitly: true,
-    captureStartupWav: true,
+    requireExpectedInputDevice: true,
+    captureStartupWav: voiceCaptureWavDiagnostics,
     vadSpeechOnRms: 0.0008,
     vadSpeechOffRms: 0.0005,
   );
@@ -99,9 +116,12 @@ class VoiceDeviceProfile {
     requireNonZeroPcmForStartup: false,
     exactZeroStartupGrace: Duration.zero,
     recoveryCaptureTimeout: Duration(seconds: 2),
+    postRecreateExactZeroStartupGrace: Duration.zero,
+    postRecreateCaptureTimeout: Duration(seconds: 2),
     maxStartupRecorderRecreates: 0,
     fallbackToVoiceCommunication: false,
     selectUsbInputExplicitly: false,
+    requireExpectedInputDevice: false,
     captureStartupWav: false,
     vadSpeechOnRms: 0.0008,
     vadSpeechOffRms: 0.0005,
@@ -120,9 +140,12 @@ class VoiceDeviceProfile {
   final bool requireNonZeroPcmForStartup;
   final Duration exactZeroStartupGrace;
   final Duration recoveryCaptureTimeout;
+  final Duration postRecreateExactZeroStartupGrace;
+  final Duration postRecreateCaptureTimeout;
   final int maxStartupRecorderRecreates;
   final bool fallbackToVoiceCommunication;
   final bool selectUsbInputExplicitly;
+  final bool requireExpectedInputDevice;
   final bool captureStartupWav;
 
   /// Raw PCM VAD thresholds. They are deliberately independent of recognizer gain.
