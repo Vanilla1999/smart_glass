@@ -143,37 +143,6 @@ void main() {
       expect(speech.startCalls, 1);
       expect(speech.restartCalls, 1);
     });
-
-    test('defers exact-zero validation until authorization release', () async {
-      final _ExactZeroSpeechRecognitionService speech =
-          _ExactZeroSpeechRecognitionService();
-      int now = 0;
-      final WearVoiceSession session = WearVoiceSession(
-        speechRecognitionService: speech,
-        ensurePrepared: () async {},
-        nowMillis: () => now,
-        delay: (_) async => now += 2000,
-        updateNativeCaptureMonitor: ({
-          required bool active,
-          required String source,
-          required int captureId,
-        }) async {},
-      );
-
-      final Future<void> startup =
-          session.start(deferReadinessUntilAuthorized: true);
-      await Future<void>.delayed(Duration.zero);
-
-      expect(speech.startCalls, 1);
-      expect(speech.restartCalls, 0);
-      expect(session.state.reason, 'awaiting_authorization');
-
-      session.releaseDeferredStartupValidation();
-      await startup;
-
-      expect(speech.restartCalls, 1);
-      expect(session.state.reason, 'startup_exact_zero_terminal');
-    });
   });
 }
 

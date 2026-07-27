@@ -65,8 +65,6 @@ class WearVoiceSession {
   int _audioRouteRevision = 0;
   final VoiceCaptureRecoveryGate _zeroAudioRecovery =
       VoiceCaptureRecoveryGate();
-  Completer<void>? _deferredStartupValidation;
-  bool _deferredStartupValidationReleased = false;
 
   SpeechRecognitionService get _speech =>
       _speechRecognitionService ?? WearDependencies.I.speechRecognitionService;
@@ -150,7 +148,7 @@ class WearVoiceSession {
     await _speech.setFreeTextEnabled(freeText);
   }
 
-  Future<void> start({bool deferReadinessUntilAuthorized = false}) async {
+  Future<void> start() async {
     _shouldListen = true;
     _requestedStartupProfile ??= _speech.deviceProfile;
     _requestedProfileId = _speech.deviceProfile.id;
@@ -200,16 +198,10 @@ class WearVoiceSession {
             return;
           }
           await _updateNativeCaptureMonitor(active: true);
-          if (deferReadinessUntilAuthorized) {
-            await _waitForDeferredStartupValidation(generation);
-            if (!_isCurrentListeningRequest(generation)) return;
-          }
           try {
             final bool ready = await _waitForCaptureReady(
               generation: generation,
-              captureStartedAtMillis: deferReadinessUntilAuthorized
-                  ? _nowMillis()
-                  : _captureStartedAtMillis(),
+              captureStartedAtMillis: _captureStartedAtMillis(),
               exactZeroGrace: startupRecreates == 0
                   ? _speech.deviceProfile.exactZeroStartupGrace
                   : _speech.deviceProfile.postRecreateExactZeroStartupGrace,
@@ -267,9 +259,6 @@ class WearVoiceSession {
   Future<void> stop() async {
     _shouldListen = false;
     _captureSilenced = false;
-    _deferredStartupValidation?.complete();
-    _deferredStartupValidation = null;
-    _deferredStartupValidationReleased = false;
     _retryTimer?.cancel();
     _retryTimer = null;
     _zeroAudioRecovery.reset();
@@ -285,22 +274,6 @@ class WearVoiceSession {
         print('[WearVoiceSession] stop failed: $error\n$stackTrace');
       }
     });
-  }
-
-  void releaseDeferredStartupValidation() {
-    _deferredStartupValidationReleased = true;
-    _deferredStartupValidation?.complete();
-  }
-
-  Future<void> _waitForDeferredStartupValidation(int generation) async {
-    _emit(VoicePhase.waitingForAudioRoute, reason: 'awaiting_authorization');
-    final Completer<void> validation = Completer<void>();
-    _deferredStartupValidation = validation;
-    if (_deferredStartupValidationReleased) validation.complete();
-    await validation.future;
-    if (_isCurrentListeningRequest(generation)) {
-      print('[WearVoiceSession] authorization validation released');
-    }
   }
 
   Future<void> restart({required String reason}) async {
@@ -377,18 +350,13 @@ class WearVoiceSession {
       final int? lastNonSilentAudioAt = service.lastNonSilentAudioChunkAtMillis;
       final int? zeroAudioStartedAt =
           service.continuousZeroAudioStartedAtMillis;
-      final int? zeroAudioObservedAt = zeroAudioStartedAt == null
-          ? null
-          : zeroAudioStartedAt < captureStartedAtMillis
-              ? captureStartedAtMillis
-              : zeroAudioStartedAt;
       if (gate.isReady(
         captureStartedAtMillis: captureStartedAtMillis,
         isCaptureRunning: service.isCaptureRunning,
         chunksReceived: service.audioChunksReceived,
         lastAudioAtMillis: lastAudioAt,
         lastNonSilentAudioAtMillis: lastNonSilentAudioAt,
-        continuousZeroAudioStartedAtMillis: zeroAudioObservedAt,
+        continuousZeroAudioStartedAtMillis: zeroAudioStartedAt,
         requireNonZeroPcm: service.deviceProfile.requireNonZeroPcmForStartup,
         hasExpectedInputDevice: service.hasExpectedInputDevice,
         nativeRouteMatchesExpected: !_diagnosticsStore.hasExplicitNonUvcRoute,
@@ -405,7 +373,7 @@ class WearVoiceSession {
       if (service.deviceProfile.requireNonZeroPcmForStartup &&
           gate.isWaitingForNonZeroPcm(
             chunksReceived: service.audioChunksReceived,
-            continuousZeroAudioStartedAtMillis: zeroAudioObservedAt,
+            continuousZeroAudioStartedAtMillis: zeroAudioStartedAt,
           )) {
         _emit(
           VoicePhase.waitingForAudioRoute,
@@ -414,7 +382,7 @@ class WearVoiceSession {
       }
       if (service.deviceProfile.requireNonZeroPcmForStartup &&
           gate.hasExceededExactZeroGrace(
-            continuousZeroAudioStartedAtMillis: zeroAudioObservedAt,
+            continuousZeroAudioStartedAtMillis: zeroAudioStartedAt,
             nowMillis: now,
             grace: exactZeroGrace,
           )) {

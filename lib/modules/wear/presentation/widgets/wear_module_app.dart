@@ -73,7 +73,6 @@ class _WearModuleAppState extends State<WearModuleApp>
   StreamSubscription<String?>? _voiceReconnectErrorSub;
   StreamSubscription<VoiceState>? _voiceStateSub;
   Timer? _voiceHealthTimer;
-  Timer? _authorizationVoiceValidationTimer;
   VoiceState _voiceState = const VoiceState.disabled();
   bool _voiceStartRequested = false;
   int? _voiceStartupToken;
@@ -227,15 +226,20 @@ class _WearModuleAppState extends State<WearModuleApp>
     });
     _configureVoiceForScreen(flow.state.screen);
     _authorizedSub = WearSession.authorizedStream.listen((_) {
-      _scheduleAuthorizationVoiceValidation();
+      if (_voiceState.phase == VoicePhase.disabled) {
+        _startVoice('authorized');
+      }
     });
     _clearedSub = WearSession.clearedStream.listen((_) {
       _stopVoiceForLogout();
     });
     _router.routerDelegate.addListener(_onRouterChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!WearSession.isAuthorized) {
+        print('[WearModuleApp] post-frame voice start skipped: not authorized');
+        return;
+      }
       _startVoice('post-frame');
-      if (WearSession.isAuthorized) _scheduleAuthorizationVoiceValidation();
     });
   }
 
@@ -301,7 +305,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     }
     _voiceStartRequested = true;
     void start() {
-      if (!mounted) {
+      if (!mounted || !WearSession.isAuthorized) {
         _voiceStartRequested = false;
         return;
       }
@@ -336,7 +340,7 @@ class _WearModuleAppState extends State<WearModuleApp>
       if (startVoice != null) {
         await startVoice();
       } else {
-        await WearVoiceSession.I.start(deferReadinessUntilAuthorized: true);
+        await WearVoiceSession.I.start();
       }
       if (!_isCurrentVoiceStartup(startupToken)) return;
       WearStatusIconReporter.I.endVoiceStartup(startupToken);
@@ -370,15 +374,6 @@ class _WearModuleAppState extends State<WearModuleApp>
         ));
       }
     }
-  }
-
-  void _scheduleAuthorizationVoiceValidation() {
-    _authorizationVoiceValidationTimer?.cancel();
-    _authorizationVoiceValidationTimer = Timer(const Duration(seconds: 10), () {
-      if (!mounted || !WearSession.isAuthorized) return;
-      print('[WearModuleApp] releasing voice validation after authorization');
-      WearVoiceSession.I.releaseDeferredStartupValidation();
-    });
   }
 
   void _startVoiceHealthTimer() {
@@ -546,8 +541,6 @@ class _WearModuleAppState extends State<WearModuleApp>
 
   void _stopVoiceForLogout() {
     _voiceStartRequested = false;
-    _authorizationVoiceValidationTimer?.cancel();
-    _authorizationVoiceValidationTimer = null;
     _setVoiceState(VoiceState(
       phase: VoicePhase.disabled,
       captureEpoch: _voiceState.captureEpoch,
@@ -678,7 +671,6 @@ class _WearModuleAppState extends State<WearModuleApp>
       ),
     );
     _voiceHealthTimer?.cancel();
-    _authorizationVoiceValidationTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _router.routerDelegate.removeListener(_onRouterChange);
     _voiceSub?.cancel();
