@@ -20,4 +20,4 @@ This file indexes canonical, reviewable documentation for the `smart_glasses` pr
 
 ## Roadmap
 
-No active roadmap documents.
+- [NATIVE_UAC4_VOICE_MIGRATION_PLAN.md](NATIVE_UAC4_VOICE_MIGRATION_PLAN.md) - Active plan to replace Flutter `record` capture with native four-microphone UAC4/SSP audio for Vosk.
