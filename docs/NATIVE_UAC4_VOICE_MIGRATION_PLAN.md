@@ -611,20 +611,25 @@ If credentials, service access, or channel mapping is missing, mark this phase `
 
 ### Phase 1: Android Build Integration
 
-- [ ] Copy the two AIDL interfaces without changing package or method signatures.
-- [ ] Add the two approved AARs under `android/app/libs`.
-- [ ] Enable `aidl = true` in `android/app/build.gradle.kts`.
-- [ ] Add explicit local AAR dependencies instead of a broad unrelated file tree.
-- [ ] Add package visibility for `com.xcheng.uac4client` if capability detection requires it.
-- [ ] Configure production credentials from CI/local Gradle properties, not source files.
-- [ ] Make missing release credentials fail the release build with a clear message.
-- [ ] Keep debug builds possible with an explicitly supplied approved test credential set.
+Build configuration uses `UAC4_APP_KEY`, `UAC4_APP_SECRET`, and `UAC4_UDID` supplied as
+Gradle properties or environment variables. Values are intentionally not stored in this
+repository. Debug builds report `ACTIVATION_FAILED` at runtime when they are absent; release
+builds fail before packaging.
+
+- [x] Copy the two AIDL interfaces without changing package or method signatures.
+- [x] Add the two approved AARs under `android/app/libs`.
+- [x] Enable `aidl = true` in `android/app/build.gradle.kts`.
+- [x] Add explicit local AAR dependencies instead of a broad unrelated file tree.
+- [x] Add package visibility for `com.xcheng.uac4client` if capability detection requires it.
+- [x] Configure production credentials from CI/local Gradle properties, not source files.
+- [x] Make missing release credentials fail the release build with a clear message.
+- [x] Keep debug builds possible with an explicitly supplied approved test credential set.
 - [ ] Confirm merged minimum SDK remains compatible with project devices.
-- [ ] Make this voice build explicitly `arm64-v8a` through Gradle ABI filters and release
+- [x] Make this voice build explicitly `arm64-v8a` through Gradle ABI filters and release
   with `--target-platform android-arm64`; do not load vendor classes on another ABI.
-- [ ] Confirm the APK packages `arm64-v8a/libais-lite-Ual.so` exactly once.
-- [ ] Confirm R8/proguard rules preserve AIDL stubs and vendor SDK entry points.
-- [ ] Run Android dependency and manifest reports and inspect them for duplicate native libs.
+- [x] Confirm the APK packages `arm64-v8a/libais-lite-Ual.so` exactly once.
+- [x] Confirm R8/proguard rules preserve AIDL stubs and vendor SDK entry points.
+- [x] Run Android dependency and manifest reports and inspect them for duplicate native libs.
 
 Verification:
 
@@ -641,21 +646,21 @@ is added.
 
 ### Phase 2: Native UAC4 Lifecycle
 
-- [ ] Implement explicit service capability detection.
-- [ ] Implement `Uac4ServiceClient` with explicit component binding.
-- [ ] Register `IBinder.DeathRecipient` and handle Binder death once per revision.
-- [ ] Implement typed wrappers for all four vendor calls.
-- [ ] Implement idempotent unbind that handles never-bound and already-disconnected cases.
-- [ ] Implement production activation without copying demo credentials.
-- [ ] Make activation single-flight and cache only a confirmed successful result.
-- [ ] Initialize SSP only after successful activation.
+- [x] Implement explicit service capability detection.
+- [x] Implement `Uac4ServiceClient` with explicit component binding.
+- [x] Register `IBinder.DeathRecipient` and handle Binder death once per revision.
+- [x] Implement typed wrappers for all four vendor calls.
+- [x] Implement idempotent unbind that handles never-bound and already-disconnected cases.
+- [x] Implement production activation without copying demo credentials.
+- [x] Make activation single-flight and cache only a confirmed successful result.
+- [x] Initialize SSP only after successful activation.
 - [ ] Implement the complete state machine and validate every transition.
-- [ ] Implement a single logical capture owner.
+- [x] Implement a single logical capture owner.
 - [ ] Add operation timeouts for activation, bind, init, start, stop, deinit, and unbind.
-- [ ] Make plugin `detach` release active capture/service/thread/SSP resources without making
+- [x] Make plugin `detach` release active capture/service/thread/SSP resources without making
   the application manager permanently unusable after primary-engine recreation.
-- [ ] Ensure no UI or Activity reference is retained after engine detachment.
-- [ ] Distinguish normal reusable detach from `terminalAbandoned`; reject re-attached capture
+- [x] Ensure no UI or Activity reference is retained after engine detachment.
+- [x] Distinguish normal reusable detach from `terminalAbandoned`; reject re-attached capture
   until process restart after a hung Binder or SSP call.
 
 Exit criterion: native lifecycle tests prove valid ordering, idempotency, timeout handling,
@@ -663,26 +668,26 @@ Binder death cleanup, and single-owner enforcement.
 
 ### Phase 3: Four-Channel SSP Processing
 
-- [ ] Implement an allocation-bounded PCM ring buffer.
+- [x] Implement an allocation-bounded PCM ring buffer.
 - [ ] Implement the Phase 0 framing contract: preserve 1-7 byte remainders only for a
   confirmed contiguous stream; otherwise reject/reset malformed independent callbacks.
 - [ ] Validate input PCM sample alignment without silently shifting channel order.
-- [ ] Process exactly 2048 input bytes per SSP call.
-- [ ] Validate every SSP output length.
-- [ ] Batch no more than two SSP outputs before Flutter delivery.
-- [ ] Add the eight-frame bounded input queue.
-- [ ] Permit exactly one unacknowledged PCM BasicMessageChannel packet.
-- [ ] Add a 500 ms acknowledgement timeout and terminal bridge error.
-- [ ] Reuse hot-path buffers and avoid per-frame list creation.
-- [ ] Calculate RMS and peak separately for all four channels before SSP.
-- [ ] Calculate processed mono RMS, peak, and clipping ratio after SSP.
-- [ ] Reset all buffers and metrics on a new capture epoch.
-- [ ] Reject callbacks from old capture epochs.
+- [x] Process exactly 2048 input bytes per SSP call.
+- [x] Validate every SSP output length.
+- [x] Batch no more than two SSP outputs before Flutter delivery.
+- [x] Add the eight-frame bounded input queue.
+- [x] Permit exactly one unacknowledged PCM BasicMessageChannel packet.
+- [x] Add a 500 ms acknowledgement timeout and terminal bridge error.
+- [x] Reuse hot-path buffers and avoid per-frame list creation.
+- [x] Calculate RMS and peak separately for all four channels before SSP.
+- [x] Calculate processed mono RMS, peak, and clipping ratio after SSP.
+- [x] Reset all buffers and metrics on a new capture epoch.
+- [x] Reject callbacks from old capture epochs.
 - [ ] Add a test-only SSP adapter so unit tests do not require the native library.
 - [ ] Add optional startup WAV diagnostics capped at 10 seconds per stream: at most
   1,280,000 raw PCM bytes and 320,000 processed PCM bytes, excluding WAV headers.
 - [ ] Write diagnostic WAV data incrementally to app-private cache, never fully in memory.
-- [ ] Enable raw diagnostics only in debug or an explicitly approved diagnostic build.
+- [x] Enable raw diagnostics only in debug or an explicitly approved diagnostic build.
 - [ ] Retain at most one raw/processed pair, delete files older than 24 hours on startup,
   and never commit diagnostic audio or device identifiers.
 
@@ -691,24 +696,24 @@ queue overflow, stale callbacks, invalid SSP output, and all four channel metric
 
 ### Phase 4: Flutter Native Voice Bridge
 
-- [ ] Implement `NativeVoicePlugin` outside `MainActivity`.
-- [ ] Register the plugin only on the primary Flutter engine.
-- [ ] Implement all control methods with typed success and error responses.
-- [ ] Implement acknowledged mono PCM BasicMessageChannel delivery using the fixed binary
+- [x] Implement `NativeVoicePlugin` outside `MainActivity`.
+- [x] Register the plugin only on the primary Flutter engine.
+- [x] Implement all control methods with typed success and error responses.
+- [x] Implement acknowledged mono PCM BasicMessageChannel delivery using the fixed binary
   packet and acknowledgement contracts.
-- [ ] Implement state/diagnostic EventChannel delivery.
-- [ ] Emit a typed terminal state on Binder death or unrecoverable native failure.
-- [ ] Include native lease ID and revision in state events.
-- [ ] Ensure late state events cannot revive a stopped Dart capture.
-- [ ] Require explicit matching lease stop; channel detachment must not stop a newer lease.
+- [x] Implement state/diagnostic EventChannel delivery.
+- [x] Emit a typed terminal state on Binder death or unrecoverable native failure.
+- [x] Include native lease ID and revision in state events.
+- [x] Ensure late state events cannot revive a stopped Dart capture.
+- [x] Require explicit matching lease stop; channel detachment must not stop a newer lease.
 - [ ] Add the pure Dart capture port and Flutter adapter defined above.
 - [ ] Construct exactly one adapter in `DependenciesContainer`, inject it into
   `WearDependencies`, `VoiceCubit`, and `VoiceMemoCubit`, and define root disposal.
 - [ ] Remove implicit `AudioStreamService` construction from `SpeechRecognitionService` and
   `VoiceTypingService`.
-- [ ] Validate PCM byte count is even before publishing to consumers.
-- [ ] Reject and acknowledge PCM if native state is not `streaming` or lease ID is stale.
-- [ ] Acknowledge `accepted` only after bounded consumer admission, never immediately after
+- [x] Validate PCM byte count is even before publishing to consumers.
+- [x] Reject and acknowledge PCM if native state is not `streaming` or lease ID is stale.
+- [x] Acknowledge `accepted` only after bounded consumer admission, never immediately after
   Dart callback or stream publication.
 - [ ] Test primary Flutter engine detach/reattach without Android process restart.
 
@@ -717,27 +722,27 @@ and reject stale capture data in Dart tests.
 
 ### Phase 5: Replace Wear Audio Capture
 
-- [ ] Inject the native PCM source into `AudioStreamService`.
-- [ ] Remove `AudioRecorder`, factory, input-device selection, and `RecordConfig` code.
-- [ ] Retain one place for PCM metrics, startup readiness, callbacks, and optional gain.
-- [ ] Set initial post-SSP gain to `1.0`.
-- [ ] Keep raw callback semantics as post-SSP/pre-gain mono PCM.
-- [ ] Keep boosted callback semantics as post-SSP/post-gain mono PCM.
+- [x] Inject the native PCM source into `AudioStreamService`.
+- [x] Remove `AudioRecorder`, factory, input-device selection, and `RecordConfig` code.
+- [x] Retain one place for PCM metrics, startup readiness, callbacks, and optional gain.
+- [x] Set initial post-SSP gain to `1.0`.
+- [x] Keep raw callback semantics as post-SSP/pre-gain mono PCM.
+- [x] Keep boosted callback semantics as post-SSP/post-gain mono PCM.
 - [ ] Preserve lease ID, packet sequence, monotonic timestamp, non-zero timestamp, and
   zero-audio tracking.
-- [ ] Replace recorder diagnostics with native UAC4 diagnostics.
-- [ ] Replace `recreateRecorder` with a native capture restart operation.
-- [ ] Remove USB label selection and expected `InputDevice` checks.
-- [ ] Simplify `VoiceDeviceProfile` so it contains recognition thresholds and UAC4 recovery
+- [x] Replace recorder diagnostics with native UAC4 diagnostics.
+- [x] Replace `recreateRecorder` with a native capture restart operation.
+- [x] Remove USB label selection and expected `InputDevice` checks.
+- [x] Simplify `VoiceDeviceProfile` so it contains recognition thresholds and UAC4 recovery
   policy only, with no `record` package types.
-- [ ] Keep `SpeechRecognitionService` recognizers at 16 kHz.
-- [ ] Add an epoch-scoped mono accumulator before `SpeechSegmenter`; emit only exact
+- [x] Keep `SpeechRecognitionService` recognizers at 16 kHz.
+- [x] Add an epoch-scoped mono accumulator before `SpeechSegmenter`; emit only exact
   640-byte/20 ms VAD frames and account for the final remainder at stop.
 - [ ] Test 512-byte, 1024-byte, and irregular even-length packet sequences across boundaries.
 - [ ] Prove Vosk receives only mono PCM from the active capture epoch.
 - [ ] Remove `dart:io` and `path_provider` from domain audio services; file diagnostics belong
   in native or Flutter infrastructure.
-- [ ] Add a bounded Vosk queue per recognition lane: maximum 64,000 pending PCM bytes
+- [x] Add a bounded Vosk queue per recognition lane: maximum 64,000 pending PCM bytes
   (2 seconds). Overflow raises `RECOGNITION_BACKLOG` and restarts the capture instead of
   silently dropping speech.
 
@@ -745,71 +750,71 @@ Exit criterion: wear voice unit tests pass without importing or constructing `Au
 
 ### Phase 6: Replace WearVoiceSession Recovery
 
-- [ ] Remove AudioRecord silencing and Android audio-source monitoring dependencies.
-- [ ] Consume native states: service disconnect, Binder death, PCM timeout, SSP failure,
+- [x] Remove AudioRecord silencing and Android audio-source monitoring dependencies.
+- [x] Consume native states: service disconnect, Binder death, PCM timeout, SSP failure,
   activation failure, unsupported firmware, and queue overrun.
-- [ ] Define readiness as current epoch streaming plus fresh processed PCM.
-- [ ] Require at least three current PCM events and one non-zero processed sample before ready.
-- [ ] Keep the 15-second startup budget unless device measurements justify a smaller value.
-- [ ] Implement one automatic full UAC4 restart for a recoverable PCM timeout.
-- [ ] After a repeated failure, publish unavailable state with the exact native reason.
-- [ ] Do not request physical USB reconnect unless the vendor service reports that condition.
-- [ ] Keep restart, retry, health check, and lifecycle ownership single-flight.
-- [ ] Stop the matching lease on primary engine detach while allowing a recreated engine to
+- [x] Define readiness as current epoch streaming plus fresh processed PCM.
+- [x] Require at least three current PCM events and one non-zero processed sample before ready.
+- [x] Keep the 15-second startup budget unless device measurements justify a smaller value.
+- [x] Implement one automatic full UAC4 restart for a recoverable PCM timeout.
+- [x] After a repeated failure, publish unavailable state with the exact native reason.
+- [x] Do not request physical USB reconnect unless the vendor service reports that condition.
+- [x] Keep restart, retry, health check, and lifecycle ownership single-flight.
+- [x] Stop the matching lease on primary engine detach while allowing a recreated engine to
   attach to the application manager.
 - [ ] Verify background/resume policy against actual service behavior.
-- [ ] Update glasses overlay reasons to UAC4 terminology.
+- [x] Update glasses overlay reasons to UAC4 terminology.
 
 Exit criterion: session tests cover all native terminal and recoverable states without
 AudioRecord-specific assumptions.
 
 ### Phase 7: Migrate Remaining Record Owners
 
-- [ ] Migrate `VoiceCubit` to the shared native capture owner `legacyRecognition`.
-- [ ] Ensure `VoiceCubit.close()` stops its capture lease and disposes Vosk resources.
+- [x] Migrate `VoiceCubit` to the shared native capture owner `legacyRecognition`.
+- [x] Ensure `VoiceCubit.close()` stops its capture lease and disposes Vosk resources.
 - [ ] Remove its chunk-dropping `_isProcessingAudioChunk` strategy and use the new bounded
   recognition queue.
-- [ ] Migrate `VoiceMemoCubit` to owner `voiceMemo`.
-- [ ] Write voice memo as mono PCM16 WAV at 16 kHz.
-- [ ] Write voice memo incrementally instead of holding the entire recording in memory.
-- [ ] Bound the voice memo write queue at 64,000 PCM bytes (2 seconds). PCM acknowledgement
+- [x] Migrate `VoiceMemoCubit` to owner `voiceMemo`.
+- [x] Write voice memo as mono PCM16 WAV at 16 kHz.
+- [x] Write voice memo incrementally instead of holding the entire recording in memory.
+- [x] Bound the voice memo write queue at 64,000 PCM bytes (2 seconds). PCM acknowledgement
   occurs only after write-queue admission.
-- [ ] On queue overflow, acknowledge `backpressure`, stop the lease, report a memo I/O error,
+- [x] On queue overflow, acknowledge `backpressure`, stop the lease, report a memo I/O error,
   and delete the temporary file; do not drop middle audio and save a corrupted memo.
-- [ ] On voice memo stop/close/error, drain the bounded write queue, finalize the WAV header,
+- [x] On voice memo stop/close/error, drain the bounded write queue, finalize the WAV header,
   fsync, and atomically rename a temporary file.
-- [ ] Limit memo stop/drain to 5 seconds; timeout deletes the temporary file and reports
+- [x] Limit memo stop/drain to 5 seconds; timeout deletes the temporary file and reports
   failure instead of publishing a partial memo.
 - [ ] Delete incomplete temporary voice memo files after native failure or application start.
 - [ ] Test `VoiceMemoCubit.close()` while writes and native stop are in flight.
 - [ ] Keep normalization only if it is proven not to clip processed SSP output.
-- [ ] Return `CAPTURE_BUSY` when voice memo and recognition overlap.
+- [x] Return `CAPTURE_BUSY` when voice memo and recognition overlap.
 - [ ] Add user-visible messages for unsupported firmware and busy capture.
-- [ ] Confirm no feature creates an independent microphone owner.
+- [x] Confirm no feature creates an independent microphone owner.
 
 Exit criterion: all application voice features use the same native manager and enforce one
 active logical owner.
 
 ### Phase 8: Remove record And Obsolete Android Monitoring
 
-- [ ] Remove `record` from `pubspec.yaml`.
-- [ ] Regenerate `pubspec.lock` and verify `record` and `record_android` are absent.
-- [ ] Remove every `package:record/record.dart` import.
-- [ ] Remove `com.llfbandit.record.service.AudioRecordingService` from the manifest.
-- [ ] Remove `FOREGROUND_SERVICE_MICROPHONE` if no remaining native component requires it.
+- [x] Remove `record` from `pubspec.yaml`.
+- [x] Regenerate `pubspec.lock` and verify `record` and `record_android` are absent.
+- [x] Remove every `package:record/record.dart` import.
+- [x] Remove `com.llfbandit.record.service.AudioRecordingService` from the manifest.
+- [x] Remove `FOREGROUND_SERVICE_MICROPHONE` if no remaining native component requires it.
 - [ ] Validate whether client `RECORD_AUDIO` is required by the vendor service; remove it only
   after a physical-device test proves it is unnecessary.
-- [ ] Replace permission requests in `SpeechRecognitionService`, `VoiceTypingService`, and
+- [x] Replace permission requests in `SpeechRecognitionService`, `VoiceTypingService`, and
   `ear_print_code_input_cubit.dart` with native capability/permission status.
 - [ ] Define and test both vendor outcomes: client permission required and service-owned
   permission not required. Do not leave an unnecessary prompt.
-- [ ] Remove AudioRecord-specific `AudioRecordingCallback` code from `MainActivity`.
-- [ ] Remove `updateVoiceCaptureMonitor` from Kotlin and Dart.
-- [ ] Remove obsolete `audioCaptureSilencedChanged` and record-route diagnostics streams.
+- [x] Remove AudioRecord-specific `AudioRecordingCallback` code from `MainActivity`.
+- [x] Remove `updateVoiceCaptureMonitor` from Kotlin and Dart.
+- [x] Remove obsolete `audioCaptureSilencedChanged` and record-route diagnostics streams.
 - [ ] Keep unrelated USB/device monitoring only if another feature consumes it.
-- [ ] Remove old build profile options tied to `VOICE_COMMUNICATION`, `VOICE_RECOGNITION`,
+- [x] Remove old build profile options tied to `VOICE_COMMUNICATION`, `VOICE_RECOGNITION`,
   and `MIC` AudioRecord sources.
-- [ ] Remove obsolete record foreground-service notification text and configuration.
+- [x] Remove obsolete record foreground-service notification text and configuration.
 
 Required zero-match checks:
 
@@ -827,21 +832,21 @@ Exit criterion: every command above returns no record-related production depende
 
 Native JVM tests:
 
-- [ ] Ring buffer preserves fragmented and unaligned callbacks.
-- [ ] Ring buffer extracts exact 2048-byte frames.
-- [ ] Four-channel RMS assigns samples to the correct channel index.
+- [x] Ring buffer preserves fragmented and unaligned callbacks.
+- [x] Ring buffer extracts exact 2048-byte frames.
+- [x] Four-channel RMS assigns samples to the correct channel index.
 - [ ] SSP adapter validates output sizes.
-- [ ] Input queue never exceeds eight frames.
-- [ ] Only one PCM packet can remain unacknowledged.
+- [x] Input queue never exceeds eight frames.
+- [x] Only one PCM packet can remain unacknowledged.
 - [ ] Missing acknowledgement reaches `PCM_ACK_TIMEOUT` without accumulating packets.
 - [ ] State machine rejects illegal transitions.
 - [ ] Duplicate operations join one in-flight operation.
-- [ ] Capture owner conflict returns `CAPTURE_BUSY`.
-- [ ] Stale or mismatched lease stop cannot stop the active owner.
+- [x] Capture owner conflict returns `CAPTURE_BUSY`.
+- [x] Stale or mismatched lease stop cannot stop the active owner.
 - [ ] Binder death performs one cleanup and one fatal event.
-- [ ] Late callbacks after stop are discarded.
+- [x] Late callbacks after stop are discarded.
 - [ ] SSP release waits for the in-flight process call.
-- [ ] Late activation and service-bind callbacks cannot revive a timed-out generation.
+- [x] Late activation and service-bind callbacks cannot revive a timed-out generation.
 - [ ] Normal detach releases resources and supports re-attach; terminal abandonment reports
   unreleased vendor work and rejects capture until simulated process restart.
 - [ ] Pure fakes exist for vendor activation, UAC4 calls, SSP, monotonic clock, scheduler,
@@ -851,15 +856,15 @@ Native JVM tests:
 
 Dart tests:
 
-- [ ] Native event maps decode into exhaustive typed states.
-- [ ] Unknown native state or error fails safely.
+- [x] Native event maps decode into exhaustive typed states.
+- [x] Unknown native state or error fails safely.
 - [ ] Stale lease IDs are rejected and acknowledged as `staleLease`.
 - [ ] Odd PCM byte lengths are rejected.
 - [ ] Audio metrics use mono 16 kHz timing.
-- [ ] VAD frame duration remains correct for 512-byte, 1024-byte, and irregular packets.
+- [x] VAD frame duration remains correct for 512-byte, 1024-byte, and irregular packets.
 - [ ] A slow Dart PCM consumer never permits more than one outstanding native packet.
-- [ ] Wear startup waits for fresh non-zero native PCM.
-- [ ] UAC4 timeout triggers only one automatic restart.
+- [x] Wear startup waits for fresh non-zero native PCM.
+- [x] UAC4 timeout triggers only one automatic restart.
 - [ ] Unsupported firmware is terminal and does not schedule legacy fallback.
 - [ ] Voice memo writes a valid 16 kHz mono PCM16 WAV.
 - [ ] Voice memo finalizes or removes temporary output on close and fatal native error.
@@ -1037,6 +1042,15 @@ Add one row after each completed phase or discovered blocker.
 | Date | Commit | Phase | Evidence | Result |
 |---|---|---|---|---|
 | 2026-07-28 | `a5fe754` | Plan | Branch `feature/native-uac4-voice` created; demo and current capture paths inspected | `PLANNED` |
+| 2026-07-28 | `UNCOMMITTED` | Phase 0-4 | User explicitly approved use of FourMicDemo AAR and activation data. AIDL contract copied; UAC4/SSP bridge, mono PCM transport, and three Dart owners migrated. Debug APK built; physical T2151 validation remains pending. | `DEVICE_PENDING` |
+| 2026-07-28 | `UNCOMMITTED` | Phase 1/4 | Activation values moved from source code to Gradle properties/environment; release build rejects missing values. Primary-engine bridge now emits native lifecycle events and enforces a PCM acknowledgement timeout. | `PARTIAL` |
+| 2026-07-28 | `UNCOMMITTED` | Phase 6/8 | Removed obsolete AudioRecord monitor APIs, diagnostics streams, and silencing recovery. Wear now consumes UAC4 lifecycle errors from the native voice bridge. | `PARTIAL` |
+| 2026-07-28 | `UNCOMMITTED` | Phase 3 | Added an eight-callback bounded UAC4 input queue, 2048-byte frame accumulator, SSP output validation, and ACK-triggered drain. Hardware callback continuity remains `DEVICE_PENDING`. | `PARTIAL` |
+| 2026-07-28 | `UNCOMMITTED` | Phase 3/5 | Replaced native PCM concatenation and frame slicing with a fixed ring buffer, added capture-revision rejection for late UAC4 callbacks, and made terminal SSP/transport failures release the active lease. VAD now accumulates irregular mono packets into exact 640-byte frames; focused tests pass. Full lifecycle, consumer admission, and device validation remain open. | `PARTIAL` |
+| 2026-07-28 | `UNCOMMITTED` | Phase 1/3/9 | Added pure Kotlin PCM ring-buffer and four-channel metrics tests, runtime raw/processed signal metrics, and locked post-SSP gain to 1.0. Full Flutter suite (190 tests), JVM tests, manifest processing, Kotlin compile, dependency report, and ARM64 debug build pass. APK contains only `arm64-v8a` native libraries and exactly one `libais-lite-Ual.so`. | `SOFTWARE_PARTIAL` |
+| 2026-07-28 | `UNCOMMITTED` | Phase 11 | Updated root/wear architecture docs and replaced obsolete multi-profile build tooling with one ARM64 native-UAC4 build. Release build remains blocked until approved UAC4 credentials and signing configuration are supplied; installation and all audio/service claims remain `DEVICE_PENDING`. | `BLOCKED_CREDENTIALS_DEVICE` |
+| 2026-07-28 | `UNCOMMITTED` | Phase 1/2/11 | Matched the local FourMicDemo lifecycle and verified vendor AAR signatures with `javap`: configuration is followed by `SDKActive.active`, successful callback, and `SspManager.init`; stop/detach release SSP without racing `processData` on the capture worker. Built and verified the signed ARM64 release APK with the approved demo credentials. APK SHA-256 is `b52237861a483f1a0d5d6d5f0b0042a47fdfd96c261cacb9324e19e0c84bbdc9`; it contains only `arm64-v8a` and one each of `libais-lite-Ual.so`, `libaisactive.so`, `libflutter.so`, and `libvosk.so`. JVM tests and all 190 Flutter tests pass. The currently attached device is an Android 9 ARM64 DT40 and does not contain `com.xcheng.uac4client`; no installation was attempted because it is not the target T2151. | `DEVICE_PENDING` |
+| 2026-07-28 | `UNCOMMITTED` | Phase 2-9/11 | Closed the pre-device review findings: main-thread direct-buffer PCM delivery, acknowledged drain wakeup, lease/revision-scoped ACK timeout, generated callback/bind epochs, eight-frame byte budget, first/gap watchdogs, supervised vendor-call timeouts with a process-wide terminal barrier, application-scoped native manager reattachment, and explicit Dart `confirmStart`. Native lease/revision ownership now uses the production `CaptureLeaseState`, with focused JVM coverage for rapid stop/start, owner conflict, stale stop, callback/binder generations, delivery invalidation, ACK identity, byte budget, drain wakeup, and terminal timeout invariants. Dart reconciles fatal leases, serializes all three owners, bounds both Vosk lanes and memo writes to 64,000 bytes, requires three fresh packets plus non-zero PCM, and applies one recoverable retry with a 60-second healthy reset. Removed independent microphone permission requests, AudioRecord profiles, and obsolete USB monitoring. Gradle tests/compile pass; all 191 Flutter tests pass; analyzer has no compile errors (311 pre-existing warnings/info). Signed release APK SHA-256 is `94a8a4c658d7d98eae826912c5131864e54a14158b8bc4f94b751daf57b2eefc`; packaging and signature checks pass. T2151 installation and all vendor/audio claims remain pending. | `IMPLEMENTED_DEVICE_PENDING` |
 
 ## Final Sign-Off
 
@@ -1045,5 +1059,5 @@ Add one row after each completed phase or discovered blocker.
 - Device tester: `PENDING`
 - Supported firmware version: `DEVICE_PENDING`
 - Final commit: `PENDING`
-- Release APK SHA-256: `PENDING`
+- Release APK SHA-256: `94a8a4c658d7d98eae826912c5131864e54a14158b8bc4f94b751daf57b2eefc`
 - Final status: `PLANNED`

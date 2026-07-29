@@ -3,10 +3,6 @@ package ru.tander.smart_glasses
 import android.app.Presentation
 import android.content.Context
 import android.hardware.display.DisplayManager
-import android.media.AudioManager
-import android.media.AudioDeviceInfo
-import android.media.AudioDeviceCallback
-import android.media.MediaRecorder
 import android.os.Bundle
 import android.os.Build
 import android.os.Handler
@@ -38,6 +34,7 @@ class MainActivity : FlutterFragmentActivity() {
     private var glassesEngine: FlutterEngine? = null
     private var glassesChannel: MethodChannel? = null
     private var appChannel: MethodChannel? = null
+    private var nativeVoiceCapturePlugin: NativeVoiceCapturePlugin? = null
     private var glassesPresentation: GlassesPresentation? = null
     private var displayManager: DisplayManager? = null
     private var currentCounter = 0
@@ -48,36 +45,11 @@ class MainActivity : FlutterFragmentActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val pendingWearResults = mutableSetOf<BoundedResult>()
     private var pendingWearShowResult: BoundedResult? = null
-    private var audioManager: AudioManager? = null
-    private var audioRecordingCallback: AudioManager.AudioRecordingCallback? = null
-    private var audioDeviceCallback: AudioDeviceCallback? = null
-    private var lastAudioCaptureSilenced: Boolean? = null
-    private var monitoredAudioSource: Int? = null
-    private var monitoredCaptureId: Int? = null
-    private var audioRouteRevision = 0
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
         engineGroup = FlutterEngineGroup(this)
-
-        // Pre-warm secondary engine in advance
-        val bundlePath = FlutterInjector.instance().flutterLoader().findAppBundlePath()
-        val dartEntrypoint = DartExecutor.DartEntrypoint(bundlePath, "glassesMain")
-        glassesEngine = engineGroup?.createAndRunEngine(this, dartEntrypoint)
-        if (glassesEngine != null) {
-            glassesChannel = MethodChannel(glassesEngine!!.dartExecutor.binaryMessenger, "glasses_channel")
-            glassesChannel?.setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "getInitialCounter" -> {
-                        Log.d("SmartWear", "Glasses requested initial counter: $currentCounter")
-                        result.success(currentCounter)
-                    }
-                    else -> result.notImplemented()
-                }
-            }
-            Log.d("SmartWear", "Secondary engine pre-warmed")
-        }
 
         appChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app_channel")
         appChannel?.setMethodCallHandler { call, result ->
@@ -118,10 +90,6 @@ class MainActivity : FlutterFragmentActivity() {
                         Log.d("SmartWear", "updateWearVoiceOverlay called: $payload")
                         updateWearVoiceOverlay(payload, result)
                     }
-                    "updateVoiceCaptureMonitor" -> {
-                        val payload = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
-                        updateVoiceCaptureMonitor(payload, result)
-                    }
                     "hideWearGlasses" -> {
                         Log.d("SmartWear", "hideWearGlasses called")
                         hideWearGlasses(result)
@@ -145,130 +113,27 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
-        registerAudioRecordingMonitor()
-        registerAudioInputMonitor()
+        nativeVoiceCapturePlugin = NativeVoiceCapturePlugin(this, flutterEngine.dartExecutor.binaryMessenger)
     }
 
-    private fun registerAudioInputMonitor() {
-        val manager = getSystemService(AudioManager::class.java)
-        val callback = object : AudioDeviceCallback() {
-            override fun onAudioDevicesAdded(devices: Array<AudioDeviceInfo>) {
-                notifyUsbInputDevices("added", devices)
-            }
-
-            override fun onAudioDevicesRemoved(devices: Array<AudioDeviceInfo>) {
-                notifyUsbInputDevices("removed", devices)
-            }
-        }
-        audioDeviceCallback = callback
-        manager.registerAudioDeviceCallback(callback, mainHandler)
-    }
-
-    private fun notifyUsbInputDevices(action: String, devices: Array<AudioDeviceInfo>) {
-        devices.filter { device ->
-            device.isSource && (device.type == AudioDeviceInfo.TYPE_USB_DEVICE ||
-                device.type == AudioDeviceInfo.TYPE_USB_HEADSET)
-        }.forEach { device ->
-            audioRouteRevision++
-            val payload = mapOf(
-                "action" to action,
-                "deviceId" to device.id,
-                "deviceName" to device.productName.toString(),
-                "deviceType" to device.type,
-                "routeRevision" to audioRouteRevision,
-            )
-            Log.d("VoiceCapture", "usb input $payload")
-            appChannel?.invokeMethod("audioInputDeviceChanged", payload)
-        }
-    }
-
-    private fun registerAudioRecordingMonitor() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            Log.d("VoiceCapture", "silence monitoring unavailable below Android 10")
-            return
-        }
-        val manager = getSystemService(AudioManager::class.java)
-        val callback = object : AudioManager.AudioRecordingCallback() {
-            override fun onRecordingConfigChanged(configs: List<android.media.AudioRecordingConfiguration>) {
-                val source = monitoredAudioSource
-                val ownRecordings = if (source == null) emptyList() else configs.filter {
-                    it.clientAudioSource == source
+    private fun ensureGlassesEngine(): FlutterEngine? {
+        glassesEngine?.let { return it }
+        val bundlePath = FlutterInjector.instance().flutterLoader().findAppBundlePath()
+        val dartEntrypoint = DartExecutor.DartEntrypoint(bundlePath, "glassesMain")
+        val engine = engineGroup?.createAndRunEngine(this, dartEntrypoint) ?: return null
+        glassesEngine = engine
+        glassesChannel = MethodChannel(engine.dartExecutor.binaryMessenger, "glasses_channel")
+        glassesChannel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getInitialCounter" -> {
+                    Log.d("SmartWear", "Glasses requested initial counter: $currentCounter")
+                    result.success(currentCounter)
                 }
-                if (ownRecordings.isEmpty()) {
-                    Log.d("VoiceCapture", "monitored recording config removed captureId=$monitoredCaptureId source=$source")
-                    if (lastAudioCaptureSilenced == true) {
-                        appChannel?.invokeMethod("audioCaptureSilencedChanged", false)
-                    }
-                    lastAudioCaptureSilenced = null
-                    return
-                }
-
-                val silenced = ownRecordings.any { it.isClientSilenced }
-                ownRecordings.forEach { config ->
-                    val payload = mapOf(
-                        "captureId" to monitoredCaptureId,
-                        "audioSessionId" to config.clientAudioSessionId,
-                        "requestedSource" to source,
-                        "clientAudioSource" to config.clientAudioSource,
-                        "routedDeviceId" to config.audioDevice?.id,
-                        "routedDeviceType" to config.audioDevice?.type,
-                        "routedDeviceName" to config.audioDevice?.productName?.toString(),
-                        "clientFormat" to config.clientFormat.toString(),
-                        "deviceFormat" to config.format.toString(),
-                        "clientSilenced" to config.isClientSilenced,
-                        "audioManagerMode" to manager.mode,
-                    )
-                    Log.d("VoiceCapture", "diagnostics=$payload")
-                    appChannel?.invokeMethod("voiceCaptureDiagnostics", payload)
-                }
-                Log.d(
-                    "VoiceCapture",
-                    "recording configs=" + ownRecordings.joinToString { config ->
-                        "session=${config.clientAudioSessionId}, " +
-                            "source=${config.clientAudioSource}, " +
-                            "silenced=${config.isClientSilenced}, " +
-                            "clientFormat=${config.clientFormat}, " +
-                            "deviceFormat=${config.format}, " +
-                            "routedDevice=${config.audioDevice?.productName}, " +
-                            "audioMode=${manager.mode}"
-                    },
-                )
-                if (silenced == lastAudioCaptureSilenced) return
-                lastAudioCaptureSilenced = silenced
-                appChannel?.invokeMethod("audioCaptureSilencedChanged", silenced)
+                else -> result.notImplemented()
             }
         }
-        audioManager = manager
-        audioRecordingCallback = callback
-        manager.registerAudioRecordingCallback(callback, mainHandler)
-    }
-
-    private fun updateVoiceCaptureMonitor(payload: Map<*, *>, result: MethodChannel.Result) {
-        val active = payload["active"] == true
-        if (!active) {
-            monitoredAudioSource = null
-            monitoredCaptureId = null
-            lastAudioCaptureSilenced = null
-            result.success(true)
-            return
-        }
-        val source = when (payload["source"] as? String) {
-            "voiceCommunication" -> MediaRecorder.AudioSource.VOICE_COMMUNICATION
-            "voiceRecognition" -> MediaRecorder.AudioSource.VOICE_RECOGNITION
-            "microphone" -> MediaRecorder.AudioSource.MIC
-            else -> {
-                result.error("INVALID_AUDIO_SOURCE", "Unknown recorder source", null)
-                return
-            }
-        }
-        monitoredAudioSource = source
-        monitoredCaptureId = payload["captureId"] as? Int
-        lastAudioCaptureSilenced = null
-        Log.d(
-            "VoiceCapture",
-            "monitor captureId=$monitoredCaptureId source=$source",
-        )
-        result.success(true)
+        Log.d("SmartWear", "Secondary engine started")
+        return engine
     }
 
     private fun copyPhotoToAppStorage(uri: String, result: MethodChannel.Result) {
@@ -323,6 +188,7 @@ class MainActivity : FlutterFragmentActivity() {
     private fun showGlassesInitialization() {
         Log.d("SmartWear", "showGlassesInitialization() called")
         invalidatePendingWearShow()
+        ensureGlassesEngine()
         val displays = displayManager?.getDisplays()
         if (displays != null && displays.size > 1) {
             val secondaryDisplay = displays[displays.size - 1]
@@ -345,11 +211,13 @@ class MainActivity : FlutterFragmentActivity() {
     private fun navigateGlassesToEmpty() {
         Log.d("SmartWear", "navigateGlassesToEmpty() called")
         invalidatePendingWearShow()
+        ensureGlassesEngine()
         glassesChannel?.invokeMethod("navigateToRoute", "/empty")
     }
 
     private fun showWearGlasses(payload: Map<*, *>, result: MethodChannel.Result) {
         invalidatePendingWearShow()
+        ensureGlassesEngine()
         val generation = wearProjectionGeneration
         currentWearGlassesPayload = payload
         val displays = displayManager?.getDisplays()
@@ -611,17 +479,8 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onDestroy() {
         invalidatePendingWearShow()
         supersedePendingWearResults()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            audioRecordingCallback?.let { callback ->
-                audioManager?.unregisterAudioRecordingCallback(callback)
-            }
-        }
-        audioRecordingCallback = null
-        audioDeviceCallback?.let { callback ->
-            audioManager?.unregisterAudioDeviceCallback(callback)
-        }
-        audioDeviceCallback = null
-        audioManager = null
+        nativeVoiceCapturePlugin?.dispose()
+        nativeVoiceCapturePlugin = null
         appChannel = null
         currentWearGlassesPayload = null
         currentWearVoiceOverlayPayload = null

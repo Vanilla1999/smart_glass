@@ -1,9 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:smart_glasses/app/di/dependencies_container.dart';
 import 'package:smart_glasses/core/utils/inherited_extension.dart';
 
 /// A scope that provides [DependenciesContainer] to the application
-class AppScope extends StatelessWidget {
+class AppScope extends StatefulWidget {
   const AppScope({
     required this.dependencies,
     required this.child,
@@ -18,10 +20,21 @@ class AppScope extends StatelessWidget {
       context.inhOf<_AppScopeInherited>(listen: false).dependencies;
 
   @override
+  State<AppScope> createState() => _AppScopeState();
+}
+
+class _AppScopeState extends State<AppScope> {
+  @override
+  void dispose() {
+    unawaited(widget.dependencies.dispose());
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return _AppScopeInherited(
-      dependencies: dependencies,
-      child: child,
+      dependencies: widget.dependencies,
+      child: widget.child,
     );
   }
 }

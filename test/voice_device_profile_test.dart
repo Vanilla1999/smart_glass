@@ -1,64 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:record/record.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_device_profile.dart';
 
 void main() {
-  test('unknown profile uses the safe default source', () {
+  test('all launches use the single UAC4 capture policy', () {
     final VoiceDeviceProfile profile =
-        VoiceDeviceProfile.resolve(profileId: 'unknown-device');
+        VoiceDeviceProfile.resolve(profileId: 'obsolete_audio_record_profile');
 
-    expect(profile.id, 'default');
-    expect(profile.androidAudioSource, AndroidAudioSource.voiceCommunication);
-    expect(profile.forceHardRestartOnResume, isFalse);
-  });
-
-  test('T2151 profile enables the interruption recovery policy', () {
-    final VoiceDeviceProfile profile =
-        VoiceDeviceProfile.resolve(profileId: 't2151');
-
-    expect(profile.id, 't2151');
+    expect(profile.id, 'uac4');
     expect(profile.forceHardRestartOnResume, isTrue);
-    expect(profile.forceHardRestartAfterUnsilence, isTrue);
-    expect(profile.forceHardRestartOnAudioRouteChange, isTrue);
-    expect(profile.manageBluetooth, isFalse);
-    expect(profile.selectUsbInputExplicitly, isTrue);
-    expect(profile.requireExpectedInputDevice, isTrue);
-    expect(profile.captureStartupWav, isFalse);
-    expect(profile.vadSpeechOnRms, 0.0005);
-    expect(profile.vadSpeechOffRms, 0.0003);
-  });
-
-  test('T2151 A/B profiles select the requested Android source', () {
-    final VoiceDeviceProfile recognition =
-        VoiceDeviceProfile.resolve(profileId: 't2151_voice_recognition');
-    expect(
-      recognition.androidAudioSource,
-      AndroidAudioSource.voiceRecognition,
-    );
-    expect(recognition.requireNonZeroPcmForStartup, isTrue);
-    expect(
-      recognition.exactZeroStartupGrace,
-      const Duration(seconds: 15),
-    );
-    expect(recognition.recoveryCaptureTimeout, const Duration(seconds: 15));
-    expect(recognition.maxStartupRecorderRecreates, 0);
-    expect(
-      recognition.postRecreateExactZeroStartupGrace,
-      const Duration(milliseconds: 3000),
-    );
-    expect(
-      recognition.postRecreateCaptureTimeout,
-      const Duration(milliseconds: 4000),
-    );
-    expect(recognition.postRecreateCaptureTimeout,
-        greaterThan(recognition.postRecreateExactZeroStartupGrace));
-    expect(recognition.fallbackToVoiceCommunication, isFalse);
-    expect(recognition.requireExpectedInputDevice, isTrue);
-    expect(recognition.captureStartupWav, isFalse);
-    expect(
-      VoiceDeviceProfile.resolve(profileId: 't2151_microphone')
-          .androidAudioSource,
-      AndroidAudioSource.mic,
-    );
+    expect(profile.requireNonZeroPcmForStartup, isTrue);
+    expect(profile.exactZeroStartupGrace, const Duration(seconds: 15));
+    expect(profile.recoveryCaptureTimeout, const Duration(seconds: 15));
+    expect(profile.maxStartupRecorderRecreates, 0);
   });
 }

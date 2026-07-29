@@ -18,7 +18,8 @@
 | DI | Ручной контейнер `DependenciesContainer` + `AppScope`; `WearDependencies` в wear-модуле |
 | Navigation | `MaterialApp`/`Navigator`; `go_router` внутри wear-модуля |
 | Native bridge | `MethodChannelService` (`app_channel` + `glasses_channel`) |
-| Voice recognition | `vosk_flutter_service` + `record` |
+| Voice capture | Native UAC4 AIDL service + Unisound SSP, mono PCM16 16 kHz to Flutter |
+| Voice recognition | `vosk_flutter_service` over native mono PCM |
 | Scanner | `multi_scanner` |
 | Assets | `assets/vosk-model-small-ru-0.22.zip` |
 | Wi‑Fi status | `wifi_info_plugin_plus` + `permission_handler` |
@@ -152,6 +153,18 @@ Wear-модуль не добавляется в `DependenciesContainer`: он �
 - асинхронные подписки должны отменяться в `close()`.
 
 ## Native Bridge
+
+Voice capture uses dedicated channels registered only on the primary engine:
+
+- `native_voice/control` controls capability checks and owner/lease lifecycle;
+- `native_voice/pcm` delivers one acknowledged mono PCM packet at a time;
+- `native_voice/events` reports typed lifecycle and failure states.
+
+Android binds explicitly to `com.xcheng.uac4client.Uac4ClientService`, frames the
+four-channel PCM into 2048-byte SSP calls, and sends only processed mono PCM16 at
+16 kHz to Dart. `wearRecognition`, `legacyRecognition`, and `voiceMemo` share one
+logical capture owner; overlapping starts return `CAPTURE_BUSY`. There is no
+`record`, `AudioRecord`, or `MediaRecorder` fallback.
 
 `MethodChannelService` инкапсулирует два канала:
 

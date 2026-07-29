@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_typing_service.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 enum WearCodeInputMode { digits, voice }
 
@@ -84,7 +83,6 @@ class WearPrintCodeInputCubit extends Cubit<WearPrintCodeInputState> {
   }
 
   static const int _maxCodeLength = 32;
-  static const Duration _permissionRequestTimeout = Duration(seconds: 8);
 
   final VoiceTypingService _voiceTypingService;
   final Future<void> Function() _ensureVoicePrepared;
@@ -169,16 +167,6 @@ class WearPrintCodeInputCubit extends Cubit<WearPrintCodeInputState> {
       ),
     );
     print('state -> starting');
-
-    final bool permissionBefore = await Permission.microphone.isGranted;
-    print('microphone permission before request $permissionBefore');
-    final PermissionStatus permission =
-        await Permission.microphone.request().timeout(
-              _permissionRequestTimeout,
-              onTimeout: () => PermissionStatus.denied,
-            );
-    print('microphone permission after request $permission');
-    if (!_wantVoice || session != _session) return;
 
     final bool hasPermission;
     try {

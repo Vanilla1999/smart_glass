@@ -713,51 +713,6 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       expect(stopVoiceCalls, 1);
     });
 
-    testWearWidget('unsilenced audio capture restarts voice once',
-        (WidgetTester tester) async {
-      final StreamController<bool> silencedEvents =
-          StreamController<bool>.broadcast();
-      addTearDown(silencedEvents.close);
-      final List<String> restartReasons = <String>[];
-      final WearFlowController routerFlow = WearFlowController(
-        glassesOutput: _TestGlassesOutput(),
-        navigationOutput: _FakeNavigationOutput(),
-      );
-
-      await tester.pumpWidget(
-        WearModuleApp(
-          flowController: routerFlow,
-          voiceCommandStream: const Stream<WearVoiceCommand>.empty(),
-          routes: _testRoutes,
-          initialLocation: WearMenuScreen.route,
-          onStartVoice: () async {},
-          onStopVoice: () async {},
-          onRestartVoice: (String reason) async {
-            restartReasons.add(reason);
-          },
-          audioCaptureSilencedStream: silencedEvents.stream,
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      silencedEvents.add(true);
-      await tester.pump();
-      silencedEvents.add(true);
-      await tester.pump();
-
-      expect(restartReasons, isEmpty);
-
-      silencedEvents.add(false);
-      await tester.pump(const Duration(seconds: 1));
-
-      expect(restartReasons, <String>['android_audio_capture_unsilenced']);
-
-      silencedEvents.add(true);
-      await tester.pump();
-
-      expect(restartReasons, <String>['android_audio_capture_unsilenced']);
-    });
-
     testWearWidget('voice startup loader stays until voice start completes',
         (WidgetTester tester) async {
       WearSession.clear();
@@ -1037,7 +992,7 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       expect(WearStatusIconReporter.I.lastPayload?.title, 'Выбор раздела');
     });
 
-    testWearWidget('fast ASR alias updates flow before its segment closes',
+    testWearWidget('direction ASR alias waits for its segment final',
         (WidgetTester tester) async {
       final _FakeSpeechRecognitionService speech =
           _FakeSpeechRecognitionService();
@@ -1069,7 +1024,7 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       speech.emitCommandPartial('вниз');
       await tester.pumpAndSettle();
 
-      expect(routerFlow.state.menuFocusedIndex, 1);
+      expect(routerFlow.state.menuFocusedIndex, 0);
 
       speech.emitCommandResult('вниз');
       speech.endSegment();
@@ -1379,6 +1334,9 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   bool get isListening => false;
 
   @override
+  bool get isVadCalibrated => true;
+
+  @override
   bool get isCaptureRunning => false;
 
   @override
@@ -1389,6 +1347,9 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
 
   @override
   int? get lastNonSilentAudioChunkAtMillis => null;
+
+  @override
+  int? get lastNonZeroNativeInputAtMillis => null;
 
   @override
   int? get continuousZeroAudioStartedAtMillis => null;
@@ -1458,6 +1419,9 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
 
   @override
   Future<bool> requestMicrophonePermission() async => true;
+
+  @override
+  Future<bool> refreshNativeInputActivity() async => false;
 
   @override
   Future<void> prepare() async {}

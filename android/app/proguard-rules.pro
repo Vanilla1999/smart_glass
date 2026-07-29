@@ -8,3 +8,7 @@
 -keep class * extends com.sun.jna.* { *; }
 -keepclassmembers class * extends com.sun.jna.* { public *; }
 -dontwarn java.awt.**
+
+# UAC4 AIDL stubs and vendor SSP/activation entry points are loaded externally.
+-keep class com.xcheng.uac4client.** { *; }
+-keep class com.unisound.** { *; }

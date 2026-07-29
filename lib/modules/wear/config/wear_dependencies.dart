@@ -16,6 +16,7 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_typ
 import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_glasses_output.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/services/wear_photo_store.dart';
+import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
 
 // На следующих этапах пригодится, поэтому можно сразу оставить импорты
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/use_case/get_available_printers_use_case.dart';
@@ -47,7 +48,9 @@ class WearDependencies {
   late final AudioStreamService audioStreamService;
 
   void _initVoiceServices() {
-    audioStreamService = AudioStreamService();
+    audioStreamService = AudioStreamService(
+      recordContinuousWav: WearMockConfig.isEnabled,
+    );
     wearFlowController = WearFlowController(
       glassesOutput: FlutterWearGlassesOutput(),
       navigationOutput: NoopWearNavigationOutput(),
@@ -118,6 +121,11 @@ class WearDependencies {
     );
 
     return _voiceTypingPrepareFuture!;
+  }
+
+  Future<void> disposeVoiceServices() async {
+    _voiceTypingPrepareFuture = null;
+    await speechRecognitionService.dispose();
   }
 
   // -------------------------

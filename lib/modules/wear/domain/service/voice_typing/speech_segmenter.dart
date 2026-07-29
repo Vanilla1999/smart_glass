@@ -39,6 +39,7 @@ class SpeechSegmenter {
     this.sampleRate = 16000,
     this.endpointSilence = const Duration(milliseconds: 500),
     this.maxSegmentDuration = const Duration(seconds: 8),
+    this.calibrationDuration = const Duration(milliseconds: 750),
     this.speechOnRms = 0.001,
     this.speechOffRms = 0.0007,
     this.initialNoiseFloorRms = 0.0002,
@@ -47,6 +48,7 @@ class SpeechSegmenter {
   final int sampleRate;
   final Duration endpointSilence;
   final Duration maxSegmentDuration;
+  final Duration calibrationDuration;
   double speechOnRms;
   double speechOffRms;
   final double initialNoiseFloorRms;
@@ -56,6 +58,9 @@ class SpeechSegmenter {
   int? _activeSegmentId;
   int _silentSamples = 0;
   int _segmentSamples = 0;
+  int _calibrationSamples = 0;
+  bool _isCalibrated = false;
+  final List<double> _calibrationRms = <double>[];
   double _noiseFloorRms = 0.0002;
   SpeechSegmentDiagnostics _lastDiagnostics = const SpeechSegmentDiagnostics(
     rms: 0,
@@ -66,6 +71,7 @@ class SpeechSegmenter {
   );
 
   SpeechSegmentDiagnostics get lastDiagnostics => _lastDiagnostics;
+  bool get isCalibrated => _isCalibrated;
 
   void configure({
     required double speechOnRms,
@@ -82,6 +88,9 @@ class SpeechSegmenter {
     _activeSegmentId = null;
     _silentSamples = 0;
     _segmentSamples = 0;
+    _calibrationSamples = 0;
+    _calibrationRms.clear();
+    _isCalibrated = calibrationDuration == Duration.zero;
     _noiseFloorRms = initialNoiseFloorRms;
     _lastDiagnostics = SpeechSegmentDiagnostics(
       rms: 0,
@@ -97,10 +106,25 @@ class SpeechSegmenter {
     final int chunkId = ++_nextChunkId;
     final int sampleCount = bytes.lengthInBytes ~/ 2;
     final double rms = _rms(bytes);
-    final double adaptiveOn = (_noiseFloorRms * 2.5).clamp(speechOnRms, 1.0);
-    final double adaptiveOff = (_noiseFloorRms * 1.5).clamp(speechOffRms, 1.0);
+    if (!_isCalibrated) {
+      _calibrate(rms, sampleCount);
+      _updateDiagnostics(rms: rms, speaking: false);
+      return null;
+    }
+
+    double adaptiveOn = (_noiseFloorRms * 2.5).clamp(speechOnRms, 1.0);
+    double adaptiveOff = (_noiseFloorRms * 1.5).clamp(speechOffRms, 1.0);
     final bool speaking =
         _activeSegmentId == null ? rms >= adaptiveOn : rms >= adaptiveOff;
+    if (!speaking &&
+        _activeSegmentId == null &&
+        rms > _zeroRms &&
+        rms < adaptiveOn) {
+      final double adapted = _noiseFloorRms * 0.98 + rms * 0.02;
+      _noiseFloorRms = math.min(adapted, adaptiveOn * 0.5);
+      adaptiveOn = (_noiseFloorRms * 2.5).clamp(speechOnRms, 1.0);
+      adaptiveOff = (_noiseFloorRms * 1.5).clamp(speechOffRms, 1.0);
+    }
     _lastDiagnostics = SpeechSegmentDiagnostics(
       rms: rms,
       noiseFloorRms: _noiseFloorRms,
@@ -109,9 +133,6 @@ class SpeechSegmenter {
       speaking: speaking,
     );
     if (!speaking) {
-      if (rms <= _noiseFloorRms * 1.5) {
-        _noiseFloorRms = _noiseFloorRms * 0.95 + rms * 0.05;
-      }
       final int? segmentId = _activeSegmentId;
       if (segmentId == null) return null;
       _silentSamples += sampleCount;
@@ -163,6 +184,31 @@ class SpeechSegmenter {
   int _durationToSamples(Duration duration) =>
       (duration.inMicroseconds * sampleRate / Duration.microsecondsPerSecond)
           .round();
+
+  static const double _zeroRms = 0.0000001;
+
+  void _calibrate(double rms, int sampleCount) {
+    if (rms <= _zeroRms) return;
+    _calibrationRms.add(rms);
+    _calibrationSamples += sampleCount;
+    if (_calibrationSamples < _durationToSamples(calibrationDuration)) return;
+
+    final List<double> sorted = List<double>.of(_calibrationRms)..sort();
+    final int percentileIndex = ((sorted.length - 1) * 0.3).floor();
+    _noiseFloorRms = math.max(initialNoiseFloorRms, sorted[percentileIndex]);
+    _isCalibrated = true;
+    _calibrationRms.clear();
+  }
+
+  void _updateDiagnostics({required double rms, required bool speaking}) {
+    _lastDiagnostics = SpeechSegmentDiagnostics(
+      rms: rms,
+      noiseFloorRms: _noiseFloorRms,
+      adaptiveOnRms: (_noiseFloorRms * 2.5).clamp(speechOnRms, 1.0),
+      adaptiveOffRms: (_noiseFloorRms * 1.5).clamp(speechOffRms, 1.0),
+      speaking: speaking,
+    );
+  }
 
   double _rms(Uint8List bytes) {
     if (bytes.lengthInBytes < 2) return 0;

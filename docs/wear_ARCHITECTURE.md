@@ -24,7 +24,7 @@
 | Navigation | `go_router` в изолированном `MaterialApp.router` |
 | DB | `fbdb` — Firebird REST-клиент (stored procedures) |
 | Auth | `dio` — HTTP-клиент для REST API (`auth/login`) |
-| Voice | `vosk_flutter_service` + `record` (offline, русский) |
+| Voice | Native UAC4/SSP mono PCM + `vosk_flutter_service` (offline, русский) |
 | Scanner | `multi_scanner` (подключение заглушено) |
 | UI kit | Flutter widgets + `flutter_svg` |
 | Env | `flutter_dotenv` |
@@ -188,6 +188,20 @@ lib/modules/wear/
     ├── wear_images.dart
     └── wear_typography.dart
 ```
+
+## Native Voice Ownership
+
+Wear does not open Android audio devices directly. `AudioStreamService` consumes
+mono PCM16 16 kHz from the application native UAC4 bridge under owner
+`wearRecognition`. The same native manager also serves legacy recognition and
+voice memo owners, but only one lease may be active.
+
+PCM transport is acknowledged and bounded. Stale leases, odd PCM, consumer
+backpressure, Binder death, service disconnect, SSP failure, activation failure,
+unsupported firmware, queue overrun, and acknowledgement timeout are surfaced as
+native states. Wear performs only the configured single recoverable restart; it
+does not request a physical USB reconnect unless the vendor service explicitly
+reports that requirement. No `record` fallback exists.
 
 ---
 

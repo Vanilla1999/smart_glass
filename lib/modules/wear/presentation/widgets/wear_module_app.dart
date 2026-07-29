@@ -34,7 +34,6 @@ class WearModuleApp extends StatefulWidget {
     this.onStartVoice,
     this.onStopVoice,
     this.onRestartVoice,
-    this.audioCaptureSilencedStream,
     this.voiceReconnectingStream,
     this.voiceReconnectErrorStream,
     this.voiceStateStream,
@@ -49,7 +48,6 @@ class WearModuleApp extends StatefulWidget {
   final Future<void> Function()? onStartVoice;
   final Future<void> Function()? onStopVoice;
   final Future<void> Function(String reason)? onRestartVoice;
-  final Stream<bool>? audioCaptureSilencedStream;
   final Stream<bool>? voiceReconnectingStream;
   final Stream<String?>? voiceReconnectErrorStream;
   final Stream<VoiceState>? voiceStateStream;
@@ -66,9 +64,6 @@ class _WearModuleAppState extends State<WearModuleApp>
   StreamSubscription<WearFlowState>? _flowStateSub;
   StreamSubscription<dynamic>? _authorizedSub;
   StreamSubscription<void>? _clearedSub;
-  StreamSubscription<bool>? _audioCaptureSilencedSub;
-  StreamSubscription<Map<String, dynamic>>? _audioInputDeviceSub;
-  StreamSubscription<Map<String, dynamic>>? _voiceCaptureDiagnosticsSub;
   StreamSubscription<bool>? _voiceReconnectingSub;
   StreamSubscription<String?>? _voiceReconnectErrorSub;
   StreamSubscription<VoiceState>? _voiceStateSub;
@@ -77,7 +72,6 @@ class _WearModuleAppState extends State<WearModuleApp>
   bool _voiceStartRequested = false;
   bool _voiceCommandsEnabled = true;
   int? _voiceStartupToken;
-  bool? _audioCaptureSilenced;
   bool _restartVoiceAfterInterruption = false;
   bool _appResumed = true;
   bool _wasActuallyBackgrounded = false;
@@ -182,37 +176,6 @@ class _WearModuleAppState extends State<WearModuleApp>
         print('[WearModuleApp] voice phrase stream error=$error\n$stackTrace');
       },
     );
-    _audioCaptureSilencedSub = (widget.audioCaptureSilencedStream ??
-            MethodChannelService().audioCaptureSilencedStream)
-        .listen(_onAudioCaptureSilencedChanged);
-    _audioInputDeviceSub = MethodChannelService().audioInputDeviceStream.listen(
-      (Map<String, dynamic> event) {
-        final int? deviceId = event['deviceId'] as int?;
-        final String? deviceName = event['deviceName'] as String?;
-        final int? routeRevision = event['routeRevision'] as int?;
-        if (deviceId == null || deviceName == null || routeRevision == null) {
-          print('[WearModuleApp] ignored incomplete USB audio event=$event');
-          return;
-        }
-        if (event['action'] == 'removed') {
-          unawaited(WearVoiceSession.I.handleUsbInputRemoved(
-            deviceId: deviceId,
-            deviceName: deviceName,
-            routeRevision: routeRevision,
-          ));
-        } else if (event['action'] == 'added') {
-          unawaited(WearVoiceSession.I.handleUsbInputAdded(
-            deviceId: deviceId,
-            deviceName: deviceName,
-            routeRevision: routeRevision,
-          ));
-        }
-      },
-    );
-    _voiceCaptureDiagnosticsSub =
-        MethodChannelService().voiceCaptureDiagnosticsStream.listen(
-              WearVoiceSession.I.handleNativeCaptureDiagnostics,
-            );
     _voiceReconnectingSub = widget.voiceReconnectingStream?.listen(
       (bool reconnecting) {
         _setVoiceState(_voiceState.copyWith(
@@ -444,7 +407,7 @@ class _WearModuleAppState extends State<WearModuleApp>
       visible: !state.acceptsCommands && state.phase != VoicePhase.disabled,
       message: switch (state.phase) {
         VoicePhase.loadingModel => 'Подготовка\nголосового управления',
-        VoicePhase.startingRecorder => 'Запускаем\nмикрофон очков',
+        VoicePhase.startingRecorder => 'Настраиваем\nмикрофон очков',
         VoicePhase.waitingForAudioRoute => 'Подключаем\nмикрофон очков',
         VoicePhase.reconnecting ||
         VoicePhase.suspendedBySystem =>
@@ -491,45 +454,6 @@ class _WearModuleAppState extends State<WearModuleApp>
         );
       }),
     );
-  }
-
-  void _onAudioCaptureSilencedChanged(bool silenced) {
-    if (_audioCaptureSilenced == silenced) return;
-    final bool wasSilenced = _audioCaptureSilenced == true;
-    _audioCaptureSilenced = silenced;
-    print('[WearModuleApp] audio capture silenced=$silenced');
-    if (widget.onStartVoice == null) {
-      WearVoiceSession.I.setCaptureSilenced(silenced);
-      return;
-    }
-    if (silenced ||
-        !wasSilenced ||
-        _voiceState.phase == VoicePhase.disabled ||
-        !WearSession.isAuthorized) {
-      return;
-    }
-
-    Future<void>.delayed(const Duration(seconds: 1), () {
-      if (!mounted ||
-          !WearSession.isAuthorized ||
-          _audioCaptureSilenced == true) {
-        return;
-      }
-      _restartVoiceAfterInterruption = false;
-      final Future<void> Function(String reason)? restartVoice =
-          widget.onRestartVoice;
-      if (restartVoice != null) {
-        unawaited(
-            _restartVoice(restartVoice, 'android_audio_capture_unsilenced'));
-        return;
-      }
-      if (widget.onStartVoice != null) return;
-      unawaited(
-        WearVoiceSession.I.restart(
-          reason: 'android_audio_capture_unsilenced',
-        ),
-      );
-    });
   }
 
   Future<void> _restartVoice(
@@ -636,8 +560,7 @@ class _WearModuleAppState extends State<WearModuleApp>
           _restartVoiceAfterInterruption = false;
           unawaited(_restartVoice(restartVoice, reason));
         } else if (resumeRecoveryRequired &&
-            WearVoiceSession.I.forceHardRestartOnResume &&
-            _audioCaptureSilenced != true) {
+            WearVoiceSession.I.forceHardRestartOnResume) {
           _restartVoiceAfterInterruption = false;
           unawaited(
             WearVoiceSession.I.restart(
@@ -646,7 +569,7 @@ class _WearModuleAppState extends State<WearModuleApp>
           );
         } else {
           _restartVoiceAfterInterruption = false;
-          if (resumeRecoveryRequired && _audioCaptureSilenced != true) {
+          if (resumeRecoveryRequired) {
             unawaited(
               WearVoiceSession.I.ensureHealthy(
                 reason: 'app_lifecycle_resumed',
@@ -700,9 +623,6 @@ class _WearModuleAppState extends State<WearModuleApp>
     _router.routerDelegate.removeListener(_onRouterChange);
     _voiceSub?.cancel();
     _voicePhraseSub?.cancel();
-    _audioCaptureSilencedSub?.cancel();
-    _audioInputDeviceSub?.cancel();
-    _voiceCaptureDiagnosticsSub?.cancel();
     _voiceReconnectingSub?.cancel();
     _voiceReconnectErrorSub?.cancel();
     _voiceStateSub?.cancel();

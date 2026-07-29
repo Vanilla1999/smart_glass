@@ -238,7 +238,7 @@ void main() {
       expect(phrases, isEmpty);
     });
 
-    test('different final after a fast alias does not execute twice', () async {
+    test('direction partial waits and conflicting final wins', () async {
       WearScreenId screen = WearScreenId.menu;
       await service.dispose();
       service = WearVoiceControlService(
@@ -254,12 +254,36 @@ void main() {
         text: 'вверх',
         segmentId: 10,
       );
+      await _settle();
+      expect(commands, isEmpty);
+
       speech.emit(
         lane: RecognitionLane.command,
         text: 'вниз',
         segmentId: 10,
       );
       speech.end(segmentId: 10);
+      await _settle();
+
+      expect(commands, <WearVoiceCommand>[WearVoiceCommand.down]);
+    });
+
+    test('matching direction partial and final execute once', () async {
+      speech.emit(
+        lane: RecognitionLane.command,
+        kind: RecognitionKind.partial,
+        text: 'вверх',
+        segmentId: 14,
+      );
+      await _settle();
+      expect(commands, isEmpty);
+
+      speech.emit(
+        lane: RecognitionLane.command,
+        text: 'вверх',
+        segmentId: 14,
+      );
+      speech.end(segmentId: 14);
       await _settle();
 
       expect(commands, <WearVoiceCommand>[WearVoiceCommand.up]);
@@ -428,7 +452,11 @@ class _FakeAudioStreamService implements AudioStreamService {
   @override
   int? get lastNonSilentChunkAtMillis => null;
   @override
+  int? get lastNonZeroNativeInputAtMillis => null;
+  @override
   int? get continuousZeroAudioStartedAtMillis => null;
+  @override
+  bool get recordContinuousWav => false;
   @override
   void addDataCallback(void Function(Uint8List) callback) {}
   @override
@@ -450,6 +478,8 @@ class _FakeAudioStreamService implements AudioStreamService {
   Future<void> pauseCallbacks() async {}
   @override
   Future<bool> requestPermission() async => true;
+  @override
+  Future<bool> refreshNativeInputActivity() async => false;
   @override
   Future<void> start({
     void Function(Uint8List bytes)? onData,
@@ -489,6 +519,8 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   @override
   bool get isListening => listening;
   @override
+  bool get isVadCalibrated => true;
+  @override
   bool get isCaptureRunning => false;
   @override
   bool get usesFreeTextRecognition => true;
@@ -496,6 +528,8 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   int? get lastAudioChunkAtMillis => null;
   @override
   int? get lastNonSilentAudioChunkAtMillis => null;
+  @override
+  int? get lastNonZeroNativeInputAtMillis => null;
   @override
   int? get continuousZeroAudioStartedAtMillis => null;
   @override
@@ -556,6 +590,8 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
 
   @override
   Future<bool> requestMicrophonePermission() async => true;
+  @override
+  Future<bool> refreshNativeInputActivity() async => false;
   @override
   Future<void> prepare() async {}
   @override

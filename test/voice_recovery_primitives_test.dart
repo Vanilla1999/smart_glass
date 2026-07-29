@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 import 'package:smart_glasses/modules/wear/services/wear_voice_session.dart';
 import 'package:smart_glasses/modules/wear/services/voice_capture_diagnostics_store.dart';
@@ -55,19 +54,6 @@ void main() {
     expect(starts, 2);
   });
 
-  test('recorder recreation stops, disposes, then replaces the recorder',
-      () async {
-    final List<String> calls = <String>[];
-
-    await VoiceRecorderLifecycle.recreate(
-      stop: () async => calls.add('stop'),
-      dispose: () async => calls.add('dispose'),
-      create: () => calls.add('create'),
-    );
-
-    expect(calls, <String>['stop', 'dispose', 'create']);
-  });
-
   test('delayed Vosk work is invalidated and does not block a new capture',
       () async {
     final VoiceRecognitionCaptureEpoch epoch = VoiceRecognitionCaptureEpoch();
@@ -101,6 +87,55 @@ void main() {
     );
 
     stuckNativeCall.complete();
+  });
+
+  test('Vosk lane backlog admits at most 64000 bytes and drains exactly', () {
+    final VoicePcmBacklog backlog = VoicePcmBacklog();
+
+    expect(backlog.admit(32000), isTrue);
+    expect(backlog.admit(32000), isTrue);
+    expect(backlog.pendingBytes, 64000);
+    expect(backlog.admit(2), isFalse);
+
+    backlog.complete(32000);
+    expect(backlog.pendingBytes, 32000);
+    expect(backlog.admit(32000), isTrue);
+  });
+
+  test('startup requires three fresh packets and fresh non-zero PCM', () {
+    final VoiceCaptureStartupGate gate = VoiceCaptureStartupGate();
+
+    expect(
+      gate.isReady(
+        captureStartedAtMillis: 100,
+        isCaptureRunning: true,
+        chunksReceived: 2,
+        lastAudioAtMillis: 120,
+        lastNonSilentAudioAtMillis: 120,
+        continuousZeroAudioStartedAtMillis: null,
+        requireNonZeroPcm: true,
+        hasExpectedInputDevice: true,
+        nativeRouteMatchesExpected: true,
+        nowMillis: 120,
+      ),
+      isFalse,
+    );
+    expect(
+      gate.isReady(
+        captureStartedAtMillis: 100,
+        isCaptureRunning: true,
+        chunksReceived: 3,
+        lastAudioAtMillis: 130,
+        lastNonSilentAudioAtMillis: 130,
+        continuousZeroAudioStartedAtMillis: null,
+        requireNonZeroPcm: true,
+        hasExpectedInputDevice: true,
+        nativeRouteMatchesExpected: true,
+        nowMillis: 130,
+      ),
+      isTrue,
+    );
+    expect(VoiceCaptureStartupGate.timeoutMs, 15000);
   });
 
   test(

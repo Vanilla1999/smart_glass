@@ -32,6 +32,8 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+**/test_bundle.dart
+.patrol.env
 
 # Local environment files with secrets. Commit only *.example templates.
 assets/develop.env

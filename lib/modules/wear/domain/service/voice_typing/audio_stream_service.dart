@@ -4,26 +4,12 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:path_provider/path_provider.dart';
-import 'package:record/record.dart';
+import 'package:smart_glasses/core/voice/native_voice_capture.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_device_profile.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_startup_wav_capture.dart';
 
-class VoiceRecorderLifecycle {
-  static Future<void> recreate({
-    required Future<void> Function() stop,
-    required Future<void> Function() dispose,
-    required void Function() create,
-  }) async {
-    await stop();
-    await dispose();
-    create();
-  }
-}
-
 class AudioStreamService {
-  static const double _liveGainMultiplier = 3.0;
-  static const double _dbMin = -2.0;
-  static const double _dbMax = 10.0;
+  static const double _liveGainMultiplier = 1.0;
   static const double _noiseFloor = 0.03;
   static const double _attackSmoothing = 0.45;
   static const double _releaseSmoothing = 0.15;
@@ -32,25 +18,23 @@ class AudioStreamService {
   static const Duration _startupWavDuration = Duration(seconds: 8);
 
   AudioStreamService({
-    AudioRecorder? audioRecorder,
-    AudioRecorder Function()? audioRecorderFactory,
     VoiceDeviceProfile? deviceProfile,
-  })  : _audioRecorderFactory = audioRecorderFactory ?? AudioRecorder.new,
-        _deviceProfile = deviceProfile ?? VoiceDeviceProfile.resolve(),
-        _audioRecorder =
-            audioRecorder ?? (audioRecorderFactory ?? AudioRecorder.new)();
+    NativeVoiceCapture? nativeCapture,
+    this.recordContinuousWav = false,
+  })  : _deviceProfile = deviceProfile ?? VoiceDeviceProfile.resolve(),
+        _nativeCapture = nativeCapture ?? NativeVoiceCapture.instance;
 
-  final AudioRecorder Function() _audioRecorderFactory;
   VoiceDeviceProfile _deviceProfile;
-  AudioRecorder _audioRecorder;
+  final NativeVoiceCapture _nativeCapture;
+  final bool recordContinuousWav;
   final StreamController<double> _audioLevelController =
       StreamController<double>.broadcast();
-  StreamSubscription<Uint8List>? _audioSubscription;
   bool _isRunning = false;
   double _audioLevel = 0.0;
   int _chunksReceived = 0;
   int? _lastChunkAtMillis;
   int? _lastNonSilentChunkAtMillis;
+  int? _lastNonZeroNativeInputAtMillis;
   int? _continuousZeroAudioStartedAtMillis;
   int? _startedAtMillis;
   int? _startupDiagnosticsStartedAtMillis;
@@ -59,31 +43,37 @@ class AudioStreamService {
   double _startupDiagnosticsMaxRms = 0.0;
   double _startupDiagnosticsMaxPeak = 0.0;
   int _captureId = 0;
-  InputDevice? _preferredInputDevice;
+  int? _leaseId;
   VoiceStartupWavCapture? _startupWavCapture;
   String? _startupWavPath;
   bool _startupWavSaved = false;
+  RandomAccessFile? _continuousWavFile;
+  String? _continuousWavPath;
+  int? _continuousWavTimestamp;
+  int _continuousWavPcmBytes = 0;
+  int _continuousWavBytesSinceHeaderUpdate = 0;
+  Future<void> _lifecycleOperation = Future<void>.value();
+  Future<void>? _pendingStart;
+  int _lifecycleGeneration = 0;
 
   final List<void Function(Uint8List)> _dataCallbacks = [];
-  final List<void Function(Uint8List raw, Uint8List boosted)> _pcmCallbacks =
-      [];
-  void Function(Object error, StackTrace stackTrace)? _errorCallback;
+  final List<FutureOr<bool> Function(Uint8List raw, Uint8List boosted)>
+      _pcmCallbacks = [];
 
   bool get isRunning => _isRunning;
   double get audioLevel => _audioLevel;
   int get chunksReceived => _chunksReceived;
   int? get lastChunkAtMillis => _lastChunkAtMillis;
   int? get lastNonSilentChunkAtMillis => _lastNonSilentChunkAtMillis;
+  int? get lastNonZeroNativeInputAtMillis => _lastNonZeroNativeInputAtMillis;
   int? get continuousZeroAudioStartedAtMillis =>
       _continuousZeroAudioStartedAtMillis;
   int? get captureStartedAtMillis => _startedAtMillis;
   int get captureId => _captureId;
   VoiceDeviceProfile get deviceProfile => _deviceProfile;
-  String? get preferredInputDeviceId => _preferredInputDevice?.id;
-  String? get preferredInputDeviceLabel => _preferredInputDevice?.label;
-  bool get hasExpectedInputDevice =>
-      !_deviceProfile.requireExpectedInputDevice ||
-      _preferredInputDevice != null;
+  String? get preferredInputDeviceId => 'uac4';
+  String? get preferredInputDeviceLabel => 'UAC4 four-microphone service';
+  bool get hasExpectedInputDevice => true;
   Stream<double> get audioLevelStream => _audioLevelController.stream;
 
   void addDataCallback(void Function(Uint8List) callback) {
@@ -97,22 +87,36 @@ class AudioStreamService {
   }
 
   void addPcmCallback(
-      void Function(Uint8List raw, Uint8List boosted) callback) {
+    FutureOr<bool> Function(Uint8List raw, Uint8List boosted) callback,
+  ) {
     if (!_pcmCallbacks.contains(callback)) _pcmCallbacks.add(callback);
   }
 
   void removePcmCallback(
-    void Function(Uint8List raw, Uint8List boosted) callback,
+    FutureOr<bool> Function(Uint8List raw, Uint8List boosted) callback,
   ) {
     _pcmCallbacks.remove(callback);
   }
 
   Future<bool> requestPermission() {
-    return _audioRecorder.hasPermission();
+    return _nativeCapture.requestPermission();
+  }
+
+  Future<bool> refreshNativeInputActivity() async {
+    final Map<String, Object?> diagnostics =
+        await _nativeCapture.getDiagnostics();
+    final Object? channelsValue = diagnostics['inputChannels'];
+    if (channelsValue is! List) return false;
+    final bool active = channelsValue.whereType<Map>().any(
+          (channel) => (channel['peak'] as num?)?.toDouble() != 0.0,
+        );
+    if (active) {
+      _lastNonZeroNativeInputAtMillis = DateTime.now().millisecondsSinceEpoch;
+    }
+    return active;
   }
 
   Future<String> diagnostics() async {
-    final bool isRecording = await _audioRecorder.isRecording();
     final int now = DateTime.now().millisecondsSinceEpoch;
     final int? lastChunkAgeMs =
         _lastChunkAtMillis == null ? null : now - _lastChunkAtMillis!;
@@ -126,14 +130,12 @@ class AudioStreamService {
     final int? runningForMs =
         _startedAtMillis == null ? null : now - _startedAtMillis!;
     return 'AudioStreamService{captureId=$_captureId, isRunning=$_isRunning, '
-        'recorderIsRecording=$isRecording, '
-        'dataCallbacks=${_dataCallbacks.length}, '
-        'pcmCallbacks=${_pcmCallbacks.length}, '
-        'chunks=$_chunksReceived, lastChunkAgeMs=$lastChunkAgeMs, '
+        'registeredDataConsumers=${_dataCallbacks.length}, '
+        'registeredPcmConsumers=${_pcmCallbacks.length}, '
+        'receivedPcmPackets=$_chunksReceived, lastChunkAgeMs=$lastChunkAgeMs, '
         'lastNonSilentAgeMs=$lastNonSilentAgeMs, '
         'continuousZeroAudioAgeMs=$continuousZeroAudioAgeMs, '
-        'preferredInputDevice=${_preferredInputDevice?.label} '
-        'preferredInputDeviceId=${_preferredInputDevice?.id}, '
+        'inputDevice=UAC4, '
         'startupWavPath=$_startupWavPath '
         'startupWavBytes=${_startupWavCapture?.pcmBytes}, '
         'runningForMs=$runningForMs}';
@@ -142,187 +144,146 @@ class AudioStreamService {
   Future<void> start({
     void Function(Uint8List bytes)? onData,
     void Function(Object error, StackTrace stackTrace)? onError,
-  }) async {
-    if (_isRunning) {
-      print(
-        '[AudioStreamService] start called while running; '
-        'dataCallbacks=${_dataCallbacks.length} '
-        'pcmCallbacks=${_pcmCallbacks.length}',
-      );
+  }) {
+    final Future<void>? pending = _pendingStart;
+    if (pending != null) return pending;
+    final int generation = ++_lifecycleGeneration;
+    late final Future<void> next;
+    next = _serializeLifecycle(() async {
+      if (_isRunning) {
+        print(
+          '[AudioStreamService] start called while running; '
+          'registeredDataConsumers=${_dataCallbacks.length} '
+          'registeredPcmConsumers=${_pcmCallbacks.length}',
+        );
+        if (onData != null) {
+          addDataCallback(onData);
+        }
+        if (onError != null) {}
+        return;
+      }
+
+      _captureId++;
+      _chunksReceived = 0;
+      _lastChunkAtMillis = null;
+      _continuousZeroAudioStartedAtMillis = null;
+      _lastNonZeroNativeInputAtMillis = null;
+      _startedAtMillis = null;
+      _lastNonSilentChunkAtMillis = null;
       if (onData != null) {
         addDataCallback(onData);
       }
-      if (onError != null) {
-        _errorCallback = onError;
+      if (onError != null) {}
+
+      await _beginContinuousWavRecording();
+
+      final int leaseId = await _nativeCapture.start(
+        owner: NativeVoiceOwner.wearRecognition,
+        recordDiagnosticWav: recordContinuousWav,
+        diagnosticCaptureTimestamp: _continuousWavTimestamp,
+        onPcm: (NativePcmPacket packet) async {
+          final Uint8List bytes = packet.bytes;
+          if (bytes.lengthInBytes < 2) {
+            print('[VoiceCapture#$_captureId] ignored empty PCM stream event');
+            return false;
+          }
+          final _PcmStats rawStats = _pcmStats(bytes);
+          _captureStartupWav(bytes);
+          await _writeContinuousWav(bytes);
+          final boostedBytes = _boostPcm16(bytes);
+          _chunksReceived++;
+          _lastChunkAtMillis = DateTime.now().millisecondsSinceEpoch;
+          final _PcmStats stats = _pcmStats(boostedBytes);
+          _logStartupDiagnostics(rawStats, stats);
+          if (rawStats.peak > 0.0) {
+            _lastNonSilentChunkAtMillis = _lastChunkAtMillis;
+          }
+          if (rawStats.peak == 0.0) {
+            _continuousZeroAudioStartedAtMillis ??= _lastChunkAtMillis;
+          } else {
+            _continuousZeroAudioStartedAtMillis = null;
+          }
+          if (_chunksReceived == 1 || _chunksReceived % 200 == 0) {
+            print(
+              '[VoiceCapture#$_captureId] chunk#$_chunksReceived '
+              'bytes=${boostedBytes.lengthInBytes} '
+              'registeredDataConsumers=${_dataCallbacks.length} '
+              'registeredPcmConsumers=${_pcmCallbacks.length} '
+              'rawRms=${rawStats.rms.toStringAsFixed(5)} '
+              'rawPeak=${rawStats.peak.toStringAsFixed(5)} '
+              'postGainRms=${stats.rms.toStringAsFixed(5)} '
+              'postGainPeak=${stats.peak.toStringAsFixed(5)} '
+              'at=$_lastChunkAtMillis',
+            );
+          }
+          _publishAudioLevel(boostedBytes);
+          for (final cb in List<void Function(Uint8List)>.of(_dataCallbacks)) {
+            cb(boostedBytes);
+          }
+          for (final cb
+              in List<FutureOr<bool> Function(Uint8List, Uint8List)>.of(
+            _pcmCallbacks,
+          )) {
+            if (!await cb(bytes, boostedBytes)) return false;
+          }
+          return true;
+        },
+      );
+
+      if (generation != _lifecycleGeneration) {
+        await _nativeCapture.stop(
+          owner: NativeVoiceOwner.wearRecognition,
+          leaseId: leaseId,
+        );
+        return;
       }
-      return;
-    }
-
-    _captureId++;
-    _chunksReceived = 0;
-    _lastChunkAtMillis = null;
-    _continuousZeroAudioStartedAtMillis = null;
-    _startedAtMillis = DateTime.now().millisecondsSinceEpoch;
-    _lastNonSilentChunkAtMillis = null;
-    _beginStartupDiagnostics();
-    await _beginStartupWavCapture();
-    print(
-      '[VoiceCapture#$_captureId] start at $_startedAtMillis '
-      'profile=${_deviceProfile.id} source=${_deviceProfile.audioSource.name}',
-    );
-    _preferredInputDevice = await _selectPreferredInputDevice();
-    if (_deviceProfile.requireExpectedInputDevice &&
-        _preferredInputDevice == null) {
-      throw const VoiceInputDeviceUnavailable();
-    }
-
-    final audioStream = await _audioRecorder.startStream(
-      RecordConfig(
-        encoder: AudioEncoder.pcm16bits,
-        sampleRate: 16000,
-        numChannels: 1,
-        device: _preferredInputDevice,
-        androidConfig: AndroidRecordConfig(
-          audioSource: _deviceProfile.androidAudioSource,
-          manageBluetooth: _deviceProfile.manageBluetooth,
-          speakerphone: _deviceProfile.speakerphone,
-          audioManagerMode: _deviceProfile.audioManagerMode,
-          service: AndroidService(
-            title: 'Smart Glasses',
-            content: 'Голосовое управление активно',
-          ),
-        ),
-      ),
-    );
-
-    if (onData != null) {
-      addDataCallback(onData);
-    }
-    if (onError != null) {
-      _errorCallback = onError;
-    }
-
-    _audioSubscription = audioStream.listen(
-      (Uint8List bytes) {
-        if (bytes.lengthInBytes < 2) {
-          print('[VoiceCapture#$_captureId] ignored empty PCM stream event');
-          return;
-        }
-        final _PcmStats rawStats = _pcmStats(bytes);
-        _captureStartupWav(bytes);
-        final boostedBytes = _boostPcm16(bytes);
-        _chunksReceived++;
-        _lastChunkAtMillis = DateTime.now().millisecondsSinceEpoch;
-        final _PcmStats stats = _pcmStats(boostedBytes);
-        if (rawStats.peak > 0.0) {
-          _lastNonSilentChunkAtMillis = _lastChunkAtMillis;
-        }
-        if (rawStats.peak == 0.0) {
-          _continuousZeroAudioStartedAtMillis ??= _lastChunkAtMillis;
-        } else {
-          _continuousZeroAudioStartedAtMillis = null;
-        }
-        _logStartupDiagnostics(rawStats, stats);
-        if (_chunksReceived == 1 || _chunksReceived % 200 == 0) {
-          print(
-            '[VoiceCapture#$_captureId] chunk#$_chunksReceived '
-            'bytes=${boostedBytes.lengthInBytes} '
-            'dataCallbacks=${_dataCallbacks.length} '
-            'pcmCallbacks=${_pcmCallbacks.length} '
-            'rawRms=${rawStats.rms.toStringAsFixed(5)} '
-            'rawPeak=${rawStats.peak.toStringAsFixed(5)} '
-            'postGainRms=${stats.rms.toStringAsFixed(5)} '
-            'postGainPeak=${stats.peak.toStringAsFixed(5)} '
-            'at=$_lastChunkAtMillis',
-          );
-        }
-        // _publishAudioLevel(boostedBytes);
-        for (final cb in List<void Function(Uint8List)>.of(_dataCallbacks)) {
-          cb(boostedBytes);
-        }
-        for (final cb
-            in List<void Function(Uint8List raw, Uint8List boosted)>.of(
-          _pcmCallbacks,
-        )) {
-          cb(bytes, boostedBytes);
-        }
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        _isRunning = false;
-        print('[AudioStreamService] stream error: $error\n$stackTrace');
-        _errorCallback?.call(error, stackTrace);
-      },
-      onDone: () {
-        _isRunning = false;
-        final StateError error = StateError('Audio stream ended unexpectedly');
-        print('[VoiceCapture#$_captureId] audio stream done');
-        _errorCallback?.call(error, StackTrace.current);
-      },
-    );
-
-    _isRunning = true;
-    print('[VoiceCapture#$_captureId] start done');
+      _leaseId = leaseId;
+      _startedAtMillis = DateTime.now().millisecondsSinceEpoch;
+      _beginStartupDiagnostics();
+      await _beginStartupWavCapture();
+      _isRunning = true;
+      print(
+        '[VoiceCapture#$_captureId] start at $_startedAtMillis '
+        'profile=${_deviceProfile.id}',
+      );
+      print('[VoiceCapture#$_captureId] control started; waiting for PCM');
+    }).whenComplete(() {
+      if (identical(_pendingStart, next)) _pendingStart = null;
+    });
+    _pendingStart = next;
+    return next;
   }
 
-  Future<void> stop() async {
-    print('[VoiceCapture#$_captureId] stop begin: ${await diagnostics()}');
-    await _audioSubscription?.cancel();
-    _audioSubscription = null;
+  Future<void> stop() {
+    _lifecycleGeneration++;
+    return _serializeLifecycle(() async {
+      print('[VoiceCapture#$_captureId] stop begin: ${await diagnostics()}');
+      final int? leaseId = _leaseId;
+      try {
+        if (leaseId != null) {
+          await _nativeCapture.stop(
+            owner: NativeVoiceOwner.wearRecognition,
+            leaseId: leaseId,
+          );
+        }
+      } finally {
+        await _closeContinuousWavRecording();
+      }
+      _leaseId = null;
 
-    if (await _audioRecorder.isRecording()) {
-      await _audioRecorder.stop();
-    }
-
-    _dataCallbacks.clear();
-    _pcmCallbacks.clear();
-    _errorCallback = null;
-    _isRunning = false;
-    _startedAtMillis = null;
-    _continuousZeroAudioStartedAtMillis = null;
-    _setAudioLevel(0.0);
-    print('[VoiceCapture#$_captureId] stop done');
+      _dataCallbacks.clear();
+      _pcmCallbacks.clear();
+      _isRunning = false;
+      _startedAtMillis = null;
+      _continuousZeroAudioStartedAtMillis = null;
+      _setAudioLevel(0.0);
+      print('[VoiceCapture#$_captureId] stop done');
+    });
   }
 
   Future<void> recreateRecorder() async {
-    await VoiceRecorderLifecycle.recreate(
-      stop: stop,
-      dispose: _audioRecorder.dispose,
-      create: () => _audioRecorder = _audioRecorderFactory(),
-    );
-    print('[VoiceCapture#$_captureId] recorder released and recreated');
-  }
-
-  Future<InputDevice?> _selectPreferredInputDevice() async {
-    if (!_deviceProfile.selectUsbInputExplicitly) return null;
-    final List<InputDevice> devices = await _audioRecorder.listInputDevices();
-    final List<InputDevice> candidates = devices.where((InputDevice device) {
-      final String label = device.label.toLowerCase();
-      return label.contains('uvc') || label.contains('usb-audio');
-    }).toList();
-    int priority(InputDevice device) {
-      final String label =
-          device.label.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
-      if (label == 'usb-audio - uvc') return 0;
-      if (label.contains('uvc')) return 1;
-      return 2;
-    }
-
-    candidates.sort(
-      (InputDevice left, InputDevice right) =>
-          priority(left).compareTo(priority(right)),
-    );
-    final InputDevice? selected = candidates.isEmpty ? null : candidates.first;
-    if (candidates.length > 1 &&
-        priority(candidates[0]) == priority(candidates[1])) {
-      throw VoiceInputDeviceAmbiguous(
-        candidates.map((InputDevice device) => device.label),
-      );
-    }
-    print(
-      '[VoiceCapture#$_captureId] input devices=$devices '
-      'preferred=${selected?.label} id=${selected?.id}',
-    );
-    return selected;
+    await stop();
+    print('[VoiceCapture#$_captureId] native capture lease released');
   }
 
   Future<void> _beginStartupWavCapture() async {
@@ -379,17 +340,91 @@ class AudioStreamService {
 
   Future<void> pauseCallbacks() async {
     print('[AudioStreamService] pauseCallbacks '
-        'dataCallbacks=${_dataCallbacks.length} '
-        'pcmCallbacks=${_pcmCallbacks.length}');
+        'registeredDataConsumers=${_dataCallbacks.length} '
+        'registeredPcmConsumers=${_pcmCallbacks.length}');
     _dataCallbacks.clear();
     _pcmCallbacks.clear();
-    _errorCallback = null;
   }
 
   Future<void> dispose() async {
     await stop();
+    await _closeContinuousWavRecording();
     await _audioLevelController.close();
-    await _audioRecorder.dispose();
+  }
+
+  Future<void> _beginContinuousWavRecording() async {
+    if (!recordContinuousWav || _continuousWavFile != null) return;
+
+    final Directory? externalDirectory = await getExternalStorageDirectory();
+    if (externalDirectory == null) {
+      throw StateError('External storage is unavailable for voice recording.');
+    }
+    final Directory directory =
+        Directory('${externalDirectory.path}/voice_capture');
+    await directory.create(recursive: true);
+    final int timestamp = DateTime.now().millisecondsSinceEpoch;
+    _continuousWavTimestamp = timestamp;
+    _continuousWavPath = '${directory.path}/ssp_mono_$timestamp.wav';
+    _continuousWavFile =
+        await File(_continuousWavPath!).open(mode: FileMode.write);
+    _continuousWavPcmBytes = 0;
+    _continuousWavBytesSinceHeaderUpdate = 0;
+    await _continuousWavFile!.writeFrom(_wavHeader(0));
+    await _continuousWavFile!.flush();
+    print(
+        '[AudioStreamService] continuous WAV recording path=$_continuousWavPath');
+  }
+
+  Future<void> _writeContinuousWav(Uint8List bytes) async {
+    final RandomAccessFile? file = _continuousWavFile;
+    if (file == null) return;
+
+    await file.writeFrom(bytes);
+    _continuousWavPcmBytes += bytes.lengthInBytes;
+    _continuousWavBytesSinceHeaderUpdate += bytes.lengthInBytes;
+    if (_continuousWavBytesSinceHeaderUpdate < 32000) return;
+
+    _continuousWavBytesSinceHeaderUpdate = 0;
+    final int endPosition = await file.position();
+    await file.setPosition(0);
+    await file.writeFrom(_wavHeader(_continuousWavPcmBytes));
+    await file.setPosition(endPosition);
+    await file.flush();
+  }
+
+  Future<void> _closeContinuousWavRecording() async {
+    final RandomAccessFile? file = _continuousWavFile;
+    if (file == null) return;
+    await file.setPosition(0);
+    await file.writeFrom(_wavHeader(_continuousWavPcmBytes));
+    await file.flush();
+    await file.close();
+    _continuousWavFile = null;
+  }
+
+  Uint8List _wavHeader(int pcmBytes) {
+    final Uint8List header = Uint8List(44);
+    final ByteData data = ByteData.sublistView(header);
+    header.setRange(0, 4, 'RIFF'.codeUnits);
+    data.setUint32(4, 36 + pcmBytes, Endian.little);
+    header.setRange(8, 12, 'WAVE'.codeUnits);
+    header.setRange(12, 16, 'fmt '.codeUnits);
+    data.setUint32(16, 16, Endian.little);
+    data.setUint16(20, 1, Endian.little);
+    data.setUint16(22, 1, Endian.little);
+    data.setUint32(24, 16000, Endian.little);
+    data.setUint32(28, 32000, Endian.little);
+    data.setUint16(32, 2, Endian.little);
+    data.setUint16(34, 16, Endian.little);
+    header.setRange(36, 40, 'data'.codeUnits);
+    data.setUint32(40, pcmBytes, Endian.little);
+    return header;
+  }
+
+  Future<void> _serializeLifecycle(Future<void> Function() operation) {
+    final Future<void> next = _lifecycleOperation.then((_) => operation());
+    _lifecycleOperation = next.catchError((Object _, StackTrace __) {});
+    return next;
   }
 
   void _publishAudioLevel(Uint8List bytes) {
@@ -475,7 +510,7 @@ class AudioStreamService {
 
     print(
       '[VoiceCapture#$_captureId] startup audio offsetMs=$offsetMs '
-      'chunks=$_startupDiagnosticsChunks '
+      'receivedPcmPackets=$_startupDiagnosticsChunks '
       'rawRms=${rawStats.rms.toStringAsFixed(5)} '
       'rawPeak=${rawStats.peak.toStringAsFixed(5)} '
       'postGainRms=${postGainStats.rms.toStringAsFixed(5)} '

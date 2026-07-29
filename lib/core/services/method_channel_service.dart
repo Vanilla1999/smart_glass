@@ -1,13 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter/services.dart';
 import 'package:smart_glasses/core/constants/app_constants.dart';
 
 /// Service for managing MethodChannel communication with native code
 class MethodChannelService {
-  MethodChannelService._() {
-    _appChannel.setMethodCallHandler(_handleAppMethodCall);
-  }
+  MethodChannelService._();
 
   static final MethodChannelService _instance = MethodChannelService._();
   factory MethodChannelService() => _instance;
@@ -16,44 +12,6 @@ class MethodChannelService {
       const MethodChannel(AppConstants.appChannelName);
   final MethodChannel _glassesChannel =
       const MethodChannel(AppConstants.glassesChannelName);
-  final StreamController<bool> _audioCaptureSilencedController =
-      StreamController<bool>.broadcast();
-  final StreamController<Map<String, dynamic>> _audioInputDeviceController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>>
-      _voiceCaptureDiagnosticsController =
-      StreamController<Map<String, dynamic>>.broadcast();
-
-  Stream<bool> get audioCaptureSilencedStream =>
-      _audioCaptureSilencedController.stream;
-  Stream<Map<String, dynamic>> get audioInputDeviceStream =>
-      _audioInputDeviceController.stream;
-  Stream<Map<String, dynamic>> get voiceCaptureDiagnosticsStream =>
-      _voiceCaptureDiagnosticsController.stream;
-
-  Future<void> _handleAppMethodCall(MethodCall call) async {
-    switch (call.method) {
-      case 'audioCaptureSilencedChanged':
-        final bool? silenced = call.arguments as bool?;
-        if (silenced != null && !_audioCaptureSilencedController.isClosed) {
-          _audioCaptureSilencedController.add(silenced);
-        }
-      case 'audioInputDeviceChanged':
-        final Map<dynamic, dynamic>? arguments = call.arguments as Map?;
-        if (arguments != null && !_audioInputDeviceController.isClosed) {
-          _audioInputDeviceController.add(arguments.cast<String, dynamic>());
-        }
-      case 'voiceCaptureDiagnostics':
-        final Map<dynamic, dynamic>? arguments = call.arguments as Map?;
-        if (arguments != null && !_voiceCaptureDiagnosticsController.isClosed) {
-          _voiceCaptureDiagnosticsController
-              .add(arguments.cast<String, dynamic>());
-        }
-      default:
-        throw MissingPluginException(
-            'Unknown app channel method: ${call.method}');
-    }
-  }
 
   /// Show glasses initialization screen
   Future<void> showGlassesInitialization() async {
@@ -141,25 +99,6 @@ class MethodChannelService {
       });
     } catch (e) {
       print('Error updating wear voice overlay: $e');
-      rethrow;
-    }
-  }
-
-  /// Configures native silencing diagnostics for the active recorder capture.
-  Future<void> updateVoiceCaptureMonitor({
-    required bool active,
-    required String source,
-    required int captureId,
-  }) async {
-    try {
-      await _appChannel
-          .invokeMethod('updateVoiceCaptureMonitor', <String, dynamic>{
-        'active': active,
-        'source': source,
-        'captureId': captureId,
-      });
-    } catch (e) {
-      print('Error updating voice capture monitor: $e');
       rethrow;
     }
   }

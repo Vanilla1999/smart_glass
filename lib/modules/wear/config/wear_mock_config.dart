@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -18,27 +17,15 @@ class WearMockConfig {
     if (_prefs != null) {
       final bool? prefsValue = _prefs!.getBool(key);
       if (prefsValue != null) {
-        if (kDebugMode) {
-          debugPrint('[ENV DEBUG] WearMockConfig.$key from prefs=$prefsValue');
-        }
         return prefsValue;
       }
     }
 
     final String? value = dotenv.env[key];
     if (value == null) {
-      if (kDebugMode) {
-        debugPrint('[ENV DEBUG] WearMockConfig.$key missing -> false');
-      }
       return false;
     }
     final String normalized = value.trim().toLowerCase();
-    final bool result = normalized == 'true';
-    if (kDebugMode) {
-      debugPrint(
-        '[ENV DEBUG] WearMockConfig.$key raw="$value" normalized="$normalized" -> $result',
-      );
-    }
-    return result;
+    return normalized == 'true';
   }
 }

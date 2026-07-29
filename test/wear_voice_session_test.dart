@@ -26,7 +26,7 @@ void main() {
   });
 
   group('VoiceCaptureRecoveryGate', () {
-    test('requires physical reconnect after one failed automatic restart', () {
+    test('becomes unavailable after one failed automatic restart', () {
       final VoiceCaptureRecoveryGate gate = VoiceCaptureRecoveryGate();
 
       expect(
@@ -46,7 +46,7 @@ void main() {
           captureSilenced: false,
           hasCurrentNonSilentAudio: false,
         ),
-        VoiceCaptureRecoveryAction.requireMicrophoneReconnect,
+        VoiceCaptureRecoveryAction.unavailable,
       );
     });
 
@@ -91,11 +91,6 @@ void main() {
         ensurePrepared: () async {},
         nowMillis: () => 0,
         delay: (_) async {},
-        updateNativeCaptureMonitor: ({
-          required bool active,
-          required String source,
-          required int captureId,
-        }) async {},
         scheduleRetry: (Duration delay, void Function() callback) {
           scheduledDelay = delay;
           scheduledRetry = callback;
@@ -125,11 +120,6 @@ void main() {
         ensurePrepared: () async {},
         nowMillis: () => now,
         delay: (_) async => now += 2000,
-        updateNativeCaptureMonitor: ({
-          required bool active,
-          required String source,
-          required int captureId,
-        }) async {},
         scheduleRetry: (_, callback) {
           scheduledRetry = callback;
           return _FakeTimer();
@@ -157,6 +147,9 @@ class _FailingStartSpeechRecognitionService extends SpeechRecognitionService {
   bool get isListening => _listening;
 
   @override
+  bool get isVadCalibrated => true;
+
+  @override
   bool get isCaptureRunning => _listening;
 
   @override
@@ -166,7 +159,13 @@ class _FailingStartSpeechRecognitionService extends SpeechRecognitionService {
   int? get lastAudioChunkAtMillis => _listening ? 0 : null;
 
   @override
-  int? get lastNonSilentAudioChunkAtMillis => null;
+  int? get lastNonSilentAudioChunkAtMillis => _listening ? 0 : null;
+
+  @override
+  int? get lastNonZeroNativeInputAtMillis => null;
+
+  @override
+  Future<bool> refreshNativeInputActivity() async => false;
 
   @override
   int? get continuousZeroAudioStartedAtMillis => null;
@@ -218,6 +217,9 @@ class _ExactZeroSpeechRecognitionService extends SpeechRecognitionService {
   bool get isListening => _listening;
 
   @override
+  bool get isVadCalibrated => false;
+
+  @override
   bool get isCaptureRunning => _listening;
 
   @override
@@ -228,6 +230,12 @@ class _ExactZeroSpeechRecognitionService extends SpeechRecognitionService {
 
   @override
   int? get lastNonSilentAudioChunkAtMillis => null;
+
+  @override
+  int? get lastNonZeroNativeInputAtMillis => null;
+
+  @override
+  Future<bool> refreshNativeInputActivity() async => false;
 
   @override
   int? get continuousZeroAudioStartedAtMillis => _listening ? 0 : null;
@@ -248,8 +256,7 @@ class _ExactZeroSpeechRecognitionService extends SpeechRecognitionService {
   String? get preferredInputDeviceLabel => 'USB-Audio - UVC';
 
   @override
-  VoiceDeviceProfile get deviceProfile =>
-      VoiceDeviceProfile.t2151VoiceRecognition;
+  VoiceDeviceProfile get deviceProfile => VoiceDeviceProfile.defaultProfile;
 
   @override
   Future<void> startListening() async {

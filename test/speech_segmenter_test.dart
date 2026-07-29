@@ -9,6 +9,7 @@ void main() {
     final SpeechSegmenter segmenter = SpeechSegmenter(
       sampleRate: 1,
       endpointSilence: const Duration(seconds: 2),
+      calibrationDuration: Duration.zero,
     );
     segmenter.begin(3);
 
@@ -29,7 +30,9 @@ void main() {
 
   test('new capture epoch discards old chunks and restarts segment numbering',
       () {
-    final SpeechSegmenter segmenter = SpeechSegmenter();
+    final SpeechSegmenter segmenter = SpeechSegmenter(
+      calibrationDuration: Duration.zero,
+    );
     segmenter.begin(1);
     segmenter.add(Uint8List.fromList(<int>[200, 0]), 1);
     segmenter.begin(2);
@@ -41,7 +44,10 @@ void main() {
   });
 
   test('records VAD thresholds used for the current raw PCM frame', () {
-    final SpeechSegmenter segmenter = SpeechSegmenter(sampleRate: 1);
+    final SpeechSegmenter segmenter = SpeechSegmenter(
+      sampleRate: 1,
+      calibrationDuration: Duration.zero,
+    );
     segmenter.begin(1);
 
     segmenter.add(Uint8List.fromList(<int>[0, 0]), 1);
@@ -54,10 +60,11 @@ void main() {
     expect(silence.speaking, isFalse);
   });
 
-  test('quiet non-speech frames do not raise the noise floor', () {
+  test('quiet non-speech frames slowly adapt the noise floor', () {
     final SpeechSegmenter segmenter = SpeechSegmenter(
       speechOnRms: 0.0005,
       speechOffRms: 0.0003,
+      calibrationDuration: Duration.zero,
     );
     segmenter.begin(1);
 
@@ -66,13 +73,14 @@ void main() {
     segmenter.add(Uint8List.fromList(<int>[15, 0]), 1);
 
     expect(segmenter.lastDiagnostics.speaking, isFalse);
-    expect(segmenter.lastDiagnostics.noiseFloorRms, noiseFloor);
+    expect(segmenter.lastDiagnostics.noiseFloorRms, greaterThan(noiseFloor));
   });
 
   test('T2151 quiet speech starts a segment in the first PCM frame', () {
     final SpeechSegmenter segmenter = SpeechSegmenter(
       speechOnRms: 0.0005,
       speechOffRms: 0.0003,
+      calibrationDuration: Duration.zero,
     );
     segmenter.begin(1);
 
@@ -87,6 +95,7 @@ void main() {
     final SpeechSegmenter segmenter = SpeechSegmenter(
       sampleRate: 10,
       endpointSilence: const Duration(milliseconds: 500),
+      calibrationDuration: Duration.zero,
     );
     segmenter.begin(1);
     segmenter.add(Uint8List.fromList(<int>[40, 0]), 1);
@@ -98,4 +107,78 @@ void main() {
 
     expect(endpoint!.isEndpoint, isTrue);
   });
+
+  test('exact-zero startup frames do not calibrate or lower noise floor', () {
+    final SpeechSegmenter segmenter = SpeechSegmenter();
+    segmenter.begin(1);
+
+    for (int index = 0; index < 350; index++) {
+      expect(segmenter.add(_pcmFrame(0), 1), isNull);
+    }
+
+    expect(segmenter.isCalibrated, isFalse);
+    expect(segmenter.lastDiagnostics.noiseFloorRms, 0.0002);
+  });
+
+  test('calibrates from 750 ms of non-zero background', () {
+    final SpeechSegmenter segmenter = SpeechSegmenter(sampleRate: 1000);
+    segmenter.begin(1);
+
+    for (int index = 0; index < 38; index++) {
+      expect(segmenter.add(_pcmFrame(33), 1), isNull);
+    }
+
+    expect(segmenter.isCalibrated, isTrue);
+    expect(segmenter.lastDiagnostics.noiseFloorRms, closeTo(33 / 32768, 1e-8));
+  });
+
+  test('background stays idle and speech starts after calibration', () {
+    final SpeechSegmenter segmenter = SpeechSegmenter(
+      sampleRate: 1000,
+      speechOnRms: 0.002,
+      speechOffRms: 0.0012,
+    );
+    segmenter.begin(1);
+    for (int index = 0; index < 38; index++) {
+      segmenter.add(_pcmFrame(33), 1);
+    }
+
+    expect(segmenter.add(_pcmFrame(33), 1), isNull);
+    final SpeechSegment? speech = segmenter.add(_pcmFrame(328), 1);
+
+    expect(speech, isNotNull);
+    expect(speech!.started, isTrue);
+  });
+
+  test('two commands separated by silence get different segment ids', () {
+    final SpeechSegmenter segmenter = SpeechSegmenter(
+      sampleRate: 1000,
+      speechOnRms: 0.002,
+      speechOffRms: 0.0012,
+      endpointSilence: const Duration(milliseconds: 500),
+    );
+    segmenter.begin(1);
+    for (int index = 0; index < 38; index++) {
+      segmenter.add(_pcmFrame(33), 1);
+    }
+
+    final SpeechSegment first = segmenter.add(_pcmFrame(328), 1)!;
+    SpeechSegment? endpoint;
+    for (int index = 0; index < 25; index++) {
+      endpoint = segmenter.add(_pcmFrame(33), 1);
+    }
+    final SpeechSegment second = segmenter.add(_pcmFrame(328), 1)!;
+
+    expect(endpoint!.isEndpoint, isTrue);
+    expect(first.segmentId, 1);
+    expect(second.segmentId, 2);
+  });
+}
+
+Uint8List _pcmFrame(int amplitude, {int samples = 20}) {
+  final ByteData bytes = ByteData(samples * 2);
+  for (int index = 0; index < samples; index++) {
+    bytes.setInt16(index * 2, amplitude, Endian.little);
+  }
+  return bytes.buffer.asUint8List();
 }
