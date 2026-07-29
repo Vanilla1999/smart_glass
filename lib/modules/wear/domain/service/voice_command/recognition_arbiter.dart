@@ -16,12 +16,13 @@ class RecognitionArbitration {
       : this._(command: command, clearPreview: true);
   const RecognitionArbitration.stable(SegmentedRecognitionResult result)
       : this._(stableCandidate: result);
-  const RecognitionArbitration.phrase(String phrase) : this._(phrase: phrase);
+  const RecognitionArbitration.phrase(SegmentedRecognitionResult phrase)
+      : this._(phrase: phrase);
   const RecognitionArbitration.preview(String preview)
       : this._(preview: preview);
 
   final WearVoiceCommand? command;
-  final String? phrase;
+  final SegmentedRecognitionResult? phrase;
   final String? preview;
   final SegmentedRecognitionResult? stableCandidate;
   final bool clearPreview;
@@ -48,6 +49,8 @@ class RecognitionArbiter {
   final Map<String, String> _latestPartial = <String, String>{};
   int _currentCaptureEpoch = 0;
 
+  int get debugRetainedPartialCount => _latestPartial.length;
+
   void startSegment(SpeechSegmentStarted started) {
     _acceptCaptureEpoch(started.captureEpoch);
   }
@@ -60,7 +63,7 @@ class RecognitionArbiter {
 
     if (result.lane == RecognitionLane.freeText) {
       if (result.kind == RecognitionKind.partial) return null;
-      return RecognitionArbitration.phrase(result.text.trim());
+      return RecognitionArbitration.phrase(result);
     }
 
     final VoiceActionEntry? action = result.kind == RecognitionKind.partial
@@ -68,6 +71,9 @@ class RecognitionArbiter {
         : _catalog.resolve(screen, result.text);
     if (result.kind == RecognitionKind.partial) {
       _latestPartial[key] = VoiceActionCatalog.normalize(result.text);
+      while (_latestPartial.length > 128) {
+        _latestPartial.remove(_latestPartial.keys.first);
+      }
       if (action == null) return null;
       switch (action.activationPolicy) {
         case VoiceActivationPolicy.immediateExactPartial:
@@ -131,6 +137,7 @@ class RecognitionArbiter {
   }
 
   void _claim(String key) {
+    _latestPartial.remove(key);
     _claimedUtterances.add(key);
     if (_claimedUtterances.length > 128) {
       _claimedUtterances.remove(_claimedUtterances.first);

@@ -27,6 +27,7 @@ import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_event.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_phrase_event.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_glasses_output.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
@@ -412,6 +413,27 @@ void main() {
       expect(commands, isEmpty);
     });
 
+    test('control-service partial revision state remains bounded', () async {
+      final _FakeSpeechRecognitionService speech =
+          _FakeSpeechRecognitionService();
+      final WearVoiceControlService voiceControl = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => WearScreenId.menu,
+      );
+      addTearDown(voiceControl.dispose);
+      addTearDown(speech.dispose);
+
+      for (int utteranceId = 1; utteranceId <= 1000; utteranceId++) {
+        speech.emitCommandPartial('шум', utteranceId: utteranceId);
+      }
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        voiceControl.debugRetainedPartialRevisionCount,
+        lessThanOrEqualTo(128),
+      );
+    });
+
     test('resolved command event retains route and utterance context',
         () async {
       final _FakeSpeechRecognitionService speech =
@@ -682,6 +704,65 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
         tester,
         grammarRevisionDelta: 1,
       );
+    });
+
+    testWearWidget('typed phrase is dropped after revision changes',
+        (WidgetTester tester) async {
+      final StreamController<WearVoicePhraseEvent> phrases =
+          StreamController<WearVoicePhraseEvent>.broadcast();
+      addTearDown(phrases.close);
+      final WearFlowController flow = WearFlowController(
+        glassesOutput: _TestGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      WearDependencies.I.actualScreenStore.confirm(WearScreenId.menu);
+      var phraseCalls = 0;
+      await tester.pumpWidget(WearModuleApp(
+        flowController: flow,
+        voicePhraseEventStream: phrases.stream,
+        routes: _testRoutes,
+        initialLocation: WearMenuScreen.route,
+        onStartVoice: () async {},
+        onStopVoice: () async {},
+        onRestartVoice: (_) async {},
+      ));
+      await tester.pumpAndSettle();
+      flow.registerScreenActions(
+        WearScreenId.menu,
+        WearScreenActionHandler(onPhrase: (_) => phraseCalls++),
+      );
+      final SpeechRecognitionService speech =
+          WearDependencies.I.speechRecognitionService;
+
+      phrases.add(WearVoicePhraseEvent(
+        phrase: 'молоко',
+        captureEpoch: 1,
+        commandUtteranceId: 1,
+        sourceScreen: WearScreenId.menu,
+        routeRevision: speech.routeRevision + 1,
+        grammarRevision: speech.grammarRevision,
+      ));
+      await tester.pumpAndSettle();
+      phrases.add(WearVoicePhraseEvent(
+        phrase: 'яблоко',
+        captureEpoch: 1,
+        commandUtteranceId: 2,
+        sourceScreen: WearScreenId.menu,
+        routeRevision: speech.routeRevision,
+        grammarRevision: speech.grammarRevision + 1,
+      ));
+      await tester.pumpAndSettle();
+      phrases.add(WearVoicePhraseEvent(
+        phrase: 'кефир',
+        captureEpoch: 1,
+        commandUtteranceId: 3,
+        sourceScreen: WearScreenId.help,
+        routeRevision: speech.routeRevision,
+        grammarRevision: speech.grammarRevision,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(phraseCalls, 0);
     });
 
     testWearWidget(
@@ -1503,6 +1584,7 @@ class _ManualTimer implements Timer {
 class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   _FakeSpeechRecognitionService([this.sourceScreen = WearScreenId.menu]);
 
+  @override
   final WearScreenId sourceScreen;
   final StreamController<SegmentedRecognitionResult>
       _segmentedResultsController =
@@ -1609,8 +1691,12 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
     required List<String> grammar,
   }) async {}
 
-  void emitCommandPartial(String text) {
-    _emitSegmented(text, RecognitionKind.partial);
+  void emitCommandPartial(String text, {int utteranceId = 1}) {
+    _emitSegmented(
+      text,
+      RecognitionKind.partial,
+      utteranceId: utteranceId,
+    );
   }
 
   void emitCommandResult(String text) {
@@ -1625,7 +1711,11 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
     ));
   }
 
-  void _emitSegmented(String text, RecognitionKind kind) {
+  void _emitSegmented(
+    String text,
+    RecognitionKind kind, {
+    int utteranceId = 1,
+  }) {
     if (!_segmentStarted) {
       _segmentStarted = true;
       _segmentStartedController.add(const SpeechSegmentStarted(
@@ -1643,7 +1733,7 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
       lastChunkId: 1,
       parsedCommand: VoiceCommandParserService()
           .parseExactForScreen(WearScreenId.menu, text),
-      commandUtteranceId: 1,
+      commandUtteranceId: utteranceId,
       routeRevision: 1,
       grammarRevision: 1,
       sourceScreen: sourceScreen,

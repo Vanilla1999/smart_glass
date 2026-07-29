@@ -4,9 +4,13 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_control_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_phrase_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_segmenter.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_typing_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -23,7 +27,7 @@ void main() {
     );
     final int routeRevision = service.routeRevision;
     final int grammarRevision = service.grammarRevision;
-    command.failNextGrammar = true;
+    command.grammarFailuresRemaining = 2;
 
     await expectLater(
       service.switchCommandGrammar(
@@ -42,7 +46,7 @@ void main() {
     final _FakeRecognizer failed = _FakeRecognizer();
     final _FakeRecognizer recovered = _FakeRecognizer()
       ..endpointSequence.add(true)
-      ..resultSequence.add(_json(text: 'сохранить'));
+      ..resultSequence.add(_json(text: 'назад'));
     final List<_FakeRecognizer> recognizers = <_FakeRecognizer>[
       failed,
       recovered,
@@ -52,21 +56,16 @@ void main() {
       speechSegmenter: SpeechSegmenter(calibrationDuration: Duration.zero),
       recognizerFactory: (RecognitionLane lane, List<String> grammar) async =>
           recognizers.removeAt(0),
+      recognizerOperationTimeout: const Duration(milliseconds: 20),
     );
     addTearDown(service.dispose);
     await service.prepare();
-    failed.failNextGrammar = true;
+    final Completer<void> blockedGrammar = Completer<void>();
+    failed.grammarBlock = blockedGrammar;
 
-    await expectLater(
-      service.switchCommandGrammar(
-        screen: WearScreenId.help,
-        grammar: const <String>['назад', '[unk]'],
-      ),
-      throwsStateError,
-    );
     await service.switchCommandGrammar(
-      screen: WearScreenId.settings,
-      grammar: const <String>['сохранить', '[unk]'],
+      screen: WearScreenId.help,
+      grammar: const <String>['назад', '[unk]'],
     );
     await service.startSession();
     service.beginProcessingCapture();
@@ -75,10 +74,14 @@ void main() {
         .firstWhere((event) => event.kind == RecognitionKind.endpointResult);
     await service.processAudioChunk(_pcmFrame(1000));
 
-    expect((await result).text, 'сохранить');
-    expect(recovered.grammars.last, const <String>['сохранить', '[unk]']);
-    expect(service.routeRevision, 1);
-    expect(service.grammarRevision, 1);
+    expect((await result).text, 'назад');
+    expect(recovered.grammars.last, const <String>['назад', '[unk]']);
+    expect(service.routeRevision, 2);
+    expect(service.grammarRevision, 2);
+    expect(failed.disposeCalls, 0);
+    blockedGrammar.complete();
+    await Future<void>.delayed(Duration.zero);
+    expect(failed.disposeCalls, 1);
   });
 
   test('100 grammar switches call the active recognizer exactly 100 times',
@@ -96,8 +99,8 @@ void main() {
     }
 
     expect(command.grammars, hasLength(101));
-    expect(service.routeRevision, 100);
-    expect(service.grammarRevision, 100);
+    expect(service.routeRevision, 101);
+    expect(service.grammarRevision, 101);
   });
 
   test('identical screen grammar does not reset recognizer', () async {
@@ -119,6 +122,99 @@ void main() {
 
     expect(command.resetCalls, resetCalls);
     expect(command.grammars, hasLength(grammarCalls));
+  });
+
+  test('no-op grammar switch does not cancel active free-text replay',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.add(true)
+      ..resultSequence.add(_json(text: 'не команда'));
+    final Completer<bool> accepted = Completer<bool>();
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..acceptOverride = ((_) => accepted.future)
+      ..finalSequence.add(_json(text: 'молоко'));
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final Future<SegmentedRecognitionResult> result = service
+        .segmentedResultsStream
+        .firstWhere((event) => event.lane == RecognitionLane.freeText);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.switchCommandGrammar(
+      screen: WearScreenId.menu,
+      grammar: const <String>['вверх', '[unk]'],
+    );
+    accepted.complete(false);
+    await service.waitForProcessing();
+
+    expect((await result).text, 'молоко');
+  });
+
+  test('initial menu configuration accepts commands with positive revisions',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.add(true)
+      ..resultSequence.add(_json(text: 'вверх'));
+    final SpeechRecognitionService service = _service(command: command);
+    final WearVoiceControlService control = WearVoiceControlService(
+      speechRecognitionService: service,
+      screenProvider: () => WearScreenId.menu,
+    );
+    addTearDown(control.dispose);
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    final Future<WearVoiceCommand> result = control.commandStream.first;
+
+    await service.processAudioChunk(_pcmFrame(1000));
+
+    expect(await result, WearVoiceCommand.up);
+    expect(service.routeRevision, 1);
+    expect(service.grammarRevision, 1);
+  });
+
+  test('VoiceTypingService drops stale typed phrase context', () async {
+    final _FakeRecognizer command = _FakeRecognizer();
+    final SpeechRecognitionService service = _service(command: command);
+    final StreamController<WearVoicePhraseEvent> phrases =
+        StreamController<WearVoicePhraseEvent>.broadcast();
+    final VoiceTypingService typing = VoiceTypingService(
+      speechRecognitionService: service,
+      resolvedPhrases: phrases.stream,
+    );
+    addTearDown(phrases.close);
+    addTearDown(typing.dispose);
+    addTearDown(service.dispose);
+    final List<String> results = <String>[];
+    typing.resultsStream.listen(results.add);
+
+    phrases.add(const WearVoicePhraseEvent(
+      phrase: 'один',
+      captureEpoch: 1,
+      commandUtteranceId: 1,
+      sourceScreen: WearScreenId.help,
+      routeRevision: 1,
+      grammarRevision: 1,
+    ));
+    phrases.add(const WearVoicePhraseEvent(
+      phrase: 'два',
+      captureEpoch: 1,
+      commandUtteranceId: 2,
+      sourceScreen: WearScreenId.menu,
+      routeRevision: 1,
+      grammarRevision: 1,
+    ));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(results, <String>['2']);
   });
 
   test('grammar cutover never replays audio accepted by old grammar', () async {
@@ -173,6 +269,40 @@ void main() {
           .map((result) => result.text),
       contains('товар молоко'),
     );
+  });
+
+  test('free-text creation failure can be retried', () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.add(true)
+      ..resultSequence.add(_json(text: 'не команда'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finalSequence.add(_json(text: 'молоко'));
+    int freeTextCreations = 0;
+    final SpeechRecognitionService service = SpeechRecognitionService(
+      commandGrammar: const <String>['вверх', '[unk]'],
+      speechSegmenter: SpeechSegmenter(calibrationDuration: Duration.zero),
+      recognizerFactory: (RecognitionLane lane, List<String> grammar) async {
+        if (lane == RecognitionLane.command) return command;
+        freeTextCreations++;
+        if (freeTextCreations == 1) throw StateError('temporary failure');
+        return freeText;
+      },
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+
+    await expectLater(service.setFreeTextEnabled(true), throwsStateError);
+    await service.setFreeTextEnabled(true);
+    final Future<SegmentedRecognitionResult> result = service
+        .segmentedResultsStream
+        .firstWhere((event) => event.lane == RecognitionLane.freeText);
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing();
+
+    expect((await result).text, 'молоко');
+    expect(freeTextCreations, 2);
   });
 
   test('free-text replay aggregates two endpoints and stream tail', () async {
@@ -267,6 +397,45 @@ void main() {
     await service.waitForProcessing().timeout(const Duration(seconds: 1));
 
     expect(freeText.finalCalls, 0);
+  });
+
+  test('free-text timeout replaces recognizer for the next replay', () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.addAll(<bool>[true, true])
+      ..resultSequence.addAll(<String>[
+        _json(text: 'не команда'),
+        _json(text: 'не команда'),
+      ]);
+    final _FakeRecognizer blocked = _FakeRecognizer()
+      ..acceptOverride = (_) => Completer<bool>().future;
+    final _FakeRecognizer replacement = _FakeRecognizer()
+      ..finalSequence.add(_json(text: 'яблоко'));
+    final List<_FakeRecognizer> freeTextRecognizers = <_FakeRecognizer>[
+      blocked,
+      replacement,
+    ];
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeTextRecognizers.removeAt(0),
+      recognizerOperationTimeout: const Duration(milliseconds: 20),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing();
+    final Future<SegmentedRecognitionResult> result = service
+        .segmentedResultsStream
+        .firstWhere((event) => event.lane == RecognitionLane.freeText);
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing();
+
+    expect((await result).text, 'яблоко');
+    expect(blocked.accepted, hasLength(1));
+    expect(replacement.accepted, hasLength(1));
   });
 
   test('external max-duration VAD does not finalize command recognizer',
@@ -393,10 +562,13 @@ class _FakeRecognizer implements VoiceRecognizer {
   final List<Uint8List> accepted = <Uint8List>[];
   final List<List<String>> grammars = <List<String>>[];
   bool failNextGrammar = false;
+  int grammarFailuresRemaining = 0;
+  Completer<void>? grammarBlock;
   Future<bool> Function(Uint8List bytes)? acceptOverride;
   int resetCalls = 0;
   int resultCalls = 0;
   int finalCalls = 0;
+  int disposeCalls = 0;
 
   @override
   Future<bool> acceptWaveformBytes(Uint8List bytes) async {
@@ -407,7 +579,9 @@ class _FakeRecognizer implements VoiceRecognizer {
   }
 
   @override
-  Future<void> dispose() async {}
+  Future<void> dispose() async {
+    disposeCalls++;
+  }
 
   @override
   Future<String> getFinalResult() async {
@@ -431,8 +605,14 @@ class _FakeRecognizer implements VoiceRecognizer {
 
   @override
   Future<void> setGrammar(List<String> grammar) async {
-    if (failNextGrammar) {
+    final Completer<void>? block = grammarBlock;
+    if (block != null) {
+      grammarBlock = null;
+      await block.future;
+    }
+    if (failNextGrammar || grammarFailuresRemaining > 0) {
       failNextGrammar = false;
+      if (grammarFailuresRemaining > 0) grammarFailuresRemaining--;
       throw StateError('setGrammar failed');
     }
     grammars.add(List<String>.of(grammar));

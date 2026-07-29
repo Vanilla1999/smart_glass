@@ -4,13 +4,14 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_str
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/number_parser_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_phrase_event.dart';
 
 class VoiceTypingService {
   factory VoiceTypingService({
     AudioStreamService? audioStreamService,
     SpeechRecognitionService? speechRecognitionService,
     NumberParserService? numberParserService,
-    Stream<String>? resolvedPhrases,
+    Stream<WearVoicePhraseEvent>? resolvedPhrases,
   }) {
     final AudioStreamService sharedAudio = audioStreamService ??
         speechRecognitionService?.audioStreamService ??
@@ -30,7 +31,7 @@ class VoiceTypingService {
     required SpeechRecognitionService speechRecognitionService,
     required NumberParserService numberParserService,
     required bool ownsSpeechRecognitionService,
-    Stream<String>? resolvedPhrases,
+    Stream<WearVoicePhraseEvent>? resolvedPhrases,
   })  : _audioStreamService = audioStreamService,
         _speechRecognitionService = speechRecognitionService,
         _numberParserService = numberParserService,
@@ -43,7 +44,7 @@ class VoiceTypingService {
       );
     } else {
       _recognitionSubscription = resolvedPhrases.listen(
-        _onResolvedPhrase,
+        _onResolvedPhraseEvent,
         onError: _onRecognitionError,
       );
     }
@@ -100,7 +101,21 @@ class VoiceTypingService {
             result.kind != RecognitionKind.streamFinal) {
       return;
     }
+    if (result.sourceScreen != _speechRecognitionService.sourceScreen ||
+        result.routeRevision != _speechRecognitionService.routeRevision ||
+        result.grammarRevision != _speechRecognitionService.grammarRevision) {
+      return;
+    }
     _onResolvedPhrase(result.text);
+  }
+
+  void _onResolvedPhraseEvent(WearVoicePhraseEvent event) {
+    if (event.sourceScreen != _speechRecognitionService.sourceScreen ||
+        event.routeRevision != _speechRecognitionService.routeRevision ||
+        event.grammarRevision != _speechRecognitionService.grammarRevision) {
+      return;
+    }
+    _onResolvedPhrase(event.phrase);
   }
 
   void _onResolvedPhrase(String phrase) {

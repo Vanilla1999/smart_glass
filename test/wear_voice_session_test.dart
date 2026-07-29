@@ -161,6 +161,30 @@ void main() {
     ]);
     expect(speech.freeTextValues, <bool>[false]);
   });
+
+  test('failed grammar recovery marks an active session unavailable', () async {
+    final _FailingStartSpeechRecognitionService speech =
+        _FailingStartSpeechRecognitionService()
+          ..startCalls = 1
+          ..failGrammarSwitch = true;
+    final WearVoiceSession session = WearVoiceSession(
+      speechRecognitionService: speech,
+      ensurePrepared: () async {},
+      delay: (_) async {},
+      actionCatalog: VoiceActionCatalog(),
+      scheduleRetry: (_, __) => _FakeTimer(),
+    );
+    await session.start();
+
+    await expectLater(
+      session.configureForScreen(WearScreenId.help),
+      throwsStateError,
+    );
+
+    expect(session.state.phase, VoicePhase.unavailable);
+    expect(session.state.reason, 'grammar_switch_failed');
+    expect(speech.grammarSwitchCalls, 2);
+  });
 }
 
 class _ConfigurationSpeechRecognitionService extends SpeechRecognitionService {
@@ -191,6 +215,8 @@ class _FailingStartSpeechRecognitionService extends SpeechRecognitionService {
   bool _listening = false;
   int restartCalls = 0;
   int startCalls = 0;
+  int grammarSwitchCalls = 0;
+  bool failGrammarSwitch = false;
 
   @override
   bool get isListening => _listening;
@@ -255,6 +281,15 @@ class _FailingStartSpeechRecognitionService extends SpeechRecognitionService {
 
   @override
   Future<String> diagnostics() async => 'fake';
+
+  @override
+  Future<void> switchCommandGrammar({
+    required WearScreenId screen,
+    required List<String> grammar,
+  }) async {
+    grammarSwitchCalls++;
+    if (failGrammarSwitch) throw StateError('grammar switch failed');
+  }
 }
 
 class _ExactZeroSpeechRecognitionService extends SpeechRecognitionService {

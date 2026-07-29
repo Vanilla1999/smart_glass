@@ -6,6 +6,7 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_ac
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_event.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_phrase_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 
@@ -64,6 +65,8 @@ class WearVoiceControlService {
       StreamController<WearVoiceCommandEvent>.broadcast();
   final StreamController<String> _phraseController =
       StreamController<String>.broadcast();
+  final StreamController<WearVoicePhraseEvent> _phraseEventController =
+      StreamController<WearVoicePhraseEvent>.broadcast();
   final StreamController<String?> _freeTextPreviewController =
       StreamController<String?>.broadcast();
   StreamSubscription<SegmentedRecognitionResult>? _recognitionSubscription;
@@ -80,8 +83,11 @@ class WearVoiceControlService {
   Stream<WearVoiceCommandEvent> get commandEventStream =>
       _commandEventController.stream;
   Stream<String> get phraseStream => _phraseController.stream;
+  Stream<WearVoicePhraseEvent> get phraseEventStream =>
+      _phraseEventController.stream;
   Stream<String?> get freeTextPreviewStream =>
       _freeTextPreviewController.stream;
+  int get debugRetainedPartialRevisionCount => _latestPartialRevisions.length;
 
   void _onRecognitionResult(SegmentedRecognitionResult result) {
     final String timerKey = '${result.captureEpoch}:'
@@ -90,6 +96,12 @@ class WearVoiceControlService {
     if (result.kind == RecognitionKind.partial) {
       _stabilityTimers.remove(timerKey)?.cancel();
       _latestPartialRevisions[timerKey] = result.partialRevision;
+      while (_latestPartialRevisions.length > 128) {
+        _latestPartialRevisions.remove(_latestPartialRevisions.keys.first);
+      }
+    } else {
+      _stabilityTimers.remove(timerKey)?.cancel();
+      _latestPartialRevisions.remove(timerKey);
     }
     final RecognitionArbitration? outcome = _arbiter.accept(result);
     if (outcome == null) return;
@@ -126,7 +138,7 @@ class WearVoiceControlService {
       _emitFreeTextPreview(preview);
       return;
     }
-    if (outcome.phrase case final String phrase) {
+    if (outcome.phrase case final SegmentedRecognitionResult phrase) {
       _emitPhrase(phrase);
     }
   }
@@ -143,7 +155,7 @@ class WearVoiceControlService {
         );
         return;
       }
-      if (outcome?.phrase case final String phrase) {
+      if (outcome?.phrase case final SegmentedRecognitionResult phrase) {
         _emitPhrase(phrase);
       }
     } finally {
@@ -191,8 +203,8 @@ class WearVoiceControlService {
         _clock();
   }
 
-  void _emitPhrase(String phrase) {
-    final String trimmed = phrase.trim();
+  void _emitPhrase(SegmentedRecognitionResult result) {
+    final String trimmed = result.text.trim();
     if (trimmed.isEmpty || _phraseController.isClosed) {
       return;
     }
@@ -201,6 +213,16 @@ class WearVoiceControlService {
       'hasListener=${_phraseController.hasListener}',
     );
     _phraseController.add(trimmed);
+    if (!_phraseEventController.isClosed) {
+      _phraseEventController.add(WearVoicePhraseEvent(
+        phrase: trimmed,
+        captureEpoch: result.captureEpoch,
+        commandUtteranceId: result.commandUtteranceId,
+        sourceScreen: result.sourceScreen,
+        routeRevision: result.routeRevision,
+        grammarRevision: result.grammarRevision,
+      ));
+    }
   }
 
   void _emitFreeTextPreview(String? phrase) {
@@ -240,6 +262,7 @@ class WearVoiceControlService {
     await _commandController.close();
     await _commandEventController.close();
     await _phraseController.close();
+    await _phraseEventController.close();
     await _freeTextPreviewController.close();
   }
 }

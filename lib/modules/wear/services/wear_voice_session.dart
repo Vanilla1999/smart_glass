@@ -139,10 +139,32 @@ class WearVoiceSession {
         '[WearVoiceSession] configureForScreen screen=$screen '
         'mode=${freeText ? 'freeText' : 'grammar'}',
       );
-      await _speech.switchCommandGrammar(
-        screen: screen,
-        grammar: catalog.grammarFor(screen),
-      );
+      try {
+        await _speech.switchCommandGrammar(
+          screen: screen,
+          grammar: catalog.grammarFor(screen),
+        );
+      } catch (_) {
+        if (generation != _configurationGeneration) rethrow;
+        if (_shouldListen) {
+          _emit(VoicePhase.reconnecting, reason: 'grammar_switch_retry');
+        }
+        await _delay(const Duration(milliseconds: 100));
+        try {
+          await _speech.switchCommandGrammar(
+            screen: screen,
+            grammar: catalog.grammarFor(screen),
+          );
+        } catch (error) {
+          if (_shouldListen) {
+            _markUnavailable(
+              reason: 'grammar_switch_failed',
+              error: error,
+            );
+          }
+          rethrow;
+        }
+      }
       if (generation != _configurationGeneration) return;
       await _speech.setFreeTextEnabled(freeText);
       if (generation == _configurationGeneration) _configuredScreen = screen;

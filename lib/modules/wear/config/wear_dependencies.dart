@@ -82,7 +82,7 @@ class WearDependencies {
     voiceTypingService = VoiceTypingService(
       speechRecognitionService: speechRecognitionService,
       audioStreamService: audioStreamService,
-      resolvedPhrases: voiceControlService.phraseStream,
+      resolvedPhrases: voiceControlService.phraseEventStream,
     );
   }
 

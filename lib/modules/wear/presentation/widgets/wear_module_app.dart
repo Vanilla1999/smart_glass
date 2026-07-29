@@ -13,6 +13,7 @@ import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_event.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_phrase_event.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/navigation/wear_routes.dart';
@@ -31,6 +32,7 @@ class WearModuleApp extends StatefulWidget {
     this.voiceCommandStream,
     this.voiceCommandEventStream,
     this.voicePhraseStream,
+    this.voicePhraseEventStream,
     this.routes,
     this.initialLocation,
     this.onStartVoice,
@@ -46,6 +48,7 @@ class WearModuleApp extends StatefulWidget {
   final Stream<WearVoiceCommand>? voiceCommandStream;
   final Stream<WearVoiceCommandEvent>? voiceCommandEventStream;
   final Stream<String>? voicePhraseStream;
+  final Stream<WearVoicePhraseEvent>? voicePhraseEventStream;
   final List<RouteBase>? routes;
   final String? initialLocation;
   final Future<void> Function()? onStartVoice;
@@ -63,7 +66,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     with WidgetsBindingObserver {
   late final GoRouter _router;
   StreamSubscription<_VoiceCommandInput>? _voiceSub;
-  StreamSubscription<String>? _voicePhraseSub;
+  StreamSubscription<_VoicePhraseInput>? _voicePhraseSub;
   StreamSubscription<WearScreenId>? _screenActionsSub;
   StreamSubscription<dynamic>? _authorizedSub;
   StreamSubscription<void>? _clearedSub;
@@ -101,11 +104,18 @@ class _WearModuleAppState extends State<WearModuleApp>
     );
   }
 
-  Stream<String> get _voicePhrases {
+  Stream<_VoicePhraseInput> get _voicePhrases {
     final Stream<String>? stream = widget.voicePhraseStream;
-    if (stream != null) return stream;
-    if (widget.onStartVoice != null) return const Stream<String>.empty();
-    return WearDependencies.I.voiceControlService.phraseStream;
+    if (stream != null) return stream.map(_VoicePhraseInput.withoutContext);
+    final eventStream = widget.voicePhraseEventStream;
+    if (eventStream != null) {
+      return eventStream.map(_VoicePhraseInput.withContext);
+    }
+    if (widget.onStartVoice != null) {
+      return const Stream<_VoicePhraseInput>.empty();
+    }
+    return WearDependencies.I.voiceControlService.phraseEventStream
+        .map(_VoicePhraseInput.withContext);
   }
 
   @override
@@ -190,7 +200,8 @@ class _WearModuleAppState extends State<WearModuleApp>
       },
     );
     _voicePhraseSub = _voicePhrases.listen(
-      (String phrase) async {
+      (_VoicePhraseInput input) async {
+        final String phrase = input.phrase;
         if (!_voiceCommandsEnabled) {
           print('[WearModuleApp] suppress voice phrase: microphone paused');
           return;
@@ -198,6 +209,15 @@ class _WearModuleAppState extends State<WearModuleApp>
         if (!_voiceState.acceptsCommands) {
           print('[WearModuleApp] suppress voice phrase during reconnect');
           return;
+        }
+        if (input.event case final WearVoicePhraseEvent event) {
+          final actualScreen = WearDependencies.I.actualScreenStore.screen;
+          final speech = WearDependencies.I.speechRecognitionService;
+          if (event.sourceScreen != actualScreen ||
+              event.routeRevision != speech.routeRevision ||
+              event.grammarRevision != speech.grammarRevision) {
+            return;
+          }
         }
         final int startedAt = DateTime.now().millisecondsSinceEpoch;
         print(
@@ -904,4 +924,19 @@ class _VoiceCommandInput {
 
   final WearVoiceCommand command;
   final WearVoiceCommandEvent? event;
+}
+
+class _VoicePhraseInput {
+  const _VoicePhraseInput(this.phrase, this.event);
+
+  factory _VoicePhraseInput.withoutContext(String phrase) {
+    return _VoicePhraseInput(phrase, null);
+  }
+
+  factory _VoicePhraseInput.withContext(WearVoicePhraseEvent event) {
+    return _VoicePhraseInput(event.phrase, event);
+  }
+
+  final String phrase;
+  final WearVoicePhraseEvent? event;
 }

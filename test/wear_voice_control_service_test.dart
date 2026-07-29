@@ -133,6 +133,20 @@ void main() {
         isNull,
       );
     });
+
+    test('partial state remains bounded across many utterances', () {
+      final RecognitionArbiter arbiter = RecognitionArbiter();
+
+      for (int utteranceId = 1; utteranceId <= 1000; utteranceId++) {
+        arbiter.accept(_event(
+          text: 'шум $utteranceId',
+          utteranceId: utteranceId,
+          kind: RecognitionKind.partial,
+        ));
+      }
+
+      expect(arbiter.debugRetainedPartialCount, lessThanOrEqualTo(128));
+    });
   });
 }
 
