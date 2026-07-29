@@ -2,9 +2,8 @@
 
 ## Noise-Robust Screen-Scoped Voice Grammar
 
-Reviewed baseline: `4c64c208c763495748fc11a1566c65e196c9f005` on
-`feature/native-uac4-voice`. The fixes below are working-tree changes. Hardware
-validation is not part of this run.
+Reviewed artifact: `f1e26f60161b3fdd0648b042ec7969dd254a3cae` on
+`feature/native-uac4-voice`. Hardware validation is not part of this run.
 
 | Area | Status | Automated evidence | External validation |
 |---|---|---|---|
@@ -24,11 +23,18 @@ Implementation rules now enforced:
 - External acoustic VAD endpoints do not finalize or reset the command
   recognizer.
 - Grammar changes commit route and grammar revisions only after successful
-  `setGrammar`; failure recovery remains fail-closed.
+  bounded `reset`/`setGrammar`; timeout recovery configures a replacement with
+  the requested target grammar before committing revisions.
 - Stable partial execution uses a 150 ms timer with an explicit
   `partialRevision` guard. Tests advance an injected manual clock.
 - Typed commands are revalidated against screen, route revision, and grammar
   revision immediately before UI execution.
+- Typed free-text phrases receive the same consumer-side context validation.
+- A failed free-text factory call remains retryable; a timed-out native
+  recognizer is detached and replaced before the next replay.
+- A timed-out command recognizer is disposed only after its pending native
+  operation completes; exhausted grammar recovery marks the session unavailable.
+- Per-utterance partial state is bounded to 128 entries.
 - `WearVoiceSession` serializes screen configuration and applies latest-wins
   semantics to rapid route changes.
 - Live PCM is not sent to free text in parallel. A no-command endpoint replays
@@ -39,8 +45,8 @@ Implementation rules now enforced:
 | Command | Result |
 |---|---|
 | `fvm dart format <changed Dart files>` | Passed |
-| Targeted voice tests | Passed: 55 tests |
-| `fvm flutter test` | Passed: 224 tests |
+| Recovery and integration tests | Passed: 73 tests |
+| `fvm flutter test` | Passed: 233 tests |
 | `fvm flutter analyze` | Completed with 311 existing project issues and no compile error |
 | `./gradlew :app:compileDebugKotlin` | Passed |
 | `git diff --check` | Passed |
