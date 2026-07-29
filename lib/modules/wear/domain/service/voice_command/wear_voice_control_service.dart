@@ -173,13 +173,17 @@ class WearVoiceControlService {
       final int recognizedAtMillis = _clock();
       if (result == null) return;
       final String segmentKey = '${result.captureEpoch}:${result.segmentId}';
-      final int asrMillis = recognizedAtMillis -
+      final int decoderUtteranceOpenAgeMs = recognizedAtMillis -
           (result.commandUtteranceStartedAtMillis ?? recognizedAtMillis);
+      final int acousticSpeechToCommandMs = recognizedAtMillis -
+          (_segmentStartedAt[segmentKey] ??
+              result.commandUtteranceStartedAtMillis ??
+              recognizedAtMillis);
       final WearVoiceCommandEvent event = WearVoiceCommandEvent(
         command: cmd,
         traceId: '$segmentKey:$emitSeq',
         recognizedAtMillis: recognizedAtMillis,
-        asrMillis: asrMillis,
+        asrMillis: acousticSpeechToCommandMs,
         captureEpoch: result.captureEpoch,
         commandUtteranceId: result.commandUtteranceId,
         sourceScreen: result.sourceScreen,
@@ -188,7 +192,9 @@ class WearVoiceControlService {
       );
       print(
         '[WearVoiceControlService] emitting#$emitSeq $source command: $cmd '
-        'hasListener=${_commandController.hasListener}',
+        'hasListener=${_commandController.hasListener} '
+        'acousticSpeechToCommandMs=$acousticSpeechToCommandMs '
+        'decoderUtteranceOpenAgeMs=$decoderUtteranceOpenAgeMs',
       );
       _commandController.add(cmd);
       if (!_commandEventController.isClosed) {

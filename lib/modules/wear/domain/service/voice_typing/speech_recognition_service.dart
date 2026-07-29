@@ -661,6 +661,9 @@ class SpeechRecognitionService {
     }
     if (segment.isEndpoint) {
       _logVadEvent('VAD_ENDPOINT', segment);
+      if (segment.endpointReason == AcousticEndpointReason.silence) {
+        _enqueueSilenceBoundary(segment, captureEpoch);
+      }
       unawaited(_finishSegment(segment, captureEpoch).catchError(
         (Object error, StackTrace stackTrace) {
           print('[SpeechRecognitionService] segment finish error: $error');
@@ -717,7 +720,112 @@ class SpeechRecognitionService {
           _enqueueCommandChunk(bytes, captureEpoch, segment, admitted: true));
     }
     await Future.wait<void>(processing);
+    if (segment.endpointReason == AcousticEndpointReason.silence) {
+      _enqueueSilenceBoundary(segment, captureEpoch);
+    }
     if (segment.isEndpoint) await _finishSegment(segment, captureEpoch);
+  }
+
+  void _enqueueSilenceBoundary(SpeechSegment segment, int captureEpoch) {
+    final int expectedUtteranceId = _commandUtteranceId;
+    final VoiceRecognizer? expectedRecognizer = _commandRecognizer;
+    if (expectedRecognizer == null) return;
+
+    final Future<void> boundary = _commandAudioProcessing.then((_) async {
+      if (!_captureEpoch.isCurrent(captureEpoch) ||
+          _commandUtteranceId != expectedUtteranceId ||
+          !identical(_commandRecognizer, expectedRecognizer)) {
+        return;
+      }
+      if (_utterancePcm.length == 0 && _commandPartialText.trim().isEmpty) {
+        return;
+      }
+      await _forceCloseCommandUtterance(
+        recognizer: expectedRecognizer,
+        segment: segment,
+        captureEpoch: captureEpoch,
+        expectedUtteranceId: expectedUtteranceId,
+      );
+    });
+    _commandAudioProcessing = boundary.catchError(
+      (Object error, StackTrace stackTrace) {
+        print(
+          '[SpeechRecognitionService] silence boundary failed: '
+          '$error\n$stackTrace',
+        );
+      },
+    );
+  }
+
+  Future<void> _forceCloseCommandUtterance({
+    required VoiceRecognizer recognizer,
+    required SpeechSegment segment,
+    required int captureEpoch,
+    required int expectedUtteranceId,
+  }) async {
+    final int startedAt = DateTime.now().millisecondsSinceEpoch;
+    Future<void>? pendingOperation;
+    try {
+      final Future<String> finalOperation = recognizer.getFinalResult();
+      pendingOperation = finalOperation.then<void>((_) {});
+      final String json = await _segmentCloseGuard.run(finalOperation);
+      if (!_isCurrentCommandUtterance(
+        recognizer,
+        captureEpoch,
+        expectedUtteranceId,
+      )) {
+        return;
+      }
+
+      final String text = _extractText(
+        json,
+        preferredKeys: const <String>['text'],
+      );
+      if (text.isNotEmpty) {
+        _emitResult(
+          _RecognitionSource.command,
+          text,
+          epoch: null,
+          captureEpoch: captureEpoch,
+          kind: RecognitionKind.streamFinal,
+          segment: segment,
+          commandUtteranceId: expectedUtteranceId,
+        );
+      }
+      _completeCommandUtterance(
+        resultText: text,
+        captureEpoch: captureEpoch,
+        segment: segment,
+        commandUtteranceId: expectedUtteranceId,
+      );
+
+      final Future<void> resetOperation = recognizer.reset();
+      pendingOperation = resetOperation;
+      await _segmentCloseGuard.run(resetOperation);
+      print(
+        '[VOICE_BOUNDARY] utteranceEndOwner=vad_silence '
+        'commandUtteranceId=$expectedUtteranceId text="$text" '
+        'forcedCloseMs=${DateTime.now().millisecondsSinceEpoch - startedAt} '
+        'naturalEndpointWon=false recognizerReplaced=false',
+      );
+    } catch (error) {
+      await _replaceUncertainCommandRecognizer(
+        failedRecognizer: recognizer,
+        pendingOperation: pendingOperation,
+        expectedUtteranceId: expectedUtteranceId,
+      );
+      rethrow;
+    }
+  }
+
+  bool _isCurrentCommandUtterance(
+    VoiceRecognizer recognizer,
+    int captureEpoch,
+    int expectedUtteranceId,
+  ) {
+    return _captureEpoch.isCurrent(captureEpoch) &&
+        _commandUtteranceId == expectedUtteranceId &&
+        identical(_commandRecognizer, recognizer);
   }
 
   Future<void> _enqueueCommandChunk(
@@ -876,30 +984,18 @@ class SpeechRecognitionService {
         );
       }
       if (source == _RecognitionSource.command) {
-        final int replayUtteranceId = _commandUtteranceId;
-        final Uint8List replay = _utterancePcm.take();
-        final bool commandFound =
-            _commandParser.parseExactForScreen(_sourceScreen, resultText) !=
-                null;
-        if (!commandFound && _freeTextEnabled && replay.isNotEmpty) {
-          _enqueueFreeTextReplay(
-            replay,
-            epoch: _freeTextEpoch,
-            captureEpoch: captureEpoch!,
-            segment: segment,
-            commandUtteranceId: replayUtteranceId,
-          );
-        }
-        if (_canProcess(source, epoch, captureEpoch)) {
-          _publishPartialChange(
-            source: source,
-            text: '',
-            epoch: epoch,
-            captureEpoch: captureEpoch,
-            segment: segment,
-          );
-          _finalizeCommandUtterance(clearPartial: false);
-        }
+        final int completedUtteranceId = _commandUtteranceId;
+        _completeCommandUtterance(
+          resultText: resultText,
+          captureEpoch: captureEpoch!,
+          segment: segment,
+          commandUtteranceId: _commandUtteranceId,
+        );
+        print(
+          '[VOICE_BOUNDARY] utteranceEndOwner=vosk '
+          'commandUtteranceId=$completedUtteranceId text="$resultText" '
+          'naturalEndpointWon=true recognizerReplaced=false',
+        );
       } else if (_canProcess(source, epoch, captureEpoch)) {
         _setPartialText(source, '');
       }
@@ -932,6 +1028,43 @@ class SpeechRecognitionService {
     if (_canProcess(source, epoch, captureEpoch)) {
       _setPartialText(source, partialText);
     }
+  }
+
+  void _completeCommandUtterance({
+    required String resultText,
+    required int captureEpoch,
+    required SpeechSegment segment,
+    required int commandUtteranceId,
+  }) {
+    final Uint8List replay = _utterancePcm.take();
+    final bool commandFound =
+        _commandParser.parseExactForScreen(_sourceScreen, resultText) != null ||
+            _commandParser.parseExactForScreen(
+                  _sourceScreen,
+                  _commandPartialText,
+                ) !=
+                null;
+    if (!commandFound && _freeTextEnabled && replay.isNotEmpty) {
+      _enqueueFreeTextReplay(
+        replay,
+        epoch: _freeTextEpoch,
+        captureEpoch: captureEpoch,
+        segment: segment,
+        commandUtteranceId: commandUtteranceId,
+      );
+    }
+    if (!_canProcess(_RecognitionSource.command, null, captureEpoch) ||
+        _commandUtteranceId != commandUtteranceId) {
+      return;
+    }
+    _publishPartialChange(
+      source: _RecognitionSource.command,
+      text: '',
+      epoch: null,
+      captureEpoch: captureEpoch,
+      segment: segment,
+    );
+    _finalizeCommandUtterance();
   }
 
   void _enqueueFreeTextReplay(
@@ -1185,6 +1318,37 @@ class SpeechRecognitionService {
       rethrow;
     }
     return _commandRecognizer!;
+  }
+
+  Future<void> _replaceUncertainCommandRecognizer({
+    required VoiceRecognizer failedRecognizer,
+    required Future<void>? pendingOperation,
+    required int expectedUtteranceId,
+  }) async {
+    if (!identical(_commandRecognizer, failedRecognizer)) return;
+    _commandRecognizer = null;
+    final VoiceRecognizer replacement =
+        await _createRecognizer(_RecognitionSource.command);
+    _commandRecognizer = replacement;
+    if (_commandUtteranceId == expectedUtteranceId) {
+      _finalizeCommandUtterance();
+    }
+    print(
+      '[VOICE_BOUNDARY] commandUtteranceId=$expectedUtteranceId '
+      'recognizerReplaced=true',
+    );
+
+    final Future<void> safeToDispose = pendingOperation == null
+        ? Future<void>.value()
+        : pendingOperation.catchError((Object _, StackTrace __) {});
+    unawaited(safeToDispose.then((_) => failedRecognizer.dispose()).catchError(
+      (Object error, StackTrace stackTrace) {
+        print(
+          '[SpeechRecognitionService] uncertain recognizer cleanup failed: '
+          '$error\n$stackTrace',
+        );
+      },
+    ));
   }
 
   Future<void> _configureCommandRecognizer(

@@ -438,6 +438,308 @@ void main() {
     expect(replacement.accepted, hasLength(1));
   });
 
+  test('silence boundary separates repeated commands without duplicate action',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..partialSequence.addAll(<String>[
+        _json(partial: 'вверх'),
+        _json(partial: 'вверх'),
+        _json(partial: 'вверх'),
+        _json(partial: 'вверх'),
+      ])
+      ..finalSequence.add(_json(text: 'вверх'));
+    final SpeechRecognitionService service = _service(
+      command: command,
+      segmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(milliseconds: 40),
+        maxSegmentDuration: const Duration(seconds: 30),
+      ),
+    );
+    final WearVoiceControlService control = WearVoiceControlService(
+      speechRecognitionService: service,
+      screenProvider: () => WearScreenId.menu,
+    );
+    final List<WearVoiceCommand> actions = <WearVoiceCommand>[];
+    final StreamSubscription<WearVoiceCommand> subscription =
+        control.commandStream.listen(actions.add);
+    addTearDown(subscription.cancel);
+    addTearDown(control.dispose);
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.processAudioChunk(_pcmFrame(0));
+    expect(service.commandUtteranceId, 2);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing();
+
+    expect(actions, <WearVoiceCommand>[
+      WearVoiceCommand.up,
+      WearVoiceCommand.up,
+    ]);
+    expect(command.finalCalls, 1);
+    expect(service.commandUtteranceId, 2);
+  });
+
+  test('natural endpoint before silence boundary makes forced close a no-op',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.addAll(<bool>[false, false, true])
+      ..resultSequence.add(_json(text: 'вверх'));
+    final SpeechRecognitionService service = _service(
+      command: command,
+      segmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(milliseconds: 40),
+        maxSegmentDuration: const Duration(seconds: 30),
+      ),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.processAudioChunk(_pcmFrame(0));
+
+    expect(command.resultCalls, 1);
+    expect(command.finalCalls, 0);
+    expect(service.commandUtteranceId, 2);
+  });
+
+  test('next segment PCM waits for silence boundary reset', () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..finalSequence.add(_json(text: 'вверх'));
+    final SpeechRecognitionService service = _service(
+      command: command,
+      segmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(milliseconds: 40),
+        maxSegmentDuration: const Duration(seconds: 30),
+      ),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    final Completer<void> resetBlock = Completer<void>();
+    final Completer<void> resetStarted = Completer<void>();
+    command
+      ..resetBlock = resetBlock
+      ..resetStarted = resetStarted;
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(0));
+    final Future<void> boundary = service.processAudioChunk(_pcmFrame(0));
+    await resetStarted.future;
+    final Future<void> nextSegment = service.processAudioChunk(_pcmFrame(1000));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(command.accepted, hasLength(3));
+    resetBlock.complete();
+    await Future.wait<void>(<Future<void>>[boundary, nextSegment]);
+    expect(command.accepted, hasLength(4));
+    expect(service.commandUtteranceId, 2);
+  });
+
+  test('silence boundary timeout replaces uncertain command recognizer',
+      () async {
+    final Completer<String> blockedFinal = Completer<String>();
+    final _FakeRecognizer failed = _FakeRecognizer()
+      ..finalOverride = () => blockedFinal.future;
+    final _FakeRecognizer replacement = _FakeRecognizer();
+    final List<_FakeRecognizer> recognizers = <_FakeRecognizer>[
+      failed,
+      replacement,
+    ];
+    final SpeechRecognitionService service = SpeechRecognitionService(
+      commandGrammar: const <String>['вверх', '[unk]'],
+      speechSegmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(milliseconds: 40),
+        maxSegmentDuration: const Duration(seconds: 30),
+      ),
+      recognizerFactory: (RecognitionLane lane, List<String> grammar) async =>
+          recognizers.removeAt(0),
+      recognizerOperationTimeout: const Duration(milliseconds: 20),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.processAudioChunk(_pcmFrame(1000));
+
+    expect(failed.finalCalls, 1);
+    expect(replacement.accepted, hasLength(1));
+    expect(service.commandUtteranceId, 2);
+    blockedFinal.complete(_json());
+    await Future<void>.delayed(Duration.zero);
+    expect(failed.disposeCalls, 1);
+  });
+
+  test('silence boundary separates different commands and utterance ids',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..partialSequence.addAll(<String>[
+        _json(partial: 'вниз'),
+        _json(partial: 'вниз'),
+        _json(partial: 'вниз'),
+        _json(partial: 'вверх'),
+      ])
+      ..finalSequence.add(_json(text: 'вниз'));
+    final SpeechRecognitionService service = _service(
+      command: command,
+      segmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(milliseconds: 40),
+        maxSegmentDuration: const Duration(seconds: 30),
+      ),
+    );
+    final WearVoiceControlService control = WearVoiceControlService(
+      speechRecognitionService: service,
+      screenProvider: () => WearScreenId.menu,
+    );
+    final List<WearVoiceCommand> actions = <WearVoiceCommand>[];
+    final List<int> utteranceIds = <int>[];
+    final StreamSubscription<WearVoiceCommand> commandSubscription =
+        control.commandStream.listen(actions.add);
+    final StreamSubscription<SegmentedRecognitionResult> resultSubscription =
+        service.segmentedResultsStream.listen((event) {
+      if (event.kind == RecognitionKind.partial &&
+          event.parsedCommand != null) {
+        utteranceIds.add(event.commandUtteranceId);
+      }
+    });
+    addTearDown(commandSubscription.cancel);
+    addTearDown(resultSubscription.cancel);
+    addTearDown(control.dispose);
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.processAudioChunk(_pcmFrame(1000));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(actions, <WearVoiceCommand>[
+      WearVoiceCommand.down,
+      WearVoiceCommand.up,
+    ]);
+    expect(utteranceIds, <int>[1, 2]);
+  });
+
+  test('silence no-command final replays buffered PCM to free-text', () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..finalSequence.add(_json(text: 'красное яблоко'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finalSequence.add(_json(text: 'красное яблоко'));
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+      segmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(milliseconds: 40),
+        maxSegmentDuration: const Duration(seconds: 30),
+      ),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final Future<SegmentedRecognitionResult> result = service
+        .segmentedResultsStream
+        .firstWhere((event) => event.lane == RecognitionLane.freeText);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.waitForProcessing();
+
+    expect((await result).text, 'красное яблоко');
+    expect(freeText.accepted, isNotEmpty);
+  });
+
+  test('empty forced final after command partial does not replay free-text',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..partialSequence.addAll(<String>[
+        _json(partial: 'вверх'),
+        _json(partial: 'вверх'),
+        _json(partial: 'вверх'),
+      ])
+      ..finalSequence.add(_json());
+    final _FakeRecognizer freeText = _FakeRecognizer();
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+      segmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(milliseconds: 40),
+        maxSegmentDuration: const Duration(seconds: 30),
+      ),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.waitForProcessing();
+
+    expect(freeText.accepted, isEmpty);
+    expect(service.commandUtteranceId, 2);
+  });
+
+  test('capture restart invalidates a pending silence boundary', () async {
+    final Completer<String> blockedFinal = Completer<String>();
+    final Completer<void> finalStarted = Completer<void>();
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..finalOverride = () {
+        finalStarted.complete();
+        return blockedFinal.future;
+      };
+    final SpeechRecognitionService service = _service(
+      command: command,
+      segmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(milliseconds: 40),
+        maxSegmentDuration: const Duration(seconds: 30),
+      ),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(0));
+    final Future<void> boundary = service.processAudioChunk(_pcmFrame(0));
+    await finalStarted.future;
+    service.beginProcessingCapture();
+    blockedFinal.complete(_json(text: 'вверх'));
+    await boundary;
+
+    expect(service.commandUtteranceId, 1);
+    expect(command.resetCalls, 1);
+  });
+
   test('external max-duration VAD does not finalize command recognizer',
       () async {
     final _FakeRecognizer command = _FakeRecognizer();
@@ -559,12 +861,16 @@ class _FakeRecognizer implements VoiceRecognizer {
   final List<bool> endpointSequence = <bool>[];
   final List<String> resultSequence = <String>[];
   final List<String> finalSequence = <String>[];
+  final List<String> partialSequence = <String>[];
   final List<Uint8List> accepted = <Uint8List>[];
   final List<List<String>> grammars = <List<String>>[];
   bool failNextGrammar = false;
   int grammarFailuresRemaining = 0;
   Completer<void>? grammarBlock;
+  Completer<void>? resetBlock;
+  Completer<void>? resetStarted;
   Future<bool> Function(Uint8List bytes)? acceptOverride;
+  Future<String> Function()? finalOverride;
   int resetCalls = 0;
   int resultCalls = 0;
   int finalCalls = 0;
@@ -586,11 +892,15 @@ class _FakeRecognizer implements VoiceRecognizer {
   @override
   Future<String> getFinalResult() async {
     finalCalls++;
+    final Future<String> Function()? override = finalOverride;
+    if (override != null) return override();
     return finalSequence.isEmpty ? _json() : finalSequence.removeAt(0);
   }
 
   @override
-  Future<String> getPartialResult() async => _json(partial: '');
+  Future<String> getPartialResult() async => partialSequence.isEmpty
+      ? _json(partial: '')
+      : partialSequence.removeAt(0);
 
   @override
   Future<String> getResult() async {
@@ -601,6 +911,13 @@ class _FakeRecognizer implements VoiceRecognizer {
   @override
   Future<void> reset() async {
     resetCalls++;
+    final Completer<void>? started = resetStarted;
+    if (started != null && !started.isCompleted) started.complete();
+    final Completer<void>? block = resetBlock;
+    if (block != null) {
+      resetBlock = null;
+      await block.future;
+    }
   }
 
   @override
