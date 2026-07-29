@@ -12,6 +12,7 @@ import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_event.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/navigation/wear_routes.dart';
@@ -59,7 +60,7 @@ class WearModuleApp extends StatefulWidget {
 class _WearModuleAppState extends State<WearModuleApp>
     with WidgetsBindingObserver {
   late final GoRouter _router;
-  StreamSubscription<WearVoiceCommand>? _voiceSub;
+  StreamSubscription<_VoiceCommandInput>? _voiceSub;
   StreamSubscription<String>? _voicePhraseSub;
   StreamSubscription<WearFlowState>? _flowStateSub;
   StreamSubscription<dynamic>? _authorizedSub;
@@ -80,13 +81,17 @@ class _WearModuleAppState extends State<WearModuleApp>
   WearFlowController get _flow =>
       widget.flowController ?? WearDependencies.I.wearFlowController;
 
-  Stream<WearVoiceCommand> get _voiceCommands {
+  Stream<_VoiceCommandInput> get _voiceCommands {
     final Stream<WearVoiceCommand>? stream = widget.voiceCommandStream;
-    if (stream != null) return stream;
-    if (widget.onStartVoice != null) {
-      return const Stream<WearVoiceCommand>.empty();
+    if (stream != null) {
+      return stream.map(_VoiceCommandInput.withoutTrace);
     }
-    return WearDependencies.I.voiceControlService.commandStream;
+    if (widget.onStartVoice != null) {
+      return const Stream<_VoiceCommandInput>.empty();
+    }
+    return WearDependencies.I.voiceControlService.commandEventStream.map(
+      _VoiceCommandInput.withTrace,
+    );
   }
 
   Stream<String> get _voicePhrases {
@@ -114,7 +119,8 @@ class _WearModuleAppState extends State<WearModuleApp>
     flow.setNavigationOutput(FlutterWearNavigationOutput(router: _router));
     flow.setUiLifecycle(WearUiLifecycle.active);
     _voiceSub = _voiceCommands.listen(
-      (WearVoiceCommand command) async {
+      (_VoiceCommandInput input) async {
+        final WearVoiceCommand command = input.command;
         if (command == WearVoiceCommand.stopMicrophone) {
           _setVoiceCommandsEnabled(false);
           return;
@@ -135,6 +141,9 @@ class _WearModuleAppState extends State<WearModuleApp>
           return;
         }
         final int startedAt = DateTime.now().millisecondsSinceEpoch;
+        if (input.event case final WearVoiceCommandEvent event) {
+          WearStatusIconReporter.I.beginPerformanceTrace(event);
+        }
         print(
           '[WearModuleApp] voice command received command=$command '
           'screen=${flow.state.screen} at=$startedAt',
@@ -845,4 +854,19 @@ class _WearNavigatorObserver extends NavigatorObserver {
       'previousRoute=${previousRoute?.settings.name}',
     );
   }
+}
+
+class _VoiceCommandInput {
+  const _VoiceCommandInput(this.command, this.event);
+
+  factory _VoiceCommandInput.withoutTrace(WearVoiceCommand command) {
+    return _VoiceCommandInput(command, null);
+  }
+
+  factory _VoiceCommandInput.withTrace(WearVoiceCommandEvent event) {
+    return _VoiceCommandInput(event.command, event);
+  }
+
+  final WearVoiceCommand command;
+  final WearVoiceCommandEvent? event;
 }

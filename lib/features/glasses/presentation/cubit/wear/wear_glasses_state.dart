@@ -26,6 +26,11 @@ class WearGlassesState {
     this.showPrinterIcon = false,
     this.printerAvailable = false,
     this.voiceCommandsEnabled = true,
+    this.performanceTraceId,
+    this.performanceCommand,
+    this.performanceRecognizedAtMillis,
+    this.performanceAsrMillis,
+    this.performanceSentAtMillis,
   });
 
   factory WearGlassesState.initial() {
@@ -69,6 +74,12 @@ class WearGlassesState {
       printerAvailable: _bool(payload['printerAvailable']),
       voiceCommandsEnabled:
           _bool(payload['voiceCommandsEnabled'], fallback: true),
+      performanceTraceId: _string(payload['performanceTraceId']),
+      performanceCommand: _string(payload['performanceCommand']),
+      performanceRecognizedAtMillis:
+          _nullableInt(payload['performanceRecognizedAtMillis']),
+      performanceAsrMillis: _nullableInt(payload['performanceAsrMillis']),
+      performanceSentAtMillis: _nullableInt(payload['performanceSentAtMillis']),
     );
   }
 
@@ -96,6 +107,11 @@ class WearGlassesState {
   final bool showPrinterIcon;
   final bool printerAvailable;
   final bool voiceCommandsEnabled;
+  final String? performanceTraceId;
+  final String? performanceCommand;
+  final int? performanceRecognizedAtMillis;
+  final int? performanceAsrMillis;
+  final int? performanceSentAtMillis;
 
   static WearGlassesScreenType _screenType(dynamic raw) {
     return WearGlassesScreenType.values.firstWhere(
@@ -140,5 +156,12 @@ class WearGlassesState {
     if (raw is int) return raw;
     if (raw is num) return raw.toInt();
     return int.tryParse(_string(raw)?.trim() ?? '') ?? fallback;
+  }
+
+  static int? _nullableInt(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is int) return raw;
+    if (raw is num) return raw.toInt();
+    return int.tryParse(_string(raw)?.trim() ?? '');
   }
 }

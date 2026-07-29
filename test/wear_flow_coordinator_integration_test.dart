@@ -992,7 +992,7 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       expect(WearStatusIconReporter.I.lastPayload?.title, 'Выбор раздела');
     });
 
-    testWearWidget('direction ASR alias waits for its segment final',
+    testWearWidget('direction ASR alias executes before its segment final',
         (WidgetTester tester) async {
       final _FakeSpeechRecognitionService speech =
           _FakeSpeechRecognitionService();
@@ -1024,7 +1024,7 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       speech.emitCommandPartial('вниз');
       await tester.pumpAndSettle();
 
-      expect(routerFlow.state.menuFocusedIndex, 0);
+      expect(routerFlow.state.menuFocusedIndex, 1);
 
       speech.emitCommandResult('вниз');
       speech.endSegment();

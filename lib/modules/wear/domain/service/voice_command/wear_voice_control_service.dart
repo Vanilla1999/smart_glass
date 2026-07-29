@@ -5,6 +5,7 @@ import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 
@@ -22,7 +23,8 @@ class WearVoiceControlService {
           commandParserService: commandParserService,
           actionCatalog: actionCatalog,
           screenProvider: screenProvider,
-        ) {
+        ),
+        _clock = clock ?? (() => DateTime.now().millisecondsSinceEpoch) {
     print('[WearVoiceControlService] subscribing to ASR results');
     _recognitionSubscription =
         _speechRecognitionService.segmentedResultsStream.listen(
@@ -39,15 +41,18 @@ class WearVoiceControlService {
     );
     _segmentStartedSubscription =
         _speechRecognitionService.segmentStartedStream.listen(
-      _arbiter.startSegment,
+      _onSegmentStarted,
       onError: _onRecognitionError,
     );
   }
 
   final SpeechRecognitionService _speechRecognitionService;
   final RecognitionArbiter _arbiter;
+  final WearVoiceClock _clock;
   final StreamController<WearVoiceCommand> _commandController =
       StreamController<WearVoiceCommand>.broadcast();
+  final StreamController<WearVoiceCommandEvent> _commandEventController =
+      StreamController<WearVoiceCommandEvent>.broadcast();
   final StreamController<String> _phraseController =
       StreamController<String>.broadcast();
   final StreamController<String?> _freeTextPreviewController =
@@ -56,9 +61,12 @@ class WearVoiceControlService {
   StreamSubscription<SpeechSegmentStarted>? _segmentStartedSubscription;
   StreamSubscription<SpeechSegmentEnded>? _segmentEndedSubscription;
   int _emittedCommandSeq = 0;
+  final Map<String, int> _segmentStartedAt = <String, int>{};
 
   static const int _minPartialPhraseLength = 6;
   Stream<WearVoiceCommand> get commandStream => _commandController.stream;
+  Stream<WearVoiceCommandEvent> get commandEventStream =>
+      _commandEventController.stream;
   Stream<String> get phraseStream => _phraseController.stream;
   Stream<String?> get freeTextPreviewStream =>
       _freeTextPreviewController.stream;
@@ -68,7 +76,12 @@ class WearVoiceControlService {
     if (outcome == null) return;
     if (outcome.command case final WearVoiceCommand command) {
       if (outcome.clearPreview) _emitFreeTextPreview(null);
-      _emitCommand(command, source: result.kind.name);
+      _emitCommand(
+        command,
+        captureEpoch: result.captureEpoch,
+        segmentId: result.segmentId,
+        source: result.kind.name,
+      );
       return;
     }
     if (outcome.preview case final String preview) {
@@ -81,29 +94,59 @@ class WearVoiceControlService {
   }
 
   void _onSegmentEnded(SpeechSegmentEnded ended) {
-    final RecognitionArbitration? outcome = _arbiter.endSegment(ended);
-    if (outcome?.command case final WearVoiceCommand command) {
-      if (outcome!.clearPreview) _emitFreeTextPreview(null);
-      _emitCommand(command, source: 'segment_final');
-      return;
-    }
-    if (outcome?.phrase case final String phrase) {
-      _emitPhrase(phrase);
+    try {
+      final RecognitionArbitration? outcome = _arbiter.endSegment(ended);
+      if (outcome?.command case final WearVoiceCommand command) {
+        if (outcome!.clearPreview) _emitFreeTextPreview(null);
+        _emitCommand(
+          command,
+          captureEpoch: ended.captureEpoch,
+          segmentId: ended.segmentId,
+          source: 'segment_final',
+        );
+        return;
+      }
+      if (outcome?.phrase case final String phrase) {
+        _emitPhrase(phrase);
+      }
+    } finally {
+      _segmentStartedAt.remove('${ended.captureEpoch}:${ended.segmentId}');
     }
   }
 
   void _emitCommand(
     WearVoiceCommand cmd, {
+    required int captureEpoch,
+    required int segmentId,
     String source = 'final',
   }) {
     if (!_commandController.isClosed) {
       final int emitSeq = ++_emittedCommandSeq;
+      final int recognizedAtMillis = _clock();
+      final String segmentKey = '$captureEpoch:$segmentId';
+      final int asrMillis = recognizedAtMillis -
+          (_segmentStartedAt[segmentKey] ?? recognizedAtMillis);
+      final WearVoiceCommandEvent event = WearVoiceCommandEvent(
+        command: cmd,
+        traceId: '$segmentKey:$emitSeq',
+        recognizedAtMillis: recognizedAtMillis,
+        asrMillis: asrMillis,
+      );
       print(
         '[WearVoiceControlService] emitting#$emitSeq $source command: $cmd '
         'hasListener=${_commandController.hasListener}',
       );
       _commandController.add(cmd);
+      if (!_commandEventController.isClosed) {
+        _commandEventController.add(event);
+      }
     }
+  }
+
+  void _onSegmentStarted(SpeechSegmentStarted started) {
+    _arbiter.startSegment(started);
+    _segmentStartedAt['${started.captureEpoch}:${started.segmentId}'] =
+        _clock();
   }
 
   void _emitPhrase(String phrase) {
@@ -148,6 +191,7 @@ class WearVoiceControlService {
     await _segmentEndedSubscription?.cancel();
     _arbiter.dispose();
     await _commandController.close();
+    await _commandEventController.close();
     await _phraseController.close();
     await _freeTextPreviewController.close();
   }

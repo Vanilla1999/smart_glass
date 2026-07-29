@@ -61,7 +61,7 @@ private const val UAC4_CLASS = "com.xcheng.uac4client.Uac4ClientService"
 private const val SSP_FRAME_BYTES = 2048
 private const val PCM_HEADER_BYTES = 32
 private const val UAC4_PACKET_BYTES = 32 * 1024
-private const val MONO_PACKET_BYTES = UAC4_PACKET_BYTES / 4
+private const val MONO_PACKET_BYTES = SSP_FRAME_BYTES / 4 * 2
 private const val MAX_PENDING_INPUT_BYTES = UAC4_PACKET_BYTES * 8
 private const val ACTIVATION_TIMEOUT_SECONDS = 10L
 private const val SERVICE_BIND_TIMEOUT_SECONDS = 5L
@@ -72,6 +72,7 @@ private const val UAC4_STOP_TIMEOUT_SECONDS = 5L
 private const val UAC4_DEINIT_TIMEOUT_SECONDS = 5L
 private const val SSP_OPERATION_TIMEOUT_SECONDS = 5L
 private const val SSP_PROCESS_TIMEOUT_MILLIS = 500L
+internal const val PCM_ACK_TIMEOUT_MILLIS = 2_000L
 private val VALID_OWNERS = setOf("wearRecognition", "legacyRecognition", "voiceMemo")
 
 /** Owns the only UAC4 service lease in the primary Flutter engine. */
@@ -531,24 +532,26 @@ private class NativeVoiceCaptureManager(
             return
         }
         while (delivery.pending == null) {
-            val input = synchronized(inputLock) {
-                if (inputQueue.isEmpty()) {
-                    drainSignal.idle()
-                    null
-                } else {
-                    inputQueue.removeFirst()
+            if (inputBuffer.size < SSP_FRAME_BYTES) {
+                val input = synchronized(inputLock) {
+                    if (inputQueue.isEmpty()) {
+                        drainSignal.idle()
+                        null
+                    } else {
+                        inputQueue.removeFirst()
+                    }
+                } ?: return
+                if (input.revision != captureRevision || !callbackGate.accepts(input.callbackGeneration) || activeLeaseId == null) {
+                    synchronized(inputLock) { inputBudget.release(input.bytes.size) }
+                    continue
                 }
-            } ?: return
-            if (input.revision != captureRevision || !callbackGate.accepts(input.callbackGeneration) || activeLeaseId == null) {
-                synchronized(inputLock) { inputBudget.release(input.bytes.size) }
-                continue
-            }
-            if (!inputBuffer.append(input.bytes)) {
-                terminateCapture("PCM_QUEUE_OVERRUN")
-                return
+                if (!inputBuffer.append(input.bytes)) {
+                    terminateCapture("PCM_QUEUE_OVERRUN")
+                    return
+                }
             }
             var monoPacketSize = 0
-            while (delivery.pending == null && inputBuffer.readFrame(sspInput)) {
+            while (monoPacketSize < MONO_PACKET_BYTES && inputBuffer.readFrame(sspInput)) {
                 synchronized(inputLock) { inputBudget.release(SSP_FRAME_BYTES) }
                 val leaseId = activeLeaseId ?: return
                 inputMetrics = PcmMetrics.interleavedPcm16Le(sspInput, 4)
@@ -613,7 +616,7 @@ private class NativeVoiceCaptureManager(
             if (delivery.settle(key)) {
                 terminateCapture("PCM_ACK_TIMEOUT")
             }
-        }.also { worker.postDelayed(it, 500) }
+        }.also { worker.postDelayed(it, PCM_ACK_TIMEOUT_MILLIS) }
     }
 
     private fun scheduleDrain(force: Boolean = false) {

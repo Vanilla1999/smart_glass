@@ -38,6 +38,29 @@ void main() {
     expect(cubit.state.selectedIndex, 1);
   });
 
+  test('parses performance trace for frame latency logging', () {
+    final WearGlassesCubit cubit = WearGlassesCubit();
+    addTearDown(cubit.close);
+
+    cubit.updateFromPayload(
+      WearGlassesPayload.menu()
+          .copyWithPerformanceTrace(
+            traceId: '7:3:1',
+            command: 'up',
+            recognizedAtMillis: 1000,
+            asrMillis: 125,
+            sentAtMillis: 1040,
+          )
+          .toJson(),
+    );
+
+    expect(cubit.state.performanceTraceId, '7:3:1');
+    expect(cubit.state.performanceCommand, 'up');
+    expect(cubit.state.performanceRecognizedAtMillis, 1000);
+    expect(cubit.state.performanceAsrMillis, 125);
+    expect(cubit.state.performanceSentAtMillis, 1040);
+  });
+
   test('maps item maps to titles defensively', () {
     final WearGlassesCubit cubit = WearGlassesCubit();
     addTearDown(cubit.close);

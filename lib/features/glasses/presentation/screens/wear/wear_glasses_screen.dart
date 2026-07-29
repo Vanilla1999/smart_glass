@@ -18,22 +18,25 @@ class WearGlassesScreen extends StatefulWidget {
 class _WearGlassesScreenState extends State<WearGlassesScreen> {
   int _scheduledUpdateId = -1;
 
-  void _logMenuFrame(WearGlassesState state) {
-    if (state.screenType != WearGlassesScreenType.menu ||
+  void _logPerformanceFrame(WearGlassesState state) {
+    if (state.performanceTraceId == null ||
         state.updateId == _scheduledUpdateId) {
       return;
     }
     _scheduledUpdateId = state.updateId;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final int renderedAtMillis = DateTime.now().millisecondsSinceEpoch;
+      final int recognizedAt = state.performanceRecognizedAtMillis!;
+      final int sentAt = state.performanceSentAtMillis!;
       // ignore: avoid_print
       print(
-        '[WearGlassesScreen] menu frame rendered update#${state.updateId} '
-        'selectedIndex=${state.selectedIndex} '
-        'payloadReceivedAt=${state.payloadReceivedAtMillis} '
-        'receiveToFrameMs='
-        '${renderedAtMillis - state.payloadReceivedAtMillis} '
-        'at=$renderedAtMillis',
+        '[WEAR_PERF] trace=${state.performanceTraceId} '
+        'cmd=${state.performanceCommand} asrMs=${state.performanceAsrMillis} '
+        'commandToSendMs=${sentAt - recognizedAt} '
+        'bridgeMs=${state.payloadReceivedAtMillis - sentAt} '
+        'renderMs=${renderedAtMillis - state.payloadReceivedAtMillis} '
+        'totalMs=${renderedAtMillis - recognizedAt} '
+        'screen=${state.screenType.name} index=${state.selectedIndex}',
       );
     });
   }
@@ -44,7 +47,7 @@ class _WearGlassesScreenState extends State<WearGlassesScreen> {
       builder: (BuildContext context, WearVoiceOverlayState overlay) {
         return BlocBuilder<WearGlassesCubit, WearGlassesState>(
           builder: (BuildContext context, WearGlassesState state) {
-            _logMenuFrame(state);
+            _logPerformanceFrame(state);
             return WearGlassesScaffold(
               child: Stack(
                 children: <Widget>[

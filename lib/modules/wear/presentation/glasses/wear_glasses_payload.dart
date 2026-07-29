@@ -44,6 +44,11 @@ class WearGlassesPayload {
     this.showPrinterIcon = false,
     this.printerAvailable = false,
     this.voiceCommandsEnabled = true,
+    this.performanceTraceId,
+    this.performanceCommand,
+    this.performanceRecognizedAtMillis,
+    this.performanceAsrMillis,
+    this.performanceSentAtMillis,
   });
 
   factory WearGlassesPayload.authWaitingBarcode() {
@@ -224,6 +229,11 @@ class WearGlassesPayload {
   final bool showPrinterIcon;
   final bool printerAvailable;
   final bool voiceCommandsEnabled;
+  final String? performanceTraceId;
+  final String? performanceCommand;
+  final int? performanceRecognizedAtMillis;
+  final int? performanceAsrMillis;
+  final int? performanceSentAtMillis;
 
   WearGlassesPayload copyWithStatusIcons({
     bool? showWifiIcon,
@@ -256,6 +266,49 @@ class WearGlassesPayload {
       showPrinterIcon: showPrinterIcon ?? this.showPrinterIcon,
       printerAvailable: printerAvailable ?? this.printerAvailable,
       voiceCommandsEnabled: voiceCommandsEnabled ?? this.voiceCommandsEnabled,
+      performanceTraceId: performanceTraceId,
+      performanceCommand: performanceCommand,
+      performanceRecognizedAtMillis: performanceRecognizedAtMillis,
+      performanceAsrMillis: performanceAsrMillis,
+      performanceSentAtMillis: performanceSentAtMillis,
+    );
+  }
+
+  WearGlassesPayload copyWithPerformanceTrace({
+    required String traceId,
+    required String command,
+    required int recognizedAtMillis,
+    required int asrMillis,
+    required int sentAtMillis,
+  }) {
+    return WearGlassesPayload(
+      screenType: screenType,
+      phase: phase,
+      title: title,
+      subtitle: subtitle,
+      statusText: statusText,
+      isLoading: isLoading,
+      isError: isError,
+      items: items,
+      bodyLines: bodyLines,
+      checkLines: checkLines,
+      selectedIndex: selectedIndex,
+      pageText: pageText,
+      footerText: footerText,
+      primaryAction: primaryAction,
+      secondaryAction: secondaryAction,
+      statusIcon: statusIcon,
+      showWifiIcon: showWifiIcon,
+      wifiAvailable: wifiAvailable,
+      wifiLevel: wifiLevel,
+      showPrinterIcon: showPrinterIcon,
+      printerAvailable: printerAvailable,
+      voiceCommandsEnabled: voiceCommandsEnabled,
+      performanceTraceId: traceId,
+      performanceCommand: command,
+      performanceRecognizedAtMillis: recognizedAtMillis,
+      performanceAsrMillis: asrMillis,
+      performanceSentAtMillis: sentAtMillis,
     );
   }
 
@@ -283,6 +336,11 @@ class WearGlassesPayload {
       'showPrinterIcon': showPrinterIcon,
       'printerAvailable': printerAvailable,
       'voiceCommandsEnabled': voiceCommandsEnabled,
+      'performanceTraceId': performanceTraceId,
+      'performanceCommand': performanceCommand,
+      'performanceRecognizedAtMillis': performanceRecognizedAtMillis,
+      'performanceAsrMillis': performanceAsrMillis,
+      'performanceSentAtMillis': performanceSentAtMillis,
     };
   }
 }

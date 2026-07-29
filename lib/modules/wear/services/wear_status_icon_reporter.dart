@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_event.dart';
+
 import 'package:flutter/foundation.dart';
 
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
@@ -42,6 +44,7 @@ class WearStatusIconReporter {
     voiceCommandsEnabled: true,
   );
   WearGlassesPayload? _lastPayload;
+  WearVoiceCommandEvent? _pendingPerformanceTrace;
   Timer? _timer;
   Timer? _transientTimer;
   int _payloadGeneration = 0;
@@ -58,6 +61,11 @@ class WearStatusIconReporter {
 
   WearStatusIconSnapshot get snapshot => _snapshot;
   WearGlassesPayload? get lastPayload => _lastPayload;
+
+  void beginPerformanceTrace(WearVoiceCommandEvent event) {
+    _pendingPerformanceTrace = event;
+  }
+
   ValueListenable<bool> get voiceCommandsEnabled => _voiceCommandsEnabled;
 
   void setVoiceCommandsEnabled(bool enabled) {
@@ -384,13 +392,24 @@ class WearStatusIconReporter {
     int payloadGeneration,
   ) {
     if (!wearGlassesBridge.isEnabled) return Future<void>.value();
+    final WearVoiceCommandEvent? performanceTrace = _pendingPerformanceTrace;
+    _pendingPerformanceTrace = null;
     final Future<void> next = _projectionOperation.then((_) async {
       if (!_isCurrentOperation(lifecycleGeneration, payloadGeneration)) return;
       try {
+        final WearGlassesPayload outgoing = performanceTrace == null
+            ? payload
+            : payload.copyWithPerformanceTrace(
+                traceId: performanceTrace.traceId,
+                command: performanceTrace.command.name,
+                recognizedAtMillis: performanceTrace.recognizedAtMillis,
+                asrMillis: performanceTrace.asrMillis,
+                sentAtMillis: DateTime.now().millisecondsSinceEpoch,
+              );
         if (_projectionVisible) {
-          await wearGlassesBridge.update(payload).timeout(_projectionTimeout);
+          await wearGlassesBridge.update(outgoing).timeout(_projectionTimeout);
         } else {
-          await wearGlassesBridge.show(payload).timeout(_projectionTimeout);
+          await wearGlassesBridge.show(outgoing).timeout(_projectionTimeout);
         }
         if (_isCurrentOperation(lifecycleGeneration, payloadGeneration)) {
           _projectionVisible = true;

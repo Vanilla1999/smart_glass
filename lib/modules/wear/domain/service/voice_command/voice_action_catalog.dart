@@ -94,16 +94,16 @@ class VoiceActionCatalog {
     VoiceActionEntry(
       command: WearVoiceCommand.up,
       screens: WearScreenId.values.toSet(),
-      fullPhrases: <String>{'вверх'},
-      fastAliases: <String>{'вверх'},
-      activationPolicy: VoiceActivationPolicy.finalOnly,
+      fullPhrases: <String>{'вверх', 'верх'},
+      fastAliases: <String>{'вверх', 'верх'},
+      activationPolicy: VoiceActivationPolicy.immediateExactPartial,
     ),
     VoiceActionEntry(
       command: WearVoiceCommand.down,
       screens: WearScreenId.values.toSet(),
-      fullPhrases: <String>{'вниз'},
-      fastAliases: <String>{'вниз'},
-      activationPolicy: VoiceActivationPolicy.finalOnly,
+      fullPhrases: <String>{'вниз', 'низ'},
+      fastAliases: <String>{'вниз', 'низ'},
+      activationPolicy: VoiceActivationPolicy.immediateExactPartial,
     ),
     VoiceActionEntry(
       command: WearVoiceCommand.openPrintPriceTag,

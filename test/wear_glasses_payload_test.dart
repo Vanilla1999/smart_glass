@@ -31,4 +31,22 @@ void main() {
     );
     expect(json['selectedIndex'], 0);
   });
+
+  test('performance trace survives bridge serialization', () {
+    final Map<String, dynamic> json = WearGlassesPayload.menu()
+        .copyWithPerformanceTrace(
+          traceId: '7:3:1',
+          command: 'up',
+          recognizedAtMillis: 1000,
+          asrMillis: 125,
+          sentAtMillis: 1040,
+        )
+        .toJson();
+
+    expect(json['performanceTraceId'], '7:3:1');
+    expect(json['performanceCommand'], 'up');
+    expect(json['performanceRecognizedAtMillis'], 1000);
+    expect(json['performanceAsrMillis'], 125);
+    expect(json['performanceSentAtMillis'], 1040);
+  });
 }

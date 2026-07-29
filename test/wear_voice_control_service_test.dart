@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_control_service.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
@@ -37,19 +38,25 @@ void main() {
     late _FakeSpeechRecognitionService speech;
     late WearVoiceControlService service;
     late List<WearVoiceCommand> commands;
+    late List<WearVoiceCommandEvent> commandEvents;
     late List<String> phrases;
     late List<String?> previews;
+    late int clockMillis;
 
     setUp(() {
       speech = _FakeSpeechRecognitionService();
+      clockMillis = 1000;
       service = WearVoiceControlService(
         speechRecognitionService: speech,
         commandParserService: VoiceCommandParserService(),
+        clock: () => clockMillis,
       );
       commands = <WearVoiceCommand>[];
+      commandEvents = <WearVoiceCommandEvent>[];
       phrases = <String>[];
       previews = <String?>[];
       service.commandStream.listen(commands.add);
+      service.commandEventStream.listen(commandEvents.add);
       service.phraseStream.listen(phrases.add);
       service.freeTextPreviewStream.listen(previews.add);
     });
@@ -67,6 +74,25 @@ void main() {
 
       expect(commands, <WearVoiceCommand>[WearVoiceCommand.up]);
       expect(phrases, isEmpty);
+    });
+
+    test('command event contains recognition performance trace', () async {
+      speech.start(captureEpoch: 7, segmentId: 3);
+      clockMillis = 1125;
+      speech.emit(
+        lane: RecognitionLane.command,
+        kind: RecognitionKind.partial,
+        text: 'вверх',
+        captureEpoch: 7,
+        segmentId: 3,
+      );
+      await _settle();
+
+      expect(commandEvents, hasLength(1));
+      expect(commandEvents.single.command, WearVoiceCommand.up);
+      expect(commandEvents.single.traceId, '7:3:1');
+      expect(commandEvents.single.recognizedAtMillis, 1125);
+      expect(commandEvents.single.asrMillis, 125);
     });
 
     test('free-text partial cannot change UI before grammar resolves',
@@ -238,7 +264,9 @@ void main() {
       expect(phrases, isEmpty);
     });
 
-    test('direction partial waits and conflicting final wins', () async {
+    test(
+        'direction partial executes immediately and conflicting final is ignored',
+        () async {
       WearScreenId screen = WearScreenId.menu;
       await service.dispose();
       service = WearVoiceControlService(
@@ -255,7 +283,7 @@ void main() {
         segmentId: 10,
       );
       await _settle();
-      expect(commands, isEmpty);
+      expect(commands, <WearVoiceCommand>[WearVoiceCommand.up]);
 
       speech.emit(
         lane: RecognitionLane.command,
@@ -265,7 +293,7 @@ void main() {
       speech.end(segmentId: 10);
       await _settle();
 
-      expect(commands, <WearVoiceCommand>[WearVoiceCommand.down]);
+      expect(commands, <WearVoiceCommand>[WearVoiceCommand.up]);
     });
 
     test('matching direction partial and final execute once', () async {
@@ -276,7 +304,7 @@ void main() {
         segmentId: 14,
       );
       await _settle();
-      expect(commands, isEmpty);
+      expect(commands, <WearVoiceCommand>[WearVoiceCommand.up]);
 
       speech.emit(
         lane: RecognitionLane.command,
@@ -287,6 +315,27 @@ void main() {
       await _settle();
 
       expect(commands, <WearVoiceCommand>[WearVoiceCommand.up]);
+    });
+
+    test('short direction aliases execute immediately', () async {
+      speech.emit(
+        lane: RecognitionLane.command,
+        kind: RecognitionKind.partial,
+        text: 'верх',
+        segmentId: 15,
+      );
+      speech.emit(
+        lane: RecognitionLane.command,
+        kind: RecognitionKind.partial,
+        text: 'низ',
+        segmentId: 16,
+      );
+      await _settle();
+
+      expect(
+        commands,
+        <WearVoiceCommand>[WearVoiceCommand.up, WearVoiceCommand.down],
+      );
     });
 
     test('menu print final resolves to opening the print section', () async {

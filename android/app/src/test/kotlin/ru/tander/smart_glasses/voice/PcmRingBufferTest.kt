@@ -38,4 +38,27 @@ class PcmRingBufferTest {
         assertEquals(16, frames)
         assertEquals(0, ring.size)
     }
+
+    @Test
+    fun preservesRemainderAcrossTwoFrameTransportBatches() {
+        val frameBytes = 2048
+        val ring = PcmRingBuffer(2 * 32 * 1024)
+        val vendorPacket = ByteArray(32 * 1024) { (it % 251).toByte() }
+        assertTrue(ring.append(vendorPacket))
+
+        val frame = ByteArray(frameBytes)
+        val restored = ArrayList<Byte>()
+        var batches = 0
+        while (ring.size >= frameBytes) {
+            repeat(2) {
+                assertTrue(ring.readFrame(frame))
+                restored.addAll(frame.toList())
+            }
+            batches++
+        }
+
+        assertEquals(8, batches)
+        assertArrayEquals(vendorPacket, restored.toByteArray())
+        assertEquals(0, ring.size)
+    }
 }
