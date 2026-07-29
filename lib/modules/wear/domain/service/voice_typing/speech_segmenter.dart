@@ -8,6 +8,7 @@ class SpeechSegment {
     required this.lastChunkId,
     required this.isEndpoint,
     required this.started,
+    this.endpointReason,
   });
 
   final int captureEpoch;
@@ -15,7 +16,10 @@ class SpeechSegment {
   final int lastChunkId;
   final bool isEndpoint;
   final bool started;
+  final AcousticEndpointReason? endpointReason;
 }
+
+enum AcousticEndpointReason { silence, maxDuration, captureStop }
 
 class SpeechSegmentDiagnostics {
   const SpeechSegmentDiagnostics({
@@ -158,6 +162,11 @@ class SpeechSegmenter {
       final bool endpoint =
           _silentSamples >= _durationToSamples(endpointSilence) ||
               _segmentSamples >= _durationToSamples(maxSegmentDuration);
+      final AcousticEndpointReason? endpointReason = endpoint
+          ? (_segmentSamples >= _durationToSamples(maxSegmentDuration)
+              ? AcousticEndpointReason.maxDuration
+              : AcousticEndpointReason.silence)
+          : null;
       if (endpoint) {
         _activeSegmentId = null;
         _silentSamples = 0;
@@ -169,6 +178,7 @@ class SpeechSegmenter {
         lastChunkId: chunkId,
         isEndpoint: endpoint,
         started: false,
+        endpointReason: endpointReason,
       );
     }
 
@@ -188,6 +198,7 @@ class SpeechSegmenter {
       lastChunkId: chunkId,
       isEndpoint: endpoint,
       started: started,
+      endpointReason: endpoint ? AcousticEndpointReason.maxDuration : null,
     );
   }
 
@@ -206,16 +217,15 @@ class SpeechSegmenter {
   static const double _zeroRms = 0.0000001;
 
   void _calibrate(double rms, int sampleCount) {
-    if (rms <= _zeroRms) return;
-    _calibrationRms.add(rms);
     _calibrationSamples += sampleCount;
+    if (rms > _zeroRms) _calibrationRms.add(rms);
     if (_calibrationSamples < _durationToSamples(calibrationDuration)) return;
 
     final List<double> sorted = List<double>.of(_calibrationRms)..sort();
-    _calibrationP10Rms = _percentile(sorted, 0.1);
-    _calibrationP50Rms = _percentile(sorted, 0.5);
-    _calibrationP90Rms = _percentile(sorted, 0.9);
-    final double p20 = _percentile(sorted, 0.2);
+    _calibrationP10Rms = sorted.isEmpty ? 0 : _percentile(sorted, 0.1);
+    _calibrationP50Rms = sorted.isEmpty ? 0 : _percentile(sorted, 0.5);
+    _calibrationP90Rms = sorted.isEmpty ? 0 : _percentile(sorted, 0.9);
+    final double p20 = sorted.isEmpty ? 0 : _percentile(sorted, 0.2);
     _noiseFloorRms = math.max(initialNoiseFloorRms, p20);
     _isCalibrated = true;
     _calibrationRms.clear();

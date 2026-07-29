@@ -9,6 +9,7 @@ import 'package:smart_glasses/app/glasses/glasses_coordinator_cubit.dart';
 import 'package:smart_glasses/core/constants/app_constants.dart';
 import 'package:smart_glasses/core/services/method_channel_service.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
+import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/data/bdto/data_source/bdto_datasource.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/available_printer.dart';
@@ -25,6 +26,7 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_event.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_glasses_output.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
@@ -355,11 +357,13 @@ void main() {
 
     test('stable direct-scan alias navigates before the segment closes',
         () async {
+      final _ManualTimerScheduler timers = _ManualTimerScheduler();
       final _FakeSpeechRecognitionService speech =
-          _FakeSpeechRecognitionService();
+          _FakeSpeechRecognitionService(WearScreenId.availabilityInteraction);
       final WearVoiceControlService voiceControl = WearVoiceControlService(
         speechRecognitionService: speech,
         screenProvider: () => flowController.state.screen,
+        timerFactory: timers.schedule,
       );
       addTearDown(voiceControl.dispose);
       addTearDown(speech.dispose);
@@ -370,7 +374,9 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       speech.emitCommandPartial('прямое');
-      await Future<void>.delayed(const Duration(milliseconds: 160));
+      await Future<void>.delayed(Duration.zero);
+      timers.elapse(const Duration(milliseconds: 150));
+      await Future<void>.delayed(Duration.zero);
 
       expect(flowController.state.screen, WearScreenId.availabilityDirectScan);
 
@@ -379,6 +385,55 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(flowController.state.screen, WearScreenId.availabilityDirectScan);
+    });
+
+    test('stable partial is cancelled when Vosk clears the hypothesis',
+        () async {
+      final _ManualTimerScheduler timers = _ManualTimerScheduler();
+      final _FakeSpeechRecognitionService speech =
+          _FakeSpeechRecognitionService(WearScreenId.help);
+      final WearVoiceControlService voiceControl = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => WearScreenId.help,
+        timerFactory: timers.schedule,
+      );
+      addTearDown(voiceControl.dispose);
+      addTearDown(speech.dispose);
+      final List<WearVoiceCommand> commands = <WearVoiceCommand>[];
+      voiceControl.commandStream.listen(commands.add);
+
+      speech.emitCommandPartial('назад');
+      await Future<void>.delayed(Duration.zero);
+      speech.emitCommandPartial('');
+      await Future<void>.delayed(Duration.zero);
+      timers.elapse(const Duration(milliseconds: 150));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(commands, isEmpty);
+    });
+
+    test('resolved command event retains route and utterance context',
+        () async {
+      final _FakeSpeechRecognitionService speech =
+          _FakeSpeechRecognitionService();
+      final WearVoiceControlService voiceControl = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => WearScreenId.menu,
+      );
+      addTearDown(voiceControl.dispose);
+      addTearDown(speech.dispose);
+
+      final Future<WearVoiceCommandEvent> emitted =
+          voiceControl.commandEventStream.first;
+      speech.emitCommandPartial('вниз');
+      final WearVoiceCommandEvent event = await emitted;
+
+      expect(event.command, WearVoiceCommand.down);
+      expect(event.captureEpoch, 1);
+      expect(event.commandUtteranceId, 1);
+      expect(event.sourceScreen, WearScreenId.menu);
+      expect(event.routeRevision, 1);
+      expect(event.grammarRevision, 1);
     });
   });
 
@@ -568,6 +623,65 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       await tester.pumpAndSettle();
 
       expect(routerFlow.state.menuFocusedIndex, 1);
+    });
+
+    testWearWidget('typed command is dropped after its source route changes',
+        (WidgetTester tester) async {
+      final StreamController<WearVoiceCommandEvent> voiceCommands =
+          StreamController<WearVoiceCommandEvent>.broadcast();
+      addTearDown(voiceCommands.close);
+      final WearFlowController routerFlow = WearFlowController(
+        glassesOutput: _TestGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      WearDependencies.I.actualScreenStore.confirm(WearScreenId.menu);
+
+      await tester.pumpWidget(
+        WearModuleApp(
+          flowController: routerFlow,
+          voiceCommandEventStream: voiceCommands.stream,
+          routes: _testRoutes,
+          initialLocation: WearMenuScreen.route,
+          onStartVoice: () async {},
+          onStopVoice: () async {},
+          onRestartVoice: (_) async {},
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(routerFlow.state.screen, WearScreenId.menu);
+
+      voiceCommands.add(WearVoiceCommandEvent(
+        command: WearVoiceCommand.back,
+        traceId: 'stale-route',
+        recognizedAtMillis: 1,
+        asrMillis: 1,
+        captureEpoch: 1,
+        commandUtteranceId: 1,
+        sourceScreen: WearScreenId.help,
+        routeRevision:
+            WearDependencies.I.speechRecognitionService.routeRevision,
+        grammarRevision:
+            WearDependencies.I.speechRecognitionService.grammarRevision,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(routerFlow.state.screen, WearScreenId.menu);
+    });
+
+    testWearWidget('typed command is dropped after route revision changes',
+        (WidgetTester tester) async {
+      await _expectStaleRevisionDropped(
+        tester,
+        routeRevisionDelta: 1,
+      );
+    });
+
+    testWearWidget('typed command is dropped after grammar revision changes',
+        (WidgetTester tester) async {
+      await _expectStaleRevisionDropped(
+        tester,
+        grammarRevisionDelta: 1,
+      );
     });
 
     testWearWidget(
@@ -1300,7 +1414,96 @@ class _NeverPrintersUseCase extends GetAvailablePrintersUseCase {
       Completer<List<AvailablePrinter>>().future;
 }
 
+Future<void> _expectStaleRevisionDropped(
+  WidgetTester tester, {
+  int routeRevisionDelta = 0,
+  int grammarRevisionDelta = 0,
+}) async {
+  final StreamController<WearVoiceCommandEvent> commands =
+      StreamController<WearVoiceCommandEvent>.broadcast();
+  final WearFlowController flow = WearFlowController(
+    glassesOutput: _TestGlassesOutput(),
+    navigationOutput: _FakeNavigationOutput(),
+  );
+  WearDependencies.I.actualScreenStore.confirm(WearScreenId.menu);
+
+  await tester.pumpWidget(WearModuleApp(
+    flowController: flow,
+    voiceCommandEventStream: commands.stream,
+    routes: _testRoutes,
+    initialLocation: WearMenuScreen.route,
+    onStartVoice: () async {},
+    onStopVoice: () async {},
+    onRestartVoice: (_) async {},
+  ));
+  await tester.pumpAndSettle();
+  final SpeechRecognitionService speech =
+      WearDependencies.I.speechRecognitionService;
+  commands.add(WearVoiceCommandEvent(
+    command: WearVoiceCommand.down,
+    traceId: 'stale-revision',
+    recognizedAtMillis: 1,
+    asrMillis: 1,
+    captureEpoch: 1,
+    commandUtteranceId: 1,
+    sourceScreen: WearScreenId.menu,
+    routeRevision: speech.routeRevision + routeRevisionDelta,
+    grammarRevision: speech.grammarRevision + grammarRevisionDelta,
+  ));
+  await tester.pumpAndSettle();
+
+  expect(flow.state.menuFocusedIndex, 0);
+  await commands.close();
+}
+
+class _ManualTimerScheduler {
+  Duration _elapsed = Duration.zero;
+  final List<_ManualTimer> _timers = <_ManualTimer>[];
+
+  Timer schedule(Duration duration, void Function() callback) {
+    final _ManualTimer timer = _ManualTimer(
+      deadline: _elapsed + duration,
+      callback: callback,
+    );
+    _timers.add(timer);
+    return timer;
+  }
+
+  void elapse(Duration duration) {
+    _elapsed += duration;
+    for (final _ManualTimer timer in List<_ManualTimer>.of(_timers)) {
+      if (timer.isActive && timer.deadline <= _elapsed) timer.fire();
+    }
+  }
+}
+
+class _ManualTimer implements Timer {
+  _ManualTimer({required this.deadline, required this.callback});
+
+  final Duration deadline;
+  final void Function() callback;
+  bool _active = true;
+
+  void fire() {
+    if (!_active) return;
+    _active = false;
+    callback();
+  }
+
+  @override
+  bool get isActive => _active;
+
+  @override
+  int get tick => _active ? 0 : 1;
+
+  @override
+  void cancel() => _active = false;
+}
+
 class _FakeSpeechRecognitionService implements SpeechRecognitionService {
+  _FakeSpeechRecognitionService([this.sourceScreen = WearScreenId.menu]);
+
+  final WearScreenId sourceScreen;
   final StreamController<SegmentedRecognitionResult>
       _segmentedResultsController =
       StreamController<SegmentedRecognitionResult>.broadcast();
@@ -1309,6 +1512,7 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   final StreamController<SpeechSegmentStarted> _segmentStartedController =
       StreamController<SpeechSegmentStarted>.broadcast();
   bool _segmentStarted = false;
+  int _partialRevision = 0;
 
   @override
   Never get audioStreamService => throw UnsupportedError('Not used in test');
@@ -1382,10 +1586,22 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   Future<void> setFreeTextEnabled(bool enabled) async {}
 
   @override
-  int get grammarRevision => 0;
+  int get grammarRevision => 1;
 
   @override
-  int get routeRevision => 0;
+  int get routeRevision => 1;
+
+  @override
+  int get commandUtteranceId => 1;
+
+  @override
+  int get bufferedUtteranceBytes => 0;
+
+  @override
+  void beginProcessingCapture() {}
+
+  @override
+  Future<void> waitForProcessing() async {}
 
   @override
   Future<void> switchCommandGrammar({
@@ -1428,6 +1644,12 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
       parsedCommand: VoiceCommandParserService()
           .parseExactForScreen(WearScreenId.menu, text),
       commandUtteranceId: 1,
+      routeRevision: 1,
+      grammarRevision: 1,
+      sourceScreen: sourceScreen,
+      partialRevision: kind == RecognitionKind.partial
+          ? ++_partialRevision
+          : _partialRevision,
     ));
   }
 

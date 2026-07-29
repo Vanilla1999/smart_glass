@@ -29,6 +29,7 @@ class WearModuleApp extends StatefulWidget {
     this.onRouterReady,
     this.flowController,
     this.voiceCommandStream,
+    this.voiceCommandEventStream,
     this.voicePhraseStream,
     this.routes,
     this.initialLocation,
@@ -43,6 +44,7 @@ class WearModuleApp extends StatefulWidget {
   final ValueChanged<GoRouter>? onRouterReady;
   final WearFlowController? flowController;
   final Stream<WearVoiceCommand>? voiceCommandStream;
+  final Stream<WearVoiceCommandEvent>? voiceCommandEventStream;
   final Stream<String>? voicePhraseStream;
   final List<RouteBase>? routes;
   final String? initialLocation;
@@ -85,6 +87,11 @@ class _WearModuleAppState extends State<WearModuleApp>
     final Stream<WearVoiceCommand>? stream = widget.voiceCommandStream;
     if (stream != null) {
       return stream.map(_VoiceCommandInput.withoutTrace);
+    }
+    final Stream<WearVoiceCommandEvent>? eventStream =
+        widget.voiceCommandEventStream;
+    if (eventStream != null) {
+      return eventStream.map(_VoiceCommandInput.withTrace);
     }
     if (widget.onStartVoice != null) {
       return const Stream<_VoiceCommandInput>.empty();
@@ -150,6 +157,21 @@ class _WearModuleAppState extends State<WearModuleApp>
         }
         final int startedAt = DateTime.now().millisecondsSinceEpoch;
         if (input.event case final WearVoiceCommandEvent event) {
+          final actualScreen = WearDependencies.I.actualScreenStore.screen;
+          final speech = WearDependencies.I.speechRecognitionService;
+          if (event.sourceScreen != actualScreen ||
+              event.routeRevision != speech.routeRevision ||
+              event.grammarRevision != speech.grammarRevision) {
+            print(
+              '[WearModuleApp] suppress stale voice command '
+              'command=$command sourceScreen=${event.sourceScreen} '
+              'actualScreen=$actualScreen routeRevision='
+              '${event.routeRevision}/${speech.routeRevision} '
+              'grammarRevision='
+              '${event.grammarRevision}/${speech.grammarRevision}',
+            );
+            return;
+          }
           WearStatusIconReporter.I.beginPerformanceTrace(event);
         }
         print(

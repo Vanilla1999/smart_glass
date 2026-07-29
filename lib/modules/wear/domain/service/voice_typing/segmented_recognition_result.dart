@@ -50,6 +50,8 @@ class SegmentedRecognitionResult {
     this.routeRevision = 0,
     this.grammarRevision = 0,
     this.sourceScreen = WearScreenId.menu,
+    this.partialRevision = 0,
+    this.commandUtteranceStartedAtMillis,
   });
 
   final int captureEpoch;
@@ -63,4 +65,6 @@ class SegmentedRecognitionResult {
   final int routeRevision;
   final int grammarRevision;
   final WearScreenId sourceScreen;
+  final int partialRevision;
+  final int? commandUtteranceStartedAtMillis;
 }

@@ -92,6 +92,8 @@ class VoiceReplayRunner {
             lastChunkId: segment.lastChunkId,
             parsedCommand: null,
             commandUtteranceId: utteranceId,
+            routeRevision: 1,
+            grammarRevision: 1,
             sourceScreen: screen,
           );
           RecognitionArbitration? decision = arbiter.accept(event);

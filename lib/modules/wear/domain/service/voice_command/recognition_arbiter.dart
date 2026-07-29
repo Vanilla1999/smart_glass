@@ -37,8 +37,8 @@ class RecognitionArbiter {
     int Function()? grammarRevisionProvider,
   })  : _catalog = actionCatalog ?? VoiceActionCatalog(),
         _screenProvider = screenProvider ?? (() => WearScreenId.menu),
-        _routeRevisionProvider = routeRevisionProvider ?? (() => 0),
-        _grammarRevisionProvider = grammarRevisionProvider ?? (() => 0);
+        _routeRevisionProvider = routeRevisionProvider ?? (() => 1),
+        _grammarRevisionProvider = grammarRevisionProvider ?? (() => 1);
 
   final VoiceActionCatalog _catalog;
   final WearScreenId Function() _screenProvider;
@@ -56,8 +56,7 @@ class RecognitionArbiter {
     if (!_isCurrent(result)) return null;
     final String key = _key(result);
     if (_claimedUtterances.contains(key)) return null;
-    final WearScreenId screen =
-        result.routeRevision == 0 ? _screenProvider() : result.sourceScreen;
+    final WearScreenId screen = result.sourceScreen;
 
     if (result.lane == RecognitionLane.freeText) {
       if (result.kind == RecognitionKind.partial) return null;
@@ -77,16 +76,12 @@ class RecognitionArbiter {
         case VoiceActivationPolicy.stableExactPartial:
           return RecognitionArbitration.stable(result);
         case VoiceActivationPolicy.endpointOnly:
-        case VoiceActivationPolicy.confirmationRequired:
           return null;
       }
     }
 
     _latestPartial.remove(key);
-    if (action == null ||
-        action.activationPolicy == VoiceActivationPolicy.confirmationRequired) {
-      return null;
-    }
+    if (action == null) return null;
     _claim(key);
     return RecognitionArbitration.command(action.command);
   }
@@ -99,7 +94,7 @@ class RecognitionArbiter {
       return null;
     }
     final VoiceActionEntry? action = _catalog.resolvePartial(
-      candidate.routeRevision == 0 ? _screenProvider() : candidate.sourceScreen,
+      candidate.sourceScreen,
       candidate.text,
     );
     if (action?.activationPolicy != VoiceActivationPolicy.stableExactPartial) {
@@ -120,7 +115,7 @@ class RecognitionArbiter {
 
   bool _isCurrent(SegmentedRecognitionResult result) {
     if (!_acceptCaptureEpoch(result.captureEpoch)) return false;
-    if (result.routeRevision == 0) return true;
+    if (result.routeRevision <= 0 || result.grammarRevision <= 0) return false;
     return result.routeRevision == _routeRevisionProvider() &&
         result.grammarRevision == _grammarRevisionProvider() &&
         result.sourceScreen == _screenProvider();

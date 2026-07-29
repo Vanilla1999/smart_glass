@@ -72,6 +72,7 @@ class WearDependencies {
     speechRecognitionService = SpeechRecognitionService(
       audioStreamService: audioStreamService,
       commandGrammar: voiceActionCatalog.grammarFor(WearScreenId.menu),
+      actionCatalog: voiceActionCatalog,
     );
     voiceControlService = WearVoiceControlService(
       speechRecognitionService: speechRecognitionService,

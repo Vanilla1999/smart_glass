@@ -141,8 +141,8 @@ SegmentedRecognitionResult _event({
   required int utteranceId,
   RecognitionKind kind = RecognitionKind.endpointResult,
   WearScreenId screen = WearScreenId.menu,
-  int routeRevision = 0,
-  int grammarRevision = 0,
+  int routeRevision = 1,
+  int grammarRevision = 1,
 }) {
   return SegmentedRecognitionResult(
     captureEpoch: 1,

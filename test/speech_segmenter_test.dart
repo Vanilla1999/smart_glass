@@ -108,15 +108,15 @@ void main() {
     expect(endpoint!.isEndpoint, isTrue);
   });
 
-  test('exact-zero startup frames do not calibrate or lower noise floor', () {
+  test('exact-zero startup completes calibration without lowering floor', () {
     final SpeechSegmenter segmenter = SpeechSegmenter();
     segmenter.begin(1);
 
-    for (int index = 0; index < 350; index++) {
+    for (int index = 0; index < 600; index++) {
       expect(segmenter.add(_pcmFrame(0), 1), isNull);
     }
 
-    expect(segmenter.isCalibrated, isFalse);
+    expect(segmenter.isCalibrated, isTrue);
     expect(segmenter.lastDiagnostics.noiseFloorRms, 0.0002);
   });
 

@@ -5,7 +5,6 @@ enum VoiceActivationPolicy {
   immediateExactPartial,
   stableExactPartial,
   endpointOnly,
-  confirmationRequired,
 }
 
 enum VoiceActionRisk { navigation, stateChange, destructive }
@@ -21,14 +20,16 @@ enum CommandGrammarProfile {
 }
 
 class VoiceActionEntry {
-  const VoiceActionEntry({
+  VoiceActionEntry({
     required this.command,
-    required this.screens,
-    required this.fullPhrases,
-    required this.fastAliases,
+    required Set<WearScreenId> screens,
+    required Set<String> fullPhrases,
+    required Set<String> fastAliases,
     required this.activationPolicy,
     this.risk = VoiceActionRisk.navigation,
-  });
+  })  : screens = Set<WearScreenId>.unmodifiable(screens),
+        fullPhrases = Set<String>.unmodifiable(fullPhrases),
+        fastAliases = Set<String>.unmodifiable(fastAliases);
 
   final WearVoiceCommand command;
   final Set<WearScreenId> screens;

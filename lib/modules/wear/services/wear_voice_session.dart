@@ -15,11 +15,13 @@ class WearVoiceSession {
     int Function()? nowMillis,
     Future<void> Function(Duration duration)? delay,
     Timer Function(Duration duration, void Function() callback)? scheduleRetry,
+    VoiceActionCatalog? actionCatalog,
   })  : _speechRecognitionService = speechRecognitionService,
         _ensurePrepared = ensurePrepared,
         _nowMillis = nowMillis ?? (() => DateTime.now().millisecondsSinceEpoch),
         _delay = delay ?? Future<void>.delayed,
-        _scheduleRetry = scheduleRetry ?? Timer.new;
+        _scheduleRetry = scheduleRetry ?? Timer.new,
+        _actionCatalog = actionCatalog;
 
   static final WearVoiceSession I = WearVoiceSession();
   final SpeechRecognitionService? _speechRecognitionService;
@@ -28,6 +30,7 @@ class WearVoiceSession {
   final Future<void> Function(Duration duration) _delay;
   final Timer Function(Duration duration, void Function() callback)
       _scheduleRetry;
+  final VoiceActionCatalog? _actionCatalog;
   bool _shouldListen = false;
   int _listeningGeneration = 0;
   Future<void> _operation = Future<void>.value();
@@ -48,6 +51,8 @@ class WearVoiceSession {
   int? _handledNativeTerminationRevision;
   VoiceDeviceProfile? _requestedStartupProfile;
   WearScreenId? _configuredScreen;
+  int _configurationGeneration = 0;
+  Future<void> _configurationOperation = Future<void>.value();
   String? _requestedProfileId;
   String? _fallbackReason;
   final VoiceCaptureRecoveryGate _zeroAudioRecovery =
@@ -122,20 +127,33 @@ class WearVoiceSession {
   Future<void> configureForScreen(
     WearScreenId screen, {
     bool force = false,
-  }) async {
-    if (!force && _configuredScreen == screen) return;
-    final VoiceActionCatalog catalog = WearDependencies.I.voiceActionCatalog;
-    final bool freeText = _usesFreeTextRecognition(screen);
-    print(
-      '[WearVoiceSession] configureForScreen screen=$screen '
-      'mode=${freeText ? 'freeText' : 'grammar'}',
+  }) {
+    final int generation = ++_configurationGeneration;
+    final Future<void> next = _configurationOperation.then((_) async {
+      if (generation != _configurationGeneration) return;
+      if (!force && _configuredScreen == screen) return;
+      final VoiceActionCatalog catalog =
+          _actionCatalog ?? WearDependencies.I.voiceActionCatalog;
+      final bool freeText = _usesFreeTextRecognition(screen);
+      print(
+        '[WearVoiceSession] configureForScreen screen=$screen '
+        'mode=${freeText ? 'freeText' : 'grammar'}',
+      );
+      await _speech.switchCommandGrammar(
+        screen: screen,
+        grammar: catalog.grammarFor(screen),
+      );
+      if (generation != _configurationGeneration) return;
+      await _speech.setFreeTextEnabled(freeText);
+      if (generation == _configurationGeneration) _configuredScreen = screen;
+    });
+    _configurationOperation = next.catchError(
+      (Object error, StackTrace stackTrace) {
+        print('[WearVoiceSession] screen configuration failed: '
+            '$error\n$stackTrace');
+      },
     );
-    await _speech.switchCommandGrammar(
-      screen: screen,
-      grammar: catalog.grammarFor(screen),
-    );
-    await _speech.setFreeTextEnabled(freeText);
-    _configuredScreen = screen;
+    return next;
   }
 
   Future<void> start() async {

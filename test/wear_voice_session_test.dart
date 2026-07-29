@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_device_profile.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
 import 'package:smart_glasses/modules/wear/services/voice_state.dart';
 import 'package:smart_glasses/modules/wear/services/wear_voice_session.dart';
 
@@ -136,6 +138,53 @@ void main() {
       expect(speech.restartCalls, 0);
     });
   });
+
+  test('rapid A to B to C screen configuration is latest-wins', () async {
+    final _ConfigurationSpeechRecognitionService speech =
+        _ConfigurationSpeechRecognitionService();
+    final WearVoiceSession session = WearVoiceSession(
+      speechRecognitionService: speech,
+      actionCatalog: VoiceActionCatalog(),
+    );
+
+    final Future<void> first = session.configureForScreen(WearScreenId.help);
+    await speech.firstSwitchStarted.future;
+    final Future<void> second =
+        session.configureForScreen(WearScreenId.settings);
+    final Future<void> third = session.configureForScreen(WearScreenId.menu);
+    speech.releaseFirstSwitch.complete();
+    await Future.wait(<Future<void>>[first, second, third]);
+
+    expect(speech.switchedScreens, <WearScreenId>[
+      WearScreenId.help,
+      WearScreenId.menu,
+    ]);
+    expect(speech.freeTextValues, <bool>[false]);
+  });
+}
+
+class _ConfigurationSpeechRecognitionService extends SpeechRecognitionService {
+  final Completer<void> firstSwitchStarted = Completer<void>();
+  final Completer<void> releaseFirstSwitch = Completer<void>();
+  final List<WearScreenId> switchedScreens = <WearScreenId>[];
+  final List<bool> freeTextValues = <bool>[];
+
+  @override
+  Future<void> switchCommandGrammar({
+    required WearScreenId screen,
+    required List<String> grammar,
+  }) async {
+    switchedScreens.add(screen);
+    if (switchedScreens.length == 1) {
+      firstSwitchStarted.complete();
+      await releaseFirstSwitch.future;
+    }
+  }
+
+  @override
+  Future<void> setFreeTextEnabled(bool enabled) async {
+    freeTextValues.add(enabled);
+  }
 }
 
 class _FailingStartSpeechRecognitionService extends SpeechRecognitionService {

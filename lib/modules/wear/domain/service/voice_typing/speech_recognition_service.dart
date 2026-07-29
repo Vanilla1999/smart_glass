@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/command_recognition_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
@@ -75,18 +77,56 @@ class VoicePcmBacklog {
   void reset() => _pendingBytes = 0;
 }
 
+abstract interface class VoiceRecognizer {
+  Future<bool> acceptWaveformBytes(Uint8List bytes);
+  Future<String> getPartialResult();
+  Future<String> getResult();
+  Future<String> getFinalResult();
+  Future<void> reset();
+  Future<void> setGrammar(List<String> grammar);
+  Future<void> dispose();
+}
+
+typedef VoiceRecognizerFactory = Future<VoiceRecognizer> Function(
+  RecognitionLane lane,
+  List<String> grammar,
+);
+
+class VoskVoiceRecognizer implements VoiceRecognizer {
+  VoskVoiceRecognizer(this._recognizer);
+
+  final vosk.Recognizer _recognizer;
+
+  @override
+  Future<bool> acceptWaveformBytes(Uint8List bytes) =>
+      _recognizer.acceptWaveformBytes(bytes);
+  @override
+  Future<void> dispose() => _recognizer.dispose();
+  @override
+  Future<String> getFinalResult() => _recognizer.getFinalResult();
+  @override
+  Future<String> getPartialResult() => _recognizer.getPartialResult();
+  @override
+  Future<String> getResult() => _recognizer.getResult();
+  @override
+  Future<void> reset() => _recognizer.reset();
+  @override
+  Future<void> setGrammar(List<String> grammar) =>
+      _recognizer.setGrammar(grammar);
+}
+
 class SpeechRecognitionService {
   static const int _sampleRate = 16000;
   static const String _modelAssetPath = 'assets/vosk-model-small-ru-0.22.zip';
   static const int _slowRecognizerLatencyMs = 150;
   static const int _slowAudioQueueDelayMs = 200;
-  static const VoiceRecognitionSegmentCloseGuard _segmentCloseGuard =
-      VoiceRecognitionSegmentCloseGuard();
-
   SpeechRecognitionService({
     AudioStreamService? audioStreamService,
     List<String> commandGrammar = const <String>[],
     SpeechSegmenter? speechSegmenter,
+    VoiceActionCatalog? actionCatalog,
+    VoiceRecognizerFactory? recognizerFactory,
+    Duration recognizerOperationTimeout = const Duration(seconds: 2),
   })  : _audioStreamOverride = audioStreamService,
         _speechSegmenter = speechSegmenter ?? SpeechSegmenter(),
         _commandGrammar = List<String>.unmodifiable(
@@ -94,7 +134,12 @@ class SpeechRecognitionService {
               .map((String item) => item.trim())
               .where((String item) => item.isNotEmpty),
         ),
-        _freeTextEnabled = commandGrammar.isEmpty;
+        _freeTextEnabled = commandGrammar.isEmpty,
+        _commandParser = VoiceCommandParserService(catalog: actionCatalog),
+        _recognizerFactory = recognizerFactory,
+        _segmentCloseGuard = VoiceRecognitionSegmentCloseGuard(
+          timeout: recognizerOperationTimeout,
+        );
 
   late final vosk.VoskFlutterPlugin _vosk = vosk.VoskFlutterPlugin.instance();
   final vosk.ModelLoader _modelLoader = vosk.ModelLoader();
@@ -103,7 +148,9 @@ class SpeechRecognitionService {
       _audioStreamOverride ?? AudioStreamService();
   List<String> _commandGrammar;
   final SpeechSegmenter _speechSegmenter;
-  final VoiceCommandParserService _commandParser = VoiceCommandParserService();
+  final VoiceCommandParserService _commandParser;
+  final VoiceRecognizerFactory? _recognizerFactory;
+  final VoiceRecognitionSegmentCloseGuard _segmentCloseGuard;
 
   final StreamController<SegmentedRecognitionResult>
       _segmentedResultsController =
@@ -123,6 +170,8 @@ class SpeechRecognitionService {
   Future<void> _lifecycleOperation = Future<void>.value();
   int _freeTextEpoch = 0;
   int _commandUtteranceId = 1;
+  int _commandPartialRevision = 0;
+  int? _commandUtteranceStartedAtMillis;
   int _routeRevision = 0;
   int _grammarRevision = 0;
   WearScreenId _sourceScreen = WearScreenId.menu;
@@ -141,14 +190,11 @@ class SpeechRecognitionService {
   final BoundedPcmBuffer _utterancePcm = BoundedPcmBuffer(
     maxBytes: 160000, // Five seconds of 16 kHz mono PCM16.
   );
-  final BoundedPcmBuffer _grammarTransitionPcm = BoundedPcmBuffer(
-    maxBytes: 6400, // 200 ms at 16 kHz mono PCM16.
-  );
-  bool _replayGrammarTransition = false;
+  Future<void> _freeTextRecognizerReady = Future<void>.value();
 
   vosk.Model? _model;
-  vosk.Recognizer? _commandRecognizer;
-  vosk.Recognizer? _freeTextRecognizer;
+  VoiceRecognizer? _commandRecognizer;
+  VoiceRecognizer? _freeTextRecognizer;
 
   Stream<SegmentedRecognitionResult> get segmentedResultsStream =>
       _segmentedResultsController.stream;
@@ -157,7 +203,8 @@ class SpeechRecognitionService {
   Stream<SpeechSegmentStarted> get segmentStartedStream =>
       _segmentStartedController.stream;
   bool get isPrepared =>
-      _model != null && (_commandGrammar.isEmpty || _commandRecognizer != null);
+      (_model != null || _recognizerFactory != null) &&
+      (_commandGrammar.isEmpty || _commandRecognizer != null);
   bool get isSessionActive => _isSessionActive;
   bool get isListening => _isListening;
   bool get isCaptureRunning => _audioStream.isRunning;
@@ -181,6 +228,20 @@ class SpeechRecognitionService {
   bool get isVadCalibrated => _speechSegmenter.isCalibrated;
   int get routeRevision => _routeRevision;
   int get grammarRevision => _grammarRevision;
+  int get commandUtteranceId => _commandUtteranceId;
+  int get bufferedUtteranceBytes => _utterancePcm.length;
+
+  Future<void> waitForProcessing() async {
+    await _commandAudioProcessing;
+    await _freeTextAudioProcessing;
+  }
+
+  void beginProcessingCapture() {
+    final int captureEpoch = _captureEpoch.begin();
+    _speechSegmenter.begin(captureEpoch);
+    _utterancePcm.clear();
+    _commandUtteranceStartedAtMillis = null;
+  }
 
   Future<void> switchCommandGrammar({
     required WearScreenId screen,
@@ -189,24 +250,32 @@ class SpeechRecognitionService {
     final List<String> normalized = List<String>.unmodifiable(
       grammar.map((item) => item.trim()).where((item) => item.isNotEmpty),
     );
-    final int routeRevision = ++_routeRevision;
-    final int grammarRevision = ++_grammarRevision;
     _freeTextEpoch++;
     _freeTextPartialText = '';
-    _utterancePcm.clear();
     final int startedAt = DateTime.now().millisecondsSinceEpoch;
     final Future<void> next = _commandAudioProcessing.then((_) async {
-      final vosk.Recognizer? recognizer = _commandRecognizer;
-      _sourceScreen = screen;
-      _commandUtteranceId++;
-      _commandPartialText = '';
-      _utterancePcm.clear();
-      _commandGrammar = normalized;
-      if (recognizer != null) {
-        await recognizer.reset();
-        await recognizer.setGrammar(normalized);
+      if (_sourceScreen == screen &&
+          _sameGrammar(_commandGrammar, normalized)) {
+        return;
       }
-      _replayGrammarTransition = true;
+      final VoiceRecognizer? recognizer = _commandRecognizer;
+      try {
+        if (recognizer != null) {
+          await recognizer.reset();
+          await recognizer.setGrammar(normalized);
+        }
+      } catch (_) {
+        if (recognizer != null && identical(_commandRecognizer, recognizer)) {
+          _commandRecognizer = null;
+          await _recoverCommandRecognizer(recognizer);
+        }
+        rethrow;
+      }
+      _sourceScreen = screen;
+      _commandGrammar = normalized;
+      final int routeRevision = ++_routeRevision;
+      final int grammarRevision = ++_grammarRevision;
+      _finalizeCommandUtterance();
       print(
         '[VOICE_GRAMMAR] screen=$screen routeRevision=$routeRevision '
         'grammarRevision=$grammarRevision phrases=${normalized.length} '
@@ -247,12 +316,15 @@ class SpeechRecognitionService {
     }
 
     if (_freeTextRecognizer == null) {
-      return _runLifecycleOperation('createFreeTextRecognizer', () async {
+      final Future<void> ready =
+          _runLifecycleOperation('createFreeTextRecognizer', () async {
         if (_freeTextEnabled && _freeTextRecognizer == null) {
           _freeTextRecognizer =
               await _createRecognizer(_RecognitionSource.freeText);
         }
       });
+      _freeTextRecognizerReady = ready;
+      return ready;
     }
 
     final Future<void> next = _freeTextAudioProcessing.then((_) async {
@@ -298,7 +370,7 @@ class SpeechRecognitionService {
   }
 
   Future<void> startSession() async {
-    if (!isPrepared || _model == null) {
+    if (!isPrepared) {
       throw StateError(
         'Сначала подготовьте модель вызовом prepare() перед стартом сессии.',
       );
@@ -395,8 +467,7 @@ class SpeechRecognitionService {
       _speechSegmenter.begin(captureEpoch);
       _vadFrames.reset();
       _utterancePcm.clear();
-      _grammarTransitionPcm.clear();
-      _replayGrammarTransition = false;
+      _commandUtteranceStartedAtMillis = null;
       _preRollFrames.clear();
       _lastProcessedChunkAtMillis = null;
       _commandMetrics.reset();
@@ -445,8 +516,7 @@ class SpeechRecognitionService {
     _speechSegmenter.end(_captureEpoch.current - 1);
     _vadFrames.reset();
     _utterancePcm.clear();
-    _grammarTransitionPcm.clear();
-    _replayGrammarTransition = false;
+    _commandUtteranceStartedAtMillis = null;
     _preRollFrames.clear();
     _removeAudioCallback();
     final int processingStartedAt = DateTime.now().millisecondsSinceEpoch;
@@ -659,69 +729,21 @@ class SpeechRecognitionService {
   }
 
   Future<void> _finishSegment(SpeechSegment segment, int captureEpoch) async {
-    final List<Future<void>> lanes = <Future<void>>[];
-    final bool hasCommandLane = _commandRecognizer != null;
-    final bool hasFreeTextLane =
-        _freeTextEnabled && _freeTextRecognizer != null;
-    if (hasCommandLane) {
-      final Future<void> next = _commandAudioProcessing.then(
-        (_) => _closeRecognizerSegment(
-          source: _RecognitionSource.command,
-          recognizer: _commandRecognizer!,
-          epoch: null,
-          captureEpoch: captureEpoch,
-          segment: segment,
-        ),
-      );
-      _commandAudioProcessing = next.catchError(
-        (Object error, StackTrace stackTrace) {
-          print(
-              '[SpeechRecognitionService] command segment close error: $error');
-        },
-      );
-      lanes.add(next);
-    }
-    if (hasFreeTextLane) {
-      final int epoch = _freeTextEpoch;
-      final Future<void> next = _freeTextAudioProcessing.then(
-        (_) => _closeRecognizerSegment(
-          source: _RecognitionSource.freeText,
-          recognizer: _freeTextRecognizer!,
-          epoch: epoch,
-          captureEpoch: captureEpoch,
-          segment: segment,
-        ),
-      );
-      _freeTextAudioProcessing = next.catchError(
-        (Object error, StackTrace stackTrace) {
-          print(
-              '[SpeechRecognitionService] freeText segment close error: $error');
-        },
-      );
-      lanes.add(next);
-    }
+    // Acoustic VAD boundaries are diagnostics only. Vosk owns command
+    // utterance boundaries through acceptWaveformBytes() == true.
     Object? commandLaneError;
     Object? freeTextLaneError;
-    if (lanes.isNotEmpty) {
-      final List<Object?> errors = await Future.wait<Object?>(
-        lanes.map((Future<void> lane) async {
-          try {
-            await lane;
-            return null;
-          } catch (error, stackTrace) {
-            print('[SpeechRecognitionService] segment lane close error: '
-                '$error\n$stackTrace');
-            return error;
-          }
-        }),
-      );
-      int errorIndex = 0;
-      if (hasCommandLane) {
-        commandLaneError = errors[errorIndex++];
-      }
-      if (hasFreeTextLane) {
-        freeTextLaneError = errors[errorIndex];
-      }
+    try {
+      await _commandAudioProcessing;
+    } catch (error) {
+      commandLaneError = error;
+    }
+    try {
+      // Command endpoint processing may enqueue replay, so snapshot this lane
+      // only after all command frames for the acoustic segment are handled.
+      await _freeTextAudioProcessing;
+    } catch (error) {
+      freeTextLaneError = error;
     }
     if (_captureEpoch.isCurrent(captureEpoch) &&
         !_segmentEndedController.isClosed) {
@@ -746,52 +768,9 @@ class SpeechRecognitionService {
     ));
   }
 
-  Future<void> _closeRecognizerSegment({
-    required _RecognitionSource source,
-    required vosk.Recognizer recognizer,
-    required int? epoch,
-    required int captureEpoch,
-    required SpeechSegment segment,
-  }) async {
-    if (!_canProcess(source, epoch, captureEpoch) ||
-        !_isCurrentRecognizer(source, recognizer)) {
-      return;
-    }
-    try {
-      final String resultJson = await _segmentCloseGuard.run(
-        recognizer.getFinalResult(),
-      );
-      final String text = _extractText(
-        resultJson,
-        preferredKeys: const <String>['text'],
-      );
-      if (text.isNotEmpty) {
-        print('[VOSK][STREAM_FINAL][${source.label}] $text');
-        _emitResult(
-          source,
-          text,
-          epoch: epoch,
-          captureEpoch: captureEpoch,
-          kind: RecognitionKind.streamFinal,
-          segment: segment,
-        );
-      }
-      if (_canProcess(source, epoch, captureEpoch) &&
-          _isCurrentRecognizer(source, recognizer)) {
-        await _segmentCloseGuard.run(recognizer.reset());
-        _setPartialText(source, '');
-      }
-    } on TimeoutException {
-      // The native call may still be stuck. Detach this recognizer before the
-      // serial queue advances so a later segment cannot reuse it.
-      unawaited(_replaceTimedOutRecognizer(source, recognizer));
-      rethrow;
-    }
-  }
-
   Future<void> _processRecognizerChunk({
     required _RecognitionSource source,
-    required vosk.Recognizer recognizer,
+    required VoiceRecognizer recognizer,
     required Uint8List bytes,
     required int queuedAt,
     required int? epoch,
@@ -830,19 +809,9 @@ class SpeechRecognitionService {
     }
 
     final int startedAt = DateTime.now().millisecondsSinceEpoch;
-    Uint8List processingBytes = bytes;
+    final Uint8List processingBytes = bytes;
     if (source == _RecognitionSource.command) {
-      if (_replayGrammarTransition) {
-        final Uint8List transition = _grammarTransitionPcm.take();
-        _replayGrammarTransition = false;
-        if (transition.isNotEmpty) {
-          processingBytes =
-              Uint8List(transition.lengthInBytes + bytes.lengthInBytes)
-                ..setAll(0, transition)
-                ..setAll(transition.lengthInBytes, bytes);
-        }
-      }
-      _grammarTransitionPcm.add(bytes);
+      _commandUtteranceStartedAtMillis ??= processingStartedAt;
       _utterancePcm.add(processingBytes);
     }
     final bool isResultReady =
@@ -898,12 +867,17 @@ class SpeechRecognitionService {
             commandUtteranceId: replayUtteranceId,
           );
         }
-      }
-      if (source == _RecognitionSource.command &&
-          _canProcess(source, epoch, captureEpoch)) {
-        _commandUtteranceId++;
-      }
-      if (_canProcess(source, epoch, captureEpoch)) {
+        if (_canProcess(source, epoch, captureEpoch)) {
+          _publishPartialChange(
+            source: source,
+            text: '',
+            epoch: epoch,
+            captureEpoch: captureEpoch,
+            segment: segment,
+          );
+          _finalizeCommandUtterance(clearPartial: false);
+        }
+      } else if (_canProcess(source, epoch, captureEpoch)) {
         _setPartialText(source, '');
       }
       return;
@@ -916,7 +890,7 @@ class SpeechRecognitionService {
       partialJson,
       preferredKeys: const <String>['partial'],
     );
-    if (partialText.isNotEmpty && partialText != _partialText(source)) {
+    if (partialText != _partialText(source)) {
       final int finishedAt = DateTime.now().millisecondsSinceEpoch;
       print(
         '[VOSK][PARTIAL][${source.label}] $partialText at $finishedAt '
@@ -924,12 +898,11 @@ class SpeechRecognitionService {
         'partialMs=${partialFinishedAt - partialStartedAt}, '
         'chunkTotalMs=${finishedAt - startedAt})',
       );
-      _emitResult(
-        source,
-        partialText,
+      _publishPartialChange(
+        source: source,
+        text: partialText,
         epoch: epoch,
         captureEpoch: captureEpoch,
-        kind: RecognitionKind.partial,
         segment: segment,
       );
     }
@@ -946,7 +919,8 @@ class SpeechRecognitionService {
     required int commandUtteranceId,
   }) {
     final Future<void> next = _freeTextAudioProcessing.then((_) async {
-      final vosk.Recognizer? recognizer = _freeTextRecognizer;
+      await _freeTextRecognizerReady.timeout(_segmentCloseGuard.timeout);
+      final VoiceRecognizer? recognizer = _freeTextRecognizer;
       if (recognizer == null ||
           !_canProcess(
             _RecognitionSource.freeText,
@@ -956,8 +930,9 @@ class SpeechRecognitionService {
         return;
       }
       final int startedAt = DateTime.now().millisecondsSinceEpoch;
-      await recognizer.reset();
+      await recognizer.reset().timeout(_segmentCloseGuard.timeout);
       const int replayBatchBytes = 2560; // 80 ms at 16 kHz mono PCM16.
+      final List<String> results = <String>[];
       for (int offset = 0;
           offset < bytes.lengthInBytes;
           offset += replayBatchBytes) {
@@ -965,13 +940,31 @@ class SpeechRecognitionService {
         final int end = requestedEnd < bytes.lengthInBytes
             ? requestedEnd
             : bytes.lengthInBytes;
-        await recognizer.acceptWaveformBytes(
-          Uint8List.sublistView(bytes, offset, end),
-        );
+        if (!_canProcess(_RecognitionSource.freeText, epoch, captureEpoch)) {
+          return;
+        }
+        final bool endpoint = await recognizer
+            .acceptWaveformBytes(
+              Uint8List.sublistView(bytes, offset, end),
+            )
+            .timeout(_segmentCloseGuard.timeout);
+        if (endpoint) {
+          final String endpointJson =
+              await recognizer.getResult().timeout(_segmentCloseGuard.timeout);
+          final String endpointText =
+              _extractText(endpointJson, preferredKeys: const <String>['text']);
+          if (endpointText.isNotEmpty) results.add(endpointText);
+        }
       }
-      final String json = await recognizer.getFinalResult();
-      final String text =
+      if (!_canProcess(_RecognitionSource.freeText, epoch, captureEpoch)) {
+        return;
+      }
+      final String json =
+          await recognizer.getFinalResult().timeout(_segmentCloseGuard.timeout);
+      final String tail =
           _extractText(json, preferredKeys: const <String>['text']);
+      if (tail.isNotEmpty) results.add(tail);
+      final String text = results.join(' ').trim();
       if (text.isNotEmpty) {
         _emitResult(
           _RecognitionSource.freeText,
@@ -1013,7 +1006,7 @@ class SpeechRecognitionService {
 
   bool _isCurrentRecognizer(
     _RecognitionSource source,
-    vosk.Recognizer recognizer,
+    VoiceRecognizer recognizer,
   ) {
     return switch (source) {
       _RecognitionSource.command => identical(_commandRecognizer, recognizer),
@@ -1084,7 +1077,59 @@ class SpeechRecognitionService {
         routeRevision: _routeRevision,
         grammarRevision: _grammarRevision,
         sourceScreen: _sourceScreen,
+        partialRevision: _commandPartialRevision,
+        commandUtteranceStartedAtMillis: _commandUtteranceStartedAtMillis,
       ));
+    }
+  }
+
+  void _publishPartialChange({
+    required _RecognitionSource source,
+    required String text,
+    required int? epoch,
+    required int? captureEpoch,
+    required SpeechSegment segment,
+  }) {
+    if (source == _RecognitionSource.command) _commandPartialRevision++;
+    _emitResult(
+      source,
+      text,
+      epoch: epoch,
+      captureEpoch: captureEpoch,
+      kind: RecognitionKind.partial,
+      segment: segment,
+    );
+  }
+
+  void _finalizeCommandUtterance({bool clearPartial = true}) {
+    _utterancePcm.clear();
+    if (clearPartial) _commandPartialText = '';
+    _commandUtteranceStartedAtMillis = null;
+    _commandUtteranceId++;
+  }
+
+  bool _sameGrammar(List<String> first, List<String> second) {
+    if (first.length != second.length) return false;
+    for (int index = 0; index < first.length; index++) {
+      if (first[index] != second[index]) return false;
+    }
+    return true;
+  }
+
+  Future<void> _recoverCommandRecognizer(VoiceRecognizer failed) async {
+    try {
+      final VoiceRecognizer replacement =
+          await _createRecognizer(_RecognitionSource.command);
+      _commandRecognizer ??= replacement;
+      if (!identical(_commandRecognizer, replacement)) {
+        await replacement.dispose();
+      }
+    } catch (error, stackTrace) {
+      print('[VOICE_GRAMMAR] recognizer recovery failed: $error\n$stackTrace');
+    } finally {
+      await failed.dispose().catchError((Object error, StackTrace stackTrace) {
+        print('[VOICE_GRAMMAR] failed recognizer dispose error: $error');
+      });
     }
   }
 
@@ -1096,7 +1141,7 @@ class SpeechRecognitionService {
   }
 
   Future<void> _ensureModelInitialized() async {
-    if (_model != null) {
+    if (_model != null || _recognizerFactory != null) {
       print('[SpeechRecognitionService] model already initialized');
       return;
     }
@@ -1120,16 +1165,31 @@ class SpeechRecognitionService {
     }
   }
 
-  Future<vosk.Recognizer> _createRecognizer(
+  Future<VoiceRecognizer> _createRecognizer(
     _RecognitionSource source,
   ) async {
+    final VoiceRecognizerFactory? factory = _recognizerFactory;
+    if (factory != null) {
+      final VoiceRecognizer recognizer = await factory(
+        source == _RecognitionSource.command
+            ? RecognitionLane.command
+            : RecognitionLane.freeText,
+        _commandGrammar,
+      );
+      if (source == _RecognitionSource.command) {
+        await recognizer.setGrammar(_commandGrammar);
+      }
+      return recognizer;
+    }
     final vosk.Model? model = _model;
     if (model == null) throw StateError('Vosk модель не инициализирована.');
 
     final int startedAt = DateTime.now().millisecondsSinceEpoch;
-    final vosk.Recognizer recognizer = await _vosk.createRecognizer(
-      model: model,
-      sampleRate: _sampleRate,
+    final VoiceRecognizer recognizer = VoskVoiceRecognizer(
+      await _vosk.createRecognizer(
+        model: model,
+        sampleRate: _sampleRate,
+      ),
     );
     if (source == _RecognitionSource.freeText) return recognizer;
     try {
@@ -1150,49 +1210,12 @@ class SpeechRecognitionService {
     return recognizer;
   }
 
-  Future<void> _replaceTimedOutRecognizer(
-    _RecognitionSource source,
-    vosk.Recognizer timedOutRecognizer,
-  ) async {
-    if (!_isCurrentRecognizer(source, timedOutRecognizer)) return;
-    switch (source) {
-      case _RecognitionSource.command:
-        _commandRecognizer = null;
-      case _RecognitionSource.freeText:
-        _freeTextRecognizer = null;
-    }
-
-    try {
-      final vosk.Recognizer replacement = await _createRecognizer(source);
-      switch (source) {
-        case _RecognitionSource.command:
-          _commandRecognizer ??= replacement;
-        case _RecognitionSource.freeText:
-          _freeTextRecognizer ??= replacement;
-      }
-    } catch (error, stackTrace) {
-      print(
-        '[SpeechRecognitionService] timed-out recognizer replacement failed: '
-        '$error\n$stackTrace',
-      );
-    }
-
-    unawaited(timedOutRecognizer.dispose().catchError(
-      (Object error, StackTrace stackTrace) {
-        print(
-          '[SpeechRecognitionService] timed-out recognizer dispose failed: '
-          '$error\n$stackTrace',
-        );
-      },
-    ));
-  }
-
   Future<void> _replaceRecognizersAfterTimedOutProcessing({
     required Future<void> commandProcessing,
     required Future<void> freeTextProcessing,
   }) async {
-    final vosk.Recognizer? oldCommand = _commandRecognizer;
-    final vosk.Recognizer? oldFreeText = _freeTextRecognizer;
+    final VoiceRecognizer? oldCommand = _commandRecognizer;
+    final VoiceRecognizer? oldFreeText = _freeTextRecognizer;
     _commandRecognizer = null;
     _freeTextRecognizer = null;
     await _createRecognizers();
@@ -1288,27 +1311,55 @@ class BoundedPcmBuffer {
   BoundedPcmBuffer({required this.maxBytes});
 
   final int maxBytes;
-  Uint8List _bytes = Uint8List(0);
+  final Queue<Uint8List> _chunks = Queue<Uint8List>();
+  int _length = 0;
+  int _firstOffset = 0;
 
-  int get length => _bytes.lengthInBytes;
+  int get length => _length;
 
   void add(Uint8List bytes) {
     if (bytes.isEmpty) return;
-    final int combinedLength = _bytes.lengthInBytes + bytes.lengthInBytes;
-    final Uint8List combined = Uint8List(combinedLength)
-      ..setAll(0, _bytes)
-      ..setAll(_bytes.lengthInBytes, bytes);
-    final int start = combinedLength > maxBytes ? combinedLength - maxBytes : 0;
-    _bytes = Uint8List.fromList(combined.sublist(start));
+    final Uint8List chunk = Uint8List.fromList(bytes);
+    _chunks.addLast(chunk);
+    _length += chunk.lengthInBytes;
+    int overflow = _length - maxBytes;
+    while (overflow > 0 && _chunks.isNotEmpty) {
+      final int available = _chunks.first.lengthInBytes - _firstOffset;
+      if (overflow < available) {
+        _firstOffset += overflow;
+        _length -= overflow;
+        overflow = 0;
+      } else {
+        _chunks.removeFirst();
+        _firstOffset = 0;
+        _length -= available;
+        overflow -= available;
+      }
+    }
   }
 
   Uint8List take() {
-    final Uint8List result = _bytes;
-    _bytes = Uint8List(0);
+    final Uint8List result = Uint8List(_length);
+    int writeOffset = 0;
+    for (final Uint8List chunk in _chunks) {
+      final int readOffset = identical(chunk, _chunks.first) ? _firstOffset : 0;
+      result.setRange(
+        writeOffset,
+        writeOffset + chunk.lengthInBytes - readOffset,
+        chunk,
+        readOffset,
+      );
+      writeOffset += chunk.lengthInBytes - readOffset;
+    }
+    clear();
     return result;
   }
 
-  void clear() => _bytes = Uint8List(0);
+  void clear() {
+    _chunks.clear();
+    _length = 0;
+    _firstOffset = 0;
+  }
 }
 
 /// Preserves packet remainders so VAD always receives exact 20 ms PCM frames.
