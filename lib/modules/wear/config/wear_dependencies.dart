@@ -2,6 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:smart_glasses/modules/wear/data/auth/data_source/auth_data_source.dart';
 import 'package:smart_glasses/modules/wear/data/auth/data_source/auth_dio_client.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/application/wear_actual_screen_store.dart';
 import 'package:smart_glasses/modules/wear/data/availability/local_wear_availability_repository.dart';
 import 'package:smart_glasses/modules/wear/data/bdto/data_source/bdto_datasource.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/repository/wear_availability_repository.dart';
@@ -9,7 +11,7 @@ import 'package:smart_glasses/modules/wear/domain/availability/use_case/wear_ava
 import 'package:smart_glasses/modules/wear/domain/availability/use_case/wear_availability_flow_use_case.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/use_case/authenticate_user_use_case.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_control_service.dart';
-import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_typing_service.dart';
@@ -41,8 +43,10 @@ class WearDependencies {
   late final VoiceTypingService voiceTypingService;
 
   late final WearVoiceControlService voiceControlService;
+  late final VoiceActionCatalog voiceActionCatalog;
 
   late final WearFlowController wearFlowController;
+  final WearActualScreenStore actualScreenStore = WearActualScreenStore();
 
   /// Shared audio stream — один на оба голосовых сервиса.
   late final AudioStreamService audioStreamService;
@@ -56,13 +60,23 @@ class WearDependencies {
       navigationOutput: NoopWearNavigationOutput(),
       photoCapture: photoStore.captureLatestPhoto,
     );
+    voiceActionCatalog = VoiceActionCatalog(
+      includeUnknown: const bool.fromEnvironment(
+        'VOICE_GRAMMAR_INCLUDE_UNKNOWN',
+        defaultValue: true,
+      ),
+      capabilities: VoiceScreenCapabilities(
+        runtimeResolver: wearFlowController.canHandleVoiceCommand,
+      ),
+    );
     speechRecognitionService = SpeechRecognitionService(
       audioStreamService: audioStreamService,
-      commandGrammar: VoiceCommandParserService.grammarPhrases,
+      commandGrammar: voiceActionCatalog.grammarFor(WearScreenId.menu),
     );
     voiceControlService = WearVoiceControlService(
       speechRecognitionService: speechRecognitionService,
-      screenProvider: () => wearFlowController.state.screen,
+      screenProvider: () => actualScreenStore.screen,
+      actionCatalog: voiceActionCatalog,
     );
     voiceTypingService = VoiceTypingService(
       speechRecognitionService: speechRecognitionService,

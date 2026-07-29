@@ -62,7 +62,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   late final GoRouter _router;
   StreamSubscription<_VoiceCommandInput>? _voiceSub;
   StreamSubscription<String>? _voicePhraseSub;
-  StreamSubscription<WearFlowState>? _flowStateSub;
+  StreamSubscription<WearScreenId>? _screenActionsSub;
   StreamSubscription<dynamic>? _authorizedSub;
   StreamSubscription<void>? _clearedSub;
   StreamSubscription<bool>? _voiceReconnectingSub;
@@ -118,6 +118,14 @@ class _WearModuleAppState extends State<WearModuleApp>
     WearStatusIconReporter.I.setVoiceCommandsEnabled(_voiceCommandsEnabled);
     flow.setNavigationOutput(FlutterWearNavigationOutput(router: _router));
     flow.setUiLifecycle(WearUiLifecycle.active);
+    if (widget.onStartVoice == null) {
+      _screenActionsSub =
+          flow.screenActionsChanged.listen((WearScreenId screen) {
+        if (screen == WearDependencies.I.actualScreenStore.screen) {
+          _configureVoiceForScreen(screen, force: true);
+        }
+      });
+    }
     _voiceSub = _voiceCommands.listen(
       (_VoiceCommandInput input) async {
         final WearVoiceCommand command = input.command;
@@ -211,10 +219,6 @@ class _WearModuleAppState extends State<WearModuleApp>
                 ? WearVoiceSession.I.stateStream
                 : null))
         ?.listen(_onVoiceStateChanged);
-    _flowStateSub = flow.stateStream.listen((WearFlowState state) {
-      _configureVoiceForScreen(state.screen);
-    });
-    _configureVoiceForScreen(flow.state.screen);
     _authorizedSub = WearSession.authorizedStream.listen((_) {
       if (_voiceState.phase == VoicePhase.disabled) {
         _startVoice('authorized');
@@ -258,6 +262,12 @@ class _WearModuleAppState extends State<WearModuleApp>
     }
     final WearScreenId? screenId =
         FlutterWearNavigationOutput.screenIdForRoute(location);
+    if (screenId != null) {
+      if (widget.onStartVoice == null) {
+        WearDependencies.I.actualScreenStore.confirm(screenId);
+      }
+      _configureVoiceForScreen(screenId);
+    }
     final pendingNavigation = flow.state.pendingNavigation;
     if (screenId != null &&
         pendingNavigation != null &&
@@ -273,9 +283,12 @@ class _WearModuleAppState extends State<WearModuleApp>
     }
   }
 
-  void _configureVoiceForScreen(WearScreenId screen) {
+  void _configureVoiceForScreen(
+    WearScreenId screen, {
+    bool force = false,
+  }) {
     if (widget.onStartVoice != null) return;
-    WearVoiceSession.I.configureForScreen(screen).catchError(
+    WearVoiceSession.I.configureForScreen(screen, force: force).catchError(
       (Object error, StackTrace stackTrace) {
         print(
           '[WearModuleApp] configure voice failed screen=$screen '
@@ -635,7 +648,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     _voiceReconnectingSub?.cancel();
     _voiceReconnectErrorSub?.cancel();
     _voiceStateSub?.cancel();
-    _flowStateSub?.cancel();
+    _screenActionsSub?.cancel();
     _authorizedSub?.cancel();
     _clearedSub?.cancel();
     _flow.setNavigationOutput(

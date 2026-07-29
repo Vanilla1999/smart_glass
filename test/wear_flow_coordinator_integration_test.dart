@@ -353,7 +353,7 @@ void main() {
       expect(flowController.state.menuFocusedIndex, 1);
     });
 
-    test('fast direct-scan alias navigates before the segment closes',
+    test('stable direct-scan alias navigates before the segment closes',
         () async {
       final _FakeSpeechRecognitionService speech =
           _FakeSpeechRecognitionService();
@@ -370,7 +370,7 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       speech.emitCommandPartial('прямое');
-      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(const Duration(milliseconds: 160));
 
       expect(flowController.state.screen, WearScreenId.availabilityDirectScan);
 
@@ -1381,12 +1381,24 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   @override
   Future<void> setFreeTextEnabled(bool enabled) async {}
 
+  @override
+  int get grammarRevision => 0;
+
+  @override
+  int get routeRevision => 0;
+
+  @override
+  Future<void> switchCommandGrammar({
+    required WearScreenId screen,
+    required List<String> grammar,
+  }) async {}
+
   void emitCommandPartial(String text) {
     _emitSegmented(text, RecognitionKind.partial);
   }
 
   void emitCommandResult(String text) {
-    _emitSegmented(text, RecognitionKind.finalResult);
+    _emitSegmented(text, RecognitionKind.endpointResult);
   }
 
   void endSegment() {
@@ -1413,7 +1425,9 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
       kind: kind,
       text: text,
       lastChunkId: 1,
-      parsedCommand: VoiceCommandParserService().parseExact(text),
+      parsedCommand: VoiceCommandParserService()
+          .parseExactForScreen(WearScreenId.menu, text),
+      commandUtteranceId: 1,
     ));
   }
 

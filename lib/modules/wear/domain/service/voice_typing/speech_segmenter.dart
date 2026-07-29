@@ -24,6 +24,9 @@ class SpeechSegmentDiagnostics {
     required this.adaptiveOnRms,
     required this.adaptiveOffRms,
     required this.speaking,
+    this.calibrationP10Rms = 0,
+    this.calibrationP50Rms = 0,
+    this.calibrationP90Rms = 0,
   });
 
   final double rms;
@@ -31,6 +34,9 @@ class SpeechSegmentDiagnostics {
   final double adaptiveOnRms;
   final double adaptiveOffRms;
   final bool speaking;
+  final double calibrationP10Rms;
+  final double calibrationP50Rms;
+  final double calibrationP90Rms;
 }
 
 /// Assigns one identity to every PCM chunk sent to both recognizer lanes.
@@ -38,7 +44,7 @@ class SpeechSegmenter {
   SpeechSegmenter({
     this.sampleRate = 16000,
     this.endpointSilence = const Duration(milliseconds: 500),
-    this.maxSegmentDuration = const Duration(seconds: 8),
+    this.maxSegmentDuration = const Duration(seconds: 4),
     this.calibrationDuration = const Duration(milliseconds: 750),
     this.speechOnRms = 0.001,
     this.speechOffRms = 0.0007,
@@ -62,6 +68,9 @@ class SpeechSegmenter {
   bool _isCalibrated = false;
   final List<double> _calibrationRms = <double>[];
   double _noiseFloorRms = 0.0002;
+  double _calibrationP10Rms = 0;
+  double _calibrationP50Rms = 0;
+  double _calibrationP90Rms = 0;
   SpeechSegmentDiagnostics _lastDiagnostics = const SpeechSegmentDiagnostics(
     rms: 0,
     noiseFloorRms: 0.0002,
@@ -92,12 +101,18 @@ class SpeechSegmenter {
     _calibrationRms.clear();
     _isCalibrated = calibrationDuration == Duration.zero;
     _noiseFloorRms = initialNoiseFloorRms;
+    _calibrationP10Rms = 0;
+    _calibrationP50Rms = 0;
+    _calibrationP90Rms = 0;
     _lastDiagnostics = SpeechSegmentDiagnostics(
       rms: 0,
       noiseFloorRms: _noiseFloorRms,
       adaptiveOnRms: speechOnRms,
       adaptiveOffRms: speechOffRms,
       speaking: false,
+      calibrationP10Rms: 0,
+      calibrationP50Rms: 0,
+      calibrationP90Rms: 0,
     );
   }
 
@@ -131,6 +146,9 @@ class SpeechSegmenter {
       adaptiveOnRms: adaptiveOn,
       adaptiveOffRms: adaptiveOff,
       speaking: speaking,
+      calibrationP10Rms: _calibrationP10Rms,
+      calibrationP50Rms: _calibrationP50Rms,
+      calibrationP90Rms: _calibrationP90Rms,
     );
     if (!speaking) {
       final int? segmentId = _activeSegmentId;
@@ -194,8 +212,11 @@ class SpeechSegmenter {
     if (_calibrationSamples < _durationToSamples(calibrationDuration)) return;
 
     final List<double> sorted = List<double>.of(_calibrationRms)..sort();
-    final int percentileIndex = ((sorted.length - 1) * 0.3).floor();
-    _noiseFloorRms = math.max(initialNoiseFloorRms, sorted[percentileIndex]);
+    _calibrationP10Rms = _percentile(sorted, 0.1);
+    _calibrationP50Rms = _percentile(sorted, 0.5);
+    _calibrationP90Rms = _percentile(sorted, 0.9);
+    final double p20 = _percentile(sorted, 0.2);
+    _noiseFloorRms = math.max(initialNoiseFloorRms, p20);
     _isCalibrated = true;
     _calibrationRms.clear();
   }
@@ -207,7 +228,14 @@ class SpeechSegmenter {
       adaptiveOnRms: (_noiseFloorRms * 2.5).clamp(speechOnRms, 1.0),
       adaptiveOffRms: (_noiseFloorRms * 1.5).clamp(speechOffRms, 1.0),
       speaking: speaking,
+      calibrationP10Rms: _calibrationP10Rms,
+      calibrationP50Rms: _calibrationP50Rms,
+      calibrationP90Rms: _calibrationP90Rms,
     );
+  }
+
+  double _percentile(List<double> sorted, double percentile) {
+    return sorted[((sorted.length - 1) * percentile).floor()];
   }
 
   double _rms(Uint8List bytes) {

@@ -1,148 +1,132 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 
 void main() {
-  group('VoiceCommandParserService', () {
-    late VoiceCommandParserService parser;
+  group('screen-scoped voice grammar', () {
+    final VoiceActionCatalog catalog = VoiceActionCatalog();
 
-    setUp(() {
-      parser = VoiceCommandParserService();
-    });
-
-    test('parses exact Russian command aliases', () {
-      const Map<String, WearVoiceCommand> cases = <String, WearVoiceCommand>{
-        'вверх': WearVoiceCommand.up,
-        'на верх': WearVoiceCommand.up,
-        'выше': WearVoiceCommand.up,
-        'вниз': WearVoiceCommand.down,
-        'в низ': WearVoiceCommand.down,
-        'ниже': WearVoiceCommand.down,
-        'выбери': WearVoiceCommand.select,
-        'окей': WearVoiceCommand.select,
-        'да': WearVoiceCommand.yes,
-        'ага': WearVoiceCommand.yes,
-        'нет': WearVoiceCommand.no,
-        'назад': WearVoiceCommand.back,
-        'домой': WearVoiceCommand.home,
-        'дом': WearVoiceCommand.home,
-        'завершить': WearVoiceCommand.finish,
-        'закончить': WearVoiceCommand.finish,
-        'готово': WearVoiceCommand.finish,
-        'фонарик': WearVoiceCommand.flashlight,
-        'люмус максима': WearVoiceCommand.flashlight,
-        'максима': WearVoiceCommand.flashlight,
-        'подтвердить': WearVoiceCommand.select,
-        'принять': WearVoiceCommand.select,
-        'печать ценника': WearVoiceCommand.openPrintPriceTag,
-        'печать ценников': WearVoiceCommand.openPrintPriceTag,
-        'напечатать': WearVoiceCommand.print,
-        'продолжить': WearVoiceCommand.continueScan,
-        'ручной ввод': WearVoiceCommand.manualInput,
-        'сделать фото': WearVoiceCommand.takePhoto,
-        'Фото': WearVoiceCommand.takePhoto,
-        'ТЕСТ ФОТО': WearVoiceCommand.testPhoto,
-        'к списку': WearVoiceCommand.backToList,
-        'прямое сканирование': WearVoiceCommand.openDirectScan,
-        'отмена': WearVoiceCommand.cancel,
-        'закрыть': WearVoiceCommand.cancel,
-        'закрой': WearVoiceCommand.cancel,
-        'вернуться': WearVoiceCommand.back,
-        'включить фонарик': WearVoiceCommand.flashlight,
-        'следующая страница': WearVoiceCommand.nextPage,
-        'дальше': WearVoiceCommand.nextPage,
-        'далее': WearVoiceCommand.nextPage,
-        'прошлая страница': WearVoiceCommand.previousPage,
-        'прошлое страница': WearVoiceCommand.previousPage,
-        'прошлую страницу': WearVoiceCommand.previousPage,
-        'предыдущая страница': WearVoiceCommand.previousPage,
-        'предыдущую страницу': WearVoiceCommand.previousPage,
-        'страница назад': WearVoiceCommand.previousPage,
-        'назад страница': WearVoiceCommand.previousPage,
-        'стоп микрофон': WearVoiceCommand.stopMicrophone,
-        'останови микрофон': WearVoiceCommand.stopMicrophone,
-        'включи микрофон': WearVoiceCommand.startMicrophone,
-      };
-
-      for (final MapEntry<String, WearVoiceCommand> entry in cases.entries) {
-        expect(parser.parse(entry.key), entry.value, reason: entry.key);
-      }
-    });
-
-    test('normalizes case and punctuation', () {
-      expect(parser.parse('  ВЫБЕРИ! '), WearVoiceCommand.select);
-      expect(parser.parse('Назад.'), WearVoiceCommand.back);
-      expect(parser.parse('Окей,'), WearVoiceCommand.select);
-      expect(parser.parse('Да.'), WearVoiceCommand.yes);
-      expect(parser.parse('Нет,'), WearVoiceCommand.no);
-      expect(parser.parse('Фонарик.'), WearVoiceCommand.flashlight);
-    });
-
-    test('parses command token inside short recognition phrase', () {
-      expect(parser.parse('иди вверх'), WearVoiceCommand.up);
-      expect(parser.parse('листай вниз пожалуйста'), WearVoiceCommand.down);
-      expect(parser.parse('можно выбрать'), WearVoiceCommand.select);
-      expect(parser.parse('да можно'), WearVoiceCommand.yes);
-      expect(parser.parse('нет нельзя'), WearVoiceCommand.no);
-      expect(parser.parse('перейти домой'), WearVoiceCommand.home);
-      expect(parser.parse('включи фонарик пожалуйста'),
-          WearVoiceCommand.flashlight);
-      expect(parser.parse('можно завершить'), WearVoiceCommand.finish);
-      expect(parser.parse('можно печать ценника'),
-          WearVoiceCommand.openPrintPriceTag);
-      expect(parser.parse('давай напечатать'), WearVoiceCommand.print);
-      expect(parser.parse('нужно продолжить'), WearVoiceCommand.continueScan);
-      expect(parser.parse('можно вернуться'), WearVoiceCommand.back);
+    test('T01 menu contains only menu commands and unknown', () {
+      final List<String> grammar = catalog.grammarFor(WearScreenId.menu);
       expect(
-          parser.parse('можно страница назад'), WearVoiceCommand.previousPage);
-      expect(parser.parse('давай прошлое страница'),
-          WearVoiceCommand.previousPage);
+          grammar, containsAll(<String>['вверх', 'вниз', 'выбрать', '[unk]']));
+      expect(grammar, isNot(contains('прямое')));
+      expect(grammar, isNot(contains('фото')));
     });
 
-    test('exposes grammar phrases for Vosk recognizer', () {
-      expect(VoiceCommandParserService.grammarPhrases, contains('вверх'));
+    test('T02 availability interaction is scoped', () {
+      final List<String> grammar =
+          catalog.grammarFor(WearScreenId.availabilityInteraction);
       expect(
-          VoiceCommandParserService.grammarPhrases, contains('печать ценника'));
-      expect(VoiceCommandParserService.grammarPhrases,
-          contains('прямое сканирование'));
-      expect(VoiceCommandParserService.grammarPhrases,
-          contains('включить фонарик'));
-      expect(
-          VoiceCommandParserService.grammarPhrases, contains('люмус максима'));
-      expect(VoiceCommandParserService.grammarPhrases, contains('максима'));
-      expect(VoiceCommandParserService.grammarPhrases,
-          contains('следующая страница'));
-      expect(VoiceCommandParserService.grammarPhrases,
-          contains('прошлая страница'));
-      expect(
-          VoiceCommandParserService.grammarPhrases, contains('стоп микрофон'));
-      expect(VoiceCommandParserService.grammarPhrases,
-          contains('включи микрофон'));
-      expect(VoiceCommandParserService.grammarPhrases, contains('тест фото'));
+          grammar, containsAll(<String>['список', 'прямое', 'назад', '[unk]']));
+      expect(grammar, isNot(contains('печать')));
+      expect(grammar, isNot(contains('фото')));
     });
 
-    test('does not parse partial words as commands', () {
-      expect(parser.parse('сверхновая'), isNull);
-      expect(parser.parse('домовой'), isNull);
-      expect(parser.parse('выбирать'), isNull);
-      expect(parser.parse('стоп'), isNull);
-      expect(parser.parse('конец'), isNull);
+    test('T03 direct scan excludes unrelated actions', () {
+      final List<String> grammar =
+          catalog.grammarFor(WearScreenId.availabilityDirectScan);
+      expect(grammar, containsAll(<String>['назад', 'фонарик', '[unk]']));
+      expect(grammar, isNot(contains('фото')));
+      expect(grammar, isNot(contains('печать')));
+      expect(grammar, isNot(contains('доступность')));
     });
 
-    test('does not treat unstable recognition fragments as up', () {
-      expect(parser.parse('бер'), isNull);
-      expect(parser.parse('сбер'), isNull);
-      expect(VoiceCommandParserService.grammarPhrases, isNot(contains('бер')));
+    test('T04 capability removes command without handler', () {
+      expect(catalog.grammarFor(WearScreenId.help), <String>['назад', '[unk]']);
+    });
+
+    test('T04 runtime callback controls grammar membership', () {
+      bool selectRegistered = false;
+      final VoiceActionCatalog runtimeCatalog = VoiceActionCatalog(
+        capabilities: VoiceScreenCapabilities(
+          runtimeResolver: (WearScreenId screen, WearVoiceCommand command) {
+            if (command == WearVoiceCommand.back) return true;
+            return screen == WearScreenId.help &&
+                command == WearVoiceCommand.select &&
+                selectRegistered;
+          },
+        ),
+      );
+
+      expect(runtimeCatalog.grammarFor(WearScreenId.help),
+          isNot(contains('выбрать')));
+      selectRegistered = true;
+      expect(runtimeCatalog.grammarFor(WearScreenId.help), contains('выбрать'));
+    });
+
+    test('T05 parser cannot execute outside active profile', () {
+      final VoiceCommandParserService parser =
+          VoiceCommandParserService(catalog: catalog);
       expect(
-        VoiceCommandParserService.grammarPhrases,
-        isNot(contains('сбер')),
+        parser.parseExactForScreen(WearScreenId.menu, 'прямое'),
+        isNull,
+      );
+      expect(
+        parser.parseExactForScreen(
+          WearScreenId.availabilityInteraction,
+          'прямое',
+        ),
+        WearVoiceCommand.openDirectScan,
       );
     });
 
-    test('returns null for empty or unknown text', () {
-      expect(parser.parse(''), isNull);
-      expect(parser.parse('   '), isNull);
-      expect(parser.parse('привет мир'), isNull);
+    test('T06 duplicate alias fails validation', () {
+      expect(
+        () => VoiceActionCatalog(actions: <VoiceActionEntry>[
+          VoiceActionEntry(
+            command: WearVoiceCommand.openList,
+            screens: <WearScreenId>{WearScreenId.menu},
+            fullPhrases: <String>{'список'},
+            fastAliases: <String>{'команда'},
+            activationPolicy: VoiceActivationPolicy.stableExactPartial,
+          ),
+          VoiceActionEntry(
+            command: WearVoiceCommand.openHelp,
+            screens: <WearScreenId>{WearScreenId.menu},
+            fullPhrases: <String>{'помощь'},
+            fastAliases: <String>{'команда'},
+            activationPolicy: VoiceActivationPolicy.stableExactPartial,
+          ),
+        ]),
+        throwsArgumentError,
+      );
+    });
+
+    test('T07 fast alias prefix collision fails validation', () {
+      expect(
+        () => VoiceActionCatalog(actions: <VoiceActionEntry>[
+          VoiceActionEntry(
+            command: WearVoiceCommand.back,
+            screens: <WearScreenId>{WearScreenId.availabilityProduct},
+            fullPhrases: <String>{'назад'},
+            fastAliases: <String>{'назад'},
+            activationPolicy: VoiceActivationPolicy.stableExactPartial,
+          ),
+          VoiceActionEntry(
+            command: WearVoiceCommand.previousPage,
+            screens: <WearScreenId>{WearScreenId.availabilityProduct},
+            fullPhrases: <String>{'назад страница'},
+            fastAliases: <String>{},
+            activationPolicy: VoiceActivationPolicy.endpointOnly,
+          ),
+        ]),
+        throwsArgumentError,
+      );
+    });
+
+    test('unknown feature flag can exclude unknown token', () {
+      expect(
+        VoiceActionCatalog(includeUnknown: false).grammarFor(WearScreenId.menu),
+        isNot(contains('[unk]')),
+      );
+    });
+
+    test('T30 root menu grammar cannot execute back', () {
+      expect(catalog.grammarFor(WearScreenId.menu), isNot(contains('назад')));
+      expect(catalog.resolve(WearScreenId.menu, 'назад'), isNull);
     });
   });
 }

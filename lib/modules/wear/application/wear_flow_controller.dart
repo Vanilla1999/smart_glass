@@ -94,6 +94,8 @@ class WearFlowController {
   WearFlowState _state = WearFlowState.initial();
   final StreamController<WearFlowState> _stateController =
       StreamController<WearFlowState>.broadcast();
+  final StreamController<WearScreenId> _screenActionsController =
+      StreamController<WearScreenId>.broadcast();
   final Map<WearScreenId, WearScreenActionHandler> _screenActions =
       <WearScreenId, WearScreenActionHandler>{};
   final Map<WearScreenId, WearGlassesPayload> _screenPayloads =
@@ -108,6 +110,8 @@ class WearFlowController {
   WearFlowState get state => _state;
 
   Stream<WearFlowState> get stateStream => _stateController.stream;
+  Stream<WearScreenId> get screenActionsChanged =>
+      _screenActionsController.stream;
 
   void setGlassesOutput(WearGlassesOutput output) {
     _glassesOutput = output;
@@ -140,12 +144,93 @@ class WearFlowController {
     WearScreenActionHandler handler,
   ) {
     _screenActions[screen] = handler;
+    _screenActionsController.add(screen);
     print('[WearFlowController] register actions screen=$screen');
   }
 
   void unregisterScreenActions(WearScreenId screen) {
     _screenActions.remove(screen);
+    _screenActionsController.add(screen);
     print('[WearFlowController] unregister actions screen=$screen');
+  }
+
+  bool canHandleVoiceCommand(WearScreenId screen, WearVoiceCommand command) {
+    final WearScreenActionHandler? handler = _screenActions[screen];
+    final bool registered = switch (command) {
+      WearVoiceCommand.up => handler?.onUp != null,
+      WearVoiceCommand.down => handler?.onDown != null,
+      WearVoiceCommand.select => handler?.onSelect != null,
+      WearVoiceCommand.yes => handler?.onYes != null,
+      WearVoiceCommand.no => handler?.onNo != null,
+      WearVoiceCommand.back => handler?.onBack != null,
+      WearVoiceCommand.home => handler?.onHome != null,
+      WearVoiceCommand.manualInput => handler?.onManualInput != null,
+      WearVoiceCommand.print => handler?.onPrint != null,
+      WearVoiceCommand.takePhoto => handler?.onPhoto != null,
+      WearVoiceCommand.backToList => handler?.onBackToList != null,
+      WearVoiceCommand.clear => handler?.onClear != null,
+      WearVoiceCommand.save => handler?.onSave != null,
+      WearVoiceCommand.cancel => handler?.onCancel != null,
+      WearVoiceCommand.connectScanner => handler?.onConnectScanner != null,
+      WearVoiceCommand.switchUser => handler?.onSwitchUser != null,
+      WearVoiceCommand.openDbSettings => handler?.onOpenDbSettings != null,
+      WearVoiceCommand.fillDatabase => handler?.onFillDatabase != null,
+      WearVoiceCommand.nextPage => handler?.onNextPage != null,
+      WearVoiceCommand.previousPage => handler?.onPreviousPage != null,
+      WearVoiceCommand.continueScan => handler?.onContinue != null,
+      WearVoiceCommand.finish => handler?.onFinish != null,
+      _ => false,
+    };
+    if (registered) return true;
+    return switch (screen) {
+      WearScreenId.menu => <WearVoiceCommand>{
+          WearVoiceCommand.up,
+          WearVoiceCommand.down,
+          WearVoiceCommand.select,
+          WearVoiceCommand.openPrintPriceTag,
+          WearVoiceCommand.openAvailability,
+          WearVoiceCommand.openHelp,
+          WearVoiceCommand.openSettings,
+        }.contains(command),
+      WearScreenId.availabilityInteraction => <WearVoiceCommand>{
+          WearVoiceCommand.up,
+          WearVoiceCommand.down,
+          WearVoiceCommand.select,
+          WearVoiceCommand.back,
+          WearVoiceCommand.home,
+          WearVoiceCommand.openList,
+          WearVoiceCommand.openDirectScan,
+        }.contains(command),
+      WearScreenId.homeConfirm ||
+      WearScreenId.continueScan =>
+        <WearVoiceCommand>{
+          WearVoiceCommand.up,
+          WearVoiceCommand.down,
+          WearVoiceCommand.select,
+          WearVoiceCommand.yes,
+          WearVoiceCommand.no,
+          WearVoiceCommand.back,
+        }.contains(command),
+      WearScreenId.help ||
+      WearScreenId.settings ||
+      WearScreenId.printerSelect ||
+      WearScreenId.productSelect ||
+      WearScreenId.availabilityGroup ||
+      WearScreenId.availabilityProduct ||
+      WearScreenId.dbSettings ||
+      WearScreenId.wifiSettings ||
+      WearScreenId.printerSettings ||
+      WearScreenId.scanIdle ||
+      WearScreenId.availabilityCheck ||
+      WearScreenId.availabilityFill =>
+        command == WearVoiceCommand.back || command == WearVoiceCommand.home,
+      WearScreenId.availabilityDirectScan => <WearVoiceCommand>{
+          WearVoiceCommand.back,
+          WearVoiceCommand.home,
+          WearVoiceCommand.flashlight,
+        }.contains(command),
+      _ => false,
+    };
   }
 
   void rememberScreenPayload(
@@ -1019,6 +1104,7 @@ class WearFlowController {
   }
 
   Future<void> dispose() async {
+    await _screenActionsController.close();
     await _stateController.close();
   }
 }

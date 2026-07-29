@@ -132,6 +132,26 @@ void main() {
     expect(segmenter.lastDiagnostics.noiseFloorRms, closeTo(33 / 32768, 1e-8));
   });
 
+  test('speech outliers do not inflate p20 calibration noise floor', () {
+    final SpeechSegmenter segmenter = SpeechSegmenter(
+      sampleRate: 1000,
+      calibrationDuration: const Duration(milliseconds: 200),
+    );
+    segmenter.begin(1);
+
+    for (int index = 0; index < 8; index++) {
+      final int amplitude = index < 6 ? 32 : 3200;
+      segmenter.add(_pcmFrame(amplitude, samples: 25), 1);
+    }
+
+    final SpeechSegmentDiagnostics diagnostics = segmenter.lastDiagnostics;
+    expect(segmenter.isCalibrated, isTrue);
+    expect(diagnostics.noiseFloorRms, closeTo(32 / 32768, 1e-8));
+    expect(diagnostics.calibrationP10Rms, closeTo(32 / 32768, 1e-8));
+    expect(diagnostics.calibrationP50Rms, closeTo(32 / 32768, 1e-8));
+    expect(diagnostics.calibrationP90Rms, greaterThan(0.09));
+  });
+
   test('background stays idle and speech starts after calibration', () {
     final SpeechSegmenter segmenter = SpeechSegmenter(
       sampleRate: 1000,

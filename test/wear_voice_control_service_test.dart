@@ -1,676 +1,160 @@
-import 'dart:async';
-import 'dart:typed_data';
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
-import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
-import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
-import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_event.dart';
-import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_control_service.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
-import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/recognition_arbiter.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
-import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
-import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_device_profile.dart';
-import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_typing_service.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-
-  test('voice typing reuses global listening without stopping it', () async {
-    final _FakeSpeechRecognitionService speech = _FakeSpeechRecognitionService()
-      ..listening = true;
-    final VoiceTypingService service = VoiceTypingService(
-      speechRecognitionService: speech,
-      audioStreamService: _FakeAudioStreamService(),
-    );
-
-    await service.startSession();
-    await service.stopSession();
-
-    expect(speech.startListeningCalls, 0);
-    expect(speech.stopListeningCalls, 0);
-    await service.dispose();
-    await speech.dispose();
-  });
-
-  group('segmented voice pipeline', () {
-    late _FakeSpeechRecognitionService speech;
-    late WearVoiceControlService service;
-    late List<WearVoiceCommand> commands;
-    late List<WearVoiceCommandEvent> commandEvents;
-    late List<String> phrases;
-    late List<String?> previews;
-    late int clockMillis;
-
-    setUp(() {
-      speech = _FakeSpeechRecognitionService();
-      clockMillis = 1000;
-      service = WearVoiceControlService(
-        speechRecognitionService: speech,
-        commandParserService: VoiceCommandParserService(),
-        clock: () => clockMillis,
-      );
-      commands = <WearVoiceCommand>[];
-      commandEvents = <WearVoiceCommandEvent>[];
-      phrases = <String>[];
-      previews = <String?>[];
-      service.commandStream.listen(commands.add);
-      service.commandEventStream.listen(commandEvents.add);
-      service.phraseStream.listen(phrases.add);
-      service.freeTextPreviewStream.listen(previews.add);
-    });
-
-    tearDown(() async {
-      await service.dispose();
-      await speech.dispose();
-    });
-
-    test('command and free text from one segment execute once', () async {
-      speech.emit(lane: RecognitionLane.freeText, text: 'вверх', segmentId: 1);
-      speech.emit(lane: RecognitionLane.command, text: 'вверх', segmentId: 1);
-      speech.end(segmentId: 1);
-      await _settle();
-
-      expect(commands, <WearVoiceCommand>[WearVoiceCommand.up]);
-      expect(phrases, isEmpty);
-    });
-
-    test('command event contains recognition performance trace', () async {
-      speech.start(captureEpoch: 7, segmentId: 3);
-      clockMillis = 1125;
-      speech.emit(
-        lane: RecognitionLane.command,
-        kind: RecognitionKind.partial,
-        text: 'вверх',
-        captureEpoch: 7,
-        segmentId: 3,
-      );
-      await _settle();
-
-      expect(commandEvents, hasLength(1));
-      expect(commandEvents.single.command, WearVoiceCommand.up);
-      expect(commandEvents.single.traceId, '7:3:1');
-      expect(commandEvents.single.recognizedAtMillis, 1125);
-      expect(commandEvents.single.asrMillis, 125);
-    });
-
-    test('free-text partial cannot change UI before grammar resolves',
-        () async {
-      speech.emit(
-        lane: RecognitionLane.command,
-        kind: RecognitionKind.partial,
-        text: 'прошлая страница',
-        segmentId: 3,
-      );
-      speech.emit(
-          lane: RecognitionLane.freeText, text: 'прошлое', segmentId: 3);
-      expect(previews, isEmpty);
-      speech.emit(
-        lane: RecognitionLane.command,
-        text: 'прошлая страница',
-        segmentId: 3,
-      );
-      speech.end(segmentId: 3);
-      await _settle();
-
-      expect(commands, <WearVoiceCommand>[WearVoiceCommand.previousPage]);
-      expect(phrases, isEmpty);
-    });
-
-    test('same command in the next segment executes again', () async {
-      speech.emit(lane: RecognitionLane.command, text: 'вверх', segmentId: 1);
-      speech.emit(lane: RecognitionLane.command, text: 'вверх', segmentId: 2);
-      speech.end(segmentId: 1);
-      speech.end(segmentId: 2);
-      await _settle();
-
-      expect(commands,
-          <WearVoiceCommand>[WearVoiceCommand.up, WearVoiceCommand.up]);
-    });
-
-    test('free text first remains a phrase when it is not a command', () async {
-      speech.emit(
-          lane: RecognitionLane.freeText, text: 'чудо творожок', segmentId: 1);
-      speech.emit(
-          lane: RecognitionLane.command, text: 'неизвестно', segmentId: 1);
-      speech.end(segmentId: 1);
-      await _settle();
-
-      expect(commands, isEmpty);
-      expect(phrases, <String>['чудо творожок']);
-    });
-
-    test('no command leaves a free-text final available', () async {
-      speech.emit(
-          lane: RecognitionLane.freeText, text: 'без сахара', segmentId: 4);
-      speech.end(segmentId: 4);
-      await _settle();
-
-      expect(commands, isEmpty);
-      expect(phrases, <String>['без сахара']);
-    });
-
-    test('grammar final commits after a non-executing partial', () async {
-      WearScreenId screen = WearScreenId.printerSelect;
-      await service.dispose();
-      service = WearVoiceControlService(
-        speechRecognitionService: speech,
-        screenProvider: () => screen,
-      );
-      commands = <WearVoiceCommand>[];
-      service.commandStream.listen(commands.add);
-      speech.emit(
-        lane: RecognitionLane.command,
-        kind: RecognitionKind.partial,
-        text: 'печать',
-        segmentId: 7,
-      );
-      speech.emit(lane: RecognitionLane.command, text: 'печать', segmentId: 7);
-      speech.end(segmentId: 7);
-      await _settle();
-
-      expect(commands, <WearVoiceCommand>[WearVoiceCommand.print]);
-    });
-
-    test('exact fast alias executes immediately and final does not repeat',
-        () async {
+  group('command utterance arbitration', () {
+    test('T11 two utterances execute inside one acoustic segment', () {
       WearScreenId screen = WearScreenId.availabilityInteraction;
-      await service.dispose();
-      service = WearVoiceControlService(
-        speechRecognitionService: speech,
+      final RecognitionArbiter arbiter = RecognitionArbiter(
         screenProvider: () => screen,
       );
-      commands = <WearVoiceCommand>[];
-      service.commandStream.listen(commands.add);
 
-      speech.emit(
-        lane: RecognitionLane.command,
-        kind: RecognitionKind.partial,
-        text: 'прямое',
-        segmentId: 8,
-      );
-      await _settle();
-      expect(commands, <WearVoiceCommand>[WearVoiceCommand.openDirectScan]);
-
-      speech.emit(
-        lane: RecognitionLane.command,
+      final RecognitionArbitration? direct = arbiter.accept(_event(
         text: 'прямое сканирование',
-        segmentId: 8,
-      );
-      speech.emit(
-        lane: RecognitionLane.freeText,
-        text: 'прямое сканирование',
-        segmentId: 8,
-      );
-      speech.end(segmentId: 8);
-      await _settle();
+        utteranceId: 1,
+        screen: screen,
+      ));
+      screen = WearScreenId.availabilityDirectScan;
+      final RecognitionArbitration? back = arbiter.accept(_event(
+        text: 'назад',
+        utteranceId: 2,
+        screen: screen,
+      ));
 
-      expect(commands, <WearVoiceCommand>[WearVoiceCommand.openDirectScan]);
-      expect(phrases, isEmpty);
+      expect(direct?.command, WearVoiceCommand.openDirectScan);
+      expect(back?.command, WearVoiceCommand.back);
     });
 
-    test('segment context uses the screen at VAD start', () async {
-      WearScreenId screen = WearScreenId.availabilityInteraction;
-      await service.dispose();
-      service = WearVoiceControlService(
-        speechRecognitionService: speech,
-        screenProvider: () => screen,
-      );
-      commands = <WearVoiceCommand>[];
-      service.commandStream.listen(commands.add);
+    test('T12 partial and endpoint execute at most once', () {
+      final RecognitionArbiter arbiter = RecognitionArbiter();
 
-      speech.start(segmentId: 12);
-      screen = WearScreenId.productSelect;
-      speech.emit(
-        lane: RecognitionLane.command,
-        kind: RecognitionKind.partial,
-        text: 'прямое',
-        segmentId: 12,
+      expect(
+        arbiter
+            .accept(_event(
+              text: 'вверх',
+              utteranceId: 1,
+              kind: RecognitionKind.partial,
+            ))
+            ?.command,
+        WearVoiceCommand.up,
       );
-      await _settle();
-
-      expect(commands, <WearVoiceCommand>[WearVoiceCommand.openDirectScan]);
+      expect(
+        arbiter.accept(_event(text: 'вверх', utteranceId: 1)),
+        isNull,
+      );
     });
 
-    test('free-text partial is preview-only and a command clears it', () async {
-      WearScreenId screen = WearScreenId.availabilityInteraction;
-      await service.dispose();
-      service = WearVoiceControlService(
-        speechRecognitionService: speech,
-        screenProvider: () => screen,
+    test('T13 stable back is claimable before acoustic endpoint', () {
+      final RecognitionArbiter arbiter = RecognitionArbiter(
+        screenProvider: () => WearScreenId.help,
       );
-      previews = <String?>[];
-      phrases = <String>[];
-      service.freeTextPreviewStream.listen(previews.add);
-      service.phraseStream.listen(phrases.add);
-
-      speech.start(segmentId: 13);
-      speech.emit(
-        lane: RecognitionLane.freeText,
+      final SegmentedRecognitionResult partial = _event(
+        text: 'назад',
+        utteranceId: 4,
         kind: RecognitionKind.partial,
-        text: 'прямое молоко',
-        segmentId: 13,
+        screen: WearScreenId.help,
       );
-      speech.emit(
-        lane: RecognitionLane.command,
-        kind: RecognitionKind.partial,
-        text: 'прямое',
-        segmentId: 13,
-      );
-      await _settle();
 
-      expect(previews, <String?>['прямое молоко', null]);
-      expect(phrases, isEmpty);
+      expect(arbiter.accept(partial)?.stableCandidate, same(partial));
+      expect(arbiter.claimStable(partial)?.command, WearVoiceCommand.back);
     });
 
-    test(
-        'direction partial executes immediately and conflicting final is ignored',
-        () async {
-      WearScreenId screen = WearScreenId.menu;
-      await service.dispose();
-      service = WearVoiceControlService(
-        speechRecognitionService: speech,
-        screenProvider: () => screen,
+    test('T14 old route endpoint is dropped', () {
+      final RecognitionArbiter arbiter = RecognitionArbiter(
+        screenProvider: () => WearScreenId.menu,
+        routeRevisionProvider: () => 2,
+        grammarRevisionProvider: () => 2,
       );
-      commands = <WearVoiceCommand>[];
-      service.commandStream.listen(commands.add);
 
-      speech.emit(
-        lane: RecognitionLane.command,
-        kind: RecognitionKind.partial,
+      expect(
+        arbiter.accept(_event(
+          text: 'доступность',
+          utteranceId: 1,
+          routeRevision: 1,
+          grammarRevision: 1,
+        )),
+        isNull,
+      );
+    });
+
+    test('T15 conflicting endpoint cannot execute after partial claim', () {
+      final RecognitionArbiter arbiter = RecognitionArbiter();
+      arbiter.accept(_event(
         text: 'вверх',
-        segmentId: 10,
-      );
-      await _settle();
-      expect(commands, <WearVoiceCommand>[WearVoiceCommand.up]);
-
-      speech.emit(
-        lane: RecognitionLane.command,
-        text: 'вниз',
-        segmentId: 10,
-      );
-      speech.end(segmentId: 10);
-      await _settle();
-
-      expect(commands, <WearVoiceCommand>[WearVoiceCommand.up]);
-    });
-
-    test('matching direction partial and final execute once', () async {
-      speech.emit(
-        lane: RecognitionLane.command,
+        utteranceId: 7,
         kind: RecognitionKind.partial,
-        text: 'вверх',
-        segmentId: 14,
-      );
-      await _settle();
-      expect(commands, <WearVoiceCommand>[WearVoiceCommand.up]);
-
-      speech.emit(
-        lane: RecognitionLane.command,
-        text: 'вверх',
-        segmentId: 14,
-      );
-      speech.end(segmentId: 14);
-      await _settle();
-
-      expect(commands, <WearVoiceCommand>[WearVoiceCommand.up]);
-    });
-
-    test('short direction aliases execute immediately', () async {
-      speech.emit(
-        lane: RecognitionLane.command,
-        kind: RecognitionKind.partial,
-        text: 'верх',
-        segmentId: 15,
-      );
-      speech.emit(
-        lane: RecognitionLane.command,
-        kind: RecognitionKind.partial,
-        text: 'низ',
-        segmentId: 16,
-      );
-      await _settle();
+      ));
 
       expect(
-        commands,
-        <WearVoiceCommand>[WearVoiceCommand.up, WearVoiceCommand.down],
+        arbiter.accept(_event(text: 'вниз', utteranceId: 7)),
+        isNull,
       );
     });
 
-    test('menu print final resolves to opening the print section', () async {
-      speech.emit(
-        lane: RecognitionLane.command,
-        text: 'печать',
-        segmentId: 11,
-      );
-      speech.end(segmentId: 11);
-      await _settle();
+    test('T16 next endpoint uses independent utterance id', () {
+      final RecognitionArbiter arbiter = RecognitionArbiter();
 
-      expect(commands, <WearVoiceCommand>[WearVoiceCommand.openPrintPriceTag]);
-    });
-
-    test('alias from another screen remains available to free text', () async {
-      WearScreenId screen = WearScreenId.productSelect;
-      await service.dispose();
-      service = WearVoiceControlService(
-        speechRecognitionService: speech,
-        screenProvider: () => screen,
-      );
-      commands = <WearVoiceCommand>[];
-      phrases = <String>[];
-      service.commandStream.listen(commands.add);
-      service.phraseStream.listen(phrases.add);
-
-      speech.emit(
-        lane: RecognitionLane.command,
-        kind: RecognitionKind.partial,
-        text: 'прямое',
-        segmentId: 9,
-      );
-      speech.emit(
-        lane: RecognitionLane.freeText,
-        text: 'прямое молоко',
-        segmentId: 9,
-      );
-      speech.end(segmentId: 9);
-      await _settle();
-
-      expect(commands, isEmpty);
-      expect(phrases, <String>['прямое молоко']);
-    });
-
-    test('catalog rejects duplicate immediate aliases on one screen', () {
       expect(
-        () => VoiceActionCatalog(actions: <VoiceActionEntry>[
-          VoiceActionEntry(
-            command: WearVoiceCommand.openList,
-            screens: <WearScreenId>{WearScreenId.menu},
-            fullPhrases: <String>{'список'},
-            fastAliases: <String>{'список'},
-            activationPolicy: VoiceActivationPolicy.immediateExactPartial,
-          ),
-          VoiceActionEntry(
-            command: WearVoiceCommand.openHelp,
-            screens: <WearScreenId>{WearScreenId.menu},
-            fullPhrases: <String>{'список помощи'},
-            fastAliases: <String>{'список'},
-            activationPolicy: VoiceActivationPolicy.immediateExactPartial,
-          ),
-        ]),
-        throwsArgumentError,
+        arbiter.accept(_event(text: 'вверх', utteranceId: 1))?.command,
+        WearVoiceCommand.up,
+      );
+      expect(
+        arbiter.accept(_event(text: 'вниз', utteranceId: 2))?.command,
+        WearVoiceCommand.down,
       );
     });
 
-    test('catalog resolves every agreed fast action alias', () {
-      final VoiceActionCatalog catalog = VoiceActionCatalog();
+    test('T19 unknown endpoint does not execute action', () {
+      final RecognitionArbiter arbiter = RecognitionArbiter();
+      expect(arbiter.accept(_event(text: '[unk]', utteranceId: 1)), isNull);
+    });
 
+    test('T29 destructive confirmation action cannot run from partial', () {
+      final RecognitionArbiter arbiter = RecognitionArbiter();
       expect(
-        catalog.resolveFastAlias(WearScreenId.menu, 'печать'),
-        WearVoiceCommand.openPrintPriceTag,
-      );
-      expect(
-        catalog.resolveFastAlias(WearScreenId.menu, 'ценник'),
-        WearVoiceCommand.openPrintPriceTag,
-      );
-      expect(
-        catalog.resolveFastAlias(
-          WearScreenId.availabilityInteraction,
-          'список',
-        ),
-        WearVoiceCommand.openList,
-      );
-      expect(
-        catalog.resolveFastAlias(
-          WearScreenId.availabilityInteraction,
-          'товары',
-        ),
-        WearVoiceCommand.openList,
-      );
-      expect(
-        catalog.resolveFastAlias(
-          WearScreenId.availabilityInteraction,
-          'прямое',
-        ),
-        WearVoiceCommand.openDirectScan,
-      );
-      expect(
-        catalog.resolveFastAlias(
-          WearScreenId.availabilityInteraction,
-          'сканирование',
-        ),
-        WearVoiceCommand.openDirectScan,
-      );
-      expect(
-        catalog.resolveFastAlias(WearScreenId.productSelect, 'фото'),
-        WearVoiceCommand.takePhoto,
+        arbiter.accept(_event(
+          text: 'печать',
+          utteranceId: 1,
+          kind: RecognitionKind.partial,
+        )),
+        isNull,
       );
     });
 
-    test('stale capture epoch is discarded after a newer epoch', () async {
-      speech.emit(
-          lane: RecognitionLane.command, text: 'вверх', captureEpoch: 2);
-      speech.emit(lane: RecognitionLane.command, text: 'вниз', captureEpoch: 1);
-      speech.end(segmentId: 1, captureEpoch: 2);
-      await _settle();
-
-      expect(commands, <WearVoiceCommand>[WearVoiceCommand.up]);
-    });
-
-    test('restart epoch cancels a late partial from the old capture', () async {
-      speech.emit(lane: RecognitionLane.command, text: 'вниз', captureEpoch: 2);
-      speech.emit(
-        lane: RecognitionLane.command,
-        kind: RecognitionKind.partial,
-        text: 'вверх',
-        captureEpoch: 1,
+    test('T31 command from another screen does not execute', () {
+      final RecognitionArbiter arbiter = RecognitionArbiter(
+        screenProvider: () => WearScreenId.menu,
       );
-      speech.end(segmentId: 1, captureEpoch: 2);
-      await _settle();
-
-      expect(commands, <WearVoiceCommand>[WearVoiceCommand.down]);
+      expect(
+        arbiter.accept(_event(text: 'прямое', utteranceId: 1)),
+        isNull,
+      );
     });
   });
 }
 
-Future<void> _settle() => Future<void>.delayed(Duration.zero);
-
-class _FakeAudioStreamService implements AudioStreamService {
-  @override
-  double get audioLevel => 0;
-  @override
-  Stream<double> get audioLevelStream => const Stream<double>.empty();
-  @override
-  int get chunksReceived => 0;
-  @override
-  int get captureId => 0;
-  @override
-  bool get hasExpectedInputDevice => true;
-  @override
-  String? get preferredInputDeviceId => null;
-  @override
-  String? get preferredInputDeviceLabel => null;
-  @override
-  int? get captureStartedAtMillis => null;
-  @override
-  VoiceDeviceProfile get deviceProfile => VoiceDeviceProfile.defaultProfile;
-  @override
-  bool get isRunning => false;
-  @override
-  int? get lastChunkAtMillis => null;
-  @override
-  int? get lastNonSilentChunkAtMillis => null;
-  @override
-  int? get lastNonZeroNativeInputAtMillis => null;
-  @override
-  int? get continuousZeroAudioStartedAtMillis => null;
-  @override
-  bool get recordContinuousWav => false;
-  @override
-  void addDataCallback(void Function(Uint8List) callback) {}
-  @override
-  void removeDataCallback(void Function(Uint8List) callback) {}
-  @override
-  void addPcmCallback(
-      void Function(Uint8List raw, Uint8List boosted) callback) {}
-  @override
-  void removePcmCallback(
-    void Function(Uint8List raw, Uint8List boosted) callback,
-  ) {}
-  @override
-  Future<String> diagnostics() async => 'fake';
-  @override
-  Future<void> dispose() async {}
-  @override
-  Future<void> recreateRecorder() async {}
-  @override
-  Future<void> pauseCallbacks() async {}
-  @override
-  Future<bool> requestPermission() async => true;
-  @override
-  Future<bool> refreshNativeInputActivity() async => false;
-  @override
-  Future<void> start({
-    void Function(Uint8List bytes)? onData,
-    void Function(Object error, StackTrace stackTrace)? onError,
-  }) async {}
-  @override
-  Future<void> stop() async {}
-  @override
-  void useDeviceProfile(VoiceDeviceProfile profile) {}
-}
-
-class _FakeSpeechRecognitionService implements SpeechRecognitionService {
-  final StreamController<SegmentedRecognitionResult> _results =
-      StreamController<SegmentedRecognitionResult>.broadcast(sync: true);
-  final StreamController<SpeechSegmentEnded> _ended =
-      StreamController<SpeechSegmentEnded>.broadcast(sync: true);
-  final StreamController<SpeechSegmentStarted> _started =
-      StreamController<SpeechSegmentStarted>.broadcast(sync: true);
-  final Set<String> _startedSegments = <String>{};
-  bool listening = false;
-  int startListeningCalls = 0;
-  int stopListeningCalls = 0;
-
-  @override
-  Stream<SegmentedRecognitionResult> get segmentedResultsStream =>
-      _results.stream;
-  @override
-  Stream<SpeechSegmentEnded> get segmentEndedStream => _ended.stream;
-  @override
-  Stream<SpeechSegmentStarted> get segmentStartedStream => _started.stream;
-  @override
-  Never get audioStreamService => throw UnsupportedError('Not used in test');
-  @override
-  bool get isPrepared => true;
-  @override
-  bool get isSessionActive => false;
-  @override
-  bool get isListening => listening;
-  @override
-  bool get isVadCalibrated => true;
-  @override
-  bool get isCaptureRunning => false;
-  @override
-  bool get usesFreeTextRecognition => true;
-  @override
-  int? get lastAudioChunkAtMillis => null;
-  @override
-  int? get lastNonSilentAudioChunkAtMillis => null;
-  @override
-  int? get lastNonZeroNativeInputAtMillis => null;
-  @override
-  int? get continuousZeroAudioStartedAtMillis => null;
-  @override
-  int get audioChunksReceived => 0;
-  @override
-  int get audioCaptureId => 0;
-  @override
-  int? get captureStartedAtMillis => null;
-  @override
-  bool get hasExpectedInputDevice => true;
-  @override
-  String? get preferredInputDeviceId => null;
-  @override
-  String? get preferredInputDeviceLabel => null;
-  @override
-  VoiceDeviceProfile get deviceProfile => VoiceDeviceProfile.defaultProfile;
-  @override
-  void useDeviceProfile(VoiceDeviceProfile profile) {}
-
-  void emit({
-    required RecognitionLane lane,
-    required String text,
-    int captureEpoch = 1,
-    int segmentId = 1,
-    RecognitionKind kind = RecognitionKind.finalResult,
-  }) {
-    start(captureEpoch: captureEpoch, segmentId: segmentId);
-    _results.add(SegmentedRecognitionResult(
-      captureEpoch: captureEpoch,
-      segmentId: segmentId,
-      lane: lane,
-      kind: kind,
-      text: text,
-      lastChunkId: segmentId,
-      parsedCommand: lane == RecognitionLane.command
-          ? VoiceCommandParserService().parseExact(text)
-          : null,
-    ));
-  }
-
-  void start({int captureEpoch = 1, required int segmentId}) {
-    final String key = '$captureEpoch:$segmentId';
-    if (!_startedSegments.add(key)) return;
-    _started.add(SpeechSegmentStarted(
-      captureEpoch: captureEpoch,
-      segmentId: segmentId,
-      startChunkId: segmentId,
-    ));
-  }
-
-  void end({int captureEpoch = 1, required int segmentId}) {
-    _ended.add(SpeechSegmentEnded(
-      captureEpoch: captureEpoch,
-      segmentId: segmentId,
-      endChunkId: segmentId,
-    ));
-  }
-
-  @override
-  Future<bool> requestMicrophonePermission() async => true;
-  @override
-  Future<bool> refreshNativeInputActivity() async => false;
-  @override
-  Future<void> prepare() async {}
-  @override
-  Future<void> startSession() async {}
-  @override
-  Future<void> stopSession() async {}
-  @override
-  Future<void> startListening() async {
-    startListeningCalls++;
-    listening = true;
-  }
-
-  @override
-  Future<void> stopListening() async {
-    stopListeningCalls++;
-    listening = false;
-  }
-
-  @override
-  Future<void> restartListening({required String reason}) async {}
-  @override
-  Future<void> setFreeTextEnabled(bool enabled) async {}
-  @override
-  Future<String> diagnostics() async => 'fake';
-  @override
-  Future<void> processAudioChunk(Uint8List bytes) async {}
-  @override
-  Future<void> dispose() async {
-    await _results.close();
-    await _started.close();
-    await _ended.close();
-  }
+SegmentedRecognitionResult _event({
+  required String text,
+  required int utteranceId,
+  RecognitionKind kind = RecognitionKind.endpointResult,
+  WearScreenId screen = WearScreenId.menu,
+  int routeRevision = 0,
+  int grammarRevision = 0,
+}) {
+  return SegmentedRecognitionResult(
+    captureEpoch: 1,
+    segmentId: 1,
+    lane: RecognitionLane.command,
+    kind: kind,
+    text: text,
+    lastChunkId: 1,
+    parsedCommand: null,
+    commandUtteranceId: utteranceId,
+    routeRevision: routeRevision,
+    grammarRevision: grammarRevision,
+    sourceScreen: screen,
+  );
 }

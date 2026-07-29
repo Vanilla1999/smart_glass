@@ -1,5 +1,54 @@
 # Voice Recovery Implementation Status
 
+## Noise-Robust Screen-Scoped Voice Grammar
+
+Baseline: `7c09b083190d925e75288acfb3e0547e8e1f418b` on
+`feature/native-uac4-voice`. Hardware validation is not part of this run.
+
+| Area | Status | Changed files | Automated evidence | Hardware | Limitations |
+|---|---|---|---|---|---|
+| Immutable screen grammar and validation | DONE | `voice_action_catalog.dart`, `voice_command_parser_service.dart`, `wear_flow_controller.dart` | Catalog, collision, root-back, and dynamic callback tests passed | DEVICE_PENDING | Grammar membership follows registered `WearScreenActionHandler` callbacks plus explicit built-in navigation actions. |
+| Vosk endpoint utterances | DONE | `segmented_recognition_result.dart`, `speech_recognition_service.dart`, `recognition_arbiter.dart`, `wear_voice_control_service.dart` | `test/wear_voice_control_service_test.dart`; targeted run passed 9 tests | DEVICE_PENDING | Stable-partial latency and false-positive rate require noisy T2151 measurement. |
+| Runtime grammar switching | DONE | `wear_actual_screen_store.dart`, `speech_recognition_service.dart`, `wear_voice_session.dart`, `wear_module_app.dart` | Actual-route, 100-switch, stale revision, and integration tests passed | DEVICE_PENDING | Device-only grammar-switch p95 remains unmeasured. A 200 ms PCM transition buffer bridges serial `reset` + `setGrammar`. |
+| Grammar-first free-text | DONE | `speech_recognition_service.dart`, `wear_voice_session.dart` | Bounded buffer and synthetic PCM replay tests passed | DEVICE_PENDING | Real Vosk accuracy still requires recorded speech corpus/device run. |
+| Fixed 20 ms PCM framing | DONE | Existing `PcmFrameAccumulator` in `speech_recognition_service.dart`; expanded test | `fvm flutter test test/pcm_frame_accumulator_test.dart` | DEVICE_PENDING | UAC4 format and resampling still require device log confirmation. |
+| Robust VAD calibration | DONE | `speech_segmenter.dart`, `speech_recognition_service.dart` | p20/outlier test passed; p10/p50/p90 are logged | DEVICE_PENDING | Threshold quality still requires T2151 A/B. |
+| Host `VoiceReplayRunner` | DONE | `voice_replay_runner.dart` | Synthetic PCM tests cover noise, multiple utterances, `[unk]`, pagination, free text, common words, and no cooldown | DEVICE_PENDING | Real diagnostic WAV/UAC PCM corpus is absent and remains DEVICE_PENDING. |
+| T2151 scenario matrix | DEVICE_PENDING | `docs/voice_recovery/T2151_TEST_PLAN.md` | Not run | DEVICE_PENDING | A single microphone cannot identify the wearer. Exact allowed speech from a nearby person can still trigger a command. |
+
+Implementation rules now enforced:
+
+- `acceptWaveformBytes() == true` is logged as `ENDPOINT_RESULT`, calls
+  `getResult()`, closes one `commandUtteranceId`, and permits the next command
+  while the acoustic VAD segment remains open.
+- `getFinalResult()` is logged as `STREAM_FINAL` and is reserved for forced
+  segment/stream flush and free-text replay.
+- Confirmed GoRouter locations select a small grammar with `[unk]`; grammar
+  changes do not stop UAC4 capture or reload the model.
+- Immediate partial execution is limited to exact `вверх`/`вниз`; navigation
+  aliases use a 150 ms stability timer; effectful actions are endpoint-only.
+- Live PCM is not sent to free-text in parallel. A no-command endpoint replays
+  a bounded five-second utterance snapshot in 80 ms batches on the lower
+  priority free-text serial queue.
+- `[unk]` is controlled by `VOICE_GRAMMAR_INCLUDE_UNKNOWN` (default `true`).
+
+Fundamental limitation: one microphone plus grammar filtering cannot determine
+whether the wearer or a nearby person spoke an exact active command. Risky
+actions must remain endpoint-only, require confirmation or an additional user
+action, and use longer distinctive phrases.
+
+### Verification 2026-07-29
+
+| Command | Result |
+|---|---|
+| `fvm dart format <changed Dart files>` | Passed. |
+| `fvm flutter test test/voice_command_parser_service_test.dart test/pcm_frame_accumulator_test.dart test/wear_voice_control_service_test.dart test/wear_flow_coordinator_integration_test.dart` | Passed after updating the direct-scan test for the intentional 150 ms stability policy. |
+| `fvm flutter test` | Passed: 205 tests. |
+| `fvm flutter analyze` | Completed with 313 existing/project info and warnings; no compile error. This is not a clean analyzer result. |
+| `./gradlew :app:compileDebugKotlin` | Passed. Existing Kotlin plugin, `flatDir`, and Gradle deprecation warnings remain. |
+| Synthetic PCM replay | Passed. Real regression PCM/WAV corpus is DEVICE_PENDING because no recordings are committed. |
+| T2151 hardware plan | DEVICE_PENDING: not run. |
+
 ## Strict VOICE_RECOGNITION update
 
 - Current base HEAD: `a9fbf5d`; strict changes are uncommitted work in progress.

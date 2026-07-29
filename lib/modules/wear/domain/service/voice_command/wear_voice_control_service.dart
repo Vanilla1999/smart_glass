@@ -20,9 +20,11 @@ class WearVoiceControlService {
     WearVoiceClock? clock,
   })  : _speechRecognitionService = speechRecognitionService,
         _arbiter = RecognitionArbiter(
-          commandParserService: commandParserService,
           actionCatalog: actionCatalog,
           screenProvider: screenProvider,
+          routeRevisionProvider: () => speechRecognitionService.routeRevision,
+          grammarRevisionProvider: () =>
+              speechRecognitionService.grammarRevision,
         ),
         _clock = clock ?? (() => DateTime.now().millisecondsSinceEpoch) {
     print('[WearVoiceControlService] subscribing to ASR results');
@@ -62,6 +64,8 @@ class WearVoiceControlService {
   StreamSubscription<SpeechSegmentEnded>? _segmentEndedSubscription;
   int _emittedCommandSeq = 0;
   final Map<String, int> _segmentStartedAt = <String, int>{};
+  final Map<String, Timer> _stabilityTimers = <String, Timer>{};
+  static const Duration _stablePartialDelay = Duration(milliseconds: 150);
 
   static const int _minPartialPhraseLength = 6;
   Stream<WearVoiceCommand> get commandStream => _commandController.stream;
@@ -74,6 +78,26 @@ class WearVoiceControlService {
   void _onRecognitionResult(SegmentedRecognitionResult result) {
     final RecognitionArbitration? outcome = _arbiter.accept(result);
     if (outcome == null) return;
+    if (outcome.stableCandidate
+        case final SegmentedRecognitionResult candidate) {
+      final String key =
+          '${candidate.captureEpoch}:${candidate.commandUtteranceId}';
+      _stabilityTimers.remove(key)?.cancel();
+      _stabilityTimers[key] = Timer(_stablePartialDelay, () {
+        _stabilityTimers.remove(key);
+        final RecognitionArbitration? stable = _arbiter.claimStable(candidate);
+        if (stable?.command case final WearVoiceCommand command) {
+          _emitFreeTextPreview(null);
+          _emitCommand(
+            command,
+            captureEpoch: candidate.captureEpoch,
+            segmentId: candidate.segmentId,
+            source: 'stable_partial',
+          );
+        }
+      });
+      return;
+    }
     if (outcome.command case final WearVoiceCommand command) {
       if (outcome.clearPreview) _emitFreeTextPreview(null);
       _emitCommand(
@@ -186,6 +210,10 @@ class WearVoiceControlService {
   }
 
   Future<void> dispose() async {
+    for (final Timer timer in _stabilityTimers.values) {
+      timer.cancel();
+    }
+    _stabilityTimers.clear();
     await _recognitionSubscription?.cancel();
     await _segmentStartedSubscription?.cancel();
     await _segmentEndedSubscription?.cancel();

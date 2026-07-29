@@ -96,7 +96,8 @@ class VoiceTypingService {
 
   void _onRecognitionResult(SegmentedRecognitionResult result) {
     if (result.lane != RecognitionLane.freeText ||
-        result.kind != RecognitionKind.finalResult) {
+        result.kind != RecognitionKind.endpointResult &&
+            result.kind != RecognitionKind.streamFinal) {
       return;
     }
     _onResolvedPhrase(result.text);

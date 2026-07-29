@@ -1,8 +1,9 @@
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 
 enum RecognitionLane { command, freeText }
 
-enum RecognitionKind { partial, finalResult }
+enum RecognitionKind { partial, endpointResult, streamFinal }
 
 class SpeechSegmentStarted {
   const SpeechSegmentStarted({
@@ -45,6 +46,10 @@ class SegmentedRecognitionResult {
     required this.text,
     required this.lastChunkId,
     required this.parsedCommand,
+    this.commandUtteranceId = 0,
+    this.routeRevision = 0,
+    this.grammarRevision = 0,
+    this.sourceScreen = WearScreenId.menu,
   });
 
   final int captureEpoch;
@@ -54,4 +59,8 @@ class SegmentedRecognitionResult {
   final String text;
   final int lastChunkId;
   final WearVoiceCommand? parsedCommand;
+  final int commandUtteranceId;
+  final int routeRevision;
+  final int grammarRevision;
+  final WearScreenId sourceScreen;
 }

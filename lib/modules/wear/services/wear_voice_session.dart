@@ -5,6 +5,7 @@ import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_device_profile.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
 import 'package:smart_glasses/modules/wear/services/voice_state.dart';
 
 class WearVoiceSession {
@@ -46,6 +47,7 @@ class WearVoiceSession {
   int _pendingReconnects = 0;
   int? _handledNativeTerminationRevision;
   VoiceDeviceProfile? _requestedStartupProfile;
+  WearScreenId? _configuredScreen;
   String? _requestedProfileId;
   String? _fallbackReason;
   final VoiceCaptureRecoveryGate _zeroAudioRecovery =
@@ -117,13 +119,23 @@ class WearVoiceSession {
     );
   }
 
-  Future<void> configureForScreen(WearScreenId screen) async {
+  Future<void> configureForScreen(
+    WearScreenId screen, {
+    bool force = false,
+  }) async {
+    if (!force && _configuredScreen == screen) return;
+    final VoiceActionCatalog catalog = WearDependencies.I.voiceActionCatalog;
     final bool freeText = _usesFreeTextRecognition(screen);
     print(
       '[WearVoiceSession] configureForScreen screen=$screen '
       'mode=${freeText ? 'freeText' : 'grammar'}',
     );
+    await _speech.switchCommandGrammar(
+      screen: screen,
+      grammar: catalog.grammarFor(screen),
+    );
     await _speech.setFreeTextEnabled(freeText);
+    _configuredScreen = screen;
   }
 
   Future<void> start() async {

@@ -1,186 +1,148 @@
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
-import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
 
 class RecognitionArbitration {
-  const RecognitionArbitration._(
-      {this.command, this.phrase, this.preview, this.clearPreview = false});
+  const RecognitionArbitration._({
+    this.command,
+    this.phrase,
+    this.preview,
+    this.stableCandidate,
+    this.clearPreview = false,
+  });
 
-  const RecognitionArbitration.command(
-    WearVoiceCommand command, {
-    bool clearPreview = false,
-  }) : this._(command: command, clearPreview: clearPreview);
-
+  const RecognitionArbitration.command(WearVoiceCommand command)
+      : this._(command: command, clearPreview: true);
+  const RecognitionArbitration.stable(SegmentedRecognitionResult result)
+      : this._(stableCandidate: result);
   const RecognitionArbitration.phrase(String phrase) : this._(phrase: phrase);
-
   const RecognitionArbitration.preview(String preview)
       : this._(preview: preview);
 
   final WearVoiceCommand? command;
   final String? phrase;
   final String? preview;
+  final SegmentedRecognitionResult? stableCandidate;
   final bool clearPreview;
 }
 
-class VoiceSegmentContext {
-  const VoiceSegmentContext({
-    required this.captureEpoch,
-    required this.segmentId,
-    required this.actualScreen,
-    required this.catalogRevision,
-  });
-
-  final int captureEpoch;
-  final int segmentId;
-  final WearScreenId actualScreen;
-  final int catalogRevision;
-}
-
-/// Resolves one capture segment only after the command lane has completed.
+/// Arbitrates logical Vosk utterances. Acoustic VAD segments are diagnostics
+/// only and may contain any number of independent command utterances.
 class RecognitionArbiter {
   RecognitionArbiter({
-    VoiceCommandParserService? commandParserService,
     VoiceActionCatalog? actionCatalog,
     WearScreenId Function()? screenProvider,
-    this.maxClosedSegments = 128,
-  })  : _parser = commandParserService ?? VoiceCommandParserService(),
-        _catalog = actionCatalog ?? VoiceActionCatalog(),
-        _screenProvider = screenProvider ?? (() => WearScreenId.menu);
+    int Function()? routeRevisionProvider,
+    int Function()? grammarRevisionProvider,
+  })  : _catalog = actionCatalog ?? VoiceActionCatalog(),
+        _screenProvider = screenProvider ?? (() => WearScreenId.menu),
+        _routeRevisionProvider = routeRevisionProvider ?? (() => 0),
+        _grammarRevisionProvider = grammarRevisionProvider ?? (() => 0);
 
-  final VoiceCommandParserService _parser;
   final VoiceActionCatalog _catalog;
   final WearScreenId Function() _screenProvider;
-  final int maxClosedSegments;
-  final Map<String, _SegmentArbitrationState> _segments =
-      <String, _SegmentArbitrationState>{};
-  final Map<String, void> _closedSegments = <String, void>{};
+  final int Function() _routeRevisionProvider;
+  final int Function() _grammarRevisionProvider;
+  final Set<String> _claimedUtterances = <String>{};
+  final Map<String, String> _latestPartial = <String, String>{};
   int _currentCaptureEpoch = 0;
 
   void startSegment(SpeechSegmentStarted started) {
-    if (!_acceptCaptureEpoch(started.captureEpoch)) return;
-    final String key = '${started.captureEpoch}:${started.segmentId}';
-    if (_closedSegments.containsKey(key)) return;
-    _segments.putIfAbsent(
-      key,
-      () => _SegmentArbitrationState(VoiceSegmentContext(
-        captureEpoch: started.captureEpoch,
-        segmentId: started.segmentId,
-        actualScreen: _screenProvider(),
-        catalogRevision: _catalog.revision,
-      )),
-    );
+    _acceptCaptureEpoch(started.captureEpoch);
   }
 
   RecognitionArbitration? accept(SegmentedRecognitionResult result) {
-    if (!_acceptCaptureEpoch(result.captureEpoch)) return null;
+    if (!_isCurrent(result)) return null;
+    final String key = _key(result);
+    if (_claimedUtterances.contains(key)) return null;
+    final WearScreenId screen =
+        result.routeRevision == 0 ? _screenProvider() : result.sourceScreen;
 
-    final String key = '${result.captureEpoch}:${result.segmentId}';
-    if (_closedSegments.containsKey(key)) return null;
-    final _SegmentArbitrationState state = _segments.putIfAbsent(
-      key,
-      () => _SegmentArbitrationState(VoiceSegmentContext(
-        captureEpoch: result.captureEpoch,
-        segmentId: result.segmentId,
-        actualScreen: _screenProvider(),
-        catalogRevision: _catalog.revision,
-      )),
-    );
-    if (result.lane == RecognitionLane.command) {
-      final String text = result.text.trim();
-      if (text.isEmpty) return null;
-      if (result.kind == RecognitionKind.partial) {
-        if (state.claimedCommand != null) return null;
-        final WearVoiceCommand? command =
-            _catalog.resolveFastAlias(state.context.actualScreen, text);
-        if (command == null) return null;
-        state.claimedCommand = command;
-        print(
-          '[VoiceArbiter] segment=$key screen=${state.context.actualScreen} '
-          'earlyCommand=$command text="$text"',
-        );
-        return RecognitionArbitration.command(command, clearPreview: true);
-      }
-      final WearVoiceCommand? command =
-          _resolveFinal(state.context.actualScreen, text);
-      if (state.claimedCommand != null) {
-        if (command != null && command != state.claimedCommand) {
-          print(
-            '[VoiceArbiter] segment=$key earlyCommand=${state.claimedCommand} '
-            'finalCommand=$command decision=keep_early_command',
-          );
-        }
-        return null;
-      }
-      if (command == null) return null;
-      state.command = command;
-      return null;
+    if (result.lane == RecognitionLane.freeText) {
+      if (result.kind == RecognitionKind.partial) return null;
+      return RecognitionArbitration.phrase(result.text.trim());
     }
 
-    if (state.claimedCommand != null || state.command != null) {
-      return null;
-    }
-    final String text = result.text.trim();
-    if (text.isEmpty) return null;
+    final VoiceActionEntry? action = result.kind == RecognitionKind.partial
+        ? _catalog.resolvePartial(screen, result.text)
+        : _catalog.resolve(screen, result.text);
     if (result.kind == RecognitionKind.partial) {
-      return RecognitionArbitration.preview(text);
+      _latestPartial[key] = VoiceActionCatalog.normalize(result.text);
+      if (action == null) return null;
+      switch (action.activationPolicy) {
+        case VoiceActivationPolicy.immediateExactPartial:
+          _claim(key);
+          return RecognitionArbitration.command(action.command);
+        case VoiceActivationPolicy.stableExactPartial:
+          return RecognitionArbitration.stable(result);
+        case VoiceActivationPolicy.endpointOnly:
+        case VoiceActivationPolicy.confirmationRequired:
+          return null;
+      }
     }
-    // Commit free text only after its sibling grammar lane has closed.
-    state.bufferedFreeText = text;
-    return null;
+
+    _latestPartial.remove(key);
+    if (action == null ||
+        action.activationPolicy == VoiceActivationPolicy.confirmationRequired) {
+      return null;
+    }
+    _claim(key);
+    return RecognitionArbitration.command(action.command);
   }
 
-  RecognitionArbitration? endSegment(SpeechSegmentEnded ended) {
-    if (ended.captureEpoch != _currentCaptureEpoch) return null;
-    final String key = '${ended.captureEpoch}:${ended.segmentId}';
-    final _SegmentArbitrationState? state = _segments.remove(key);
-    _closedSegments[key] = null;
-    if (_closedSegments.length > maxClosedSegments) {
-      _closedSegments.remove(_closedSegments.keys.first);
+  RecognitionArbitration? claimStable(SegmentedRecognitionResult candidate) {
+    if (!_isCurrent(candidate)) return null;
+    final String key = _key(candidate);
+    if (_claimedUtterances.contains(key) ||
+        _latestPartial[key] != VoiceActionCatalog.normalize(candidate.text)) {
+      return null;
     }
-    if (state == null || !ended.commandLaneCompleted) return null;
-    final WearVoiceCommand? command = state.command;
-    if (state.claimedCommand != null) return null;
-    if (command != null) {
-      return RecognitionArbitration.command(command, clearPreview: true);
+    final VoiceActionEntry? action = _catalog.resolvePartial(
+      candidate.routeRevision == 0 ? _screenProvider() : candidate.sourceScreen,
+      candidate.text,
+    );
+    if (action?.activationPolicy != VoiceActivationPolicy.stableExactPartial) {
+      return null;
     }
-    if (!ended.freeTextLaneCompleted) return null;
-    final String? phrase = state.bufferedFreeText;
-    if (phrase == null) return null;
-    return RecognitionArbitration.phrase(phrase);
+    _claim(key);
+    return RecognitionArbitration.command(action!.command);
   }
 
-  void dispose() => _clearClosedSegments();
+  RecognitionArbitration? endSegment(SpeechSegmentEnded ended) => null;
 
-  void _clearClosedSegments() {
-    _closedSegments.clear();
+  void resetRoute() {
+    _claimedUtterances.clear();
+    _latestPartial.clear();
+  }
+
+  void dispose() => resetRoute();
+
+  bool _isCurrent(SegmentedRecognitionResult result) {
+    if (!_acceptCaptureEpoch(result.captureEpoch)) return false;
+    if (result.routeRevision == 0) return true;
+    return result.routeRevision == _routeRevisionProvider() &&
+        result.grammarRevision == _grammarRevisionProvider() &&
+        result.sourceScreen == _screenProvider();
   }
 
   bool _acceptCaptureEpoch(int captureEpoch) {
     if (captureEpoch < _currentCaptureEpoch) return false;
     if (captureEpoch > _currentCaptureEpoch) {
       _currentCaptureEpoch = captureEpoch;
-      _segments.clear();
-      _clearClosedSegments();
+      resetRoute();
     }
     return true;
   }
 
-  WearVoiceCommand? _resolveFinal(WearScreenId screen, String text) {
-    final WearVoiceCommand? catalogCommand =
-        _catalog.resolveFinal(screen, text);
-    if (catalogCommand != null) return catalogCommand;
-    if (_catalog.isKnownPhrase(text)) return null;
-    return _parser.parseExact(text);
+  void _claim(String key) {
+    _claimedUtterances.add(key);
+    if (_claimedUtterances.length > 128) {
+      _claimedUtterances.remove(_claimedUtterances.first);
+    }
   }
-}
 
-class _SegmentArbitrationState {
-  _SegmentArbitrationState(this.context);
-
-  final VoiceSegmentContext context;
-  WearVoiceCommand? claimedCommand;
-  WearVoiceCommand? command;
-  String? bufferedFreeText;
+  String _key(SegmentedRecognitionResult result) =>
+      '${result.captureEpoch}:${result.commandUtteranceId}:'
+      '${result.routeRevision}:${result.grammarRevision}';
 }
