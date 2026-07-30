@@ -35,7 +35,14 @@ void main() {
     });
 
     test('T04 capability removes command without handler', () {
-      expect(catalog.grammarFor(WearScreenId.help), <String>['назад', '[unk]']);
+      expect(catalog.grammarFor(WearScreenId.help), <String>[
+        'назад',
+        'выключить микрофон',
+        'стоп микрофон',
+        'включить микрофон',
+        'старт микрофон',
+        '[unk]',
+      ]);
     });
 
     test('T04 runtime callback controls grammar membership', () {
@@ -127,6 +134,34 @@ void main() {
     test('T30 root menu grammar cannot execute back', () {
       expect(catalog.grammarFor(WearScreenId.menu), isNot(contains('назад')));
       expect(catalog.resolve(WearScreenId.menu, 'назад'), isNull);
+    });
+
+    test('microphone commands are endpoint-only on every screen', () {
+      for (final WearScreenId screen in WearScreenId.values) {
+        expect(
+          catalog.resolve(screen, 'выключить микрофон')?.command,
+          WearVoiceCommand.stopMicrophone,
+        );
+        expect(
+          catalog.resolve(screen, 'включить микрофон')?.command,
+          WearVoiceCommand.startMicrophone,
+        );
+        expect(
+          catalog.resolve(screen, 'стоп микрофон')?.command,
+          WearVoiceCommand.stopMicrophone,
+        );
+        expect(
+          catalog.resolve(screen, 'старт микрофон')?.command,
+          WearVoiceCommand.startMicrophone,
+        );
+        expect(
+          catalog.resolvePartial(screen, 'выключить микрофон'),
+          isNull,
+        );
+        expect(catalog.resolvePartial(screen, 'включить микрофон'), isNull);
+        expect(catalog.resolvePartial(screen, 'стоп микрофон'), isNull);
+        expect(catalog.resolvePartial(screen, 'старт микрофон'), isNull);
+      }
     });
   });
 }

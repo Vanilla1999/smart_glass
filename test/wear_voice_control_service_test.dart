@@ -124,6 +124,23 @@ void main() {
       );
     });
 
+    test('microphone stop requires an endpoint', () {
+      final RecognitionArbiter arbiter = RecognitionArbiter();
+
+      expect(
+        arbiter.accept(_event(
+          text: 'стоп микрофон',
+          utteranceId: 1,
+          kind: RecognitionKind.partial,
+        )),
+        isNull,
+      );
+      expect(
+        arbiter.accept(_event(text: 'стоп микрофон', utteranceId: 1))?.command,
+        WearVoiceCommand.stopMicrophone,
+      );
+    });
+
     test('T31 command from another screen does not execute', () {
       final RecognitionArbiter arbiter = RecognitionArbiter(
         screenProvider: () => WearScreenId.menu,

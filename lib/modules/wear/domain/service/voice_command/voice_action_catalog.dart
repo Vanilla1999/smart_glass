@@ -50,10 +50,16 @@ class VoiceScreenCapabilities {
   final VoiceCapabilityResolver? runtimeResolver;
 
   bool canHandle(WearScreenId screen, WearVoiceCommand command) {
+    if (_globalCommands.contains(command)) return true;
     final VoiceCapabilityResolver? resolver = runtimeResolver;
     if (resolver != null) return resolver(screen, command);
     return _commandsByScreen[screen]?.contains(command) ?? false;
   }
+
+  static const Set<WearVoiceCommand> _globalCommands = <WearVoiceCommand>{
+    WearVoiceCommand.stopMicrophone,
+    WearVoiceCommand.startMicrophone,
+  };
 
   static const Set<WearVoiceCommand> _listNavigation = <WearVoiceCommand>{
     WearVoiceCommand.up,
@@ -351,7 +357,21 @@ class VoiceActionCatalog {
         WearVoiceCommand.save, 'сохранить', VoiceActivationPolicy.endpointOnly,
         screens: <WearScreenId>{WearScreenId.dbSettings},
         risk: VoiceActionRisk.stateChange),
+    _action(WearVoiceCommand.stopMicrophone, 'выключить микрофон',
+        VoiceActivationPolicy.endpointOnly,
+        screens: _allScreens,
+        phrases: <String>{'выключить микрофон', 'стоп микрофон'},
+        risk: VoiceActionRisk.stateChange),
+    _action(WearVoiceCommand.startMicrophone, 'включить микрофон',
+        VoiceActivationPolicy.endpointOnly,
+        screens: _allScreens,
+        phrases: <String>{'включить микрофон', 'старт микрофон'},
+        risk: VoiceActionRisk.stateChange),
   ];
+
+  static const Set<WearScreenId> _allScreens = <WearScreenId>{
+    ...WearScreenId.values,
+  };
 
   static const Set<WearScreenId> _selectableScreens = <WearScreenId>{
     WearScreenId.menu,
