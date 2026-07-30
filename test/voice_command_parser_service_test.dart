@@ -120,6 +120,26 @@ void main() {
       );
     });
 
+    test('clarification grammar includes page navigation commands', () {
+      final VoiceCommandParserService parser =
+          VoiceCommandParserService(catalog: catalog);
+
+      expect(
+        parser.parseExactForScreen(
+          WearScreenId.voiceClarification,
+          'следующая страница',
+        ),
+        WearVoiceCommand.nextPage,
+      );
+      expect(
+        parser.parseExactForScreen(
+          WearScreenId.voiceClarification,
+          'прошлая страница',
+        ),
+        WearVoiceCommand.previousPage,
+      );
+    });
+
     test('T06 duplicate alias fails validation', () {
       expect(
         () => VoiceActionCatalog(actions: <VoiceActionEntry>[

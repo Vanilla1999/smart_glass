@@ -133,7 +133,7 @@ void main() {
     );
   });
 
-  test('T10 command and unique dynamic item reject conflict', () {
+  test('T10 command takes priority over a unique dynamic item', () {
     final VoiceUtteranceCoordinator coordinator = VoiceUtteranceCoordinator();
     final VoiceDecisionContext current = context();
     expect(
@@ -149,7 +149,7 @@ void main() {
             itemStillExists: (_) => true,
           )
           .kind,
-      VoiceDecisionKind.conflictRejected,
+      VoiceDecisionKind.command,
     );
   });
 

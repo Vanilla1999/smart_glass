@@ -1546,14 +1546,16 @@ class SpeechRecognitionService {
         _commandParser.parseExactForScreen(context.sourceScreen, freeText);
     final VoiceDynamicItemsSnapshot items =
         _dynamicItemsProvider(context.sourceScreen);
-    final VoiceListMatch<VoiceDynamicItem> match =
-        phraseCommand == command && command != null
-            ? VoiceListMatch<VoiceDynamicItem>.none()
-            : VoiceListMatcher.match(
-                freeText,
-                items.items,
-                (VoiceDynamicItem item) => item.label,
-              );
+    final CommandCandidate? commandCandidate = command != null
+        ? CommandCandidate(command: command, text: commandText)
+        : phraseCommand == null
+            ? null
+            : CommandCandidate(command: phraseCommand, text: freeText);
+    final VoiceListMatch<VoiceDynamicItem> match = VoiceListMatcher.match(
+      freeText,
+      items.items,
+      (VoiceDynamicItem item) => item.label,
+    );
     final VoiceDecisionContext decisionContext = VoiceDecisionContext(
       key: VoiceUtteranceKey(
         captureEpoch: captureEpoch,
@@ -1580,9 +1582,7 @@ class SpeechRecognitionService {
         ),
         listRevision: currentItems.revision,
       ),
-      command: command == null
-          ? null
-          : CommandCandidate(command: command, text: commandText),
+      command: commandCandidate,
       freeText: FreeTextCandidate(
         text: freeText,
         matchType: match.type,
@@ -1594,7 +1594,7 @@ class SpeechRecognitionService {
     if (decision.kind == VoiceDecisionKind.command) {
       _emitResult(
         _RecognitionSource.command,
-        commandText,
+        commandCandidate!.text,
         epoch: null,
         captureEpoch: captureEpoch,
         kind: RecognitionKind.streamFinal,

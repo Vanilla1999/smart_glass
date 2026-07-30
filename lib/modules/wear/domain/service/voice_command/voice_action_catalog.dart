@@ -92,7 +92,11 @@ class VoiceScreenCapabilities {
       WearVoiceCommand.previousPage,
     },
     WearScreenId.productSelect: _listNavigation,
-    WearScreenId.voiceClarification: _listNavigation,
+    WearScreenId.voiceClarification: <WearVoiceCommand>{
+      ..._listNavigation,
+      WearVoiceCommand.nextPage,
+      WearVoiceCommand.previousPage,
+    },
     WearScreenId.printerSelect: _listNavigation,
     WearScreenId.availabilityDirectScan: <WearVoiceCommand>{
       WearVoiceCommand.back,

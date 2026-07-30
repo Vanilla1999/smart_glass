@@ -55,6 +55,8 @@ class _WearVoiceClarificationScreenState
         onDown: _onDown,
         onSelect: _onSelect,
         onBack: _onBack,
+        onNextPage: _onNextPage,
+        onPreviousPage: _onPreviousPage,
         onPhrase: _onPhrase,
         dynamicVoiceItems: _dynamicVoiceItems,
       ),
@@ -195,6 +197,27 @@ class _WearVoiceClarificationScreenState
     _focusCurrent();
   }
 
+  void _onNextPage() {
+    final int nextIndex = ((_focusedIndex ~/ _visibleGlassesItemCount) + 1) *
+        _visibleGlassesItemCount;
+    if (nextIndex >= _matches.length) {
+      _showNotice('Это последняя страница');
+      return;
+    }
+    _focusedIndex = nextIndex;
+    _focusCurrent();
+  }
+
+  void _onPreviousPage() {
+    final int currentPage = _focusedIndex ~/ _visibleGlassesItemCount;
+    if (currentPage == 0) {
+      _showNotice('Это первая страница');
+      return;
+    }
+    _focusedIndex = (currentPage - 1) * _visibleGlassesItemCount;
+    _focusCurrent();
+  }
+
   Future<void> _onSelect() async {
     if (_matches.isEmpty) return;
     await _select(_matches[_focusedIndex.clamp(0, _matches.length - 1)]);
@@ -299,4 +322,6 @@ class _WearVoiceClarificationScreenState
       curve: Curves.easeOut,
     );
   }
+
+  static const int _visibleGlassesItemCount = 4;
 }

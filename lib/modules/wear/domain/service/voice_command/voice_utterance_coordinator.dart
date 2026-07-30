@@ -209,15 +209,6 @@ class VoiceUtteranceCoordinator {
         freeText?.matchType == VoiceListMatchType.unique &&
             dynamicItemId != null &&
             itemStillExists(dynamicItemId);
-    if (command != null && uniqueDynamic && freeText != null) {
-      return VoiceDecision(
-        VoiceDecisionKind.conflictRejected,
-        intent: VoiceConflictIntent(
-          commandText: command.text,
-          freeText: freeText.text,
-        ),
-      );
-    }
     if (command != null) {
       return VoiceDecision(
         VoiceDecisionKind.command,

@@ -5,7 +5,9 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/free_text_pipeline_mode.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_segmenter.dart';
@@ -89,6 +91,44 @@ void main() {
     expect(service.metricsSnapshot.speechToPhrase.p50, greaterThanOrEqualTo(5));
   });
 
+  test('free-text exact command navigates clarification pages', () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpoints.add(true)
+      ..results.add(_json(text: 'не команда'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finals.addAll(<String>[
+        _json(),
+        _json(text: 'следующая страница'),
+      ]);
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeText: freeText,
+      dynamicItems: const VoiceDynamicItemsSnapshot(
+        revision: 1,
+        items: <VoiceDynamicItem>[
+          VoiceDynamicItem(id: 'page', label: 'следующая страница'),
+        ],
+      ),
+    );
+    addTearDown(service.dispose);
+    await _start(service);
+    await service.switchCommandGrammar(
+      screen: WearScreenId.voiceClarification,
+      grammar: VoiceActionCatalog().grammarFor(WearScreenId.voiceClarification),
+    );
+    final Future<SegmentedRecognitionResult> result =
+        service.segmentedResultsStream.firstWhere((event) =>
+            event.lane == RecognitionLane.command &&
+            event.kind == RecognitionKind.streamFinal);
+
+    await _processUtterance(service);
+    await service.waitForProcessing();
+
+    final SegmentedRecognitionResult commandResult = await result;
+    expect(commandResult.text, 'следующая страница');
+    expect(commandResult.parsedCommand, WearVoiceCommand.nextPage);
+  });
+
   test('ambiguous free text is published for clarification', () async {
     final _FakeRecognizer command = _FakeRecognizer()
       ..endpoints.add(true)
@@ -127,7 +167,8 @@ void main() {
     expect((await phrase).text, 'коровка из кореновки');
   });
 
-  test('T10 command and free-text conflict publishes neither result', () async {
+  test('T10 command lane takes priority over a dynamic free-text match',
+      () async {
     final _FakeRecognizer command = _FakeRecognizer()
       ..endpoints.add(true)
       ..results.add(_json(text: 'выбрать'));
@@ -148,8 +189,10 @@ void main() {
     await _processUtterance(service);
     await service.waitForProcessing();
 
-    expect(finals, isEmpty);
-    expect(service.conflictCount, 1);
+    expect(finals, hasLength(1));
+    expect(finals.single.lane, RecognitionLane.command);
+    expect(finals.single.parsedCommand, WearVoiceCommand.select);
+    expect(service.conflictCount, 0);
   });
 
   test('T13 backlog invalidates live result and uses replay fallback',

@@ -230,7 +230,6 @@ class WearFlowController {
       WearScreenId.settings ||
       WearScreenId.printerSelect ||
       WearScreenId.productSelect ||
-      WearScreenId.voiceClarification ||
       WearScreenId.availabilityGroup ||
       WearScreenId.availabilityProduct ||
       WearScreenId.dbSettings ||
@@ -240,6 +239,12 @@ class WearFlowController {
       WearScreenId.availabilityCheck ||
       WearScreenId.availabilityFill =>
         command == WearVoiceCommand.back || command == WearVoiceCommand.home,
+      WearScreenId.voiceClarification => <WearVoiceCommand>{
+          WearVoiceCommand.back,
+          WearVoiceCommand.home,
+          WearVoiceCommand.nextPage,
+          WearVoiceCommand.previousPage,
+        }.contains(command),
       WearScreenId.availabilityDirectScan => <WearVoiceCommand>{
           WearVoiceCommand.back,
           WearVoiceCommand.home,
