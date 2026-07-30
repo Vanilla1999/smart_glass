@@ -1606,6 +1606,12 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
         commandQueueDelay: VoiceMetricPercentiles(p50: 0, p95: 0, p99: 0),
         freeTextQueueDelay: VoiceMetricPercentiles(p50: 0, p95: 0, p99: 0),
         freeTextAudioLag: VoiceMetricPercentiles(p50: 0, p95: 0, p99: 0),
+        freeTextQueueWaitAfterEndpoint:
+            VoiceMetricPercentiles(p50: 0, p95: 0, p99: 0),
+        freeTextFinalization: VoiceMetricPercentiles(p50: 0, p95: 0, p99: 0),
+        endpointToFreeTextFinal: VoiceMetricPercentiles(p50: 0, p95: 0, p99: 0),
+        endpointToDecision: VoiceMetricPercentiles(p50: 0, p95: 0, p99: 0),
+        speechToPhrase: VoiceMetricPercentiles(p50: 0, p95: 0, p99: 0),
         liveFreeTextRtf: 0,
         replayFallbackCount: 0,
         replayFallbackReasons: <String, int>{},

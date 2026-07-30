@@ -59,6 +59,7 @@ void main() {
       ..endpoints.add(true)
       ..results.add(_json(text: 'не команда'));
     final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finalDelay = const Duration(milliseconds: 5)
       ..finals.addAll(<String>[_json(), _json(text: 'жёлтый')]);
     final SpeechRecognitionService service = _service(
       command: command,
@@ -79,6 +80,13 @@ void main() {
     expect(phrases.single.isLiveFreeText, isTrue);
     expect(freeText.accepted.length, command.accepted.length + 1);
     expect(service.replayFallbackCount, 0);
+    expect(service.metricsSnapshot.freeTextFinalization.p50,
+        greaterThanOrEqualTo(5));
+    expect(service.metricsSnapshot.endpointToFreeTextFinal.p50,
+        greaterThanOrEqualTo(5));
+    expect(service.metricsSnapshot.endpointToDecision.p50,
+        greaterThanOrEqualTo(5));
+    expect(service.metricsSnapshot.speechToPhrase.p50, greaterThanOrEqualTo(5));
   });
 
   test('T10 command and free-text conflict publishes neither result', () async {
@@ -288,6 +296,7 @@ class _FakeRecognizer implements VoiceRecognizer {
   final List<String> finals = <String>[];
   final List<Uint8List> accepted = <Uint8List>[];
   Future<String> Function()? finalOverride;
+  Duration finalDelay = Duration.zero;
   int disposeCalls = 0;
 
   @override
@@ -301,6 +310,7 @@ class _FakeRecognizer implements VoiceRecognizer {
 
   @override
   Future<String> getFinalResult() async {
+    if (finalDelay > Duration.zero) await Future<void>.delayed(finalDelay);
     if (finals.isNotEmpty) return finals.removeAt(0);
     final Future<String> Function()? override = finalOverride;
     return override == null ? _json() : override();

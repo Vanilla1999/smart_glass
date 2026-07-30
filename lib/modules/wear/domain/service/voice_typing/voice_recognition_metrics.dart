@@ -15,6 +15,11 @@ class VoiceRecognitionMetricsSnapshot {
     required this.commandQueueDelay,
     required this.freeTextQueueDelay,
     required this.freeTextAudioLag,
+    required this.freeTextQueueWaitAfterEndpoint,
+    required this.freeTextFinalization,
+    required this.endpointToFreeTextFinal,
+    required this.endpointToDecision,
+    required this.speechToPhrase,
     required this.liveFreeTextRtf,
     required this.replayFallbackCount,
     required this.replayFallbackReasons,
@@ -26,6 +31,11 @@ class VoiceRecognitionMetricsSnapshot {
   final VoiceMetricPercentiles commandQueueDelay;
   final VoiceMetricPercentiles freeTextQueueDelay;
   final VoiceMetricPercentiles freeTextAudioLag;
+  final VoiceMetricPercentiles freeTextQueueWaitAfterEndpoint;
+  final VoiceMetricPercentiles freeTextFinalization;
+  final VoiceMetricPercentiles endpointToFreeTextFinal;
+  final VoiceMetricPercentiles endpointToDecision;
+  final VoiceMetricPercentiles speechToPhrase;
   final double liveFreeTextRtf;
   final int replayFallbackCount;
   final Map<String, int> replayFallbackReasons;
@@ -38,6 +48,11 @@ class VoiceRecognitionMetrics {
   final List<int> _commandQueueDelay = <int>[];
   final List<int> _freeTextQueueDelay = <int>[];
   final List<int> _freeTextAudioLag = <int>[];
+  final List<int> _freeTextQueueWaitAfterEndpoint = <int>[];
+  final List<int> _freeTextFinalization = <int>[];
+  final List<int> _endpointToFreeTextFinal = <int>[];
+  final List<int> _endpointToDecision = <int>[];
+  final List<int> _speechToPhrase = <int>[];
   final Map<String, int> _fallbackReasons = <String, int>{};
   int _freeTextRecognizerMs = 0;
   int _freeTextAudioMs = 0;
@@ -67,6 +82,26 @@ class VoiceRecognitionMetrics {
         ifAbsent: () => 1);
   }
 
+  void recordLiveFinalization({
+    required int queueWaitAfterEndpointMs,
+    required int finalizationMs,
+    required int endpointToFreeTextFinalMs,
+  }) {
+    _record(_freeTextQueueWaitAfterEndpoint, queueWaitAfterEndpointMs);
+    _record(_freeTextFinalization, finalizationMs);
+    _record(_endpointToFreeTextFinal, endpointToFreeTextFinalMs);
+  }
+
+  void recordDecision({
+    required int endpointToDecisionMs,
+    int? speechToPhraseMs,
+  }) {
+    _record(_endpointToDecision, endpointToDecisionMs);
+    if (speechToPhraseMs != null) {
+      _record(_speechToPhrase, speechToPhraseMs);
+    }
+  }
+
   void recordConflict() => _conflicts++;
   void recordStale() => _stale++;
   void recordDroppedFrame() => _dropped++;
@@ -75,6 +110,12 @@ class VoiceRecognitionMetrics {
         commandQueueDelay: _percentiles(_commandQueueDelay),
         freeTextQueueDelay: _percentiles(_freeTextQueueDelay),
         freeTextAudioLag: _percentiles(_freeTextAudioLag),
+        freeTextQueueWaitAfterEndpoint:
+            _percentiles(_freeTextQueueWaitAfterEndpoint),
+        freeTextFinalization: _percentiles(_freeTextFinalization),
+        endpointToFreeTextFinal: _percentiles(_endpointToFreeTextFinal),
+        endpointToDecision: _percentiles(_endpointToDecision),
+        speechToPhrase: _percentiles(_speechToPhrase),
         liveFreeTextRtf: _freeTextAudioMs == 0
             ? 0
             : _freeTextRecognizerMs / _freeTextAudioMs,

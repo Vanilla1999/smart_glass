@@ -15,6 +15,15 @@ void main() {
     }
     metrics
       ..recordFallback('live_lane_timeout')
+      ..recordLiveFinalization(
+        queueWaitAfterEndpointMs: 30,
+        finalizationMs: 40,
+        endpointToFreeTextFinalMs: 70,
+      )
+      ..recordDecision(
+        endpointToDecisionMs: 75,
+        speechToPhraseMs: 1100,
+      )
       ..recordConflict()
       ..recordStale()
       ..recordDroppedFrame();
@@ -25,6 +34,11 @@ void main() {
     expect(result.commandQueueDelay.p99, 100);
     expect(result.freeTextQueueDelay.p95, 192);
     expect(result.freeTextAudioLag.p99, 300);
+    expect(result.freeTextQueueWaitAfterEndpoint.p50, 30);
+    expect(result.freeTextFinalization.p50, 40);
+    expect(result.endpointToFreeTextFinal.p50, 70);
+    expect(result.endpointToDecision.p50, 75);
+    expect(result.speechToPhrase.p50, 1100);
     expect(result.liveFreeTextRtf, 0.5);
     expect(result.replayFallbackReasons, {'live_lane_timeout': 1});
     expect(result.conflictCount, 1);

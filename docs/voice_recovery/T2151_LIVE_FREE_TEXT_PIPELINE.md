@@ -22,6 +22,17 @@ Retained utterance PCM and replay remain available for recovery.
 - `liveWithReplayFallback` - both lanes run live and a single decision is
   published after their FIFO boundary.
 
+A release test build can override the asset/default without changing production
+configuration:
+
+```text
+WEAR_FREE_TEXT_PIPELINE_MODE=liveWithReplayFallback \
+  ./tool/build_voice_recovery_apk.sh
+```
+
+The build fingerprint logs the compile-time override. The checked-in default
+remains `replayOnly`.
+
 Live free-text is active only while the existing `freeTextEnabled` screen mode
 is active. Grammar-only screens continue to feed only the command recognizer.
 
@@ -59,16 +70,19 @@ calibration or publish a result.
 ## Metrics
 
 Structured logs include:
-
-- `VOICE_LIVE_FREE_TEXT`: mode, capture, segment, utterance, chunk, queue delay,
-  recognizer time and audio lag.
-- `VOICE_DUAL_FINAL`: command text, free-text text and endpoint-to-final time.
+- `VOICE_LIVE_FREE_TEXT`: sampled first/periodic/slow frames with mode,
+  capture, segment, utterance, chunk, queue delay, recognizer time and audio lag.
+- `VOICE_DUAL_FINAL`: command/free-text candidates plus wall-clock queue wait
+  after VAD endpoint, finalization time and endpoint-to-final time.
+- `VOICE_DUAL_DECISION`: endpoint-to-decision and speech-to-dynamic-phrase time.
 - `VOICE_ARBITRATION`: command, dynamic item, conflict or none.
 - `VOICE_FREE_TEXT_FALLBACK`: reason, capture, utterance and replay bytes.
 - `VOICE_SHADOW_COMPARISON`: live candidate and production replay mode.
 
-Diagnostics now report the active pipeline mode and non-zero live free-text
-processed chunks. Replay fallback and conflict counters are exposed for tests.
+The endpoint timestamp is captured when VAD reports the boundary, before either
+recognizer queue drains. This avoids excluding queue wait from
+`endpointToFreeTextFinalMs`. Diagnostics report the active pipeline mode and
+non-zero live free-text processed chunks.
 
 ## T2151 Verification
 

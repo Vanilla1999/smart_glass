@@ -213,6 +213,7 @@ class SpeechRecognitionService {
   final Map<int, _VoiceResultContext> _utteranceContexts =
       <int, _VoiceResultContext>{};
   final Set<int> _invalidLiveFreeTextUtterances = <int>{};
+  final Set<int> _loggedLiveFreeTextUtterances = <int>{};
   final Map<int, String> _liveFreeTextInvalidReasons = <int, String>{};
   int _replayFallbackCount = 0;
   int _conflictCount = 0;
@@ -286,6 +287,7 @@ class SpeechRecognitionService {
     _commandUtteranceStartedAtMillis = null;
     _liveFreeTextResults.clear();
     _invalidLiveFreeTextUtterances.clear();
+    _loggedLiveFreeTextUtterances.clear();
     _liveFreeTextInvalidReasons.clear();
     _freeTextBacklog.reset();
   }
@@ -707,9 +709,15 @@ class SpeechRecognitionService {
       return false;
     }
     if (segment.isEndpoint) {
+      final int endpointDetectedAtMillis =
+          DateTime.now().millisecondsSinceEpoch;
       _logVadEvent('VAD_ENDPOINT', segment);
       if (segment.endpointReason == AcousticEndpointReason.silence) {
-        _enqueueSilenceBoundary(segment, captureEpoch);
+        _enqueueSilenceBoundary(
+          segment,
+          captureEpoch,
+          endpointDetectedAtMillis: endpointDetectedAtMillis,
+        );
       }
       unawaited(_finishSegment(segment, captureEpoch).catchError(
         (Object error, StackTrace stackTrace) {
@@ -791,12 +799,20 @@ class SpeechRecognitionService {
     }
     await Future.wait<void>(processing);
     if (segment.endpointReason == AcousticEndpointReason.silence) {
-      _enqueueSilenceBoundary(segment, captureEpoch);
+      _enqueueSilenceBoundary(
+        segment,
+        captureEpoch,
+        endpointDetectedAtMillis: DateTime.now().millisecondsSinceEpoch,
+      );
     }
     if (segment.isEndpoint) await _finishSegment(segment, captureEpoch);
   }
 
-  void _enqueueSilenceBoundary(SpeechSegment segment, int captureEpoch) {
+  void _enqueueSilenceBoundary(
+    SpeechSegment segment,
+    int captureEpoch, {
+    required int endpointDetectedAtMillis,
+  }) {
     final int expectedUtteranceId = _commandUtteranceId;
     final VoiceRecognizer? expectedRecognizer = _commandRecognizer;
     if (expectedRecognizer == null) return;
@@ -815,6 +831,7 @@ class SpeechRecognitionService {
         segment: segment,
         captureEpoch: captureEpoch,
         expectedUtteranceId: expectedUtteranceId,
+        endpointDetectedAtMillis: endpointDetectedAtMillis,
       );
     });
     _commandAudioProcessing = boundary.catchError(
@@ -832,6 +849,7 @@ class SpeechRecognitionService {
     required SpeechSegment segment,
     required int captureEpoch,
     required int expectedUtteranceId,
+    required int endpointDetectedAtMillis,
   }) async {
     final int startedAt = DateTime.now().millisecondsSinceEpoch;
     Future<void>? pendingOperation;
@@ -873,6 +891,7 @@ class SpeechRecognitionService {
         captureEpoch: captureEpoch,
         segment: segment,
         commandUtteranceId: expectedUtteranceId,
+        endpointDetectedAtMillis: endpointDetectedAtMillis,
       );
 
       final Future<void> resetOperation = recognizer.reset();
@@ -1003,14 +1022,26 @@ class SpeechRecognitionService {
               .add(text);
         }
       }
-      print(
-        '[VOICE_LIVE_FREE_TEXT] mode=${freeTextPipelineMode.name} '
-        'captureEpoch=$captureEpoch segmentId=${segment.segmentId} '
-        'utteranceId=$commandUtteranceId chunkId=${segment.lastChunkId} '
-        'processedThroughChunkId=${segment.lastChunkId} '
-        'queueDelayMs=$queueDelayMs recognizerMs=$recognizerMs '
-        'audioLagMs=${finishedAt - queuedAt}',
-      );
+      final bool firstLogForUtterance =
+          _loggedLiveFreeTextUtterances.add(commandUtteranceId);
+      final bool periodicLog = _freeTextMetrics.processedChunks % 25 == 0;
+      final bool slowLog = queueDelayMs > _slowAudioQueueDelayMs ||
+          recognizerMs > _slowRecognizerLatencyMs;
+      if (firstLogForUtterance || periodicLog || slowLog) {
+        final String sample = firstLogForUtterance
+            ? 'first'
+            : slowLog
+                ? 'slow'
+                : 'periodic';
+        print(
+          '[VOICE_LIVE_FREE_TEXT] mode=${freeTextPipelineMode.name} '
+          'captureEpoch=$captureEpoch segmentId=${segment.segmentId} '
+          'utteranceId=$commandUtteranceId chunkId=${segment.lastChunkId} '
+          'processedThroughChunkId=${segment.lastChunkId} sample=$sample '
+          'queueDelayMs=$queueDelayMs recognizerMs=$recognizerMs '
+          'audioLagMs=${finishedAt - queuedAt}',
+        );
+      }
     }).whenComplete(
       () => _freeTextBacklog.complete(bytes.lengthInBytes),
     );
@@ -1219,7 +1250,9 @@ class SpeechRecognitionService {
     required int captureEpoch,
     required SpeechSegment segment,
     required int commandUtteranceId,
+    int? endpointDetectedAtMillis,
   }) {
+    final int? speechStartedAtMillis = _commandUtteranceStartedAtMillis;
     final _VoiceResultContext resultContext =
         _utteranceContexts[commandUtteranceId] ??
             _currentResultContext(commandUtteranceId);
@@ -1242,6 +1275,9 @@ class SpeechRecognitionService {
           captureEpoch: captureEpoch,
           segment: segment,
           commandUtteranceId: commandUtteranceId,
+          endpointDetectedAtMillis:
+              endpointDetectedAtMillis ?? DateTime.now().millisecondsSinceEpoch,
+          speechStartedAtMillis: speechStartedAtMillis,
           resultContext: resultContext,
         );
       } else if (!commandFound) {
@@ -1277,10 +1313,15 @@ class SpeechRecognitionService {
     required int captureEpoch,
     required SpeechSegment segment,
     required int commandUtteranceId,
+    required int endpointDetectedAtMillis,
+    int? speechStartedAtMillis,
     _VoiceResultContext? resultContext,
   }) {
     final Future<void> next = _freeTextAudioProcessing.then((_) async {
-      final int endpointAt = DateTime.now().millisecondsSinceEpoch;
+      final int finalizationStartedAtMillis =
+          DateTime.now().millisecondsSinceEpoch;
+      final int queueWaitAfterEndpointMs =
+          finalizationStartedAtMillis - endpointDetectedAtMillis;
       final VoiceRecognizer? recognizer = _freeTextRecognizer;
       bool valid = recognizer != null &&
           !_invalidLiveFreeTextUtterances.contains(commandUtteranceId) &&
@@ -1313,10 +1354,23 @@ class SpeechRecognitionService {
           print('[VOICE_LIVE_FREE_TEXT] finalization failed: $error');
         }
       }
-      final int decisionMs = DateTime.now().millisecondsSinceEpoch - endpointAt;
+      final int freeTextFinalAtMillis = DateTime.now().millisecondsSinceEpoch;
+      final int freeTextFinalizationMs =
+          freeTextFinalAtMillis - finalizationStartedAtMillis;
+      final int endpointToFreeTextFinalMs =
+          freeTextFinalAtMillis - endpointDetectedAtMillis;
+      _voiceMetrics.recordLiveFinalization(
+        queueWaitAfterEndpointMs: queueWaitAfterEndpointMs,
+        finalizationMs: freeTextFinalizationMs,
+        endpointToFreeTextFinalMs: endpointToFreeTextFinalMs,
+      );
+      _loggedLiveFreeTextUtterances.remove(commandUtteranceId);
       print(
         '[VOICE_DUAL_FINAL] commandText="$commandText" '
-        'freeText="$liveText" endpointToFreeTextFinalMs=$decisionMs',
+        'freeText="$liveText" '
+        'freeTextQueueWaitAfterEndpointMs=$queueWaitAfterEndpointMs '
+        'freeTextFinalizationMs=$freeTextFinalizationMs '
+        'endpointToFreeTextFinalMs=$endpointToFreeTextFinalMs',
       );
       if (freeTextPipelineMode == FreeTextPipelineMode.shadowLive) {
         print(
@@ -1346,7 +1400,7 @@ class SpeechRecognitionService {
               _logShadowComparison(
                 liveText: liveText,
                 replayText: replayText,
-                liveLatencyMs: decisionMs,
+                liveLatencyMs: endpointToFreeTextFinalMs,
                 replayLatencyMs: replayMs,
                 resultContext: resultContext,
               );
@@ -1389,7 +1443,7 @@ class SpeechRecognitionService {
         }
         return;
       }
-      _publishCoordinatedDecision(
+      final VoiceDecisionKind decision = _publishCoordinatedDecision(
         commandText: commandText,
         freeText: liveText,
         captureEpoch: captureEpoch,
@@ -1397,6 +1451,22 @@ class SpeechRecognitionService {
         segment: segment,
         commandUtteranceId: commandUtteranceId,
         resultContext: resultContext,
+      );
+      final int decisionAtMillis = DateTime.now().millisecondsSinceEpoch;
+      final int endpointToDecisionMs =
+          decisionAtMillis - endpointDetectedAtMillis;
+      final int? speechToPhraseMs = decision == VoiceDecisionKind.dynamicItem &&
+              speechStartedAtMillis != null
+          ? decisionAtMillis - speechStartedAtMillis
+          : null;
+      _voiceMetrics.recordDecision(
+        endpointToDecisionMs: endpointToDecisionMs,
+        speechToPhraseMs: speechToPhraseMs,
+      );
+      print(
+        '[VOICE_DUAL_DECISION] decision=${decision.name} '
+        'endpointToDecisionMs=$endpointToDecisionMs '
+        'speechToPhraseMs=$speechToPhraseMs',
       );
     });
     _freeTextAudioProcessing = next.catchError(
@@ -1457,7 +1527,7 @@ class SpeechRecognitionService {
     );
   }
 
-  void _publishCoordinatedDecision({
+  VoiceDecisionKind _publishCoordinatedDecision({
     required String commandText,
     required String freeText,
     required int captureEpoch,
@@ -1555,6 +1625,7 @@ class SpeechRecognitionService {
       'command="$commandText" phrase="$freeText" '
       "matchType=${match.type.name} matchedItemId=${match.item?.id}",
     );
+    return decision.kind;
   }
 
   void _enqueueFreeTextReplay(

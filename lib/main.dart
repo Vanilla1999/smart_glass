@@ -18,6 +18,10 @@ const String _gitDirty =
     String.fromEnvironment('GIT_DIRTY', defaultValue: 'unknown');
 const String _sourcePatchSha =
     String.fromEnvironment('SOURCE_PATCH_SHA', defaultValue: 'unknown');
+const String _freeTextPipelineModeOverride = String.fromEnvironment(
+  'WEAR_FREE_TEXT_PIPELINE_MODE',
+  defaultValue: '',
+);
 
 @pragma('vm:entry-point')
 void glassesMain() {
@@ -54,6 +58,7 @@ Future<void> _main() async {
   await WearMockConfig.init();
 
   _applyDefaultEnvValues();
+  _applyBuildEnvOverrides();
 
   if (kDebugMode) {
     _debugLogLoadedEnv();
@@ -79,6 +84,7 @@ void _logBuildFingerprint(String entryPoint) {
     '[VoiceBuild] entry=$entryPoint gitSha=$_gitSha '
     'buildTimestamp=$_buildTimestamp gitDirty=$_gitDirty '
     'sourcePatchSha=$_sourcePatchSha mode=$mode '
+    'freeTextPipelineModeOverride=${_freeTextPipelineModeOverride.isEmpty ? 'none' : _freeTextPipelineModeOverride} '
     'platform=${defaultTargetPlatform.name}',
   );
 }
@@ -135,6 +141,15 @@ void _applyDefaultEnvValues() {
       '[ENV DEBUG] default $key=$value ${alreadyDefined ? 'skipped, env has ${dotenv.env[key]}' : 'applied'}',
     );
   });
+}
+
+void _applyBuildEnvOverrides() {
+  if (_freeTextPipelineModeOverride.isEmpty) return;
+  dotenv.env['WEAR_FREE_TEXT_PIPELINE_MODE'] = _freeTextPipelineModeOverride;
+  debugPrint(
+    '[ENV] build override WEAR_FREE_TEXT_PIPELINE_MODE='
+    '$_freeTextPipelineModeOverride',
+  );
 }
 
 Future<void> _debugLogDevelopEnvAsset() async {
