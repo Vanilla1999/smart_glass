@@ -476,12 +476,18 @@ class _WearList extends StatelessWidget {
     final List<String> visible = state.items.take(4).toList(growable: false);
     final bool showPageText =
         state.pageText != null && state.pageText!.trim().isNotEmpty;
+    final bool showNotice =
+        state.statusText != null && state.statusText!.trim().isNotEmpty;
     return SizedBox(
       width: 403,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: <Widget>[
+          if (showNotice) ...<Widget>[
+            _ListNotice(state.statusText!),
+            const SizedBox(height: 6),
+          ],
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
@@ -512,6 +518,41 @@ class _WearList extends StatelessWidget {
             _PageText(state.pageText!),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _ListNotice extends StatelessWidget {
+  const _ListNotice(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.center,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: WearGlassesScaffold.backgroundColor,
+          border: Border.all(color: WearGlassesScaffold.accentColor),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          child: Text(
+            text,
+            style: const TextStyle(
+              color: WearGlassesScaffold.accentColor,
+              fontSize: 16,
+              height: 1.2,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+        ),
       ),
     );
   }

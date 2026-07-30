@@ -49,6 +49,7 @@ class _WearAvailabilityGroupScreenState
         onNextPage: _onVoiceNextPage,
         onPreviousPage: _onVoicePreviousPage,
         onPhrase: _onVoicePhrase,
+        onDynamicItem: _onVoiceDynamicItem,
         dynamicVoiceItems: _dynamicVoiceItems,
         onPartialPhrase: _onVoicePartialPhrase,
       ),
@@ -261,6 +262,23 @@ class _WearAvailabilityGroupScreenState
         }
         context.push(WearAvailabilityProductScreen.route, extra: group);
         break;
+    }
+  }
+
+  void _onVoiceDynamicItem(String itemId) {
+    final List<WearAvailabilityGroup>? groups =
+        ref.read(wearAvailabilityGroupsProvider).valueOrNull;
+    if (groups == null) return;
+    for (final WearAvailabilityGroup group in groups) {
+      if (group.id.toString() != itemId) continue;
+      final int index = groups.indexOf(group);
+      if (index >= 0) {
+        _focusedIndex = index;
+        _scrollToFocused();
+        _sendGlassesState(groups, fast: true);
+      }
+      context.push(WearAvailabilityProductScreen.route, extra: group);
+      return;
     }
   }
 

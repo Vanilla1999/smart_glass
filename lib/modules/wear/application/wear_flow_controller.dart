@@ -8,6 +8,8 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
 import 'package:smart_glasses/modules/wear/application/wear_navigation_request.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
+import 'package:smart_glasses/modules/wear/application/voice_clarification_args.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availability_glasses_payloads.dart';
@@ -15,6 +17,7 @@ import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_pay
 
 typedef WearFlowAction = FutureOr<void> Function();
 typedef WearFlowPhraseAction = FutureOr<void> Function(String phrase);
+typedef WearFlowDynamicItemAction = FutureOr<void> Function(String itemId);
 typedef WearFlowPartialPhraseAction = FutureOr<bool> Function(String phrase);
 typedef WearDynamicVoiceItems = VoiceDynamicItemsSnapshot Function();
 typedef WearFlashlightToggle = Future<void> Function();
@@ -45,6 +48,7 @@ class WearScreenActionHandler {
     this.onContinue,
     this.onFinish,
     this.onPhrase,
+    this.onDynamicItem,
     this.onPartialPhrase,
     this.dynamicVoiceItems,
   });
@@ -72,6 +76,7 @@ class WearScreenActionHandler {
   final WearFlowAction? onContinue;
   final WearFlowAction? onFinish;
   final WearFlowPhraseAction? onPhrase;
+  final WearFlowDynamicItemAction? onDynamicItem;
   final WearFlowPartialPhraseAction? onPartialPhrase;
   final WearDynamicVoiceItems? dynamicVoiceItems;
 }
@@ -108,6 +113,7 @@ class WearFlowController {
   final WearFlashlightToggle _flashlightToggle;
   final WearPhotoCapture? _photoCapture;
   bool _isProcessingCommand = false;
+  bool _isVoiceClarificationSelectionInProgress = false;
   int _nextNavigationRequestId = 0;
   int? _deliveredNavigationRequestId;
 
@@ -224,6 +230,7 @@ class WearFlowController {
       WearScreenId.settings ||
       WearScreenId.printerSelect ||
       WearScreenId.productSelect ||
+      WearScreenId.voiceClarification ||
       WearScreenId.availabilityGroup ||
       WearScreenId.availabilityProduct ||
       WearScreenId.dbSettings ||
@@ -318,7 +325,99 @@ class WearFlowController {
     final String trimmed = phrase.trim();
     if (trimmed.isEmpty || _uiLifecycle == WearUiLifecycle.inactive) return;
     print('[WearFlowController] phrase="$trimmed" state=$_state');
+    if (_state.screen != WearScreenId.voiceClarification) {
+      final VoiceDynamicItemsSnapshot items =
+          dynamicVoiceItemsFor(_state.screen);
+      final VoiceListMatch<VoiceDynamicItem> match = VoiceListMatcher.match(
+        trimmed,
+        items.items,
+        (VoiceDynamicItem item) => item.label,
+      );
+      if (match.type == VoiceListMatchType.ambiguous) {
+        await _navigateTo(
+          WearScreenId.voiceClarification,
+          extra: VoiceClarificationArgs(
+            sourceScreen: _state.screen,
+            phrase: trimmed,
+            matches: match.matches,
+          ),
+        );
+        return;
+      }
+    }
     await _invokeScreenPhrase(_state.screen, trimmed);
+  }
+
+  void setVoiceClarificationFocusedIndex(int index, int itemCount) {
+    if (itemCount <= 0) return;
+    final int next = index.clamp(0, itemCount - 1);
+    _setState(
+      _state.copyWith(
+        focusedIndex: next,
+        voiceClarificationFocusedIndex: next,
+        clearError: true,
+      ),
+    );
+    unawaited(_renderGlasses());
+  }
+
+  void setVoiceClarificationNotice(String? message) {
+    if (_state.screen != WearScreenId.voiceClarification) return;
+    _setState(
+      _state.copyWith(
+        voiceClarificationNotice: message,
+        clearVoiceClarificationNotice: message == null,
+      ),
+    );
+    unawaited(_renderGlasses());
+  }
+
+  Future<bool> selectVoiceClarificationItem(
+    VoiceClarificationArgs args,
+    String itemId,
+  ) async {
+    if (_isVoiceClarificationSelectionInProgress ||
+        _state.screen != WearScreenId.voiceClarification ||
+        !identical(_state.currentVoiceClarificationArgs, args)) {
+      return false;
+    }
+    final WearScreenActionHandler? sourceHandler =
+        _screenActions[args.sourceScreen];
+    VoiceDynamicItem? selected;
+    for (final VoiceDynamicItem item in args.matches) {
+      if (item.id == itemId) {
+        selected = item;
+        break;
+      }
+    }
+    if (selected == null ||
+        sourceHandler == null ||
+        (sourceHandler.onDynamicItem == null &&
+            sourceHandler.onPhrase == null)) {
+      return false;
+    }
+    final VoiceDynamicItem selectedItem = selected;
+    final VoiceDynamicItemsSnapshot? currentItems =
+        sourceHandler.dynamicVoiceItems?.call();
+    if (currentItems != null &&
+        !currentItems.items.any((VoiceDynamicItem item) {
+          return item.id == selectedItem.id;
+        })) {
+      return false;
+    }
+
+    _isVoiceClarificationSelectionInProgress = true;
+    try {
+      await _returnToPreviousScreen(args.sourceScreen);
+      if (sourceHandler.onDynamicItem != null) {
+        await sourceHandler.onDynamicItem!(selectedItem.id);
+      } else {
+        await sourceHandler.onPhrase!(selectedItem.label);
+      }
+      return true;
+    } finally {
+      _isVoiceClarificationSelectionInProgress = false;
+    }
   }
 
   Future<bool> handleVoicePartialPhrase(String phrase) async {
@@ -745,7 +844,11 @@ class WearFlowController {
   }
 
   WearFlowState _stateForEnteredScreen(WearScreenId screen, {Object? extra}) {
-    return switch (screen) {
+    final bool returningFromHomeConfirmToClarification =
+        screen == WearScreenId.voiceClarification &&
+            _state.screen == WearScreenId.homeConfirm &&
+            _state.currentVoiceClarificationArgs != null;
+    final WearFlowState next = switch (screen) {
       WearScreenId.menu => _state.copyWith(
           screen: screen,
           focusedIndex: _state.menuFocusedIndex,
@@ -772,6 +875,23 @@ class WearFlowController {
           currentProductSelectArgs: extra,
           clearError: true,
         ),
+      WearScreenId.voiceClarification => _state.copyWith(
+          screen: screen,
+          focusedIndex: returningFromHomeConfirmToClarification
+              ? _state.voiceClarificationFocusedIndex
+              : 0,
+          voiceClarificationFocusedIndex:
+              returningFromHomeConfirmToClarification
+                  ? _state.voiceClarificationFocusedIndex
+                  : 0,
+          currentVoiceClarificationArgs: returningFromHomeConfirmToClarification
+              ? _state.currentVoiceClarificationArgs
+              : extra,
+          clearCurrentVoiceClarificationArgs:
+              !returningFromHomeConfirmToClarification && extra == null,
+          clearVoiceClarificationNotice: true,
+          clearError: true,
+        ),
       WearScreenId.availabilityProduct => _state.copyWith(
           screen: screen,
           focusedIndex: _state.availabilityProductFocusedIndex,
@@ -795,6 +915,14 @@ class WearFlowController {
         ),
       _ => _state.copyWith(screen: screen, clearError: true),
     };
+    if (screen == WearScreenId.voiceClarification ||
+        screen == WearScreenId.homeConfirm) {
+      return next.copyWith(clearVoiceClarificationNotice: true);
+    }
+    return next.copyWith(
+      clearCurrentVoiceClarificationArgs: true,
+      clearVoiceClarificationNotice: true,
+    );
   }
 
   void _clearContextPayload(WearScreenId screen, Object? extra) {
@@ -1082,6 +1210,7 @@ class WearFlowController {
               title: 'Выбор товара',
               statusText: 'Открываем список...',
             ),
+      WearScreenId.voiceClarification => _voiceClarificationPayload(state),
       WearScreenId.printCodeInput ||
       WearScreenId.status =>
         WearGlassesPayload.status(
@@ -1102,6 +1231,41 @@ class WearFlowController {
       WearScreenId.main =>
         WearGlassesPayload.authWaitingBarcode(),
     };
+  }
+
+  WearGlassesPayload _voiceClarificationPayload(WearFlowState state) {
+    final VoiceClarificationArgs? args =
+        state.currentVoiceClarificationArgs as VoiceClarificationArgs?;
+    final List<VoiceDynamicItem> matches =
+        args?.matches ?? const <VoiceDynamicItem>[];
+    if (matches.isEmpty) {
+      return const WearGlassesPayload(
+        screenType: WearGlassesScreenType.productSelect,
+        phase: WearGlassesPhase.idle,
+        title: 'Уточните фразу',
+        statusText: 'Совпадения не найдены',
+      );
+    }
+    const int pageSize = 4;
+    final int selected =
+        state.voiceClarificationFocusedIndex.clamp(0, matches.length - 1);
+    final int pageStart = (selected ~/ pageSize) * pageSize;
+    final int page = (selected ~/ pageSize) + 1;
+    final int pageCount = ((matches.length - 1) ~/ pageSize) + 1;
+    return WearGlassesPayload(
+      screenType: WearGlassesScreenType.productSelect,
+      phase: WearGlassesPhase.idle,
+      title: 'Уточните фразу',
+      subtitle: args?.phrase,
+      items: matches
+          .skip(pageStart)
+          .take(pageSize)
+          .map((VoiceDynamicItem item) => item.label)
+          .toList(growable: false),
+      selectedIndex: selected - pageStart,
+      pageText: pageCount > 1 ? 'Страница: $page из $pageCount' : null,
+      statusText: state.voiceClarificationNotice,
+    );
   }
 
   void _setState(WearFlowState next) {

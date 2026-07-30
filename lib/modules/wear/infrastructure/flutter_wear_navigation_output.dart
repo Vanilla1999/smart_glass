@@ -22,6 +22,7 @@ import 'package:smart_glasses/modules/wear/presentation/screens/settings/wear_pr
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/wear_settings_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/wear_wifi_settings_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/voice/wear_voice_clarification_screen.dart';
 
 class FlutterWearNavigationOutput implements WearNavigationOutput {
   FlutterWearNavigationOutput({required GoRouter router}) : _router = router;
@@ -63,6 +64,7 @@ class FlutterWearNavigationOutput implements WearNavigationOutput {
       WearPrinterSelectScreen.route => WearScreenId.printerSelect,
       WearScanIdleScreen.route => WearScreenId.scanIdle,
       WearProductSelectScreen.route => WearScreenId.productSelect,
+      WearVoiceClarificationScreen.route => WearScreenId.voiceClarification,
       WearPrintCodeInputScreen.route => WearScreenId.printCodeInput,
       WearAvailabilityInteractionScreen.route =>
         WearScreenId.availabilityInteraction,
@@ -102,6 +104,7 @@ class FlutterWearNavigationOutput implements WearNavigationOutput {
       WearScreenId.printerSelect => WearPrinterSelectScreen.route,
       WearScreenId.scanIdle => WearScanIdleScreen.route,
       WearScreenId.productSelect => WearProductSelectScreen.route,
+      WearScreenId.voiceClarification => WearVoiceClarificationScreen.route,
       WearScreenId.printCodeInput => WearPrintCodeInputScreen.route,
       WearScreenId.availabilityInteraction =>
         WearAvailabilityInteractionScreen.route,

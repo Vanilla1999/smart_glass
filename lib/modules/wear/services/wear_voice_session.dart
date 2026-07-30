@@ -624,6 +624,7 @@ class WearVoiceSession {
     return switch (screen) {
       WearScreenId.printerSelect ||
       WearScreenId.productSelect ||
+      WearScreenId.voiceClarification ||
       WearScreenId.availabilityGroup ||
       WearScreenId.availabilityProduct ||
       WearScreenId.availabilityFill ||

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_group.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
+import 'package:smart_glasses/modules/wear/application/voice_clarification_args.dart';
 import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_input_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/continue_scan/wear_continue_scan_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_check_screen.dart';
@@ -27,6 +28,7 @@ import 'package:smart_glasses/modules/wear/presentation/screens/settings/wear_se
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/wear_wifi_settings_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/voice/wear_voice_clarification_screen.dart';
 
 class WearRoute {
   static String get initialRoute => _shouldSkipScannerConnect()
@@ -114,6 +116,16 @@ class WearRoute {
                     ? state.extra! as WearProductSelectArgs
                     : null;
             return WearProductSelectScreen(args: args);
+          },
+        ),
+        GoRoute(
+          path: WearVoiceClarificationScreen.route,
+          builder: (BuildContext context, GoRouterState state) {
+            final VoiceClarificationArgs? args =
+                state.extra is VoiceClarificationArgs
+                    ? state.extra! as VoiceClarificationArgs
+                    : null;
+            return WearVoiceClarificationScreen(args: args);
           },
         ),
         GoRoute(

@@ -7,6 +7,7 @@ enum WearScreenId {
   printerSelect,
   scanIdle,
   productSelect,
+  voiceClarification,
   printCodeInput,
   availabilityInteraction,
   availabilityGroup,

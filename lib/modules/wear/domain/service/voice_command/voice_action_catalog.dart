@@ -92,6 +92,7 @@ class VoiceScreenCapabilities {
       WearVoiceCommand.previousPage,
     },
     WearScreenId.productSelect: _listNavigation,
+    WearScreenId.voiceClarification: _listNavigation,
     WearScreenId.printerSelect: _listNavigation,
     WearScreenId.availabilityDirectScan: <WearVoiceCommand>{
       WearVoiceCommand.back,
@@ -141,7 +142,8 @@ class VoiceActionCatalog {
         WearScreenId.availabilityInteraction =>
           CommandGrammarProfile.availabilityInteraction,
         WearScreenId.availabilityGroup ||
-        WearScreenId.availabilityProduct =>
+        WearScreenId.availabilityProduct ||
+        WearScreenId.voiceClarification =>
           CommandGrammarProfile.list,
         WearScreenId.availabilityDirectScan => CommandGrammarProfile.directScan,
         WearScreenId.homeConfirm => CommandGrammarProfile.confirmation,
@@ -309,6 +311,7 @@ class VoiceActionCatalog {
           WearScreenId.availabilityGroup,
           WearScreenId.availabilityProduct,
           WearScreenId.productSelect,
+          WearScreenId.voiceClarification,
         }),
     _action(WearVoiceCommand.previousPage, 'предыдущая страница',
         VoiceActivationPolicy.endpointOnly,
@@ -316,6 +319,7 @@ class VoiceActionCatalog {
           WearScreenId.availabilityGroup,
           WearScreenId.availabilityProduct,
           WearScreenId.productSelect,
+          WearScreenId.voiceClarification,
         },
         phrases: <String>{
           'предыдущая страница',
@@ -390,6 +394,7 @@ class VoiceActionCatalog {
     WearScreenId.availabilityGroup,
     WearScreenId.availabilityProduct,
     WearScreenId.productSelect,
+    WearScreenId.voiceClarification,
     WearScreenId.printerSelect,
     WearScreenId.continueScan,
     WearScreenId.help,
@@ -406,6 +411,7 @@ class VoiceActionCatalog {
     WearScreenId.availabilityGroup,
     WearScreenId.availabilityProduct,
     WearScreenId.productSelect,
+    WearScreenId.voiceClarification,
     WearScreenId.printerSelect,
     WearScreenId.availabilityDirectScan,
     WearScreenId.homeConfirm,

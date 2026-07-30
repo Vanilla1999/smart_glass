@@ -13,6 +13,7 @@ class WearFlowState {
     this.menuFocusedIndex = 0,
     this.printerFocusedIndex = 0,
     this.productFocusedIndex = 0,
+    this.voiceClarificationFocusedIndex = 0,
     this.availabilityInteractionFocusedIndex = 0,
     this.availabilityGroupFocusedIndex = 0,
     this.availabilityProductFocusedIndex = 0,
@@ -21,6 +22,8 @@ class WearFlowState {
     this.continueScanFocusedIndex = 0,
     this.currentPrinterSelection,
     this.currentProductSelectArgs,
+    this.currentVoiceClarificationArgs,
+    this.voiceClarificationNotice,
     this.currentAvailabilityGroup,
     this.currentAvailabilityProduct,
     this.currentStatusArgs,
@@ -40,6 +43,7 @@ class WearFlowState {
   final int menuFocusedIndex;
   final int printerFocusedIndex;
   final int productFocusedIndex;
+  final int voiceClarificationFocusedIndex;
   final int availabilityInteractionFocusedIndex;
   final int availabilityGroupFocusedIndex;
   final int availabilityProductFocusedIndex;
@@ -48,6 +52,8 @@ class WearFlowState {
   final int continueScanFocusedIndex;
   final Object? currentPrinterSelection;
   final Object? currentProductSelectArgs;
+  final Object? currentVoiceClarificationArgs;
+  final String? voiceClarificationNotice;
   final Object? currentAvailabilityGroup;
   final Object? currentAvailabilityProduct;
   final Object? currentStatusArgs;
@@ -65,6 +71,7 @@ class WearFlowState {
     int? menuFocusedIndex,
     int? printerFocusedIndex,
     int? productFocusedIndex,
+    int? voiceClarificationFocusedIndex,
     int? availabilityInteractionFocusedIndex,
     int? availabilityGroupFocusedIndex,
     int? availabilityProductFocusedIndex,
@@ -73,6 +80,10 @@ class WearFlowState {
     int? continueScanFocusedIndex,
     Object? currentPrinterSelection,
     Object? currentProductSelectArgs,
+    Object? currentVoiceClarificationArgs,
+    bool clearCurrentVoiceClarificationArgs = false,
+    String? voiceClarificationNotice,
+    bool clearVoiceClarificationNotice = false,
     Object? currentAvailabilityGroup,
     Object? currentAvailabilityProduct,
     Object? currentStatusArgs,
@@ -92,6 +103,8 @@ class WearFlowState {
       menuFocusedIndex: menuFocusedIndex ?? this.menuFocusedIndex,
       printerFocusedIndex: printerFocusedIndex ?? this.printerFocusedIndex,
       productFocusedIndex: productFocusedIndex ?? this.productFocusedIndex,
+      voiceClarificationFocusedIndex:
+          voiceClarificationFocusedIndex ?? this.voiceClarificationFocusedIndex,
       availabilityInteractionFocusedIndex:
           availabilityInteractionFocusedIndex ??
               this.availabilityInteractionFocusedIndex,
@@ -109,6 +122,12 @@ class WearFlowState {
           currentPrinterSelection ?? this.currentPrinterSelection,
       currentProductSelectArgs:
           currentProductSelectArgs ?? this.currentProductSelectArgs,
+      currentVoiceClarificationArgs: clearCurrentVoiceClarificationArgs
+          ? null
+          : currentVoiceClarificationArgs ?? this.currentVoiceClarificationArgs,
+      voiceClarificationNotice: clearVoiceClarificationNotice
+          ? null
+          : voiceClarificationNotice ?? this.voiceClarificationNotice,
       currentAvailabilityGroup:
           currentAvailabilityGroup ?? this.currentAvailabilityGroup,
       currentAvailabilityProduct:

@@ -56,6 +56,7 @@ class _WearAvailabilityProductScreenState
         onNextPage: _onVoiceNextPage,
         onPreviousPage: _onVoicePreviousPage,
         onPhrase: _onVoicePhrase,
+        onDynamicItem: _onVoiceDynamicItem,
         dynamicVoiceItems: _dynamicVoiceItems,
         onPartialPhrase: _onVoicePartialPhrase,
       ),
@@ -293,21 +294,41 @@ class _WearAvailabilityProductScreenState
         _showVoiceSearchMessage('Назовите точнее');
         break;
       case VoiceListMatchType.unique:
-        final WearAvailabilityProduct product = match.item!;
-        final int index = products.indexWhere((WearAvailabilityProduct item) {
-          return item.id == product.id;
-        });
-        if (index >= 0) {
-          _focusedIndex = index;
-          WearDependencies.I.wearFlowController
-              .setAvailabilityProductFocusedIndex(
-                  _focusedIndex, products.length);
-          _scrollToFocused();
-          _sendGlassesState(group, products, fast: true);
-        }
-        context.push(WearAvailabilityCheckScreen.route, extra: product);
+        _selectProduct(group, products, match.item!);
         break;
     }
+  }
+
+  void _onVoiceDynamicItem(String itemId) {
+    final WearAvailabilityGroup? group = widget.group;
+    if (group == null) return;
+    final List<WearAvailabilityProduct>? products =
+        ref.read(wearAvailabilityProductsProvider(group)).valueOrNull;
+    if (products == null) return;
+    for (final WearAvailabilityProduct product in products) {
+      if (product.id.toString() == itemId) {
+        _selectProduct(group, products, product);
+        return;
+      }
+    }
+  }
+
+  void _selectProduct(
+    WearAvailabilityGroup group,
+    List<WearAvailabilityProduct> products,
+    WearAvailabilityProduct product,
+  ) {
+    final int index = products.indexWhere((WearAvailabilityProduct item) {
+      return item.id == product.id;
+    });
+    if (index >= 0) {
+      _focusedIndex = index;
+      WearDependencies.I.wearFlowController
+          .setAvailabilityProductFocusedIndex(_focusedIndex, products.length);
+      _scrollToFocused();
+      _sendGlassesState(group, products, fast: true);
+    }
+    context.push(WearAvailabilityCheckScreen.route, extra: product);
   }
 
   bool _onVoicePartialPhrase(String phrase) {

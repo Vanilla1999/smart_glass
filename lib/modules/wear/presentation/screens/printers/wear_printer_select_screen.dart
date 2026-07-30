@@ -62,6 +62,7 @@ class _WearPrinterSelectScreenState
         onNextPage: _onVoiceNextPage,
         onPreviousPage: _onVoicePreviousPage,
         onPhrase: _onVoicePhrase,
+        onDynamicItem: _onVoiceDynamicItem,
         dynamicVoiceItems: _dynamicVoiceItems,
         onPartialPhrase: _onVoicePartialPhrase,
       ),
@@ -342,6 +343,30 @@ class _WearPrinterSelectScreenState
           _openScanScreen(context, updated);
         }
         break;
+    }
+  }
+
+  void _onVoiceDynamicItem(String itemId) {
+    final WearPrinterSelectState state =
+        ref.read(wearPrinterSelectNotifierProvider);
+    if (state.isLoading) return;
+    final List<WearPrinter> printers = _visiblePrinters(state);
+    for (final WearPrinter printer in printers) {
+      if (printer.id != itemId) continue;
+      final int index = printers.indexOf(printer);
+      if (index >= 0) {
+        _focusedIndex = index;
+        _scrollToFocused();
+      }
+      ref
+          .read(wearPrinterSelectNotifierProvider.notifier)
+          .selectPrinter(printer);
+      final WearPrinterSelectState updated =
+          ref.read(wearPrinterSelectNotifierProvider);
+      if (updated.whitePrinter != null && updated.yellowPrinter != null) {
+        _openScanScreen(context, updated);
+      }
+      return;
     }
   }
 

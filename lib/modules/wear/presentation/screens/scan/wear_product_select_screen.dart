@@ -59,6 +59,7 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
         onNextPage: _onVoiceNextPage,
         onPreviousPage: _onVoicePreviousPage,
         onPhrase: _onVoicePhrase,
+        onDynamicItem: _onVoiceDynamicItem,
         dynamicVoiceItems: _dynamicVoiceItems,
         onPartialPhrase: _onVoicePartialPhrase,
       ),
@@ -221,6 +222,22 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
         }
         context.pop(product);
         break;
+    }
+  }
+
+  void _onVoiceDynamicItem(String itemId) {
+    final List<BarcodeProductInfo> products =
+        widget.args?.products ?? <BarcodeProductInfo>[];
+    for (final BarcodeProductInfo product in products) {
+      if (product.id.toString() != itemId) continue;
+      final int index = products.indexOf(product);
+      if (index >= 0) {
+        _focusedIndex = index;
+        _scrollToFocused();
+        _sendGlassesFocus();
+      }
+      context.pop(product);
+      return;
     }
   }
 

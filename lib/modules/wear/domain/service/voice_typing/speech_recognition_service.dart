@@ -1602,7 +1602,8 @@ class SpeechRecognitionService {
         commandUtteranceId: commandUtteranceId,
         resultContext: context,
       );
-    } else if (decision.kind == VoiceDecisionKind.dynamicItem) {
+    } else if (decision.kind == VoiceDecisionKind.dynamicItem ||
+        decision.kind == VoiceDecisionKind.ambiguousRejected) {
       _emitResult(
         _RecognitionSource.freeText,
         freeText,

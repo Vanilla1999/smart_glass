@@ -89,6 +89,44 @@ void main() {
     expect(service.metricsSnapshot.speechToPhrase.p50, greaterThanOrEqualTo(5));
   });
 
+  test('ambiguous free text is published for clarification', () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpoints.add(true)
+      ..results.add(_json(text: 'не команда'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finals.addAll(<String>[
+        _json(),
+        _json(text: 'коровка из кореновки'),
+      ]);
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeText: freeText,
+      dynamicItems: const VoiceDynamicItemsSnapshot(
+        revision: 2,
+        items: <VoiceDynamicItem>[
+          VoiceDynamicItem(
+            id: '1',
+            label: 'Коровка из Кореновки пломбир',
+          ),
+          VoiceDynamicItem(
+            id: '2',
+            label: 'Коровка из Кореновки стакан',
+          ),
+        ],
+      ),
+    );
+    addTearDown(service.dispose);
+    await _start(service);
+    final Future<SegmentedRecognitionResult> phrase = service
+        .segmentedResultsStream
+        .firstWhere((event) => event.lane == RecognitionLane.freeText);
+
+    await _processUtterance(service);
+    await service.waitForProcessing();
+
+    expect((await phrase).text, 'коровка из кореновки');
+  });
+
   test('T10 command and free-text conflict publishes neither result', () async {
     final _FakeRecognizer command = _FakeRecognizer()
       ..endpoints.add(true)
@@ -245,20 +283,20 @@ SpeechRecognitionService _service({
   required _FakeRecognizer command,
   required _FakeRecognizer freeText,
   int backlogBytes = 64000,
+  VoiceDynamicItemsSnapshot dynamicItems = const VoiceDynamicItemsSnapshot(
+    revision: 1,
+    items: <VoiceDynamicItem>[
+      VoiceDynamicItem(id: "yellow", label: "жёлтый"),
+      VoiceDynamicItem(id: "mobile", label: "мобильный"),
+    ],
+  ),
 }) {
   return SpeechRecognitionService(
     commandGrammar: const <String>['вверх', 'вниз', 'выбрать', '[unk]'],
     freeTextPipelineMode: FreeTextPipelineMode.liveWithReplayFallback,
     freeTextBacklogLimitBytes: backlogBytes,
     speechSegmenter: SpeechSegmenter(calibrationDuration: Duration.zero),
-    dynamicItemsProvider: (WearScreenId screen) =>
-        const VoiceDynamicItemsSnapshot(
-      revision: 1,
-      items: <VoiceDynamicItem>[
-        VoiceDynamicItem(id: "yellow", label: "жёлтый"),
-        VoiceDynamicItem(id: "mobile", label: "мобильный"),
-      ],
-    ),
+    dynamicItemsProvider: (WearScreenId screen) => dynamicItems,
     recognizerFactory: (RecognitionLane lane, List<String> grammar) async {
       return lane == RecognitionLane.command ? command : freeText;
     },

@@ -5,6 +5,8 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart
 import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
+import 'package:smart_glasses/modules/wear/application/voice_clarification_args.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 
@@ -1324,6 +1326,239 @@ void main() {
 
       expect(selectCalls, 1);
     });
+    test('opens clarification with only ambiguous dynamic matches', () async {
+      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: navigation,
+      );
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.availabilityProduct);
+      controller.registerScreenActions(
+        WearScreenId.availabilityProduct,
+        WearScreenActionHandler(
+          dynamicVoiceItems: () => const VoiceDynamicItemsSnapshot(
+            revision: 1,
+            items: <VoiceDynamicItem>[
+              VoiceDynamicItem(id: '1', label: 'Коровка из Кореновки пломбир'),
+              VoiceDynamicItem(id: '2', label: 'Коровка из Кореновки стакан'),
+              VoiceDynamicItem(id: '3', label: 'Другой товар'),
+            ],
+          ),
+        ),
+      );
+
+      await controller.handleVoicePhrase('коровка из кореновки');
+
+      expect(navigation.goToCalls, <WearScreenId>[
+        WearScreenId.voiceClarification,
+      ]);
+      final VoiceClarificationArgs args =
+          navigation.goToExtras.single! as VoiceClarificationArgs;
+      expect(args.sourceScreen, WearScreenId.availabilityProduct);
+      expect(args.matches.map((VoiceDynamicItem item) => item.id), <String>[
+        '1',
+        '2',
+      ]);
+    });
+
+    test('clarification selection returns and invokes source item by id',
+        () async {
+      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: navigation,
+      );
+      String? selectedId;
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.registerScreenActions(
+        WearScreenId.availabilityProduct,
+        WearScreenActionHandler(
+          onDynamicItem: (String itemId) => selectedId = itemId,
+        ),
+      );
+      const VoiceClarificationArgs args = VoiceClarificationArgs(
+        sourceScreen: WearScreenId.availabilityProduct,
+        phrase: 'коровка из кореновки',
+        matches: <VoiceDynamicItem>[
+          VoiceDynamicItem(id: '1', label: 'Коровка из Кореновки пломбир'),
+          VoiceDynamicItem(id: '2', label: 'Коровка из Кореновки стакан'),
+        ],
+      );
+      controller.enterScreen(WearScreenId.voiceClarification, extra: args);
+
+      await controller.selectVoiceClarificationItem(args, '2');
+
+      expect(navigation.backCalls, 1);
+      expect(controller.state.screen, WearScreenId.availabilityProduct);
+      expect(selectedId, '2');
+    });
+
+    test('does not leave clarification when selected item became stale',
+        () async {
+      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: navigation,
+      );
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.registerScreenActions(
+        WearScreenId.availabilityProduct,
+        WearScreenActionHandler(
+          onDynamicItem: (String itemId) {},
+          dynamicVoiceItems: () => const VoiceDynamicItemsSnapshot(
+            revision: 2,
+            items: <VoiceDynamicItem>[
+              VoiceDynamicItem(id: '1', label: 'Первый товар'),
+            ],
+          ),
+        ),
+      );
+      const VoiceClarificationArgs args = VoiceClarificationArgs(
+        sourceScreen: WearScreenId.availabilityProduct,
+        phrase: 'товар',
+        matches: <VoiceDynamicItem>[
+          VoiceDynamicItem(id: '2', label: 'Исчезнувший товар'),
+        ],
+      );
+      controller.enterScreen(WearScreenId.voiceClarification, extra: args);
+
+      final bool selected =
+          await controller.selectVoiceClarificationItem(args, '2');
+
+      expect(selected, isFalse);
+      expect(navigation.backCalls, 0);
+      expect(controller.state.screen, WearScreenId.voiceClarification);
+    });
+
+    test('ignores a repeated clarification selection in flight', () async {
+      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: navigation,
+      );
+      int selectCalls = 0;
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.registerScreenActions(
+        WearScreenId.availabilityProduct,
+        WearScreenActionHandler(
+          onDynamicItem: (String itemId) async {
+            selectCalls++;
+            await Future<void>.delayed(const Duration(milliseconds: 10));
+          },
+          dynamicVoiceItems: () => const VoiceDynamicItemsSnapshot(
+            revision: 1,
+            items: <VoiceDynamicItem>[
+              VoiceDynamicItem(id: '2', label: 'Второй товар'),
+            ],
+          ),
+        ),
+      );
+      const VoiceClarificationArgs args = VoiceClarificationArgs(
+        sourceScreen: WearScreenId.availabilityProduct,
+        phrase: 'товар',
+        matches: <VoiceDynamicItem>[
+          VoiceDynamicItem(id: '2', label: 'Второй товар'),
+        ],
+      );
+      controller.enterScreen(WearScreenId.voiceClarification, extra: args);
+
+      final Future<bool> first =
+          controller.selectVoiceClarificationItem(args, '2');
+      await Future<void>.delayed(Duration.zero);
+      final bool second =
+          await controller.selectVoiceClarificationItem(args, '2');
+
+      expect(second, isFalse);
+      expect(await first, isTrue);
+      expect(selectCalls, 1);
+      expect(navigation.backCalls, 1);
+    });
+
+    test('keeps refined clarification after cancelling home confirmation', () {
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      const VoiceClarificationArgs root = VoiceClarificationArgs(
+        sourceScreen: WearScreenId.availabilityProduct,
+        phrase: 'коровка',
+        matches: <VoiceDynamicItem>[
+          VoiceDynamicItem(id: '1', label: 'Коровка пломбир'),
+          VoiceDynamicItem(id: '2', label: 'Коровка стакан'),
+          VoiceDynamicItem(id: '3', label: 'Коровка эскимо'),
+        ],
+      );
+      const VoiceClarificationArgs refined = VoiceClarificationArgs(
+        sourceScreen: WearScreenId.availabilityProduct,
+        phrase: 'пломбир',
+        matches: <VoiceDynamicItem>[
+          VoiceDynamicItem(id: '1', label: 'Коровка пломбир'),
+          VoiceDynamicItem(id: '2', label: 'Коровка стакан'),
+        ],
+        previous: root,
+      );
+      controller.enterScreen(
+        WearScreenId.voiceClarification,
+        extra: refined,
+      );
+      controller.setVoiceClarificationFocusedIndex(1, 2);
+
+      controller.enterScreen(WearScreenId.homeConfirm);
+      controller.enterScreen(
+        WearScreenId.voiceClarification,
+        extra: root,
+      );
+
+      expect(controller.state.currentVoiceClarificationArgs, same(refined));
+      expect(controller.state.voiceClarificationFocusedIndex, 1);
+    });
+
+    test('shows clarification notice without replacing matches', () async {
+      final _FakeGlassesOutput glasses = _FakeGlassesOutput();
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: glasses,
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      const VoiceClarificationArgs args = VoiceClarificationArgs(
+        sourceScreen: WearScreenId.availabilityProduct,
+        phrase: 'коровка',
+        matches: <VoiceDynamicItem>[
+          VoiceDynamicItem(id: '1', label: 'Коровка пломбир'),
+          VoiceDynamicItem(id: '2', label: 'Коровка стакан'),
+        ],
+      );
+      controller.enterScreen(WearScreenId.voiceClarification, extra: args);
+
+      controller.setVoiceClarificationNotice('Назовите точнее');
+      await controller.renderCurrentGlasses();
+
+      expect(glasses.payloads.last.statusText, 'Назовите точнее');
+      expect(glasses.payloads.last.items, <String>[
+        'Коровка пломбир',
+        'Коровка стакан',
+      ]);
+
+      controller.setVoiceClarificationNotice(null);
+      expect(controller.state.voiceClarificationNotice, isNull);
+    });
+
+    test('clears clarification arguments after leaving the flow', () {
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      const VoiceClarificationArgs args = VoiceClarificationArgs(
+        sourceScreen: WearScreenId.availabilityProduct,
+        phrase: 'товар',
+        matches: <VoiceDynamicItem>[],
+      );
+      controller.enterScreen(WearScreenId.voiceClarification, extra: args);
+
+      controller.enterScreen(WearScreenId.menu);
+
+      expect(controller.state.currentVoiceClarificationArgs, isNull);
+    });
   });
 }
 
@@ -1363,12 +1598,14 @@ class _BlockingGlassesOutput implements WearGlassesOutput {
 
 class _FakeNavigationOutput implements WearNavigationOutput {
   final List<WearScreenId> goToCalls = <WearScreenId>[];
+  final List<Object?> goToExtras = <Object?>[];
   int backCalls = 0;
   int homeCalls = 0;
 
   @override
   Future<void> goTo(WearScreenId screen, {Object? extra}) async {
     goToCalls.add(screen);
+    goToExtras.add(extra);
   }
 
   @override
