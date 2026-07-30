@@ -6,6 +6,7 @@ import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_group.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availability_glasses_payloads.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/availability/cubit/wear_availability_list_providers.dart';
@@ -48,6 +49,7 @@ class _WearAvailabilityGroupScreenState
         onNextPage: _onVoiceNextPage,
         onPreviousPage: _onVoicePreviousPage,
         onPhrase: _onVoicePhrase,
+        dynamicVoiceItems: _dynamicVoiceItems,
         onPartialPhrase: _onVoicePartialPhrase,
       ),
     );
@@ -211,6 +213,24 @@ class _WearAvailabilityGroupScreenState
     _focusedIndex = previousIndex.clamp(0, groups.length - 1);
     _scrollToFocused();
     _sendGlassesState(groups, fast: true);
+  }
+
+  VoiceDynamicItemsSnapshot _dynamicVoiceItems() {
+    final List<WearAvailabilityGroup> groups =
+        ref.read(wearAvailabilityGroupsProvider).valueOrNull ??
+            <WearAvailabilityGroup>[];
+    final List<VoiceDynamicItem> items = groups
+        .map((WearAvailabilityGroup item) => VoiceDynamicItem(
+              id: item.id.toString(),
+              label: item.name,
+            ))
+        .toList(growable: false);
+    return VoiceDynamicItemsSnapshot(
+      revision: Object.hashAll(
+        items.map((VoiceDynamicItem item) => Object.hash(item.id, item.label)),
+      ),
+      items: items,
+    );
   }
 
   void _onVoicePhrase(String phrase) {

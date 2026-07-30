@@ -40,27 +40,24 @@ The previously referenced temporary file
 `/tmp/opencode/t2151_post_sequence.log` is no longer present. Use the committed
 raw evidence above for reproducible analysis.
 
-## Current Behavior
+## Patched Policy
 
-The menu catalog currently configures:
+Production command activation is now restricted to:
 
 ```text
-вверх           immediateExactPartial
-вниз            immediateExactPartial
-доступность     stableExactPartial
-справка         stableExactPartial
-настройки       stableExactPartial
-печать ценников endpointOnly
+вверх/вниз                   immediateExactPartial
+all other production actions endpointOnly
 ```
 
-Code locations:
+No production `VoiceActionEntry` uses `stableExactPartial`. Catalog validation
+has an explicit closed allowlist containing only `up` and `down`; any other
+partial activation policy fails with `ArgumentError` in tests and debug runs.
+Ignored endpoint-only partials remain visible once per utterance/text in the
+diagnostic log:
 
-- `lib/modules/wear/domain/service/voice_command/voice_action_catalog.dart:248`
-- `lib/modules/wear/domain/service/voice_command/recognition_arbiter.dart:69`
-- `lib/modules/wear/domain/service/voice_command/wear_voice_control_service.dart:79`
-
-For `stableExactPartial`, the application executes a command after the same
-partial remains unchanged for 150 ms. It does not wait for a Vosk endpoint.
+```text
+[VOICE_POLICY] ... kind=partial ... policy=endpointOnly decision=ignored_until_endpoint
+```
 
 ## Problem
 
@@ -83,27 +80,17 @@ rejects unknown text, but if Vosk has already converted unknown or incomplete
 audio into the exact text `доступность`, the catalog has no access to the
 original spoken phrase.
 
-## Minimal Solution Without Double Recognition
+## Implemented Minimal Solution
 
 Keep one screen-scoped constrained recognizer and the existing registered
 command grammar. Change commands that navigate or mutate state from
 `stableExactPartial` to `endpointOnly`.
 
-Recommended policy:
+Implemented policy:
 
 ```text
-up/down and other reversible focus movement -> immediateExactPartial
-navigation and state changes               -> endpointOnly
-destructive actions                         -> endpointOnly plus confirmation
-```
-
-For the menu this means at least:
-
-```text
-доступность -> endpointOnly
-справка     -> endpointOnly
-настройки   -> endpointOnly
-назад       -> endpointOnly
+up/down                      -> immediateExactPartial
+all other production actions -> endpointOnly
 ```
 
 This directly prevents the logged failure mode because `openAvailability` can
@@ -112,26 +99,15 @@ not replay audio and does not add a second recognizer.
 
 ## Limitation of the Minimal Solution
 
-An endpoint result can still be a false positive. One constrained recognizer
+An endpoint result can still be a false positive. The T2151 hardware log already
+contains a false `streamFinal` value of `выбрать` that executed `select`. One constrained recognizer
 cannot guarantee that out-of-grammar speech will become `[unk]`; it may finalize
 the nearest permitted command. The minimal solution protects against premature
 partial execution, not every possible false command.
 
-If endpoint-only behavior still produces unacceptable false activations on the
-T2151 negative corpus, then add a second-stage verifier using the retained
-utterance PCM. Do not add that complexity before measuring endpoint-only false
-activation rate.
-
-## Questions for Review
-
-1. Is endpoint-only execution for all route and state-changing commands the
-   correct first fix?
-2. Are there any commands besides `up` and `down` whose partial execution is
-   both necessary and safely reversible?
-3. What endpoint latency is acceptable on T2151?
-4. What negative corpus and false-activation target should gate release?
-5. Should a second unconstrained replay be added only if endpoint-only testing
-   fails the target?
+Second-stage acoustic verification, phrase hardening, and speaker gating are
+outside this patch. Measure the endpoint-only false activation rate before
+choosing a follow-up.
 
 ## Verification Required
 
@@ -152,4 +128,5 @@ false activation rate = unintended executed commands / negative utterances
 
 Acceptance must verify that no route-changing command is emitted with
 `source=stable_partial` and that known endpoint-only commands still execute once
-per utterance.
+per utterance. Hardware status remains `DEVICE_PENDING` until this patched build
+is rerun on a physical T2151. False endpoint commands must be counted separately.

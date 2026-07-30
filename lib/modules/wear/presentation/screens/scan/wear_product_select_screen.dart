@@ -4,6 +4,7 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
@@ -58,6 +59,7 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
         onNextPage: _onVoiceNextPage,
         onPreviousPage: _onVoicePreviousPage,
         onPhrase: _onVoicePhrase,
+        dynamicVoiceItems: _dynamicVoiceItems,
         onPartialPhrase: _onVoicePartialPhrase,
       ),
     );
@@ -174,6 +176,23 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
     _focusedIndex = previousIndex.clamp(0, products.length - 1);
     _scrollToFocused();
     _sendGlassesFocus();
+  }
+
+  VoiceDynamicItemsSnapshot _dynamicVoiceItems() {
+    final List<BarcodeProductInfo> products =
+        widget.args?.products ?? <BarcodeProductInfo>[];
+    final List<VoiceDynamicItem> items = products
+        .map((BarcodeProductInfo item) => VoiceDynamicItem(
+              id: item.id.toString(),
+              label: item.name,
+            ))
+        .toList(growable: false);
+    return VoiceDynamicItemsSnapshot(
+      revision: Object.hashAll(
+        items.map((VoiceDynamicItem item) => Object.hash(item.id, item.label)),
+      ),
+      items: items,
+    );
   }
 
   void _onVoicePhrase(String phrase) {

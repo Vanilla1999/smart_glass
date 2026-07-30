@@ -195,6 +195,10 @@ class VoiceActionCatalog {
       resolvePartial(screen, text)?.command;
 
   void validate() {
+    const Set<WearVoiceCommand> partialActivationAllowlist = <WearVoiceCommand>{
+      WearVoiceCommand.up,
+      WearVoiceCommand.down,
+    };
     const Set<String> unsafeGlobalAliases = <String>{
       'не',
       'есть',
@@ -202,6 +206,15 @@ class VoiceActionCatalog {
       'выход',
       'готово',
     };
+    for (final VoiceActionEntry action in actions) {
+      if (action.activationPolicy != VoiceActivationPolicy.endpointOnly &&
+          !partialActivationAllowlist.contains(action.command)) {
+        throw ArgumentError(
+          'Voice command ${action.command} is not allowed to execute from '
+          'a partial result',
+        );
+      }
+    }
     for (final WearScreenId screen in WearScreenId.values) {
       final Map<String, WearVoiceCommand> aliases =
           <String, WearVoiceCommand>{};
@@ -255,11 +268,9 @@ class VoiceActionCatalog {
     _action(
         WearVoiceCommand.select, 'выбрать', VoiceActivationPolicy.endpointOnly,
         screens: _selectableScreens),
-    _action(WearVoiceCommand.back, 'назад',
-        VoiceActivationPolicy.stableExactPartial,
+    _action(WearVoiceCommand.back, 'назад', VoiceActivationPolicy.endpointOnly,
         screens: _backScreens, aliases: <String>{'назад'}),
-    _action(WearVoiceCommand.home, 'домой',
-        VoiceActivationPolicy.stableExactPartial,
+    _action(WearVoiceCommand.home, 'домой', VoiceActivationPolicy.endpointOnly,
         screens: <WearScreenId>{
           WearScreenId.availabilityInteraction,
           WearScreenId.availabilityGroup,
@@ -271,24 +282,24 @@ class VoiceActionCatalog {
         screens: <WearScreenId>{WearScreenId.menu},
         phrases: <String>{'печать', 'печать ценника', 'печать ценников'}),
     _action(WearVoiceCommand.openAvailability, 'доступность',
-        VoiceActivationPolicy.stableExactPartial,
+        VoiceActivationPolicy.endpointOnly,
         screens: <WearScreenId>{WearScreenId.menu},
         aliases: <String>{'доступность'}),
     _action(WearVoiceCommand.openHelp, 'справка',
-        VoiceActivationPolicy.stableExactPartial,
+        VoiceActivationPolicy.endpointOnly,
         screens: <WearScreenId>{WearScreenId.menu},
         aliases: <String>{'справка'}),
     _action(WearVoiceCommand.openSettings, 'настройки',
-        VoiceActivationPolicy.stableExactPartial,
+        VoiceActivationPolicy.endpointOnly,
         screens: <WearScreenId>{WearScreenId.menu},
         aliases: <String>{'настройки'}),
     _action(WearVoiceCommand.openList, 'список товаров',
-        VoiceActivationPolicy.stableExactPartial,
+        VoiceActivationPolicy.endpointOnly,
         screens: <WearScreenId>{WearScreenId.availabilityInteraction},
         phrases: <String>{'список', 'список товаров'},
         aliases: <String>{'список'}),
     _action(WearVoiceCommand.openDirectScan, 'прямое сканирование',
-        VoiceActivationPolicy.stableExactPartial,
+        VoiceActivationPolicy.endpointOnly,
         screens: <WearScreenId>{WearScreenId.availabilityInteraction},
         phrases: <String>{'прямое', 'прямое сканирование'},
         aliases: <String>{'прямое'}),
@@ -311,7 +322,7 @@ class VoiceActionCatalog {
           'прошлая страница'
         }),
     _action(WearVoiceCommand.flashlight, 'фонарик',
-        VoiceActivationPolicy.stableExactPartial,
+        VoiceActivationPolicy.endpointOnly,
         screens: <WearScreenId>{WearScreenId.availabilityDirectScan},
         aliases: <String>{'фонарик'}),
     _action(WearVoiceCommand.takePhoto, 'сделать фото',

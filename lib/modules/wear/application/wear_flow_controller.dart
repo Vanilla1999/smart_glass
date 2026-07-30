@@ -9,12 +9,14 @@ import 'package:smart_glasses/modules/wear/application/wear_navigation_request.d
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availability_glasses_payloads.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 
 typedef WearFlowAction = FutureOr<void> Function();
 typedef WearFlowPhraseAction = FutureOr<void> Function(String phrase);
 typedef WearFlowPartialPhraseAction = FutureOr<bool> Function(String phrase);
+typedef WearDynamicVoiceItems = VoiceDynamicItemsSnapshot Function();
 typedef WearFlashlightToggle = Future<void> Function();
 typedef WearPhotoCapture = Future<void> Function();
 
@@ -44,6 +46,7 @@ class WearScreenActionHandler {
     this.onFinish,
     this.onPhrase,
     this.onPartialPhrase,
+    this.dynamicVoiceItems,
   });
 
   final WearFlowAction? onUp;
@@ -70,6 +73,7 @@ class WearScreenActionHandler {
   final WearFlowAction? onFinish;
   final WearFlowPhraseAction? onPhrase;
   final WearFlowPartialPhraseAction? onPartialPhrase;
+  final WearDynamicVoiceItems? dynamicVoiceItems;
 }
 
 class WearFlowController {
@@ -112,6 +116,11 @@ class WearFlowController {
   Stream<WearFlowState> get stateStream => _stateController.stream;
   Stream<WearScreenId> get screenActionsChanged =>
       _screenActionsController.stream;
+
+  VoiceDynamicItemsSnapshot dynamicVoiceItemsFor(WearScreenId screen) {
+    return _screenActions[screen]?.dynamicVoiceItems?.call() ??
+        VoiceDynamicItemsSnapshot.empty;
+  }
 
   void setGlassesOutput(WearGlassesOutput output) {
     _glassesOutput = output;

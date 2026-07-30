@@ -6,6 +6,7 @@ import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
@@ -61,6 +62,7 @@ class _WearPrinterSelectScreenState
         onNextPage: _onVoiceNextPage,
         onPreviousPage: _onVoicePreviousPage,
         onPhrase: _onVoicePhrase,
+        dynamicVoiceItems: _dynamicVoiceItems,
         onPartialPhrase: _onVoicePartialPhrase,
       ),
     );
@@ -288,6 +290,21 @@ class _WearPrinterSelectScreenState
     _focusedIndex = previousIndex.clamp(0, printers.length - 1);
     _scrollToFocused();
     _sendGlassesState(ref.read(wearPrinterSelectNotifierProvider), fast: true);
+  }
+
+  VoiceDynamicItemsSnapshot _dynamicVoiceItems() {
+    final WearPrinterSelectState state =
+        ref.read(wearPrinterSelectNotifierProvider);
+    final List<VoiceDynamicItem> items = _visiblePrinters(state)
+        .map((WearPrinter item) =>
+            VoiceDynamicItem(id: item.id, label: item.name))
+        .toList(growable: false);
+    return VoiceDynamicItemsSnapshot(
+      revision: Object.hashAll(
+        items.map((VoiceDynamicItem item) => Object.hash(item.id, item.label)),
+      ),
+      items: items,
+    );
   }
 
   void _onVoicePhrase(String phrase) {

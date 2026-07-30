@@ -14,11 +14,13 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voi
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/free_text_pipeline_mode.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_typing_service.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_glasses_output.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/services/wear_photo_store.dart';
 import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 // На следующих этапах пригодится, поэтому можно сразу оставить импорты
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/use_case/get_available_printers_use_case.dart';
@@ -73,6 +75,10 @@ class WearDependencies {
       audioStreamService: audioStreamService,
       commandGrammar: voiceActionCatalog.grammarFor(WearScreenId.menu),
       actionCatalog: voiceActionCatalog,
+      dynamicItemsProvider: wearFlowController.dynamicVoiceItemsFor,
+      freeTextPipelineMode: FreeTextPipelineMode.parse(
+        dotenv.env['WEAR_FREE_TEXT_PIPELINE_MODE'],
+      ),
     );
     voiceControlService = WearVoiceControlService(
       speechRecognitionService: speechRecognitionService,

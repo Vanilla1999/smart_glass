@@ -31,6 +31,7 @@ class WearVoiceControlService {
           routeRevisionProvider: () => speechRecognitionService.routeRevision,
           grammarRevisionProvider: () =>
               speechRecognitionService.grammarRevision,
+          freeTextEpochProvider: () => speechRecognitionService.freeTextEpoch,
         ),
         _clock = clock ?? (() => DateTime.now().millisecondsSinceEpoch),
         _timerFactory = timerFactory ?? Timer.new {
@@ -93,6 +94,8 @@ class WearVoiceControlService {
     final String timerKey = '${result.captureEpoch}:'
         '${result.commandUtteranceId}:${result.routeRevision}:'
         '${result.grammarRevision}';
+    final RecognitionArbitration? outcome = _arbiter.accept(result);
+    if (outcome?.ignoredEndpointOnly ?? false) return;
     if (result.kind == RecognitionKind.partial) {
       _stabilityTimers.remove(timerKey)?.cancel();
       _latestPartialRevisions[timerKey] = result.partialRevision;
@@ -103,7 +106,6 @@ class WearVoiceControlService {
       _stabilityTimers.remove(timerKey)?.cancel();
       _latestPartialRevisions.remove(timerKey);
     }
-    final RecognitionArbitration? outcome = _arbiter.accept(result);
     if (outcome == null) return;
     if (outcome.stableCandidate
         case final SegmentedRecognitionResult candidate) {

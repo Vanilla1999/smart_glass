@@ -18,6 +18,8 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voi
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
 import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_glasses_state.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_recognition_metrics.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/free_text_pipeline_mode.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_device_profile.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
 import 'package:smart_glasses/modules/wear/application/ports/wear_glasses_output.dart';
@@ -356,7 +358,7 @@ void main() {
       expect(flowController.state.menuFocusedIndex, 1);
     });
 
-    test('stable direct-scan alias navigates before the segment closes',
+    test('endpoint-only direct-scan alias waits for the segment result',
         () async {
       final _ManualTimerScheduler timers = _ManualTimerScheduler();
       final _FakeSpeechRecognitionService speech =
@@ -376,26 +378,26 @@ void main() {
 
       speech.emitCommandPartial('прямое');
       await Future<void>.delayed(Duration.zero);
-      timers.elapse(const Duration(milliseconds: 150));
+      timers.elapse(const Duration(milliseconds: 1000));
       await Future<void>.delayed(Duration.zero);
 
-      expect(flowController.state.screen, WearScreenId.availabilityDirectScan);
+      expect(flowController.state.screen, WearScreenId.availabilityInteraction);
+      expect(voiceControl.debugRetainedPartialRevisionCount, 0);
 
       speech.emitCommandResult('прямое сканирование');
-      speech.endSegment();
       await Future<void>.delayed(Duration.zero);
 
       expect(flowController.state.screen, WearScreenId.availabilityDirectScan);
     });
 
-    test('stable partial is cancelled when Vosk clears the hypothesis',
+    test('accessibility partial retains no state past old stable delay',
         () async {
       final _ManualTimerScheduler timers = _ManualTimerScheduler();
       final _FakeSpeechRecognitionService speech =
-          _FakeSpeechRecognitionService(WearScreenId.help);
+          _FakeSpeechRecognitionService();
       final WearVoiceControlService voiceControl = WearVoiceControlService(
         speechRecognitionService: speech,
-        screenProvider: () => WearScreenId.help,
+        screenProvider: () => WearScreenId.menu,
         timerFactory: timers.schedule,
       );
       addTearDown(voiceControl.dispose);
@@ -403,14 +405,18 @@ void main() {
       final List<WearVoiceCommand> commands = <WearVoiceCommand>[];
       voiceControl.commandStream.listen(commands.add);
 
-      speech.emitCommandPartial('назад');
+      speech.emitCommandPartial('доступность');
       await Future<void>.delayed(Duration.zero);
-      speech.emitCommandPartial('');
-      await Future<void>.delayed(Duration.zero);
-      timers.elapse(const Duration(milliseconds: 150));
+      timers.elapse(const Duration(milliseconds: 1000));
       await Future<void>.delayed(Duration.zero);
 
       expect(commands, isEmpty);
+      expect(voiceControl.debugRetainedPartialRevisionCount, 0);
+
+      speech.emitCommandResult('вверх');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(commands, <WearVoiceCommand>[WearVoiceCommand.up]);
     });
 
     test('control-service partial revision state remains bounded', () async {
@@ -1586,6 +1592,33 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
 
   @override
   final WearScreenId sourceScreen;
+
+  @override
+  FreeTextPipelineMode get freeTextPipelineMode =>
+      FreeTextPipelineMode.replayOnly;
+
+  @override
+  int get freeTextEpoch => 0;
+
+  @override
+  VoiceRecognitionMetricsSnapshot get metricsSnapshot =>
+      const VoiceRecognitionMetricsSnapshot(
+        commandQueueDelay: VoiceMetricPercentiles(p50: 0, p95: 0, p99: 0),
+        freeTextQueueDelay: VoiceMetricPercentiles(p50: 0, p95: 0, p99: 0),
+        freeTextAudioLag: VoiceMetricPercentiles(p50: 0, p95: 0, p99: 0),
+        liveFreeTextRtf: 0,
+        replayFallbackCount: 0,
+        replayFallbackReasons: <String, int>{},
+        conflictCount: 0,
+        staleResultCount: 0,
+        freeTextDroppedFrames: 0,
+      );
+
+  @override
+  int get replayFallbackCount => 0;
+
+  @override
+  int get conflictCount => 0;
   final StreamController<SegmentedRecognitionResult>
       _segmentedResultsController =
       StreamController<SegmentedRecognitionResult>.broadcast();

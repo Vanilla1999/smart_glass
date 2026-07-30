@@ -125,6 +125,7 @@ void _applyDefaultEnvValues() {
     'WEAR_MOCK_AUTH_ON_LOGO': 'false',
     'WEAR_MOCK_SKIP_AUTH_ON_LOGO': 'false',
     'WEAR_SKIP_SCANNER_CONNECT_SCREEN': 'false',
+    'WEAR_FREE_TEXT_PIPELINE_MODE': 'replayOnly',
   };
 
   defaults.forEach((String key, String value) {

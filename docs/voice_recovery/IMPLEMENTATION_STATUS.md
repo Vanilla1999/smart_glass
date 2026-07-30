@@ -29,8 +29,10 @@ Implementation rules now enforced:
 - Grammar changes commit route and grammar revisions only after successful
   bounded `reset`/`setGrammar`; timeout recovery configures a replacement with
   the requested target grammar before committing revisions.
-- Stable partial execution uses a 150 ms timer with an explicit
-  `partialRevision` guard. Tests advance an injected manual clock.
+- Only `up` and `down` execute from exact partials. Every other production
+  command is endpoint-only, and catalog validation rejects any partial policy
+  outside that explicit allowlist. No production action uses the existing
+  stable-partial timer.
 - Typed commands are revalidated against screen, route revision, and grammar
   revision immediately before UI execution.
 - Typed free-text phrases receive the same consumer-side context validation.
@@ -73,6 +75,12 @@ Implementation rules now enforced:
 
 ## Remaining External Validation
 
+- `DEVICE_PENDING`: rerun the partial-policy safety matrix on a clean release
+  build from a physical T2151. Verify zero route-changing
+  `source=stable_partial` emissions and count false endpoint commands separately.
+- A false `streamFinal="выбрать"` has already been observed. This policy patch
+  does not correct false endpoint recognition. Acoustic verification, phrase
+  hardening, and speaker gating remain separate follow-up work.
 - Replay a committed real WAV/UAC PCM corpus.
 - Run the documented T2151 noise and false-command matrix.
 - Measure command and grammar-switch p50/p95 on T2151.

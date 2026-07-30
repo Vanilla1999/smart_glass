@@ -7,6 +7,7 @@ import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_group.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availability_glasses_payloads.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/availability/cubit/wear_availability_list_providers.dart';
@@ -55,6 +56,7 @@ class _WearAvailabilityProductScreenState
         onNextPage: _onVoiceNextPage,
         onPreviousPage: _onVoicePreviousPage,
         onPhrase: _onVoicePhrase,
+        dynamicVoiceItems: _dynamicVoiceItems,
         onPartialPhrase: _onVoicePartialPhrase,
       ),
     );
@@ -249,6 +251,26 @@ class _WearAvailabilityProductScreenState
         .setAvailabilityProductFocusedIndex(_focusedIndex, products.length);
     _scrollToFocused();
     _sendGlassesState(group, products, fast: true);
+  }
+
+  VoiceDynamicItemsSnapshot _dynamicVoiceItems() {
+    final WearAvailabilityGroup? group = widget.group;
+    final List<WearAvailabilityProduct> products = group == null
+        ? <WearAvailabilityProduct>[]
+        : ref.read(wearAvailabilityProductsProvider(group)).valueOrNull ??
+            <WearAvailabilityProduct>[];
+    final List<VoiceDynamicItem> items = products
+        .map((WearAvailabilityProduct item) => VoiceDynamicItem(
+              id: item.id.toString(),
+              label: item.name,
+            ))
+        .toList(growable: false);
+    return VoiceDynamicItemsSnapshot(
+      revision: Object.hashAll(
+        items.map((VoiceDynamicItem item) => Object.hash(item.id, item.label)),
+      ),
+      items: items,
+    );
   }
 
   void _onVoicePhrase(String phrase) {

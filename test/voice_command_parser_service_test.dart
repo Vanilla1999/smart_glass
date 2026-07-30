@@ -8,12 +8,52 @@ void main() {
   group('screen-scoped voice grammar', () {
     final VoiceActionCatalog catalog = VoiceActionCatalog();
 
-    test('T01 menu contains only menu commands and unknown', () {
+    test('menu contains only menu commands and unknown', () {
       final List<String> grammar = catalog.grammarFor(WearScreenId.menu);
       expect(
           grammar, containsAll(<String>['вверх', 'вниз', 'выбрать', '[unk]']));
       expect(grammar, isNot(contains('прямое')));
       expect(grammar, isNot(contains('фото')));
+    });
+
+    test('T01 only up and down use production partial activation', () {
+      for (final VoiceActionEntry action in catalog.actions) {
+        if (<WearVoiceCommand>{
+          WearVoiceCommand.up,
+          WearVoiceCommand.down,
+        }.contains(action.command)) {
+          expect(
+            action.activationPolicy,
+            VoiceActivationPolicy.immediateExactPartial,
+            reason: '${action.command} must remain immediate',
+          );
+        } else {
+          expect(
+            action.activationPolicy,
+            VoiceActivationPolicy.endpointOnly,
+            reason: '${action.command} must wait for an endpoint',
+          );
+        }
+        expect(
+          action.activationPolicy,
+          isNot(VoiceActivationPolicy.stableExactPartial),
+        );
+      }
+    });
+
+    test('partial activation outside the explicit allowlist is rejected', () {
+      expect(
+        () => VoiceActionCatalog(actions: <VoiceActionEntry>[
+          VoiceActionEntry(
+            command: WearVoiceCommand.openAvailability,
+            screens: <WearScreenId>{WearScreenId.menu},
+            fullPhrases: <String>{'доступность'},
+            fastAliases: <String>{'доступность'},
+            activationPolicy: VoiceActivationPolicy.stableExactPartial,
+          ),
+        ]),
+        throwsArgumentError,
+      );
     });
 
     test('T02 availability interaction is scoped', () {
@@ -88,14 +128,14 @@ void main() {
             screens: <WearScreenId>{WearScreenId.menu},
             fullPhrases: <String>{'список'},
             fastAliases: <String>{'команда'},
-            activationPolicy: VoiceActivationPolicy.stableExactPartial,
+            activationPolicy: VoiceActivationPolicy.endpointOnly,
           ),
           VoiceActionEntry(
             command: WearVoiceCommand.openHelp,
             screens: <WearScreenId>{WearScreenId.menu},
             fullPhrases: <String>{'помощь'},
             fastAliases: <String>{'команда'},
-            activationPolicy: VoiceActivationPolicy.stableExactPartial,
+            activationPolicy: VoiceActivationPolicy.endpointOnly,
           ),
         ]),
         throwsArgumentError,

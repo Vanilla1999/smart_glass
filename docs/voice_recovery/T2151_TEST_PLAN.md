@@ -56,6 +56,26 @@ All three profile mappings are unit-tested. Test every profile before choosing a
 - Authorization-to-ready and app-start-to-model-ready.
 - Recovery duration, recorder recreations, duplicate restart count, route mismatch count, zero-PCM incidents, and USB-reattach success rate.
 
+## Partial-Policy Safety Check
+
+This check remains `DEVICE_PENDING` until repeated with the patched release APK:
+
+1. On the menu, say `вверх` 30 times and `вниз` 30 times.
+2. Say `доступность` 20 times.
+3. Say `назад` 20 times on a screen where back is registered.
+4. Repeat only `вверх` and `вниз` at different rates and volumes.
+5. Add unrelated speech and store background noise.
+
+Record each utterance whose provisional partial differs from its final result.
+`up` and `down` must still execute from partial. No route-changing command may
+have `source=stable_partial`; an isolated `доступность` or `назад` partial must
+not change the screen. Route and state changes may occur only from a natural
+endpoint result or VAD-silence `streamFinal`.
+
+Count false endpoint commands separately. In particular, this patch does not
+fix the known false `streamFinal="выбрать"`. A second acoustic verifier, phrase
+hardening, and speaker gating are outside this check.
+
 ## Acceptance Criteria
 
 - Silence and low RMS do not cause startup errors or restart loops.
@@ -69,5 +89,7 @@ All three profile mappings are unit-tested. Test every profile before choosing a
 - A visible glasses overlay is reapplied after Presentation recreation.
 - There are zero false startup errors from silence, zero UI-route restarts, zero parallel recorders, and zero commands outside `VoicePhase.ready`.
 - `up`/`down` command handlers do not wait for glasses acknowledgement.
+- Only `up` and `down` execute from partial; every other production command is
+  endpoint-only and production `stableExactPartial` usage is zero.
 - Ordinary low RMS never triggers recovery; no rapid restart loop occurs.
 - USB reattach restores voice automatically once the native device-event path is implemented and validated.

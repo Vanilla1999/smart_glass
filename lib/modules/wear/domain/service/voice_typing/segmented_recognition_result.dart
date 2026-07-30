@@ -52,6 +52,8 @@ class SegmentedRecognitionResult {
     this.sourceScreen = WearScreenId.menu,
     this.partialRevision = 0,
     this.commandUtteranceStartedAtMillis,
+    this.freeTextEpoch = 0,
+    this.isLiveFreeText = false,
   });
 
   final int captureEpoch;
@@ -67,4 +69,6 @@ class SegmentedRecognitionResult {
   final WearScreenId sourceScreen;
   final int partialRevision;
   final int? commandUtteranceStartedAtMillis;
+  final int freeTextEpoch;
+  final bool isLiveFreeText;
 }

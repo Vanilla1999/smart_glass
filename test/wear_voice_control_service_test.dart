@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/recognition_arbiter.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
 
@@ -47,19 +48,251 @@ void main() {
       );
     });
 
-    test('T13 stable back is claimable before acoustic endpoint', () {
+    test('T02 false accessibility partial is ignored indefinitely', () {
+      final RecognitionArbiter arbiter = RecognitionArbiter(
+        screenProvider: () => WearScreenId.menu,
+      );
+
+      expect(
+        arbiter
+            .accept(_event(
+              text: 'доступность',
+              utteranceId: 4,
+              kind: RecognitionKind.partial,
+            ))
+            ?.ignoredEndpointOnly,
+        isTrue,
+      );
+      expect(arbiter.debugRetainedPartialCount, 0);
+    });
+
+    test('T03 false accessibility partial corrects to up at endpoint', () {
+      final RecognitionArbiter arbiter = RecognitionArbiter();
+
+      expect(
+        arbiter
+            .accept(_event(
+              text: 'доступность',
+              utteranceId: 5,
+              kind: RecognitionKind.partial,
+            ))
+            ?.ignoredEndpointOnly,
+        isTrue,
+      );
+      expect(
+        arbiter.accept(_event(text: 'вверх', utteranceId: 5))?.command,
+        WearVoiceCommand.up,
+      );
+    });
+
+    test('T04 accessibility executes only at endpoint', () {
+      final RecognitionArbiter arbiter = RecognitionArbiter();
+
+      expect(
+        arbiter
+            .accept(_event(
+              text: 'доступность',
+              utteranceId: 6,
+              kind: RecognitionKind.partial,
+            ))
+            ?.ignoredEndpointOnly,
+        isTrue,
+      );
+      expect(
+        arbiter.accept(_event(text: 'доступность', utteranceId: 6))?.command,
+        WearVoiceCommand.openAvailability,
+      );
+    });
+
+    test('T05 back executes only at endpoint', () {
       final RecognitionArbiter arbiter = RecognitionArbiter(
         screenProvider: () => WearScreenId.help,
       );
-      final SegmentedRecognitionResult partial = _event(
-        text: 'назад',
-        utteranceId: 4,
-        kind: RecognitionKind.partial,
-        screen: WearScreenId.help,
-      );
 
-      expect(arbiter.accept(partial)?.stableCandidate, same(partial));
-      expect(arbiter.claimStable(partial)?.command, WearVoiceCommand.back);
+      expect(
+        arbiter
+            .accept(_event(
+              text: 'назад',
+              utteranceId: 7,
+              kind: RecognitionKind.partial,
+              screen: WearScreenId.help,
+            ))
+            ?.ignoredEndpointOnly,
+        isTrue,
+      );
+      expect(
+        arbiter
+            .accept(_event(
+              text: 'назад',
+              utteranceId: 7,
+              screen: WearScreenId.help,
+            ))
+            ?.command,
+        WearVoiceCommand.back,
+      );
+    });
+
+    for (final ({String text, WearVoiceCommand command, String id}) testCase
+        in <({String text, WearVoiceCommand command, String id})>[
+      (text: 'вверх', command: WearVoiceCommand.up, id: 'T06'),
+      (text: 'вниз', command: WearVoiceCommand.down, id: 'T07'),
+    ]) {
+      test('${testCase.id} direction remains immediate and emits once', () {
+        final RecognitionArbiter arbiter = RecognitionArbiter();
+
+        expect(
+          arbiter
+              .accept(_event(
+                text: testCase.text,
+                utteranceId: 8,
+                kind: RecognitionKind.partial,
+              ))
+              ?.command,
+          testCase.command,
+        );
+        expect(
+          arbiter.accept(_event(text: testCase.text, utteranceId: 8)),
+          isNull,
+        );
+      });
+    }
+
+    test('T08 other route commands execute only at endpoint', () {
+      final List<({String text, WearVoiceCommand command, WearScreenId screen})>
+          cases = <({
+        String text,
+        WearVoiceCommand command,
+        WearScreenId screen,
+      })>[
+        (
+          text: 'справка',
+          command: WearVoiceCommand.openHelp,
+          screen: WearScreenId.menu,
+        ),
+        (
+          text: 'настройки',
+          command: WearVoiceCommand.openSettings,
+          screen: WearScreenId.menu,
+        ),
+        (
+          text: 'список',
+          command: WearVoiceCommand.openList,
+          screen: WearScreenId.availabilityInteraction,
+        ),
+        (
+          text: 'прямое',
+          command: WearVoiceCommand.openDirectScan,
+          screen: WearScreenId.availabilityInteraction,
+        ),
+        (
+          text: 'домой',
+          command: WearVoiceCommand.home,
+          screen: WearScreenId.availabilityInteraction,
+        ),
+        (
+          text: 'фонарик',
+          command: WearVoiceCommand.flashlight,
+          screen: WearScreenId.availabilityDirectScan,
+        ),
+      ];
+
+      for (int index = 0; index < cases.length; index++) {
+        final testCase = cases[index];
+        final RecognitionArbiter arbiter = RecognitionArbiter(
+          screenProvider: () => testCase.screen,
+        );
+        final RecognitionArbitration? partial = arbiter.accept(_event(
+          text: testCase.text,
+          utteranceId: index + 20,
+          kind: RecognitionKind.partial,
+          screen: testCase.screen,
+        ));
+        expect(
+          partial?.ignoredEndpointOnly,
+          isTrue,
+          reason: '${testCase.command} partial must be ignored',
+        );
+        expect(
+          arbiter
+              .accept(_event(
+                text: testCase.text,
+                utteranceId: index + 20,
+                screen: testCase.screen,
+              ))
+              ?.command,
+          testCase.command,
+        );
+      }
+    });
+
+    test('T09 global microphone commands execute only at endpoint', () {
+      for (final testCase in <(String, WearVoiceCommand)>[
+        ('стоп микрофон', WearVoiceCommand.stopMicrophone),
+        ('старт микрофон', WearVoiceCommand.startMicrophone),
+      ]) {
+        final RecognitionArbiter arbiter = RecognitionArbiter();
+        expect(
+          arbiter
+              .accept(_event(
+                text: testCase.$1,
+                utteranceId: 30,
+                kind: RecognitionKind.partial,
+              ))
+              ?.ignoredEndpointOnly,
+          isTrue,
+        );
+        expect(
+          arbiter.accept(_event(text: testCase.$1, utteranceId: 30))?.command,
+          testCase.$2,
+        );
+      }
+    });
+
+    test('T10 production partials never create stable candidates', () {
+      final VoiceActionCatalog catalog = VoiceActionCatalog();
+      for (final VoiceActionEntry action in catalog.actions) {
+        for (final WearScreenId screen in action.screens) {
+          if (!catalog.capabilities.canHandle(screen, action.command)) continue;
+          for (final String alias in action.fastAliases) {
+            final RecognitionArbiter arbiter = RecognitionArbiter(
+              actionCatalog: catalog,
+              screenProvider: () => screen,
+            );
+            final RecognitionArbitration? outcome = arbiter.accept(_event(
+              text: alias,
+              utteranceId: 40,
+              kind: RecognitionKind.partial,
+              screen: screen,
+            ));
+            expect(outcome?.stableCandidate, isNull);
+            if (action.command == WearVoiceCommand.up ||
+                action.command == WearVoiceCommand.down) {
+              expect(outcome?.command, action.command);
+            } else {
+              expect(outcome?.ignoredEndpointOnly, isTrue);
+            }
+          }
+        }
+      }
+    });
+
+    test('T11 select endpoint behavior remains unchanged', () {
+      final RecognitionArbiter arbiter = RecognitionArbiter();
+      expect(
+        arbiter
+            .accept(_event(
+              text: 'выбрать',
+              utteranceId: 50,
+              kind: RecognitionKind.partial,
+            ))
+            ?.ignoredEndpointOnly,
+        isTrue,
+      );
+      expect(arbiter.debugRetainedPartialCount, 0);
+      expect(
+        arbiter.accept(_event(text: 'выбрать', utteranceId: 50))?.command,
+        WearVoiceCommand.select,
+      );
     });
 
     test('T14 old route endpoint is dropped', () {
@@ -115,12 +348,14 @@ void main() {
     test('T29 destructive confirmation action cannot run from partial', () {
       final RecognitionArbiter arbiter = RecognitionArbiter();
       expect(
-        arbiter.accept(_event(
-          text: 'печать',
-          utteranceId: 1,
-          kind: RecognitionKind.partial,
-        )),
-        isNull,
+        arbiter
+            .accept(_event(
+              text: 'печать',
+              utteranceId: 1,
+              kind: RecognitionKind.partial,
+            ))
+            ?.ignoredEndpointOnly,
+        isTrue,
       );
     });
 
@@ -128,12 +363,14 @@ void main() {
       final RecognitionArbiter arbiter = RecognitionArbiter();
 
       expect(
-        arbiter.accept(_event(
-          text: 'стоп микрофон',
-          utteranceId: 1,
-          kind: RecognitionKind.partial,
-        )),
-        isNull,
+        arbiter
+            .accept(_event(
+              text: 'стоп микрофон',
+              utteranceId: 1,
+              kind: RecognitionKind.partial,
+            ))
+            ?.ignoredEndpointOnly,
+        isTrue,
       );
       expect(
         arbiter.accept(_event(text: 'стоп микрофон', utteranceId: 1))?.command,
