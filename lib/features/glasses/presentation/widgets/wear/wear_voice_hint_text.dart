@@ -22,9 +22,26 @@ class WearVoiceHintText extends StatelessWidget {
           : TextSpan(children: <InlineSpan>[
               if (value.start > 0)
                 TextSpan(text: text.substring(0, value.start)),
-              TextSpan(
-                text: text.substring(value.start, value.end),
-                style: const TextStyle(decoration: TextDecoration.underline),
+              WidgetSpan(
+                alignment: PlaceholderAlignment.baseline,
+                baseline: TextBaseline.alphabetic,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: style.color ?? Colors.white,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      text.substring(value.start, value.end),
+                      style: style,
+                    ),
+                  ),
+                ),
               ),
               if (value.end < text.length)
                 TextSpan(text: text.substring(value.end)),

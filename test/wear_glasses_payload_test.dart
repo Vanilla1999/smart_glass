@@ -1,13 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_hint_generator.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_hint_index_cache.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availability_glasses_payloads.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_voice_hints.dart';
 
 void main() {
+  setUp(() {
+    WearGlassesVoiceHints.configureVoiceHintIndexCache(VoiceHintIndexCache());
+  });
+
   test('runtime command phrase cannot be advertised as a voice hint', () {
     WearGlassesVoiceHints.configureActionCatalog(VoiceActionCatalog(
       capabilities: VoiceScreenCapabilities(
@@ -108,8 +116,7 @@ void main() {
   });
 
   test('availability duplicate rows receive dynamic voice hints', () {
-    final WearGlassesPayload payload = WearAvailabilityGlassesPayloads
-        .duplicates(const <WearAvailabilityProduct>[
+    const List<WearAvailabilityProduct> products = <WearAvailabilityProduct>[
       WearAvailabilityProduct(
         id: 1,
         groupId: 1,
@@ -138,10 +145,61 @@ void main() {
         unpackaged: false,
         priceTagActual: true,
       ),
-    ]);
+    ];
+    final WearGlassesPayload payload =
+        WearAvailabilityGlassesPayloads.duplicates(products);
 
     expect(payload.voiceHints.map((hint) => hint.itemId), <String>['1', '2']);
     expect(payload.voiceHints.map((hint) => hint.phrase),
         <String>['альфа', 'бета']);
+  });
+
+  test('large list refreshes visible hints after async preparation', () async {
+    final Completer<VoiceHintSet> build = Completer<VoiceHintSet>();
+    final VoiceHintIndexCache cache = VoiceHintIndexCache(
+      builder: (snapshot, reserved, excluded) => build.future,
+    );
+    WearGlassesVoiceHints.configureVoiceHintIndexCache(cache);
+    final List<VoiceDynamicItem> items = <VoiceDynamicItem>[
+      const VoiceDynamicItem(id: 'yellow', label: 'Жёлтый товар'),
+      for (int index = 0; index < 32; index++)
+        VoiceDynamicItem(id: 'item-$index', label: 'Позиция номер $index'),
+    ];
+    final VoiceDynamicItemsSnapshot snapshot = VoiceDynamicItemsSnapshot(
+      revision: 33,
+      items: items,
+    );
+    final Completer<void> prepared = Completer<void>();
+
+    final List<WearGlassesVoiceHint> pending =
+        WearGlassesVoiceHints.forVisibleItems(
+      screen: WearScreenId.productSelect,
+      snapshot: snapshot,
+      visibleItemIds: const <String>['yellow'],
+      onPrepared: prepared.complete,
+    );
+    expect(pending.single.phrase, isEmpty);
+
+    final Future<VoiceHintSet> preparing = cache.prepare(
+      snapshot: snapshot,
+      screen: WearScreenId.productSelect.name,
+      reservedPhrases:
+          VoiceActionCatalog().phrasesFor(WearScreenId.productSelect),
+    );
+    build.complete(VoiceHintGenerator.generate(
+      snapshot,
+      reservedPhrases:
+          VoiceActionCatalog().phrasesFor(WearScreenId.productSelect),
+    ));
+    await preparing;
+    await prepared.future;
+
+    final List<WearGlassesVoiceHint> ready =
+        WearGlassesVoiceHints.forVisibleItems(
+      screen: WearScreenId.productSelect,
+      snapshot: snapshot,
+      visibleItemIds: const <String>['yellow'],
+    );
+    expect(ready.single.phrase, isNotEmpty);
   });
 }

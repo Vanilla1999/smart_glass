@@ -341,27 +341,54 @@ class _WearAvailabilityGroupScreenState
     List<WearAvailabilityGroup> groups, {
     bool fast = false,
   }) {
+    if (fast) {
+      _sendGlassesPayload(groups, fast: true);
+      return;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final payload = WearAvailabilityGlassesPayloads.groups(
-        groups,
-        selectedIndex: _focusedIndex,
-      );
-      WearDependencies.I.wearFlowController.rememberScreenPayload(
+      _sendGlassesPayload(groups);
+    });
+  }
+
+  void _sendGlassesPayload(
+    List<WearAvailabilityGroup> groups, {
+    bool fast = false,
+  }) {
+    if (!mounted ||
+        WearDependencies.I.wearFlowController.state.screen !=
+            WearScreenId.availabilityGroup) {
+      return;
+    }
+    final int expectedRevision = _dynamicVoiceItems().revision;
+    final payload = WearAvailabilityGlassesPayloads.groups(
+      groups,
+      selectedIndex: _focusedIndex,
+      onVoiceHintsPrepared: () {
+        if (!mounted) return;
+        final List<WearAvailabilityGroup>? currentGroups =
+            ref.read(wearAvailabilityGroupsProvider).valueOrNull;
+        if (currentGroups == null ||
+            _dynamicVoiceItems().revision != expectedRevision) {
+          return;
+        }
+        _sendGlassesPayload(currentGroups, fast: true);
+      },
+    );
+    WearDependencies.I.wearFlowController.rememberScreenPayload(
+      WearScreenId.availabilityGroup,
+      payload,
+    );
+    if (fast) {
+      WearStatusIconReporter.I.sendFastForScreen(
         WearScreenId.availabilityGroup,
         payload,
       );
-      if (fast) {
-        WearStatusIconReporter.I.sendFastForScreen(
-          WearScreenId.availabilityGroup,
-          payload,
-        );
-      } else {
-        WearStatusIconReporter.I.sendForScreen(
-          WearScreenId.availabilityGroup,
-          payload,
-        );
-      }
-    });
+      return;
+    }
+    WearStatusIconReporter.I.sendForScreen(
+      WearScreenId.availabilityGroup,
+      payload,
+    );
   }
 
   void _sendLoading() {

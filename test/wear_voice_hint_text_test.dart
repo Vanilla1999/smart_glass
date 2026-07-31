@@ -19,17 +19,22 @@ void main() {
       ),
     ));
 
-    final Text text = tester.widget<Text>(find.byType(Text));
+    final Text text = tester.widget<Text>(
+      find.byWidgetPredicate(
+        (Widget widget) => widget is Text && widget.textSpan != null,
+      ),
+    );
     final TextSpan root = text.textSpan! as TextSpan;
     final List<InlineSpan> spans = root.children!;
 
     expect((spans[0] as TextSpan).text, 'MOCK ');
-    expect((spans[1] as TextSpan).text, 'Белый');
-    expect(
-      (spans[1] as TextSpan).style?.decoration,
-      TextDecoration.underline,
-    );
-    expect((spans[1] as TextSpan).style?.fontWeight, isNull);
+    final WidgetSpan hintSpan = spans[1] as WidgetSpan;
+    final DecoratedBox box = hintSpan.child as DecoratedBox;
+    final BoxDecoration decoration = box.decoration as BoxDecoration;
+    expect(decoration.border!.bottom.width, 2);
+    final Padding padding = box.child as Padding;
+    expect(padding.padding, const EdgeInsets.only(bottom: 4));
+    expect((padding.child as Text).data, 'Белый');
     expect((spans[2] as TextSpan).text, ' 1');
   });
 

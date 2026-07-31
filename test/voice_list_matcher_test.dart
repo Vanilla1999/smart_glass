@@ -82,6 +82,17 @@ void main() {
       expect(match.item, 'Безалкогольные');
     });
 
+    test('matches Russian adjective inflection', () {
+      final VoiceListMatch<String> match = VoiceListMatcher.match(
+        'жёлтой',
+        <String>['MOCK Белый 1', 'MOCK Желтый 1', 'MOCK Мобильный 2'],
+        (String item) => item,
+      );
+
+      expect(match.type, VoiceListMatchType.unique);
+      expect(match.item, 'MOCK Желтый 1');
+    });
+
     test('keeps ending match ambiguous when multiple items match', () {
       final VoiceListMatch<String> match = VoiceListMatcher.match(
         'безалкогольное',

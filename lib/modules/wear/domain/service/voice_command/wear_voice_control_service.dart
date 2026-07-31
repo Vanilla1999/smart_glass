@@ -83,11 +83,11 @@ class WearVoiceControlService {
   final Map<String, int> _latestPartialRevisions = <String, int>{};
   final Map<String, _PreviewStabilityState> _previewStates =
       <String, _PreviewStabilityState>{};
-  Timer? _recognitionDelayTimer;
+  Timer? _recognitionPreviewTimeout;
   bool _recognitionDelayVisible = false;
   _RecognitionDelayContext? _recognitionDelayContext;
   static const Duration _stablePartialDelay = Duration(milliseconds: 150);
-  static const Duration _recognitionDelay = Duration(milliseconds: 900);
+  static const Duration _recognitionPreviewDuration = Duration(seconds: 3);
 
   Stream<WearVoiceCommand> get commandStream => _commandController.stream;
   Stream<WearVoiceCommandEvent> get commandEventStream =>
@@ -234,12 +234,6 @@ class WearVoiceControlService {
       freeTextEpoch: _speechRecognitionService.freeTextEpoch,
     );
     _recognitionDelayContext = context;
-    _recognitionDelayTimer = _timerFactory(_recognitionDelay, () {
-      if (_recognitionDelayContext != context) return;
-      _recognitionDelayTimer = null;
-      _recognitionDelayVisible = true;
-      _emitDelay(visible: true, context: context);
-    });
   }
 
   void _emitPhrase(SegmentedRecognitionResult result) {
@@ -371,10 +365,9 @@ class WearVoiceControlService {
                     ended.segmentId != context.segmentId)))) {
       return;
     }
-    final bool wasActive = _recognitionDelayTimer != null;
-    _recognitionDelayTimer?.cancel();
-    _recognitionDelayTimer = null;
-    if (wasActive || _recognitionDelayVisible) {
+    _recognitionPreviewTimeout?.cancel();
+    _recognitionPreviewTimeout = null;
+    if (_recognitionDelayVisible) {
       _recognitionDelayVisible = false;
       if (context != null) _emitDelay(visible: false, context: context);
     }
@@ -392,12 +385,19 @@ class WearVoiceControlService {
         context.freeTextEpoch != event.freeTextEpoch) {
       return;
     }
-    _clearRecognitionDelay();
+    if (_recognitionDelayVisible) return;
+    _recognitionDelayVisible = true;
+    _emitDelay(visible: true, context: context, previewText: event.text);
+    _recognitionPreviewTimeout = _timerFactory(
+      _recognitionPreviewDuration,
+      () => _clearRecognitionDelay(),
+    );
   }
 
   void _emitDelay({
     required bool visible,
     required _RecognitionDelayContext context,
+    String? previewText,
   }) {
     if (_delayEventController.isClosed) return;
     _delayEventController.add(WearVoiceDelayEvent(
@@ -408,6 +408,7 @@ class WearVoiceControlService {
       routeRevision: context.routeRevision,
       grammarRevision: context.grammarRevision,
       freeTextEpoch: context.freeTextEpoch,
+      previewText: previewText,
     ));
   }
 
@@ -442,7 +443,7 @@ class WearVoiceControlService {
     _stabilityTimers.clear();
     _latestPartialRevisions.clear();
     _previewStates.clear();
-    _recognitionDelayTimer?.cancel();
+    _recognitionPreviewTimeout?.cancel();
     await _recognitionSubscription?.cancel();
     await _segmentStartedSubscription?.cancel();
     await _segmentEndedSubscription?.cancel();

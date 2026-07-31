@@ -80,6 +80,11 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
   }
 
   void _sendGlassesFocus() {
+    if (!mounted ||
+        WearDependencies.I.wearFlowController.state.screen !=
+            WearScreenId.productSelect) {
+      return;
+    }
     final List<BarcodeProductInfo> products =
         widget.args?.products ?? <BarcodeProductInfo>[];
     if (products.isEmpty) return;
@@ -104,6 +109,12 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
         visibleItemIds: visibleProducts
             .map((BarcodeProductInfo product) => product.id.toString())
             .toList(growable: false),
+        onPrepared: () {
+          if (!mounted || _dynamicVoiceItems().revision != snapshot.revision) {
+            return;
+          }
+          _sendGlassesFocus();
+        },
       ),
       selectedIndex: idx - start,
       pageText: _pageText(products.length, idx),

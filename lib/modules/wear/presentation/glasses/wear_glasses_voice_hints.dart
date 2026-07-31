@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_hint_generator.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_hint_index_cache.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
@@ -7,12 +10,15 @@ import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_pay
 class WearGlassesVoiceHints {
   const WearGlassesVoiceHints._();
 
-  static final Map<String, VoiceHintSet> _cache = <String, VoiceHintSet>{};
+  static VoiceHintIndexCache _indexCache = VoiceHintIndexCache();
   static VoiceActionCatalog _actionCatalog = VoiceActionCatalog();
 
   static void configureActionCatalog(VoiceActionCatalog actionCatalog) {
     _actionCatalog = actionCatalog;
-    _cache.clear();
+  }
+
+  static void configureVoiceHintIndexCache(VoiceHintIndexCache indexCache) {
+    _indexCache = indexCache;
   }
 
   static List<WearGlassesVoiceHint> forVisibleItems({
@@ -20,36 +26,62 @@ class WearGlassesVoiceHints {
     required VoiceDynamicItemsSnapshot snapshot,
     required List<String> visibleItemIds,
     Set<String> excludedWords = const <String>{},
+    void Function()? onPrepared,
   }) {
-    final List<String> sortedExcluded = excludedWords.toList()..sort();
     final List<String> reservedPhrases =
         _actionCatalog.phrasesFor(screen).toList()..sort();
-    final String cacheKey =
-        '${screen.name}:${snapshot.revision}:${sortedExcluded.join(',')}:'
-        '${reservedPhrases.join(',')}';
-    final VoiceHintSet hintSet = _cache.putIfAbsent(
-      cacheKey,
-      () {
-        final Stopwatch stopwatch = Stopwatch()..start();
-        final VoiceHintSet generated = VoiceHintGenerator.generate(
-          snapshot,
-          reservedPhrases: reservedPhrases.toSet(),
-          excludedWords: excludedWords,
-        );
-        stopwatch.stop();
-        print(
-          '[VOICE_DYNAMIC_PERF] phase=glasses_hint_index '
-          'screen=${screen.name} items=${snapshot.items.length} '
-          'durationMs=${stopwatch.elapsedMilliseconds} '
-          'hints=${generated.hintsByItemId.length} '
-          'issues=${generated.issues.length}',
-        );
-        return generated;
-      },
+    final Set<String> reserved = reservedPhrases.toSet();
+    VoiceHintSet? ready = _indexCache.getIfReady(
+      snapshot: snapshot,
+      screen: screen.name,
+      reservedPhrases: reserved,
+      excludedWords: excludedWords,
     );
-    while (_cache.length > 32) {
-      _cache.remove(_cache.keys.first);
+    if (ready == null &&
+        snapshot.items.length <= VoiceHintIndexCache.synchronousItemLimit) {
+      ready = _indexCache.prepareSmallSynchronously(
+        snapshot: snapshot,
+        screen: screen.name,
+        reservedPhrases: reserved,
+        excludedWords: excludedWords,
+      );
     }
+    if (ready == null) {
+      final Stopwatch stopwatch = Stopwatch()..start();
+      unawaited(
+        _indexCache
+            .whenReady(
+          snapshot: snapshot,
+          screen: screen.name,
+          reservedPhrases: reserved,
+          excludedWords: excludedWords,
+        )
+            .then((VoiceHintSet generated) {
+          stopwatch.stop();
+          print(
+            '[VOICE_DYNAMIC_PERF] phase=glasses_hint_index_ready '
+            'screen=${screen.name} items=${snapshot.items.length} '
+            'durationMs=${stopwatch.elapsedMilliseconds} '
+            'hints=${generated.hintsByItemId.length} '
+            'issues=${generated.issues.length}',
+          );
+          onPrepared?.call();
+        }).catchError((Object error, StackTrace stackTrace) {
+          print(
+            '[VOICE_HINT_INDEX] glasses prepare failed: $error\n$stackTrace',
+          );
+        }),
+      );
+      return visibleItemIds
+          .map((String itemId) => WearGlassesVoiceHint(
+                itemId: itemId,
+                phrase: '',
+                start: 0,
+                end: 0,
+              ))
+          .toList(growable: false);
+    }
+    final VoiceHintSet hintSet = ready;
     for (final VoiceHintValidationIssue issue in hintSet.issues) {
       // ignore: avoid_print
       print(

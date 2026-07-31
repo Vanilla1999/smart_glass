@@ -74,10 +74,24 @@ void main() {
       expect(grammar, isNot(contains('доступность')));
     });
 
+    test('flashlight is available on every screen', () {
+      final VoiceCommandParserService parser =
+          VoiceCommandParserService(catalog: catalog);
+
+      for (final WearScreenId screen in WearScreenId.values) {
+        expect(
+          parser.parseExactForScreen(screen, 'фонарик'),
+          WearVoiceCommand.flashlight,
+          reason: 'Flashlight unavailable on ${screen.name}',
+        );
+      }
+    });
+
     test('T04 capability removes command without handler', () {
       expect(catalog.grammarFor(WearScreenId.help), <String>[
         'назад',
         'домой',
+        'фонарик',
         'выключить микрофон',
         'стоп микрофон',
         'включить микрофон',
@@ -156,6 +170,24 @@ void main() {
           'домой',
         ),
         WearVoiceCommand.home,
+      );
+    });
+
+    test('home confirmation supports focus navigation and selection', () {
+      final VoiceCommandParserService parser =
+          VoiceCommandParserService(catalog: catalog);
+
+      expect(
+        parser.parseExactForScreen(WearScreenId.homeConfirm, 'вверх'),
+        WearVoiceCommand.up,
+      );
+      expect(
+        parser.parseExactForScreen(WearScreenId.homeConfirm, 'вниз'),
+        WearVoiceCommand.down,
+      );
+      expect(
+        parser.parseExactForScreen(WearScreenId.homeConfirm, 'выбрать'),
+        WearVoiceCommand.select,
       );
     });
 

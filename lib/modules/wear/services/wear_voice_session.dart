@@ -142,6 +142,8 @@ class WearVoiceSession {
       final VoiceActionCatalog catalog =
           _actionCatalog ?? WearDependencies.I.voiceActionCatalog;
       final bool freeText = _usesFreeTextRecognition(screen);
+      await _speech.prepareVoiceHints(screen);
+      if (generation != _configurationGeneration) return;
       final List<String> dynamicPhrases =
           _dynamicGrammarPhrases?.call(screen) ??
               (_speechRecognitionService == null

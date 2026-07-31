@@ -153,6 +153,11 @@ class VoiceListMatcher {
     if (labelWord == queryWord) {
       return true;
     }
+    final String? queryAdjectiveStem = _russianAdjectiveStem(queryWord);
+    if (queryAdjectiveStem != null &&
+        queryAdjectiveStem == _russianAdjectiveStem(labelWord)) {
+      return true;
+    }
     final int shorterLength = queryWord.length < labelWord.length
         ? queryWord.length
         : labelWord.length;
@@ -165,6 +170,41 @@ class VoiceListMatcher {
       return false;
     }
     return commonPrefix / shorterLength >= _minFuzzyPrefixRatio;
+  }
+
+  static String? _russianAdjectiveStem(String word) {
+    const List<String> endings = <String>[
+      'ого',
+      'его',
+      'ому',
+      'ему',
+      'ыми',
+      'ими',
+      'ый',
+      'ий',
+      'ая',
+      'яя',
+      'ое',
+      'ее',
+      'ые',
+      'ие',
+      'ой',
+      'ей',
+      'ым',
+      'им',
+      'ом',
+      'ем',
+      'ую',
+      'юю',
+      'ых',
+      'их',
+    ];
+    for (final String ending in endings) {
+      if (!word.endsWith(ending)) continue;
+      final String stem = word.substring(0, word.length - ending.length);
+      return stem.length >= 4 ? stem : null;
+    }
+    return null;
   }
 
   static bool _containsPhrase(String label, String query) {

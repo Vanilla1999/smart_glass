@@ -427,12 +427,28 @@ class _WearAvailabilityProductScreenState
     List<WearAvailabilityProduct> products, {
     bool fast = false,
   }) {
+    if (!mounted ||
+        WearDependencies.I.wearFlowController.state.screen !=
+            WearScreenId.availabilityProduct) {
+      return;
+    }
     final Stopwatch stopwatch = Stopwatch()..start();
+    final VoiceDynamicItemsSnapshot voiceSnapshot = _dynamicVoiceItems();
     final payload = WearAvailabilityGlassesPayloads.products(
       group: group,
       products: products,
-      voiceSnapshot: _dynamicVoiceItems(),
+      voiceSnapshot: voiceSnapshot,
       selectedIndex: _focusedIndex,
+      onVoiceHintsPrepared: () {
+        if (!mounted) return;
+        final List<WearAvailabilityProduct>? currentProducts =
+            ref.read(wearAvailabilityProductsProvider(group)).valueOrNull;
+        if (currentProducts == null ||
+            _dynamicVoiceItems().revision != voiceSnapshot.revision) {
+          return;
+        }
+        _sendGlassesPayload(group, currentProducts, fast: true);
+      },
     );
     stopwatch.stop();
     if (products.length >= 100 || stopwatch.elapsedMilliseconds >= 20) {

@@ -97,6 +97,7 @@ class WearFlowController {
   static const int _homeConfirmItemCount = 2;
   static const int _availabilityInteractionItemCount = 2;
   static const int _continueScanItemCount = 2;
+  static int? _flashlightState;
 
   WearGlassesOutput _glassesOutput;
   WearNavigationOutput _navigationOutput;
@@ -160,12 +161,16 @@ class WearFlowController {
   Future<void> setRecognitionDelayVisible(
     WearScreenId screen,
     bool visible,
+    String? previewText,
   ) async {
     if (_state.screen != screen) return;
     final WearGlassesPayload payload =
         _screenPayloads[screen] ?? _payloadForState(_state);
+    final String candidate = previewText?.trim() ?? '';
     await _glassesOutput.send(
-      visible ? payload.copyWithStatusText('Распознаю...') : payload,
+      visible && candidate.isNotEmpty
+          ? payload.copyWithStatusText('Похоже: $candidate')
+          : payload,
     );
   }
 
@@ -199,6 +204,7 @@ class WearFlowController {
   }
 
   bool canHandleVoiceCommand(WearScreenId screen, WearVoiceCommand command) {
+    if (command == WearVoiceCommand.flashlight) return true;
     if (command == WearVoiceCommand.home) {
       return screen != WearScreenId.menu && screen != WearScreenId.homeConfirm;
     }
@@ -267,10 +273,14 @@ class WearFlowController {
       WearScreenId.dbSettings ||
       WearScreenId.wifiSettings ||
       WearScreenId.printerSettings ||
-      WearScreenId.scanIdle ||
       WearScreenId.availabilityCheck ||
       WearScreenId.availabilityFill =>
         command == WearVoiceCommand.back || command == WearVoiceCommand.home,
+      WearScreenId.scanIdle => <WearVoiceCommand>{
+          WearVoiceCommand.back,
+          WearVoiceCommand.home,
+          WearVoiceCommand.flashlight,
+        }.contains(command),
       WearScreenId.voiceClarification => <WearVoiceCommand>{
           WearVoiceCommand.back,
           WearVoiceCommand.home,
@@ -851,8 +861,15 @@ class WearFlowController {
 
   static Future<void> _toggleScannerFlashlight() async {
     final MovfastGlassController controller = MovfastGlassController();
-    final int currentState = await controller.getFlashlightState();
-    await controller.setFlashlight(currentState == 1 ? 0 : 1);
+    final int hardwareState = await controller.getFlashlightState();
+    final int currentState = _flashlightState ?? hardwareState;
+    final int targetState = currentState == 1 ? 0 : 1;
+    print(
+      '[WearFlowController] flashlight hardware=$hardwareState '
+      'tracked=$currentState target=$targetState',
+    );
+    await controller.setFlashlight(targetState);
+    _flashlightState = targetState;
   }
 
   Future<void> _navigateTo(
@@ -1334,6 +1351,18 @@ class WearFlowController {
         visibleItemIds: visibleMatches
             .map((VoiceDynamicItem item) => item.id)
             .toList(growable: false),
+        onPrepared: () {
+          if (_state.screen != WearScreenId.voiceClarification) return;
+          final VoiceClarificationArgs? currentArgs =
+              _state.currentVoiceClarificationArgs as VoiceClarificationArgs?;
+          final int currentRevision = Object.hashAll(
+            (currentArgs?.matches ?? const <VoiceDynamicItem>[])
+                .map((VoiceDynamicItem item) => item.revisionHash),
+          );
+          if (currentRevision != snapshot.revision) return;
+          _screenActionsController.add(WearScreenId.voiceClarification);
+          unawaited(_renderGlasses());
+        },
       ),
       selectedIndex: selected - pageStart,
       pageText: pageCount > 1 ? 'Страница: $page из $pageCount' : null,

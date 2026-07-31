@@ -31,11 +31,13 @@ class VoiceHintSet {
   const VoiceHintSet({
     required this.revision,
     required this.hintsByItemId,
+    required this.itemIdByPhrase,
     required this.issues,
   });
 
   final int revision;
   final Map<String, VoiceHint> hintsByItemId;
+  final Map<String, String> itemIdByPhrase;
   final List<VoiceHintValidationIssue> issues;
 }
 
@@ -168,6 +170,11 @@ class VoiceHintGenerator {
     return VoiceHintSet(
       revision: snapshot.revision,
       hintsByItemId: Map<String, VoiceHint>.unmodifiable(hints),
+      itemIdByPhrase: Map<String, String>.unmodifiable(
+        <String, String>{
+          for (final VoiceHint hint in hints.values) hint.phrase: hint.itemId,
+        },
+      ),
       issues: List<VoiceHintValidationIssue>.unmodifiable(issues),
     );
   }

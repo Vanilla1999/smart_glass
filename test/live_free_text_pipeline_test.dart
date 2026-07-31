@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/free_text_pipeline_mode.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_hint_generator.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_hint_index_cache.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
@@ -223,6 +225,188 @@ void main() {
     expect(service.conflictCount, 0);
   });
 
+  test('cold final does not generate hints or change command arbitration',
+      () async {
+    final Completer<VoiceHintSet> hintBuild = Completer<VoiceHintSet>();
+    var buildCount = 0;
+    final VoiceHintIndexCache hintIndexCache = VoiceHintIndexCache(
+      builder: (snapshot, reserved, excluded) {
+        buildCount++;
+        return hintBuild.future;
+      },
+    );
+    final List<VoiceDynamicItem> items = <VoiceDynamicItem>[
+      const VoiceDynamicItem(id: 'yellow', label: 'Жёлтый товар'),
+      for (int index = 0; index < 32; index++)
+        VoiceDynamicItem(id: 'item-$index', label: 'Позиция номер $index'),
+    ];
+    final VoiceDynamicItemsSnapshot snapshot = VoiceDynamicItemsSnapshot(
+      revision: 33,
+      items: items,
+    );
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpoints.add(true)
+      ..results.add(_json(text: 'выбрать'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finals.addAll(<String>[_json(), _json(text: 'жёлтый')]);
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeText: freeText,
+      dynamicItems: snapshot,
+      hintIndexCache: hintIndexCache,
+      prewarmHints: false,
+    );
+    addTearDown(service.dispose);
+    await _start(service);
+    final Future<SegmentedRecognitionResult> result = service
+        .segmentedResultsStream
+        .firstWhere((event) => event.kind == RecognitionKind.streamFinal);
+
+    await _processUtterance(service);
+    await service.waitForProcessing();
+
+    final SegmentedRecognitionResult decision = await result;
+    expect(decision.lane, RecognitionLane.command);
+    expect(decision.text, 'выбрать');
+    expect(buildCount, 0);
+  });
+
+  test('screen preparation preserves exact-hint dynamic priority', () async {
+    final Completer<VoiceHintSet> hintBuild = Completer<VoiceHintSet>();
+    final VoiceHintIndexCache hintIndexCache = VoiceHintIndexCache(
+      builder: (snapshot, reserved, excluded) => hintBuild.future,
+    );
+    final List<VoiceDynamicItem> items = <VoiceDynamicItem>[
+      const VoiceDynamicItem(id: 'yellow', label: 'Жёлтый товар'),
+      for (int index = 0; index < 32; index++)
+        VoiceDynamicItem(id: 'item-$index', label: 'Позиция номер $index'),
+    ];
+    final VoiceDynamicItemsSnapshot snapshot = VoiceDynamicItemsSnapshot(
+      revision: 33,
+      items: items,
+    );
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpoints.add(true)
+      ..results.add(_json(text: 'выбрать'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finals.addAll(<String>[_json(), _json(text: 'товар')]);
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeText: freeText,
+      dynamicItems: snapshot,
+      hintIndexCache: hintIndexCache,
+      prewarmHints: false,
+    );
+    addTearDown(service.dispose);
+    await _start(service);
+    final Future<void> preparing = service.prepareVoiceHints(WearScreenId.menu);
+    hintBuild.complete(VoiceHintGenerator.generate(
+      snapshot,
+      reservedPhrases: VoiceActionCatalog().phrasesFor(WearScreenId.menu),
+    ));
+    await preparing;
+    final Future<SegmentedRecognitionResult> result = service
+        .segmentedResultsStream
+        .firstWhere((event) => event.kind == RecognitionKind.streamFinal);
+
+    await _processUtterance(service);
+    await service.waitForProcessing();
+
+    final SegmentedRecognitionResult decision = await result;
+    expect(decision.lane, RecognitionLane.freeText);
+    expect(decision.text, 'товар');
+  });
+
+  test('production callback batches four VAD frames per recognizer call',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer();
+    final _FakeRecognizer freeText = _FakeRecognizer();
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeText: freeText,
+    );
+    addTearDown(service.dispose);
+    await _start(service);
+
+    for (int index = 0; index < 3; index++) {
+      expect(service.processAudioPacketForTest(_pcmFrame(1000)), isTrue);
+    }
+    expect(command.accepted, isEmpty);
+    expect(service.processAudioPacketForTest(_pcmFrame(1000)), isTrue);
+    await service.waitForProcessing();
+
+    expect(command.accepted, hasLength(1));
+    expect(command.accepted.single.lengthInBytes, 2560);
+    expect(freeText.accepted.last.lengthInBytes, 2560);
+  });
+
+  test('production callback flushes an incomplete batch at VAD endpoint',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer();
+    final _FakeRecognizer freeText = _FakeRecognizer();
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeText: freeText,
+      speechSegmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(milliseconds: 20),
+      ),
+    );
+    addTearDown(service.dispose);
+    await _start(service);
+
+    expect(service.processAudioPacketForTest(_pcmFrame(1000)), isTrue);
+    expect(service.processAudioPacketForTest(_pcmFrame(0)), isTrue);
+    await service.waitForProcessing();
+
+    expect(command.accepted.single.lengthInBytes, 1280);
+    expect(
+      freeText.accepted.map((bytes) => bytes.lengthInBytes),
+      contains(1280),
+    );
+  });
+
+  test('backlog rejection preserves the admitted incomplete batch', () async {
+    final _FakeRecognizer command = _FakeRecognizer();
+    final _FakeRecognizer freeText = _FakeRecognizer();
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeText: freeText,
+      commandBacklogBytes: 640,
+    );
+    addTearDown(service.dispose);
+    await _start(service);
+
+    expect(service.processAudioPacketForTest(_pcmFrame(1000)), isTrue);
+    expect(service.processAudioPacketForTest(_pcmFrame(1000)), isFalse);
+    await service.stopListening();
+
+    expect(command.accepted, hasLength(1));
+    expect(command.accepted.single.lengthInBytes, 640);
+  });
+
+  test('free-text disable drains an incomplete production batch', () async {
+    final _FakeRecognizer command = _FakeRecognizer();
+    final _FakeRecognizer freeText = _FakeRecognizer();
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeText: freeText,
+    );
+    addTearDown(service.dispose);
+    await _start(service);
+
+    expect(service.processAudioPacketForTest(_pcmFrame(1000)), isTrue);
+    await service.setFreeTextEnabled(false);
+    await service.waitForProcessing();
+
+    expect(command.accepted.single.lengthInBytes, 640);
+    expect(
+      freeText.accepted.map((bytes) => bytes.lengthInBytes),
+      contains(640),
+    );
+    expect(service.usesFreeTextRecognition, isFalse);
+  });
+
   test('T13 backlog invalidates live result and uses replay fallback',
       () async {
     final _FakeRecognizer command = _FakeRecognizer()
@@ -247,6 +431,95 @@ void main() {
     expect((await phrase).text, 'жёлтый');
     expect(service.replayFallbackCount, 1);
     expect(freeText.accepted.length, lessThan(command.accepted.length));
+  });
+
+  test('slow live lane stops accepting the invalidated utterance', () async {
+    final _FakeRecognizer command = _FakeRecognizer();
+    final _FakeRecognizer freeText = _FakeRecognizer();
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeText: freeText,
+    );
+    addTearDown(service.dispose);
+    await _start(service);
+    command.accepted.clear();
+    freeText.accepted.clear();
+    final Completer<bool> blockedAccept = Completer<bool>();
+    freeText.acceptOverride = (_) => blockedAccept.future;
+
+    for (int index = 0; index < 12; index++) {
+      expect(service.processAudioPacketForTest(_pcmFrame(1000)), isTrue);
+    }
+    await Future<void>.delayed(Duration.zero);
+    blockedAccept.complete(false);
+    await service.waitForProcessing();
+
+    expect(command.accepted, hasLength(3));
+    expect(freeText.accepted, hasLength(2));
+  });
+
+  test('enabling live lane resyncs after grammar-only natural endpoints',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpoints.addAll(<bool>[true, true])
+      ..results.addAll(<String>[
+        _json(text: 'вверх'),
+        _json(text: 'вниз'),
+      ]);
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finals.addAll(<String>[
+        _json(),
+        _json(text: 'жёлтый'),
+      ]);
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeText: freeText,
+      speechSegmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(milliseconds: 20),
+      ),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.setFreeTextEnabled(true);
+    final Future<SegmentedRecognitionResult> phrase = service
+        .segmentedResultsStream
+        .firstWhere((event) => event.lane == RecognitionLane.freeText);
+
+    await _processUtterance(service);
+    await service.waitForProcessing().timeout(const Duration(seconds: 1));
+
+    expect((await phrase).text, 'жёлтый');
+  });
+
+  test('live free-text is prewarmed but receives PCM only after enable',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer();
+    final _FakeRecognizer freeText = _FakeRecognizer();
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeText: freeText,
+    );
+    addTearDown(service.dispose);
+
+    await service.prepare();
+    expect(freeText.accepted, hasLength(1));
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing();
+    expect(freeText.accepted, hasLength(1));
+
+    await service.setFreeTextEnabled(true);
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing();
+    expect(freeText.accepted, hasLength(2));
   });
 
   test('T19 shadow mode publishes replay result only', () async {
@@ -684,7 +957,11 @@ void main() {
 SpeechRecognitionService _service({
   required _FakeRecognizer command,
   required _FakeRecognizer freeText,
-  int backlogBytes = 64000,
+  int backlogBytes = 5120,
+  int commandBacklogBytes = 64000,
+  SpeechSegmenter? speechSegmenter,
+  VoiceHintIndexCache? hintIndexCache,
+  bool prewarmHints = true,
   VoiceDynamicItemsSnapshot dynamicItems = const VoiceDynamicItemsSnapshot(
     revision: 1,
     items: <VoiceDynamicItem>[
@@ -693,12 +970,31 @@ SpeechRecognitionService _service({
     ],
   ),
 }) {
+  final VoiceActionCatalog actionCatalog = VoiceActionCatalog();
+  final Set<String> reservedPhrases =
+      actionCatalog.phrasesFor(WearScreenId.menu);
+  final VoiceHintIndexCache cache = hintIndexCache ?? VoiceHintIndexCache();
+  if (prewarmHints) {
+    cache.store(
+      snapshot: dynamicItems,
+      screen: WearScreenId.menu.name,
+      reservedPhrases: reservedPhrases,
+      hints: VoiceHintGenerator.generate(
+        dynamicItems,
+        reservedPhrases: reservedPhrases,
+      ),
+    );
+  }
   return SpeechRecognitionService(
     commandGrammar: const <String>['вверх', 'вниз', 'выбрать', '[unk]'],
     freeTextPipelineMode: FreeTextPipelineMode.liveWithReplayFallback,
+    commandBacklogLimitBytes: commandBacklogBytes,
     freeTextBacklogLimitBytes: backlogBytes,
-    speechSegmenter: SpeechSegmenter(calibrationDuration: Duration.zero),
+    speechSegmenter:
+        speechSegmenter ?? SpeechSegmenter(calibrationDuration: Duration.zero),
+    actionCatalog: actionCatalog,
     dynamicItemsProvider: (WearScreenId screen) => dynamicItems,
+    voiceHintIndexCache: cache,
     recognizerFactory: (RecognitionLane lane, List<String> grammar) async {
       return lane == RecognitionLane.command ? command : freeText;
     },

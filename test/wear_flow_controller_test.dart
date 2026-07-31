@@ -1662,8 +1662,12 @@ void main() {
       await controller.setRecognitionDelayVisible(
         WearScreenId.voiceClarification,
         true,
+        'Коровка пломбир',
       );
-      expect(glasses.payloads.last.statusText, 'Распознаю...');
+      expect(
+        glasses.payloads.last.statusText,
+        'Похоже: Коровка пломбир',
+      );
       expect(glasses.payloads.last.items, <String>[
         'Коровка пломбир',
         'Коровка стакан',

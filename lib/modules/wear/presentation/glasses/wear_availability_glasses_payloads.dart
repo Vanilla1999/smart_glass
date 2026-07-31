@@ -37,6 +37,7 @@ class WearAvailabilityGlassesPayloads {
   static WearGlassesPayload duplicates(
     List<WearAvailabilityProduct> products, {
     int selectedIndex = 0,
+    void Function()? onVoiceHintsPrepared,
   }) {
     final int selected = selectedIndex.clamp(0, products.length - 1);
     final int start = _pageStart(selected);
@@ -71,6 +72,7 @@ class WearAvailabilityGlassesPayloads {
         visibleItemIds: visibleProducts
             .map((WearAvailabilityProduct product) => product.id.toString())
             .toList(growable: false),
+        onPrepared: onVoiceHintsPrepared,
       ),
       selectedIndex: selected - start,
       pageText: _pageText(products.length, selected),
@@ -80,6 +82,7 @@ class WearAvailabilityGlassesPayloads {
   static WearGlassesPayload groups(
     List<WearAvailabilityGroup> groups, {
     int selectedIndex = 0,
+    void Function()? onVoiceHintsPrepared,
   }) {
     if (groups.isEmpty) {
       return const WearGlassesPayload(
@@ -105,15 +108,18 @@ class WearAvailabilityGlassesPayloads {
           .toList(growable: false),
       voiceHints: _voiceHints(
         WearScreenId.availabilityGroup,
-        groups
-            .map((WearAvailabilityGroup group) => VoiceDynamicItem(
-                  id: group.id.toString(),
-                  label: group.name,
-                ))
-            .toList(growable: false),
+        _snapshot(
+          groups
+              .map((WearAvailabilityGroup group) => VoiceDynamicItem(
+                    id: group.id.toString(),
+                    label: group.name,
+                  ))
+              .toList(growable: false),
+        ),
         visibleGroups
             .map((WearAvailabilityGroup group) => group.id.toString())
             .toList(growable: false),
+        onVoiceHintsPrepared,
       ),
       selectedIndex: selected - start,
       pageText: _pageText(groups.length, selected),
@@ -125,6 +131,7 @@ class WearAvailabilityGlassesPayloads {
     required List<WearAvailabilityProduct> products,
     required VoiceDynamicItemsSnapshot voiceSnapshot,
     int selectedIndex = 0,
+    void Function()? onVoiceHintsPrepared,
   }) {
     if (products.isEmpty) {
       return WearGlassesPayload(
@@ -155,10 +162,11 @@ class WearAvailabilityGlassesPayloads {
           .toList(growable: false),
       voiceHints: _voiceHints(
         WearScreenId.availabilityProduct,
-        voiceSnapshot.items,
+        voiceSnapshot,
         visibleProducts
             .map((WearAvailabilityProduct product) => product.id.toString())
             .toList(growable: false),
+        onVoiceHintsPrepared,
       ),
       selectedIndex: selected - start,
       pageText: _pageText(products.length, selected),
@@ -167,19 +175,24 @@ class WearAvailabilityGlassesPayloads {
 
   static List<WearGlassesVoiceHint> _voiceHints(
     WearScreenId screen,
-    List<VoiceDynamicItem> items,
+    VoiceDynamicItemsSnapshot snapshot,
     List<String> visibleItemIds,
+    void Function()? onVoiceHintsPrepared,
   ) {
-    final VoiceDynamicItemsSnapshot snapshot = VoiceDynamicItemsSnapshot(
-      revision: Object.hashAll(
-        items.map((VoiceDynamicItem item) => item.revisionHash),
-      ),
-      items: items,
-    );
     return WearGlassesVoiceHints.forVisibleItems(
       screen: screen,
       snapshot: snapshot,
       visibleItemIds: visibleItemIds,
+      onPrepared: onVoiceHintsPrepared,
+    );
+  }
+
+  static VoiceDynamicItemsSnapshot _snapshot(List<VoiceDynamicItem> items) {
+    return VoiceDynamicItemsSnapshot(
+      revision: Object.hashAll(
+        items.map((VoiceDynamicItem item) => item.revisionHash),
+      ),
+      items: items,
     );
   }
 

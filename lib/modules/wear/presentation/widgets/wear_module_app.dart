@@ -336,7 +336,11 @@ class _WearModuleAppState extends State<WearModuleApp>
       } else {
         _visibleVoiceDelaySegmentId = null;
       }
-      await flow.setRecognitionDelayVisible(event.sourceScreen, event.visible);
+      await flow.setRecognitionDelayVisible(
+        event.sourceScreen,
+        event.visible,
+        event.previewText,
+      );
     });
     _voiceReconnectingSub = widget.voiceReconnectingStream?.listen(
       (bool reconnecting) {

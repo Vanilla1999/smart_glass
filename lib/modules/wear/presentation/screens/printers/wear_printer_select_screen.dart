@@ -608,6 +608,15 @@ class _WearPrinterSelectScreenState
         visibleItemIds: visiblePrinters
             .map((WearPrinter printer) => printer.id)
             .toList(growable: false),
+        onPrepared: () {
+          if (!mounted || _dynamicVoiceItems().revision != snapshot.revision) {
+            return;
+          }
+          _sendGlassesState(
+            ref.read(wearPrinterSelectNotifierProvider),
+            fast: true,
+          );
+        },
       ),
       selectedIndex: selected - start,
       pageText: _pageText(printers.length, selected),

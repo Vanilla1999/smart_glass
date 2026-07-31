@@ -275,34 +275,66 @@ class _WearAvailabilityDirectScanScreenState
     WearAvailabilityDirectScanState state, {
     bool fast = false,
   }) {
+    if (fast) {
+      _sendGlassesPayload(state, fast: true);
+      return;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      WearGlassesPayload payload;
-      if (state.isLoading) {
-        payload = WearAvailabilityGlassesPayloads.loading(
-          title: 'Сканирование товара',
-          statusText: state.loadingText,
-          statusIcon: state.loadingIcon,
-        );
-      } else if (state.duplicateProducts.isNotEmpty) {
-        payload = WearAvailabilityGlassesPayloads.duplicates(
-          state.duplicateProducts,
-          selectedIndex: _focusedIndex,
-        );
-      } else {
-        payload = WearAvailabilityGlassesPayloads.directScanWaiting(
-          statusText: state.message,
-        );
-      }
-      WearDependencies.I.wearFlowController.rememberScreenPayload(
+      _sendGlassesPayload(state);
+    });
+  }
+
+  void _sendGlassesPayload(
+    WearAvailabilityDirectScanState state, {
+    bool fast = false,
+  }) {
+    if (!mounted ||
+        WearDependencies.I.wearFlowController.state.screen !=
+            WearScreenId.availabilityDirectScan) {
+      return;
+    }
+    final int expectedRevision = _dynamicVoiceItems().revision;
+    WearGlassesPayload payload;
+    if (state.isLoading) {
+      payload = WearAvailabilityGlassesPayloads.loading(
+        title: 'Сканирование товара',
+        statusText: state.loadingText,
+        statusIcon: state.loadingIcon,
+      );
+    } else if (state.duplicateProducts.isNotEmpty) {
+      payload = WearAvailabilityGlassesPayloads.duplicates(
+        state.duplicateProducts,
+        selectedIndex: _focusedIndex,
+        onVoiceHintsPrepared: () {
+          if (!mounted) return;
+          final WearAvailabilityDirectScanState current =
+              ref.read(wearAvailabilityDirectScanProvider);
+          if (_dynamicVoiceItems().revision != expectedRevision) {
+            return;
+          }
+          _sendGlassesPayload(current, fast: true);
+        },
+      );
+    } else {
+      payload = WearAvailabilityGlassesPayloads.directScanWaiting(
+        statusText: state.message,
+      );
+    }
+    WearDependencies.I.wearFlowController.rememberScreenPayload(
+      WearScreenId.availabilityDirectScan,
+      payload,
+    );
+    if (fast) {
+      WearStatusIconReporter.I.sendFastForScreen(
         WearScreenId.availabilityDirectScan,
         payload,
       );
-      if (fast) {
-        WearStatusIconReporter.I.sendFast(payload);
-      } else {
-        WearStatusIconReporter.I.send(payload);
-      }
-    });
+    } else {
+      WearStatusIconReporter.I.sendForScreen(
+        WearScreenId.availabilityDirectScan,
+        payload,
+      );
+    }
   }
 }
 

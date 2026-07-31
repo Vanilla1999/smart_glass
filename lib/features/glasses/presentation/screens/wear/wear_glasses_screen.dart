@@ -479,14 +479,18 @@ class _WearList extends StatelessWidget {
         state.pageText != null && state.pageText!.trim().isNotEmpty;
     final bool showNotice =
         state.statusText != null && state.statusText!.trim().isNotEmpty;
+    final bool reserveNoticeSpace = state.title == 'Товарная позиция';
     return SizedBox(
       width: 403,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: <Widget>[
-          if (showNotice) ...<Widget>[
-            _ListNotice(state.statusText!),
+          if (showNotice || reserveNoticeSpace) ...<Widget>[
+            SizedBox(
+              height: 32,
+              child: showNotice ? _ListNotice(state.statusText!) : null,
+            ),
             const SizedBox(height: 6),
           ],
           Row(
@@ -749,7 +753,7 @@ class _WearListItem extends StatelessWidget {
         width: double.infinity,
         height: 44,
         child: Padding(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Row(
             children: <Widget>[
               if (selected) ...<Widget>[

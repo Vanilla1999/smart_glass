@@ -553,7 +553,7 @@ void main() {
       expect(previews.single.itemId, 'yellow');
     });
 
-    test('recognition delay shows at 900 ms and clears with original context',
+    test('recognition preview only shows for a dictionary match and expires',
         () async {
       final _ManualTimerScheduler timers = _ManualTimerScheduler();
       final _FakeSpeechRecognitionService speech =
@@ -566,24 +566,39 @@ void main() {
       addTearDown(voiceControl.dispose);
       addTearDown(speech.dispose);
       final List<WearVoiceDelayEvent> delays = <WearVoiceDelayEvent>[];
+      final List<WearVoicePreviewEvent> previews = <WearVoicePreviewEvent>[];
       voiceControl.delayEventStream.listen(delays.add);
+      voiceControl.previewEventStream.listen(previews.add);
 
-      speech.emitFreeTextPartial('неоднозначно');
+      speech.emitFreeTextPartial('случайные слова');
       await Future<void>.delayed(Duration.zero);
-      timers.elapse(const Duration(milliseconds: 899));
+      timers.elapse(const Duration(milliseconds: 1000));
       expect(delays, isEmpty);
-      timers.elapse(const Duration(milliseconds: 1));
+
+      speech.emitFreeTextPartial(
+        'желтый',
+        dynamicItemId: 'yellow',
+      );
+      speech.emitFreeTextPartial(
+        'желтый принтер',
+        dynamicItemId: 'yellow',
+      );
       await Future<void>.delayed(Duration.zero);
+      timers.elapse(const Duration(milliseconds: 150));
+      await Future<void>.delayed(Duration.zero);
+      voiceControl.markPreviewUseful(previews.single);
+      await Future<void>.delayed(Duration.zero);
+
       expect(delays.single.visible, isTrue);
       expect(delays.single.sourceScreen, WearScreenId.help);
 
-      speech.endSegment();
+      timers.elapse(const Duration(seconds: 3));
       await Future<void>.delayed(Duration.zero);
       expect(delays.last.visible, isFalse);
       expect(delays.last.sourceScreen, WearScreenId.help);
     });
 
-    test('recognition delay cannot acquire a newer route context', () async {
+    test('stale dictionary preview cannot show recognition delay', () async {
       final _ManualTimerScheduler timers = _ManualTimerScheduler();
       final _FakeSpeechRecognitionService speech =
           _FakeSpeechRecognitionService();
@@ -595,20 +610,23 @@ void main() {
       addTearDown(voiceControl.dispose);
       addTearDown(speech.dispose);
       final List<WearVoiceDelayEvent> delays = <WearVoiceDelayEvent>[];
+      final List<WearVoicePreviewEvent> previews = <WearVoicePreviewEvent>[];
       voiceControl.delayEventStream.listen(delays.add);
+      voiceControl.previewEventStream.listen(previews.add);
 
-      speech.emitFreeTextPartial('старый экран');
+      speech.emitFreeTextPartial('старый', dynamicItemId: 'old');
+      speech.emitFreeTextPartial('старый экран', dynamicItemId: 'old');
       await Future<void>.delayed(Duration.zero);
       speech.sourceScreen = WearScreenId.settings;
       speech.currentRouteRevision = 2;
-      timers.elapse(const Duration(milliseconds: 900));
+      timers.elapse(const Duration(milliseconds: 150));
       await Future<void>.delayed(Duration.zero);
 
-      expect(delays.single.sourceScreen, WearScreenId.menu);
-      expect(delays.single.routeRevision, 1);
+      expect(previews, isEmpty);
+      expect(delays, isEmpty);
     });
 
-    test('preview from another segment cannot clear recognition delay',
+    test('preview from another segment cannot show recognition delay',
         () async {
       final _ManualTimerScheduler timers = _ManualTimerScheduler();
       final _FakeSpeechRecognitionService speech =
@@ -640,11 +658,10 @@ void main() {
         itemId: 'yellow',
         isCommandLane: false,
       ));
-      timers.elapse(const Duration(milliseconds: 900));
+      timers.elapse(const Duration(milliseconds: 1000));
       await Future<void>.delayed(Duration.zero);
 
-      expect(delays.single.visible, isTrue);
-      expect(delays.single.segmentId, 1);
+      expect(delays, isEmpty);
     });
 
     test('control-service partial revision state remains bounded', () async {
@@ -1834,6 +1851,12 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   @override
   FreeTextPipelineMode get freeTextPipelineMode =>
       FreeTextPipelineMode.replayOnly;
+
+  @override
+  bool processAudioPacketForTest(Object bytes) => false;
+
+  @override
+  Future<void> prepareVoiceHints(WearScreenId screen) async {}
 
   @override
   int get freeTextEpoch => 0;

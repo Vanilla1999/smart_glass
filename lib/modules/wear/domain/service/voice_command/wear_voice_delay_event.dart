@@ -9,6 +9,7 @@ class WearVoiceDelayEvent {
     required this.routeRevision,
     required this.grammarRevision,
     required this.freeTextEpoch,
+    this.previewText,
   });
 
   final bool visible;
@@ -18,4 +19,5 @@ class WearVoiceDelayEvent {
   final int routeRevision;
   final int grammarRevision;
   final int freeTextEpoch;
+  final String? previewText;
 }

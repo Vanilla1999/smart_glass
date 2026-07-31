@@ -60,6 +60,7 @@ class VoiceScreenCapabilities {
   static const Set<WearVoiceCommand> _globalCommands = <WearVoiceCommand>{
     WearVoiceCommand.stopMicrophone,
     WearVoiceCommand.startMicrophone,
+    WearVoiceCommand.flashlight,
   };
 
   static const Set<WearVoiceCommand> _listNavigation = <WearVoiceCommand>{
@@ -132,7 +133,15 @@ class VoiceScreenCapabilities {
       WearVoiceCommand.flashlight,
       WearVoiceCommand.takePhoto,
     },
+    WearScreenId.scanIdle: <WearVoiceCommand>{
+      WearVoiceCommand.back,
+      WearVoiceCommand.home,
+      WearVoiceCommand.flashlight,
+    },
     WearScreenId.homeConfirm: <WearVoiceCommand>{
+      WearVoiceCommand.up,
+      WearVoiceCommand.down,
+      WearVoiceCommand.select,
       WearVoiceCommand.yes,
       WearVoiceCommand.no,
       WearVoiceCommand.back,
@@ -361,7 +370,7 @@ class VoiceActionCatalog {
         }),
     _action(WearVoiceCommand.flashlight, 'фонарик',
         VoiceActivationPolicy.endpointOnly,
-        screens: <WearScreenId>{WearScreenId.availabilityDirectScan},
+        screens: _allScreens,
         aliases: <String>{'фонарик'}),
     _action(WearVoiceCommand.takePhoto, 'сделать фото',
         VoiceActivationPolicy.endpointOnly,
@@ -430,6 +439,7 @@ class VoiceActionCatalog {
     WearScreenId.productSelect,
     WearScreenId.voiceClarification,
     WearScreenId.printerSelect,
+    WearScreenId.homeConfirm,
     WearScreenId.continueScan,
     WearScreenId.help,
     WearScreenId.settings,

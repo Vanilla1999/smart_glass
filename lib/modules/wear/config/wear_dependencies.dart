@@ -12,6 +12,7 @@ import 'package:smart_glasses/modules/wear/domain/availability/use_case/wear_ava
 import 'package:smart_glasses/modules/wear/domain/auth/use_case/authenticate_user_use_case.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_control_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_hint_index_cache.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/free_text_pipeline_mode.dart';
@@ -48,6 +49,7 @@ class WearDependencies {
 
   late final WearVoiceControlService voiceControlService;
   late final VoiceActionCatalog voiceActionCatalog;
+  late final VoiceHintIndexCache voiceHintIndexCache;
 
   late final WearFlowController wearFlowController;
   final WearActualScreenStore actualScreenStore = WearActualScreenStore();
@@ -57,7 +59,7 @@ class WearDependencies {
 
   void _initVoiceServices() {
     audioStreamService = AudioStreamService(
-      recordContinuousWav: WearMockConfig.isEnabled,
+      recordContinuousWav: voiceCaptureWavDiagnostics,
     );
     wearFlowController = WearFlowController(
       glassesOutput: FlutterWearGlassesOutput(),
@@ -73,12 +75,15 @@ class WearDependencies {
         runtimeResolver: wearFlowController.canHandleVoiceCommand,
       ),
     );
+    voiceHintIndexCache = VoiceHintIndexCache();
     WearGlassesVoiceHints.configureActionCatalog(voiceActionCatalog);
+    WearGlassesVoiceHints.configureVoiceHintIndexCache(voiceHintIndexCache);
     speechRecognitionService = SpeechRecognitionService(
       audioStreamService: audioStreamService,
       commandGrammar: voiceActionCatalog.grammarFor(WearScreenId.menu),
       actionCatalog: voiceActionCatalog,
       dynamicItemsProvider: wearFlowController.dynamicVoiceItemsFor,
+      voiceHintIndexCache: voiceHintIndexCache,
       freeTextPipelineMode: FreeTextPipelineMode.parse(
         dotenv.env['WEAR_FREE_TEXT_PIPELINE_MODE'],
       ),
