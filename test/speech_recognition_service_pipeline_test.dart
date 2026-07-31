@@ -219,7 +219,13 @@ void main() {
 
   test('grammar cutover never replays audio accepted by old grammar', () async {
     final _FakeRecognizer command = _FakeRecognizer();
-    final SpeechRecognitionService service = _service(command: command);
+    final SpeechRecognitionService service = _service(
+      command: command,
+      segmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(milliseconds: 40),
+      ),
+    );
     addTearDown(service.dispose);
     await service.prepare();
     await service.startSession();
@@ -228,13 +234,127 @@ void main() {
     final Uint8List oldFrame = _pcmFrame(1000);
     final Uint8List newFrame = _pcmFrame(2000);
     await service.processAudioChunk(oldFrame);
-    await service.switchCommandGrammar(
+    final Future<void> switching = service.switchCommandGrammar(
       screen: WearScreenId.help,
       grammar: const <String>['назад', '[unk]'],
     );
+    var completed = false;
+    switching.then((_) => completed = true);
+    await Future<void>.delayed(Duration.zero);
+    expect(completed, isFalse);
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.processAudioChunk(_pcmFrame(0));
+    await switching;
     await service.processAudioChunk(newFrame);
 
-    expect(command.accepted, <Uint8List>[oldFrame, newFrame]);
+    expect(
+        command.accepted, containsAllInOrder(<Uint8List>[oldFrame, newFrame]));
+  });
+
+  test('grammar request after frame admission waits for utterance boundary',
+      () async {
+    final Completer<void> firstGrammarBlock = Completer<void>();
+    final Completer<void> firstGrammarStarted = Completer<void>();
+    final _FakeRecognizer command = _FakeRecognizer();
+    final SpeechRecognitionService service = _service(
+      command: command,
+      segmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(milliseconds: 40),
+      ),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    command
+      ..grammarBlock = firstGrammarBlock
+      ..grammarStarted = firstGrammarStarted;
+
+    final Future<void> firstSwitch = service.switchCommandGrammar(
+      screen: WearScreenId.help,
+      grammar: const <String>['назад', '[unk]'],
+    );
+    await firstGrammarStarted.future;
+    final Future<void> admitted = service.processAudioChunk(_pcmFrame(1000));
+    final Future<void> deferred = service.switchCommandGrammar(
+      screen: WearScreenId.settings,
+      grammar: const <String>['домой', '[unk]'],
+    );
+    firstGrammarBlock.complete();
+    await firstSwitch;
+    await admitted;
+    await Future<void>.delayed(Duration.zero);
+
+    expect(command.grammars, isNot(contains(const <String>['домой', '[unk]'])));
+    expect(service.sourceScreen, WearScreenId.help);
+
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.processAudioChunk(_pcmFrame(0));
+    await deferred;
+
+    expect(command.grammars.last, const <String>['домой', '[unk]']);
+    expect(service.sourceScreen, WearScreenId.settings);
+  });
+
+  test('deferred grammar switches coalesce and complete at the boundary',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer();
+    final SpeechRecognitionService service = _service(
+      command: command,
+      segmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(milliseconds: 40),
+      ),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    final Future<void> first = service.switchCommandGrammar(
+      screen: WearScreenId.help,
+      grammar: const <String>['назад', '[unk]'],
+    );
+    final Future<void> second = service.switchCommandGrammar(
+      screen: WearScreenId.settings,
+      grammar: const <String>['домой', '[unk]'],
+    );
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.processAudioChunk(_pcmFrame(0));
+    await Future.wait(<Future<void>>[first, second]);
+
+    expect(service.sourceScreen, WearScreenId.settings);
+    expect(command.grammars.last, const <String>['домой', '[unk]']);
+    expect(command.grammars, isNot(contains(const <String>['назад', '[unk]'])));
+  });
+
+  test('deferred grammar failure reaches its caller', () async {
+    final _FakeRecognizer command = _FakeRecognizer();
+    final SpeechRecognitionService service = _service(
+      command: command,
+      segmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(milliseconds: 40),
+      ),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    command.grammarFailuresRemaining = 2;
+    final Future<void> switching = service.switchCommandGrammar(
+      screen: WearScreenId.help,
+      grammar: const <String>['назад', '[unk]'],
+    );
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.processAudioChunk(_pcmFrame(0));
+
+    await expectLater(switching, throwsStateError);
+    expect(service.sourceScreen, WearScreenId.menu);
   });
 
   test('free-text replay waits for recognizer creation', () async {
@@ -587,6 +707,40 @@ void main() {
     expect(failed.disposeCalls, 1);
   });
 
+  test('failed boundary replacement still disposes uncertain recognizer',
+      () async {
+    final Completer<String> blockedFinal = Completer<String>();
+    final _FakeRecognizer failed = _FakeRecognizer()
+      ..finalOverride = () => blockedFinal.future;
+    int factoryCalls = 0;
+    final SpeechRecognitionService service = SpeechRecognitionService(
+      commandGrammar: const <String>['вверх', '[unk]'],
+      speechSegmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(milliseconds: 40),
+        maxSegmentDuration: const Duration(seconds: 30),
+      ),
+      recognizerFactory: (RecognitionLane lane, List<String> grammar) async {
+        if (factoryCalls++ == 0) return failed;
+        throw StateError('replacement failed');
+      },
+      recognizerOperationTimeout: const Duration(milliseconds: 20),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.processAudioChunk(_pcmFrame(0));
+
+    expect(failed.disposeCalls, 0);
+    blockedFinal.complete(_json());
+    await Future<void>.delayed(Duration.zero);
+    expect(failed.disposeCalls, 1);
+  });
+
   test('silence boundary separates different commands and utterance ids',
       () async {
     final _FakeRecognizer command = _FakeRecognizer()
@@ -867,6 +1021,7 @@ class _FakeRecognizer implements VoiceRecognizer {
   bool failNextGrammar = false;
   int grammarFailuresRemaining = 0;
   Completer<void>? grammarBlock;
+  Completer<void>? grammarStarted;
   Completer<void>? resetBlock;
   Completer<void>? resetStarted;
   Future<bool> Function(Uint8List bytes)? acceptOverride;
@@ -922,6 +1077,8 @@ class _FakeRecognizer implements VoiceRecognizer {
 
   @override
   Future<void> setGrammar(List<String> grammar) async {
+    final Completer<void>? started = grammarStarted;
+    if (started != null && !started.isCompleted) started.complete();
     final Completer<void>? block = grammarBlock;
     if (block != null) {
       grammarBlock = null;

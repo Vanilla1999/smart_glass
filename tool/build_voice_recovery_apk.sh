@@ -19,6 +19,12 @@ build_args=(
   --dart-define="BUILD_TIMESTAMP=$timestamp"
   --dart-define="GIT_DIRTY=$dirty"
   --dart-define="SOURCE_PATCH_SHA=$patch_sha"
+  --dart-define="WEAR_VALIDATION_BUILD=true"
+  --dart-define="WEAR_USE_MOCKS=false"
+  --dart-define="WEAR_MOCK_AUTH_ON_LOGO=false"
+  --dart-define="WEAR_MOCK_SKIP_AUTH_ON_LOGO=false"
+  --dart-define="WEAR_SKIP_SCANNER_CONNECT_SCREEN=true"
+  --dart-define="VOICE_CAPTURE_WAV_DIAGNOSTICS=false"
 )
 
 if test -n "$free_text_pipeline_mode"; then
@@ -29,6 +35,6 @@ fi
 
 fvm flutter build apk "${build_args[@]}"
 
-printf 'Native UAC4 release APK: sha=%s dirty=%s patch=%s freeTextMode=%s\n' \
+printf 'Native UAC4 validation APK: sha=%s dirty=%s patch=%s freeTextMode=%s mocks=false scannerSkip=true wav=false\n' \
   "$sha" "$dirty" "$patch_sha" \
   "${free_text_pipeline_mode:-asset/default}"

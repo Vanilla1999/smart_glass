@@ -95,19 +95,16 @@ class WearAuthNotifier extends StateNotifier<WearAuthState>
       print('[AUTH] handleLogoTap ignored: already authorized');
       return;
     }
-    final bool useAuthMock = WearMockConfig.isEnabled || await _isAuthMockEnabled();
+    final bool useAuthMock =
+        WearMockConfig.isEnabled || await _isAuthMockEnabled();
     print('[AUTH] handleLogoTap useAuthMock=$useAuthMock');
     if (!useAuthMock) {
       print('[AUTH] handleLogoTap using real logo barcode');
       await authorizeByBadgeBarcode(_realLogoBarcode);
       return;
     }
-    if (_isMockLogoAuthEnabled()) {
-      print('[AUTH] handleLogoTap using mock logo barcode');
-      await authorizeByBadgeBarcode(_mockLogoBarcode);
-      return;
-    }
-    print('[AUTH] handleLogoTap no action');
+    print('[AUTH] handleLogoTap using mock logo barcode');
+    await authorizeByBadgeBarcode(_mockLogoBarcode);
   }
 
   Future<void> handleLogoLongPress() async {
@@ -249,10 +246,6 @@ class WearAuthNotifier extends StateNotifier<WearAuthState>
       return raw.substring('Exception: '.length);
     }
     return raw;
-  }
-
-  bool _isMockLogoAuthEnabled() {
-    return dotenv.env['WEAR_MOCK_AUTH_ON_LOGO'] == 'true';
   }
 
   bool _isMockLogoSkipAuthEnabled() {

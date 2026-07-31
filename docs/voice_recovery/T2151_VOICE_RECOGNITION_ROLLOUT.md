@@ -89,6 +89,13 @@ per-route `setGrammar()` calls.
 
 ## Validation Matrix
 
+The validation build script now pins mocks, mock authentication shortcuts,
+scanner skipping and diagnostic WAV capture to `false` with compile-time
+defines. Runtime logs include the source fingerprint and effective voice
+configuration. This improves session precondition evidence but does not satisfy
+the device latency, thermal, battery, route, model or Android-version acceptance
+measurements.
+
 - 20 cold starts each for A, B, and C; play a fixed phrase before recorder start.
 - Record start, first callback, first non-zero, first VAD start, first partial,
   and command execution. Save the first 8 seconds of PCM only in diagnostic APKs.

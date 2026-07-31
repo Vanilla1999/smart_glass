@@ -77,8 +77,9 @@ class VoiceListMatcher {
   static VoiceListMatch<T> match<T>(
     String phrase,
     List<T> items,
-    String Function(T item) labelOf,
-  ) {
+    String Function(T item) labelOf, {
+    Iterable<String> Function(T item)? aliasesOf,
+  }) {
     final String query = normalize(phrase);
     if (query.isEmpty || items.isEmpty) {
       return VoiceListMatch<T>.none();
@@ -86,10 +87,17 @@ class VoiceListMatcher {
 
     final List<String> queryWords = query.split(' ');
     final List<T> matches = items.where((T item) {
-      final String label = normalize(labelOf(item));
-      if (label.isEmpty) return false;
-      if (_containsPhrase(label, query)) return true;
-      return _allQueryWordsMatch(queryWords, label.split(' '));
+      final List<String> searchable = <String>[
+        normalize(labelOf(item)),
+        ...?aliasesOf?.call(item).map(normalize),
+      ].where((String value) => value.isNotEmpty).toList(growable: false);
+      if (searchable.any((String value) => _containsPhrase(value, query))) {
+        return true;
+      }
+      final List<String> words = searchable
+          .expand((value) => value.split(' '))
+          .toList(growable: false);
+      return _allQueryWordsMatch(queryWords, words);
     }).toList(growable: false);
 
     if (matches.isEmpty) {
@@ -98,6 +106,26 @@ class VoiceListMatcher {
     if (matches.length == 1) {
       return VoiceListMatch<T>.unique(matches.single);
     }
+    return VoiceListMatch<T>.ambiguous(matches);
+  }
+
+  static VoiceListMatch<T> matchExactPhrase<T>(
+    String phrase,
+    List<T> items,
+    String Function(T item) labelOf, {
+    Iterable<String> Function(T item)? aliasesOf,
+  }) {
+    final String query = normalize(phrase);
+    if (query.isEmpty || items.isEmpty) return VoiceListMatch<T>.none();
+    final List<T> matches = items.where((T item) {
+      return <String>[
+        normalize(labelOf(item)),
+        ...?aliasesOf?.call(item).map(normalize),
+      ].any(
+          (String value) => value.isNotEmpty && _containsPhrase(value, query));
+    }).toList(growable: false);
+    if (matches.isEmpty) return VoiceListMatch<T>.none();
+    if (matches.length == 1) return VoiceListMatch<T>.unique(matches.single);
     return VoiceListMatch<T>.ambiguous(matches);
   }
 

@@ -19,14 +19,14 @@ class RecognitionArbitration {
       : this._(stableCandidate: result);
   const RecognitionArbitration.phrase(SegmentedRecognitionResult phrase)
       : this._(phrase: phrase);
-  const RecognitionArbitration.preview(String preview)
+  const RecognitionArbitration.preview(SegmentedRecognitionResult preview)
       : this._(preview: preview);
   const RecognitionArbitration.ignoredEndpointOnly()
       : this._(ignoredEndpointOnly: true);
 
   final WearVoiceCommand? command;
   final SegmentedRecognitionResult? phrase;
-  final String? preview;
+  final SegmentedRecognitionResult? preview;
   final SegmentedRecognitionResult? stableCandidate;
   final bool clearPreview;
   final bool ignoredEndpointOnly;
@@ -69,8 +69,16 @@ class RecognitionArbiter {
     if (_claimedUtterances.contains(key)) return null;
     final WearScreenId screen = result.sourceScreen;
 
+    if (result.kind == RecognitionKind.partial &&
+        result.dynamicItemId != null) {
+      return RecognitionArbitration.preview(result);
+    }
+
     if (result.lane == RecognitionLane.freeText) {
-      if (result.kind == RecognitionKind.partial) return null;
+      if (result.kind == RecognitionKind.partial) {
+        return null;
+      }
+      _claim(key);
       return RecognitionArbitration.phrase(result);
     }
 
@@ -141,6 +149,12 @@ class RecognitionArbiter {
     }
     _claim(key);
     return RecognitionArbitration.command(action!.command);
+  }
+
+  bool canPreview(SegmentedRecognitionResult candidate) {
+    return _isCurrent(candidate) &&
+        candidate.dynamicItemId != null &&
+        !_claimedUtterances.contains(_key(candidate));
   }
 
   RecognitionArbitration? endSegment(SpeechSegmentEnded ended) => null;

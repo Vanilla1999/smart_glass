@@ -59,7 +59,7 @@ private const val VOICE_TAG = "NativeVoiceCapture"
 private const val UAC4_PACKAGE = "com.xcheng.uac4client"
 private const val UAC4_CLASS = "com.xcheng.uac4client.Uac4ClientService"
 private const val SSP_FRAME_BYTES = 2048
-private const val PCM_HEADER_BYTES = 32
+private const val PCM_HEADER_BYTES = 40
 private const val UAC4_PACKET_BYTES = 32 * 1024
 private const val MONO_PACKET_BYTES = SSP_FRAME_BYTES / 4 * 2
 private const val MAX_PENDING_INPUT_BYTES = UAC4_PACKET_BYTES * 8
@@ -187,6 +187,8 @@ private class NativeVoiceCaptureManager(
     private val inputQueue = ArrayDeque<CaptureInput>()
     private val inputBudget = ByteBudget(MAX_PENDING_INPUT_BYTES)
     private val inputBuffer = PcmRingBuffer(MAX_PENDING_INPUT_BYTES)
+    private val inputTimestampSpans = ArrayDeque<InputTimestampSpan>()
+    private var lastPublishedSourceTimestampNanos = 0L
     private val sspInput = ByteArray(SSP_FRAME_BYTES)
     private val sspOutput = ByteArray(SSP_FRAME_BYTES / 4)
     private val rawLightDenoiser = RawLightDenoiser()
@@ -206,6 +208,7 @@ private class NativeVoiceCaptureManager(
     private val captureRevision: Long get() = leaseState.revision
     private var nextSequence = 0L
     private val pcmStreamingGate = PcmStreamingGate()
+    private var pendingDeliveryStartedAtMs: Long? = null
     private var firstCallbackAtMs: Long? = null
     private var captureStartedAtMs: Long? = null
     @Volatile private var dartReady = false
@@ -273,14 +276,27 @@ private class NativeVoiceCaptureManager(
                     overrun = true
                     false
                 } else {
-                    inputQueue.addLast(CaptureInput(data.copyOf(), generation, captureRevision))
+                    inputQueue.addLast(
+                        CaptureInput(
+                            data.copyOf(),
+                            generation,
+                            captureRevision,
+                            SystemClock.elapsedRealtimeNanos(),
+                            System.currentTimeMillis() * 1_000L,
+                        ),
+                    )
                     drainSignal.request()
                 }
             }
             if (shouldDrain) {
                 worker.post(::drainInput)
             } else if (overrun) {
-                worker.post { terminateCapture("PCM_QUEUE_OVERRUN") }
+                worker.post {
+                    terminateCapture(
+                        "PCM_QUEUE_OVERRUN",
+                        pcmQueueDetails("callback_budget", data.size),
+                    )
+                }
             }
             if (!overrun) worker.post { armCallbackWatchdog(generation) }
         }
@@ -325,8 +341,14 @@ private class NativeVoiceCaptureManager(
         "receivedPcmPackets" to pcmStreamingGate.acceptedPackets,
         "firstCallbackAgeMs" to firstCallbackAtMs?.let { SystemClock.elapsedRealtime() - it },
         "pendingPcm" to (delivery.pending != null),
+        "pendingPcmSequence" to delivery.pending?.sequence,
+        "pendingPcmAckAgeMs" to pendingDeliveryStartedAtMs?.let {
+            SystemClock.elapsedRealtime() - it
+        },
         "pendingInputBytes" to inputBuffer.size,
         "pendingCallbacks" to synchronized(inputLock) { inputQueue.size },
+        "pendingCallbackBytes" to synchronized(inputLock) { inputBudget.used },
+        "pendingTimestampSpans" to inputTimestampSpans.size,
             "lateCallbacks" to lateCallbacks,
             "preReadyCallbacks" to preReadyCallbacks,
         "inputChannels" to inputMetrics.mapIndexed { index, metrics ->
@@ -546,12 +568,29 @@ private class NativeVoiceCaptureManager(
                     continue
                 }
                 if (!inputBuffer.append(input.bytes)) {
-                    terminateCapture("PCM_QUEUE_OVERRUN")
+                    terminateCapture(
+                        "PCM_QUEUE_OVERRUN",
+                        pcmQueueDetails("ring_buffer", input.bytes.size),
+                    )
                     return
                 }
+                inputTimestampSpans.addLast(
+                    InputTimestampSpan(
+                        remainingBytes = input.bytes.size,
+                        elapsedRealtimeNanos = input.elapsedRealtimeNanos,
+                        capturedAtEpochMicros = input.capturedAtEpochMicros,
+                    ),
+                )
             }
             var monoPacketSize = 0
+            var sourceElapsedRealtimeNanos = 0L
+            var capturedAtEpochMicros = 0L
             while (monoPacketSize < MONO_PACKET_BYTES && inputBuffer.readFrame(sspInput)) {
+                val sourceTimestamp = consumeInputTimestamp(SSP_FRAME_BYTES)
+                if (sourceElapsedRealtimeNanos == 0L) {
+                    sourceElapsedRealtimeNanos = sourceTimestamp.elapsedRealtimeNanos
+                    capturedAtEpochMicros = sourceTimestamp.capturedAtEpochMicros
+                }
                 synchronized(inputLock) { inputBudget.release(SSP_FRAME_BYTES) }
                 val leaseId = activeLeaseId ?: return
                 inputMetrics = PcmMetrics.interleavedPcm16Le(sspInput, 4)
@@ -574,20 +613,43 @@ private class NativeVoiceCaptureManager(
                 if (nextSequence == 0L) {
                     emitDiagnostic("firstProcessedPcm", packetBytes = monoPacketSize)
                 }
-                publishMono(leaseId, monoPacket, monoPacketSize)
+                publishMono(
+                    leaseId,
+                    monoPacket,
+                    monoPacketSize,
+                    sourceElapsedRealtimeNanos,
+                    capturedAtEpochMicros,
+                )
             }
         }
     }
 
-    private fun publishMono(leaseId: Long, pcm: ByteArray, pcmSize: Int) {
+    private fun publishMono(
+        leaseId: Long,
+        pcm: ByteArray,
+        pcmSize: Int,
+        sourceElapsedRealtimeNanos: Long,
+        capturedAtEpochMicros: Long,
+    ) {
         val sequence = nextSequence++
+        val packetTimestampNanos = maxOf(sourceElapsedRealtimeNanos, lastPublishedSourceTimestampNanos + 1L)
+        lastPublishedSourceTimestampNanos = packetTimestampNanos
         val key = DeliveryKey(captureRevision, leaseId, sequence)
         if (!delivery.begin(key)) return
+        pendingDeliveryStartedAtMs = SystemClock.elapsedRealtime()
         val packet = ByteBuffer.allocate(PCM_HEADER_BYTES + pcmSize).order(ByteOrder.BIG_ENDIAN)
-            .putInt(1).putInt(PCM_HEADER_BYTES).putLong(leaseId).putLong(sequence).putLong(SystemClock.elapsedRealtimeNanos()).put(pcm, 0, pcmSize).array()
+            .putInt(2)
+            .putInt(PCM_HEADER_BYTES)
+            .putLong(leaseId)
+            .putLong(sequence)
+            .putLong(packetTimestampNanos)
+            .putLong(capturedAtEpochMicros)
+            .put(pcm, 0, pcmSize)
+            .array()
         val publisher = publishPacket
         if (publisher == null) {
             delivery.settle(key)
+            pendingDeliveryStartedAtMs = null
             terminateCapture("PCM_ACK_TIMEOUT")
             return
         }
@@ -597,11 +659,13 @@ private class NativeVoiceCaptureManager(
             }
             if (ack == null || ack.leaseId != key.leaseId || ack.sequence != key.sequence) {
                 delivery.settle(key)
+                pendingDeliveryStartedAtMs = null
                 cancelAckTimeout()
                 terminateCapture("PCM_CONSUMER_REJECTED_2")
                 return@post
             }
             delivery.settle(key)
+            pendingDeliveryStartedAtMs = null
             cancelAckTimeout()
             if (ack.status != 0) {
                     terminateCapture(
@@ -614,6 +678,7 @@ private class NativeVoiceCaptureManager(
         } }
         ackTimeout = Runnable {
             if (delivery.settle(key)) {
+                pendingDeliveryStartedAtMs = null
                 terminateCapture("PCM_ACK_TIMEOUT")
             }
         }.also { worker.postDelayed(it, PCM_ACK_TIMEOUT_MILLIS) }
@@ -628,11 +693,26 @@ private class NativeVoiceCaptureManager(
 
     private fun clearInput() {
         inputBuffer.clear()
+        inputTimestampSpans.clear()
+        lastPublishedSourceTimestampNanos = 0L
         synchronized(inputLock) {
             inputQueue.clear()
             inputBudget.clear()
             drainSignal.idle()
         }
+    }
+
+    private fun consumeInputTimestamp(byteCount: Int): InputTimestampSpan {
+        val first = inputTimestampSpans.first()
+        var remaining = byteCount
+        while (remaining > 0) {
+            val span = inputTimestampSpans.first()
+            val consumed = minOf(remaining, span.remainingBytes)
+            span.remainingBytes -= consumed
+            remaining -= consumed
+            if (span.remainingBytes == 0) inputTimestampSpans.removeFirst()
+        }
+        return first
     }
 
     private fun invalidateCapture(owner: String, leaseId: Long) {
@@ -647,7 +727,31 @@ private class NativeVoiceCaptureManager(
 
     private fun invalidateDelivery() {
         delivery.invalidate()
+        pendingDeliveryStartedAtMs = null
         cancelAckTimeout()
+    }
+
+    private fun pcmQueueDetails(stage: String, incomingBytes: Int): String {
+        val nowNanos = SystemClock.elapsedRealtimeNanos()
+        val (callbackCount, callbackBytes, oldestCallbackAgeMs) = synchronized(inputLock) {
+            val oldestNanos = inputQueue.firstOrNull()?.elapsedRealtimeNanos
+            Triple(
+                inputQueue.size,
+                inputBudget.used,
+                oldestNanos?.let { (nowNanos - it).coerceAtLeast(0L) / 1_000_000L },
+            )
+        }
+        val pending = delivery.pending
+        val ackAgeMs = pendingDeliveryStartedAtMs?.let {
+            SystemClock.elapsedRealtime() - it
+        }
+        return "stage=$stage incomingBytes=$incomingBytes " +
+            "callbackCount=$callbackCount callbackBytes=$callbackBytes " +
+            "callbackCapacityBytes=$MAX_PENDING_INPUT_BYTES " +
+            "oldestCallbackAgeMs=$oldestCallbackAgeMs " +
+            "ringBytes=${inputBuffer.size} timestampSpans=${inputTimestampSpans.size} " +
+            "pendingAck=${pending != null} pendingSequence=${pending?.sequence} " +
+            "pendingAckAgeMs=$ackAgeMs nextSequence=$nextSequence"
     }
 
     private fun cancelAckTimeout() {
@@ -767,9 +871,12 @@ private class NativeVoiceCaptureManager(
             BuildConfig.UAC4_APP_SECRET.isNotBlank() &&
             BuildConfig.UAC4_UDID.isNotBlank()
 
-    private fun terminateCapture(errorCode: String) {
+    private fun terminateCapture(errorCode: String, errorDetails: String? = null) {
         val leaseId = activeLeaseId
         val owner = activeOwner
+        if (errorDetails != null) {
+            Log.e(VOICE_TAG, "$errorCode $errorDetails")
+        }
         if (leaseId != null && owner != null) {
             invalidateCapture(owner, leaseId)
         } else {
@@ -796,7 +903,13 @@ private class NativeVoiceCaptureManager(
             emitState("terminalAbandoned", errorCode = "SSP_RELEASE_FAILED", leaseId = leaseId, owner = owner)
             return
         }
-        emitState("error", errorCode = errorCode, leaseId = leaseId, owner = owner)
+        emitState(
+            "error",
+            errorCode = errorCode,
+            errorDetails = errorDetails,
+            leaseId = leaseId,
+            owner = owner,
+        )
     }
 
     private fun closeDiagnosticWav() {
@@ -807,6 +920,7 @@ private class NativeVoiceCaptureManager(
     private fun emitState(
         state: String,
         errorCode: String? = null,
+        errorDetails: String? = null,
         leaseId: Long? = activeLeaseId,
         owner: String? = activeOwner,
     ) {
@@ -817,6 +931,7 @@ private class NativeVoiceCaptureManager(
             "revision" to captureRevision,
             "timestampMs" to SystemClock.elapsedRealtime(),
             "errorCode" to errorCode,
+            "errorDetails" to errorDetails,
         ))
     }
 
@@ -996,7 +1111,19 @@ private class DiagnosticWavFile(
         }.array()
 }
 
-private data class CaptureInput(val bytes: ByteArray, val callbackGeneration: Long, val revision: Long)
+private data class CaptureInput(
+    val bytes: ByteArray,
+    val callbackGeneration: Long,
+    val revision: Long,
+    val elapsedRealtimeNanos: Long,
+    val capturedAtEpochMicros: Long,
+)
+
+private data class InputTimestampSpan(
+    var remainingBytes: Int,
+    val elapsedRealtimeNanos: Long,
+    val capturedAtEpochMicros: Long,
+)
 
 /** Fixed-size byte queue for fragmented UAC4 callbacks. */
 private class VoiceCaptureException(val code: String, override val message: String) : RuntimeException(message)

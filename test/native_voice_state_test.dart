@@ -52,4 +52,19 @@ void main() {
       NativeVoiceCaptureState.unknown,
     );
   });
+
+  test('native termination details survive event decoding', () {
+    final NativeVoiceStateEvent event =
+        NativeVoiceCapture.decodeStateEvent(<Object?, Object?>{
+      'state': 'error',
+      'errorCode': 'PCM_QUEUE_OVERRUN',
+      'errorDetails': 'stage=callback_budget callbackBytes=262144',
+    });
+
+    expect(event.errorCode, 'PCM_QUEUE_OVERRUN');
+    expect(
+      event.errorDetails,
+      'stage=callback_budget callbackBytes=262144',
+    );
+  });
 }

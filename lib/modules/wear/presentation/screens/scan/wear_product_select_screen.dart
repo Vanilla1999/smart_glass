@@ -8,6 +8,7 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_ut
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
+import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_voice_hints.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
@@ -88,6 +89,7 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
         .skip(start)
         .take(_visibleGlassesItemCount)
         .toList(growable: false);
+    final VoiceDynamicItemsSnapshot snapshot = _dynamicVoiceItems();
     final WearGlassesPayload payload = WearGlassesPayload(
       screenType: WearGlassesScreenType.productSelect,
       phase: WearGlassesPhase.idle,
@@ -96,6 +98,13 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
       items: visibleProducts
           .map((BarcodeProductInfo p) => p.name)
           .toList(growable: false),
+      voiceHints: WearGlassesVoiceHints.forVisibleItems(
+        screen: WearScreenId.productSelect,
+        snapshot: snapshot,
+        visibleItemIds: visibleProducts
+            .map((BarcodeProductInfo product) => product.id.toString())
+            .toList(growable: false),
+      ),
       selectedIndex: idx - start,
       pageText: _pageText(products.length, idx),
     );
@@ -190,7 +199,7 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
         .toList(growable: false);
     return VoiceDynamicItemsSnapshot(
       revision: Object.hashAll(
-        items.map((VoiceDynamicItem item) => Object.hash(item.id, item.label)),
+        items.map((VoiceDynamicItem item) => item.revisionHash),
       ),
       items: items,
     );
@@ -242,15 +251,21 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
   }
 
   bool _onVoicePartialPhrase(String phrase) {
-    if (!VoiceListMatcher.canMatchPartial(phrase)) return false;
     final List<BarcodeProductInfo> products =
         widget.args?.products ?? <BarcodeProductInfo>[];
     if (products.isEmpty) return false;
-    final VoiceListMatch<BarcodeProductInfo> match = VoiceListMatcher.match(
-      phrase,
-      products,
-      (BarcodeProductInfo product) => product.name,
-    );
+    final VoiceListMatch<BarcodeProductInfo> match =
+        VoiceListMatcher.canMatchPartial(phrase)
+            ? VoiceListMatcher.match(
+                phrase,
+                products,
+                (BarcodeProductInfo product) => product.name,
+              )
+            : VoiceListMatcher.matchExactPhrase(
+                phrase,
+                products,
+                (BarcodeProductInfo product) => product.name,
+              );
     if (match.type != VoiceListMatchType.unique) {
       return false;
     }
@@ -262,7 +277,7 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
       _scrollToFocused();
       _sendGlassesFocus();
     }
-    return false;
+    return index >= 0;
   }
 
   void _onVoiceCancel() {

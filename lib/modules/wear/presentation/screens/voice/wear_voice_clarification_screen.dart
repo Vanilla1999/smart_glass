@@ -58,6 +58,7 @@ class _WearVoiceClarificationScreenState
         onNextPage: _onNextPage,
         onPreviousPage: _onPreviousPage,
         onPhrase: _onPhrase,
+        onPartialPhrase: _onPartialPhrase,
         dynamicVoiceItems: _dynamicVoiceItems,
       ),
     );
@@ -178,7 +179,7 @@ class _WearVoiceClarificationScreenState
     return VoiceDynamicItemsSnapshot(
       revision: Object.hashAll(
         _matches.map(
-          (VoiceDynamicItem item) => Object.hash(item.id, item.label),
+          (VoiceDynamicItem item) => item.revisionHash,
         ),
       ),
       items: _matches,
@@ -228,6 +229,7 @@ class _WearVoiceClarificationScreenState
       phrase,
       _matches,
       (VoiceDynamicItem item) => item.label,
+      aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
     );
     switch (match.type) {
       case VoiceListMatchType.none:
@@ -239,11 +241,20 @@ class _WearVoiceClarificationScreenState
           return;
         }
         final VoiceClarificationArgs current = _currentArgs!;
+        final String normalizedPhrase = VoiceListMatcher.normalize(phrase);
         final VoiceClarificationArgs next = VoiceClarificationArgs(
           sourceScreen: current.sourceScreen,
           phrase: phrase.trim(),
           matches: match.matches,
+          sourceListRevision: current.sourceListRevision,
           previous: current,
+          spokenPhrases: <String>[...current.spokenPhrases, phrase.trim()],
+          excludedWords: <String>{
+            ...current.excludedWords,
+            ...normalizedPhrase
+                .split(' ')
+                .where((String word) => word.isNotEmpty),
+          },
         );
         setState(() {
           _currentArgs = next;
@@ -257,6 +268,31 @@ class _WearVoiceClarificationScreenState
       case VoiceListMatchType.unique:
         await _select(match.item!);
     }
+  }
+
+  bool _onPartialPhrase(String phrase) {
+    final VoiceListMatch<VoiceDynamicItem> match =
+        VoiceListMatcher.canMatchPartial(phrase)
+            ? VoiceListMatcher.match(
+                phrase,
+                _matches,
+                (VoiceDynamicItem item) => item.label,
+                aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
+              )
+            : VoiceListMatcher.matchExactPhrase(
+                phrase,
+                _matches,
+                (VoiceDynamicItem item) => item.label,
+                aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
+              );
+    if (match.type != VoiceListMatchType.unique) return false;
+    final int index = _matches.indexWhere(
+      (VoiceDynamicItem item) => item.id == match.item!.id,
+    );
+    if (index < 0) return false;
+    _focusedIndex = index;
+    _focusCurrent();
+    return true;
   }
 
   Future<void> _select(VoiceDynamicItem item) async {

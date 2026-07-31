@@ -22,6 +22,14 @@ const String _freeTextPipelineModeOverride = String.fromEnvironment(
   'WEAR_FREE_TEXT_PIPELINE_MODE',
   defaultValue: '',
 );
+const Map<String, String> _buildEnvOverrides = <String, String>{
+  'WEAR_USE_MOCKS': String.fromEnvironment('WEAR_USE_MOCKS'),
+  'WEAR_MOCK_AUTH_ON_LOGO': String.fromEnvironment('WEAR_MOCK_AUTH_ON_LOGO'),
+  'WEAR_MOCK_SKIP_AUTH_ON_LOGO':
+      String.fromEnvironment('WEAR_MOCK_SKIP_AUTH_ON_LOGO'),
+  'WEAR_SKIP_SCANNER_CONNECT_SCREEN':
+      String.fromEnvironment('WEAR_SKIP_SCANNER_CONNECT_SCREEN'),
+};
 
 @pragma('vm:entry-point')
 void glassesMain() {
@@ -55,10 +63,9 @@ Future<void> _main() async {
     isOptional: true,
   );
 
-  await WearMockConfig.init();
-
   _applyDefaultEnvValues();
   _applyBuildEnvOverrides();
+  await WearMockConfig.init();
 
   if (kDebugMode) {
     _debugLogLoadedEnv();
@@ -144,12 +151,15 @@ void _applyDefaultEnvValues() {
 }
 
 void _applyBuildEnvOverrides() {
-  if (_freeTextPipelineModeOverride.isEmpty) return;
-  dotenv.env['WEAR_FREE_TEXT_PIPELINE_MODE'] = _freeTextPipelineModeOverride;
-  debugPrint(
-    '[ENV] build override WEAR_FREE_TEXT_PIPELINE_MODE='
-    '$_freeTextPipelineModeOverride',
-  );
+  final Map<String, String> overrides = <String, String>{
+    ..._buildEnvOverrides,
+    'WEAR_FREE_TEXT_PIPELINE_MODE': _freeTextPipelineModeOverride,
+  };
+  overrides.forEach((String key, String value) {
+    if (value.isEmpty) return;
+    dotenv.env[key] = value;
+    debugPrint('[ENV] build override $key=$value');
+  });
 }
 
 Future<void> _debugLogDevelopEnvAsset() async {

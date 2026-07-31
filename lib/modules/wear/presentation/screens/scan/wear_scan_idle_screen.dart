@@ -5,9 +5,11 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
+import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_voice_hints.dart';
 import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_input_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/cubit/wear_scan_cubit.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_product_select_screen.dart';
@@ -163,13 +165,36 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen>
       }
       if (previous?.navSelect != next.navSelect && next.navSelect != null) {
         final WearProductSelectArgs args = next.navSelect!;
+        final List<VoiceDynamicItem> voiceItems = args.products
+            .map((BarcodeProductInfo product) => VoiceDynamicItem(
+                  id: product.id.toString(),
+                  label: product.name,
+                ))
+            .toList(growable: false);
+        final VoiceDynamicItemsSnapshot snapshot = VoiceDynamicItemsSnapshot(
+          revision: Object.hashAll(
+            voiceItems.map((VoiceDynamicItem item) => item.revisionHash),
+          ),
+          items: voiceItems,
+        );
+        final List<BarcodeProductInfo> visibleProducts =
+            args.products.take(4).toList(growable: false);
         WearStatusIconReporter.I.send(
           WearGlassesPayload(
             screenType: WearGlassesScreenType.productSelect,
             phase: WearGlassesPhase.idle,
             title: 'Дубль ШК',
             subtitle: 'Выберите нужный товар',
-            items: args.products.map((BarcodeProductInfo p) => p.name).toList(),
+            items: visibleProducts
+                .map((BarcodeProductInfo product) => product.name)
+                .toList(growable: false),
+            voiceHints: WearGlassesVoiceHints.forVisibleItems(
+              screen: WearScreenId.productSelect,
+              snapshot: snapshot,
+              visibleItemIds: visibleProducts
+                  .map((BarcodeProductInfo product) => product.id.toString())
+                  .toList(growable: false),
+            ),
             selectedIndex: 0,
             pageText: args.products.length > 4 ? 'Показаны первые 4' : null,
           ),

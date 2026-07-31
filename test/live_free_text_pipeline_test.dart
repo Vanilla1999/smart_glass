@@ -13,6 +13,33 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_re
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_segmenter.dart';
 
 void main() {
+  test('live free-text publishes a contextual partial before final', () async {
+    final _FakeRecognizer command = _FakeRecognizer();
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..partials.add(_json(partial: 'жёлтый'));
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeText: freeText,
+    );
+    addTearDown(service.dispose);
+    final List<SegmentedRecognitionResult> events =
+        <SegmentedRecognitionResult>[];
+    final subscription = service.segmentedResultsStream.listen(events.add);
+    addTearDown(subscription.cancel);
+
+    await _start(service);
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing();
+
+    final SegmentedRecognitionResult partial = events.singleWhere((event) =>
+        event.lane == RecognitionLane.freeText &&
+        event.kind == RecognitionKind.partial &&
+        event.text == 'жёлтый');
+    expect(partial.freeTextEpoch, service.freeTextEpoch);
+    expect(partial.listRevision, 1);
+    expect(partial.commandUtteranceId, 1);
+  });
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('T01 live mode fans the same PCM out to both lanes', () async {
@@ -96,6 +123,7 @@ void main() {
       ..endpoints.add(true)
       ..results.add(_json(text: 'не команда'));
     final _FakeRecognizer freeText = _FakeRecognizer()
+      ..partials.add(_json(partial: 'жёлтый'))
       ..finals.addAll(<String>[
         _json(),
         _json(text: 'следующая страница'),
@@ -167,7 +195,7 @@ void main() {
     expect((await phrase).text, 'коровка из кореновки');
   });
 
-  test('T10 command lane takes priority over a dynamic free-text match',
+  test('T10 exact dynamic hint takes priority over a false command match',
       () async {
     final _FakeRecognizer command = _FakeRecognizer()
       ..endpoints.add(true)
@@ -190,8 +218,8 @@ void main() {
     await service.waitForProcessing();
 
     expect(finals, hasLength(1));
-    expect(finals.single.lane, RecognitionLane.command);
-    expect(finals.single.parsedCommand, WearVoiceCommand.select);
+    expect(finals.single.lane, RecognitionLane.freeText);
+    expect(finals.single.text, 'жёлтый');
     expect(service.conflictCount, 0);
   });
 
@@ -240,15 +268,83 @@ void main() {
     );
     addTearDown(service.dispose);
     await _start(service);
-    final List<String> phrases = <String>[];
+    final List<SegmentedRecognitionResult> phrases =
+        <SegmentedRecognitionResult>[];
     service.segmentedResultsStream.listen((event) {
-      if (event.lane == RecognitionLane.freeText) phrases.add(event.text);
+      if (event.lane == RecognitionLane.freeText) phrases.add(event);
     });
 
     await _processUtterance(service);
     await service.waitForProcessing();
 
-    expect(phrases, <String>['мобильный']);
+    expect(phrases.map((event) => event.text), <String>['мобильный']);
+    expect(phrases.single.kind, RecognitionKind.streamFinal);
+  });
+
+  test('command-lane dynamic key partial carries typed preview identity',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpoints.add(false)
+      ..partials.add(_json(partial: 'жёлтый'));
+    final _FakeRecognizer freeText = _FakeRecognizer();
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeText: freeText,
+    );
+    addTearDown(service.dispose);
+    await _start(service);
+    final Future<SegmentedRecognitionResult> partial = service
+        .segmentedResultsStream
+        .firstWhere((event) => event.kind == RecognitionKind.partial);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+
+    final SegmentedRecognitionResult result = await partial;
+    expect(result.lane, RecognitionLane.command);
+    expect(result.dynamicItemId, 'yellow');
+    expect(result.listRevision, 1);
+  });
+
+  test('delayed live final is rejected after a newer utterance starts',
+      () async {
+    final Completer<String> blockedFinal = Completer<String>();
+    final Completer<void> finalStarted = Completer<void>();
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpoints.addAll(<bool>[true, false])
+      ..results.add(_json(text: 'не команда'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finals.add(_json())
+      ..finalOverride = () {
+        if (!finalStarted.isCompleted) finalStarted.complete();
+        return blockedFinal.future;
+      };
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeText: freeText,
+    );
+    addTearDown(service.dispose);
+    await _start(service);
+    final List<SegmentedRecognitionResult> finals =
+        <SegmentedRecognitionResult>[];
+    service.segmentedResultsStream.listen((event) {
+      if (event.lane == RecognitionLane.freeText &&
+          event.kind != RecognitionKind.partial) {
+        finals.add(event);
+      }
+    });
+
+    final Future<void> firstUtterance = _processUtterance(service);
+    await finalStarted.future;
+    final Future<void> newerUtterance =
+        service.processAudioChunk(_pcmFrame(1000));
+    await Future<void>.delayed(Duration.zero);
+    blockedFinal.complete(_json(text: 'жёлтый'));
+    await firstUtterance;
+    await newerUtterance;
+    await service.waitForProcessing();
+
+    expect(finals, isEmpty);
+    expect(service.metricsSnapshot.staleResultCount, 1);
   });
 
   test('T20 replay-only compatibility keeps sequential replay', () async {
@@ -320,6 +416,269 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(blocked.disposeCalls, 1);
   });
+
+  test('stored natural final is cleared by capture restart', () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpoints.addAll(<bool>[true, false])
+      ..results.add(_json(text: 'вверх'))
+      ..finals.add(_json());
+    final _FakeRecognizer freeText = _FakeRecognizer();
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeText: freeText,
+    );
+    addTearDown(service.dispose);
+    final List<SegmentedRecognitionResult> finals =
+        <SegmentedRecognitionResult>[];
+    service.segmentedResultsStream.listen((event) {
+      if (event.lane == RecognitionLane.command &&
+          event.kind == RecognitionKind.streamFinal) {
+        finals.add(event);
+      }
+    });
+    await _start(service);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    service.beginProcessingCapture();
+    await service.processAudioChunk(_pcmFrame(2000));
+    await _silenceEndpoint(service);
+    await service.waitForProcessing();
+
+    expect(finals.where((event) => event.text == 'вверх'), isEmpty);
+  });
+
+  test('capture restart accepts a final after segment numbering resets',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer();
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finals.addAll(<String>[
+        _json(),
+        _json(),
+        _json(),
+        _json(text: 'жёлтый'),
+      ]);
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeText: freeText,
+    );
+    addTearDown(service.dispose);
+    await _start(service);
+
+    for (int index = 0; index < 2; index++) {
+      await _processUtterance(service);
+    }
+    service.beginProcessingCapture();
+    final Future<SegmentedRecognitionResult> phrase = service
+        .segmentedResultsStream
+        .firstWhere((event) => event.lane == RecognitionLane.freeText);
+
+    await _processUtterance(service);
+    await service.waitForProcessing();
+
+    expect((await phrase).text, 'жёлтый');
+  });
+
+  test(
+      'overlapping live PCM waits for prior final reset and uses next utterance id',
+      () async {
+    final Completer<String> blockedFinal = Completer<String>();
+    final Completer<void> finalStarted = Completer<void>();
+    var currentSample = 0;
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpoints.add(true)
+      ..results.add(_json(text: 'не команда'));
+    final _FakeRecognizer freeText = _FakeRecognizer()..finals.add(_json());
+    freeText.acceptOverride = (bytes) async {
+      currentSample = ByteData.sublistView(bytes).getInt16(0, Endian.little);
+      return false;
+    };
+    freeText.partialOverride =
+        () async => _json(partial: currentSample == 2000 ? 'мобильный' : '');
+    freeText.finalOverride = () {
+      if (!finalStarted.isCompleted) finalStarted.complete();
+      return blockedFinal.future;
+    };
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeText: freeText,
+    );
+    addTearDown(service.dispose);
+    final List<SegmentedRecognitionResult> partials =
+        <SegmentedRecognitionResult>[];
+    service.segmentedResultsStream.listen((event) {
+      if (event.lane == RecognitionLane.freeText &&
+          event.kind == RecognitionKind.partial &&
+          event.text == 'мобильный') {
+        partials.add(event);
+      }
+    });
+    await _start(service);
+    final Completer<void> resetBlock = Completer<void>();
+    final Completer<void> resetStarted = Completer<void>();
+    freeText
+      ..resetBlock = resetBlock
+      ..resetStarted = resetStarted;
+
+    final Future<void> first = _processUtterance(service);
+    await finalStarted.future;
+    final int acceptedBeforeNext = freeText.accepted.length;
+    final Future<void> next = service.processAudioChunk(_pcmFrame(2000));
+    await Future<void>.delayed(Duration.zero);
+    expect(freeText.accepted, hasLength(acceptedBeforeNext));
+
+    blockedFinal.complete(_json(text: 'жёлтый'));
+    await resetStarted.future;
+    expect(freeText.accepted, hasLength(acceptedBeforeNext));
+    resetBlock.complete();
+    await Future.wait<void>(<Future<void>>[first, next]);
+    await service.waitForProcessing();
+
+    expect(partials, hasLength(1));
+    expect(partials.single.commandUtteranceId, 2);
+    expect(
+      freeText.accepted.map(
+        (bytes) => ByteData.sublistView(bytes).getInt16(0, Endian.little),
+      ),
+      contains(2000),
+    );
+  });
+
+  test('shadow overlap emits replay production result and not live result',
+      () async {
+    final Completer<String> blockedLiveFinal = Completer<String>();
+    final Completer<void> liveFinalStarted = Completer<void>();
+    var finalCalls = 0;
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpoints.add(true)
+      ..results.add(_json(text: 'не команда'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finals.add(_json())
+      ..finalOverride = () {
+        finalCalls++;
+        if (finalCalls == 1) {
+          liveFinalStarted.complete();
+          return blockedLiveFinal.future;
+        }
+        return Future<String>.value(_json(text: 'мобильный'));
+      };
+    final SpeechRecognitionService service = SpeechRecognitionService(
+      commandGrammar: const <String>['вверх', 'вниз', 'выбрать', '[unk]'],
+      freeTextPipelineMode: FreeTextPipelineMode.shadowLive,
+      speechSegmenter: SpeechSegmenter(calibrationDuration: Duration.zero),
+      recognizerFactory: (RecognitionLane lane, List<String> grammar) async =>
+          lane == RecognitionLane.command ? command : freeText,
+    );
+    addTearDown(service.dispose);
+    final List<SegmentedRecognitionResult> finals =
+        <SegmentedRecognitionResult>[];
+    service.segmentedResultsStream.listen((event) {
+      if (event.lane == RecognitionLane.freeText &&
+          event.kind != RecognitionKind.partial) {
+        finals.add(event);
+      }
+    });
+    await _start(service);
+
+    final Future<void> first = _processUtterance(service);
+    await liveFinalStarted.future;
+    final Future<void> next = service.processAudioChunk(_pcmFrame(2000));
+    blockedLiveFinal.complete(_json(text: 'жёлтый'));
+    await Future.wait<void>(<Future<void>>[first, next]);
+    await service.waitForProcessing();
+
+    expect(finals.map((event) => event.text), <String>['мобильный']);
+    expect(finals.single.isLiveFreeText, isFalse);
+  });
+
+  test('deferred grammar commits after live decision before next command PCM',
+      () async {
+    final Completer<String> blockedFinal = Completer<String>();
+    final Completer<void> finalStarted = Completer<void>();
+    final List<String> operations = <String>[];
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpoints.add(true)
+      ..results.add(_json(text: 'не команда'))
+      ..onAccept = (bytes) {
+        final int sample =
+            ByteData.sublistView(bytes).getInt16(0, Endian.little);
+        if (sample == 2000) operations.add('next-command-pcm');
+      }
+      ..onGrammar = (_) => operations.add('grammar');
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finals.add(_json())
+      ..finalOverride = () {
+        if (!finalStarted.isCompleted) finalStarted.complete();
+        return blockedFinal.future;
+      };
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeText: freeText,
+    );
+    addTearDown(service.dispose);
+    await _start(service);
+    operations.clear();
+    final int routeRevision = service.routeRevision;
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    final Future<void> switching = service.switchCommandGrammar(
+      screen: WearScreenId.help,
+      grammar: const <String>['назад', '[unk]'],
+    );
+    final Future<void> boundary = _silenceEndpoint(service);
+    await finalStarted.future;
+    final Future<void> next = service.processAudioChunk(_pcmFrame(2000));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(service.routeRevision, routeRevision);
+    expect(operations, isNot(contains('grammar')));
+    expect(operations, isNot(contains('next-command-pcm')));
+
+    blockedFinal.complete(_json(text: 'жёлтый'));
+    await Future.wait<void>(<Future<void>>[
+      switching,
+      boundary,
+      next,
+    ]);
+    await service.waitForProcessing();
+
+    expect(operations,
+        containsAllInOrder(<String>['grammar', 'next-command-pcm']));
+    expect(service.sourceScreen, WearScreenId.help);
+  });
+
+  test(
+      'identical free-text partial previews publish for consecutive utterances',
+      () async {
+    var currentSample = 0;
+    final _FakeRecognizer command = _FakeRecognizer();
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..acceptOverride = (bytes) async {
+        currentSample = ByteData.sublistView(bytes).getInt16(0, Endian.little);
+        return false;
+      }
+      ..partialOverride =
+          () async => _json(partial: currentSample > 0 ? 'жёлтый' : '');
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeText: freeText,
+    );
+    addTearDown(service.dispose);
+    final List<int> utteranceIds = <int>[];
+    service.segmentedResultsStream.listen((event) {
+      if (event.lane == RecognitionLane.freeText &&
+          event.kind == RecognitionKind.partial &&
+          event.text == 'жёлтый') {
+        utteranceIds.add(event.commandUtteranceId);
+      }
+    });
+    await _start(service);
+
+    await _processUtterance(service);
+    await _processUtterance(service);
+    await service.waitForProcessing();
+
+    expect(utteranceIds, <int>[1, 2]);
+  });
 }
 
 SpeechRecognitionService _service({
@@ -355,6 +714,10 @@ Future<void> _start(SpeechRecognitionService service) async {
 
 Future<void> _processUtterance(SpeechRecognitionService service) async {
   await service.processAudioChunk(_pcmFrame(1000));
+  await _silenceEndpoint(service);
+}
+
+Future<void> _silenceEndpoint(SpeechRecognitionService service) async {
   for (int index = 0; index < 40; index++) {
     await service.processAudioChunk(_pcmFrame(0));
   }
@@ -375,14 +738,25 @@ class _FakeRecognizer implements VoiceRecognizer {
   final List<bool> endpoints = <bool>[];
   final List<String> results = <String>[];
   final List<String> finals = <String>[];
+  final List<String> partials = <String>[];
   final List<Uint8List> accepted = <Uint8List>[];
   Future<String> Function()? finalOverride;
+  Future<String> Function()? partialOverride;
+  Future<bool> Function(Uint8List bytes)? acceptOverride;
+  void Function(Uint8List bytes)? onAccept;
+  void Function(List<String> grammar)? onGrammar;
+  Completer<void>? resetBlock;
+  Completer<void>? resetStarted;
   Duration finalDelay = Duration.zero;
   int disposeCalls = 0;
+  int finalCalls = 0;
 
   @override
   Future<bool> acceptWaveformBytes(Uint8List bytes) async {
     accepted.add(Uint8List.fromList(bytes));
+    onAccept?.call(bytes);
+    final Future<bool> Function(Uint8List bytes)? override = acceptOverride;
+    if (override != null) return override(bytes);
     return endpoints.isEmpty ? false : endpoints.removeAt(0);
   }
 
@@ -391,6 +765,7 @@ class _FakeRecognizer implements VoiceRecognizer {
 
   @override
   Future<String> getFinalResult() async {
+    finalCalls++;
     if (finalDelay > Duration.zero) await Future<void>.delayed(finalDelay);
     if (finals.isNotEmpty) return finals.removeAt(0);
     final Future<String> Function()? override = finalOverride;
@@ -398,15 +773,28 @@ class _FakeRecognizer implements VoiceRecognizer {
   }
 
   @override
-  Future<String> getPartialResult() async => _json();
+  Future<String> getPartialResult() async => partialOverride != null
+      ? partialOverride!()
+      : partials.isEmpty
+          ? _json()
+          : partials.removeAt(0);
 
   @override
   Future<String> getResult() async =>
       results.isEmpty ? _json() : results.removeAt(0);
 
   @override
-  Future<void> reset() async {}
+  Future<void> reset() async {
+    final Completer<void>? started = resetStarted;
+    if (started != null && !started.isCompleted) started.complete();
+    final Completer<void>? block = resetBlock;
+    if (block != null) {
+      resetBlock = null;
+      await block.future;
+    }
+  }
 
   @override
-  Future<void> setGrammar(List<String> grammar) async {}
+  Future<void> setGrammar(List<String> grammar) async =>
+      onGrammar?.call(grammar);
 }

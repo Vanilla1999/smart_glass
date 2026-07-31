@@ -33,6 +33,8 @@ class AudioStreamService {
   double _audioLevel = 0.0;
   int _chunksReceived = 0;
   int? _lastChunkAtMillis;
+  int? _lastNativeElapsedRealtimeNanos;
+  int? _lastNativeAdmissionAgeMicros;
   int? _lastNonSilentChunkAtMillis;
   int? _lastNonZeroNativeInputAtMillis;
   int? _continuousZeroAudioStartedAtMillis;
@@ -64,6 +66,8 @@ class AudioStreamService {
   double get audioLevel => _audioLevel;
   int get chunksReceived => _chunksReceived;
   int? get lastChunkAtMillis => _lastChunkAtMillis;
+  int? get lastNativeElapsedRealtimeNanos => _lastNativeElapsedRealtimeNanos;
+  int? get lastNativeAdmissionAgeMicros => _lastNativeAdmissionAgeMicros;
   int? get lastNonSilentChunkAtMillis => _lastNonSilentChunkAtMillis;
   int? get lastNonZeroNativeInputAtMillis => _lastNonZeroNativeInputAtMillis;
   int? get continuousZeroAudioStartedAtMillis =>
@@ -133,6 +137,8 @@ class AudioStreamService {
         'registeredDataConsumers=${_dataCallbacks.length}, '
         'registeredPcmConsumers=${_pcmCallbacks.length}, '
         'receivedPcmPackets=$_chunksReceived, lastChunkAgeMs=$lastChunkAgeMs, '
+        'lastNativeElapsedRealtimeNanos=$_lastNativeElapsedRealtimeNanos, '
+        'lastNativeAdmissionAgeMicros=$_lastNativeAdmissionAgeMicros, '
         'lastNonSilentAgeMs=$lastNonSilentAgeMs, '
         'continuousZeroAudioAgeMs=$continuousZeroAudioAgeMs, '
         'inputDevice=UAC4, '
@@ -183,6 +189,21 @@ class AudioStreamService {
         diagnosticCaptureTimestamp: _continuousWavTimestamp,
         onPcm: (NativePcmPacket packet) async {
           final Uint8List bytes = packet.bytes;
+          if (_lastNativeElapsedRealtimeNanos != null &&
+              packet.elapsedRealtimeNanos <= _lastNativeElapsedRealtimeNanos!) {
+            print(
+                '[VoiceCapture#$_captureId] non-monotonic native PCM timestamp');
+          }
+          _lastNativeElapsedRealtimeNanos = packet.elapsedRealtimeNanos;
+          _lastNativeAdmissionAgeMicros =
+              DateTime.now().microsecondsSinceEpoch -
+                  packet.capturedAtEpochMicros;
+          if (_chunksReceived == 0 || _chunksReceived % 200 == 0) {
+            print(
+              '[VOICE_PCM_ADMISSION] sequence=${packet.sequence} '
+              'sourceToDartMicros=$_lastNativeAdmissionAgeMicros',
+            );
+          }
           if (bytes.lengthInBytes < 2) {
             print('[VoiceCapture#$_captureId] ignored empty PCM stream event');
             return false;

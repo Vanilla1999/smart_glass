@@ -36,6 +36,31 @@ void main() {
       expect(match.item, isNull);
     });
 
+    test('matches an explicit voice alias', () {
+      final VoiceListMatch<String> match = VoiceListMatcher.match(
+        'кефирчик',
+        <String>['Кисломолочный напиток', 'Молоко'],
+        (String item) => item,
+        aliasesOf: (String item) => item == 'Кисломолочный напиток'
+            ? const <String>['кефирчик']
+            : const <String>[],
+      );
+
+      expect(match.type, VoiceListMatchType.unique);
+      expect(match.item, 'Кисломолочный напиток');
+    });
+
+    test('keeps a shared voice alias ambiguous', () {
+      final VoiceListMatch<String> match = VoiceListMatcher.matchExactPhrase(
+        'любимый',
+        <String>['Первый', 'Второй'],
+        (String item) => item,
+        aliasesOf: (_) => const <String>['любимый'],
+      );
+
+      expect(match.type, VoiceListMatchType.ambiguous);
+    });
+
     test('normalizes case punctuation and yo letter', () {
       final VoiceListMatch<String> match = VoiceListMatcher.match(
         'Творожок! ежик',

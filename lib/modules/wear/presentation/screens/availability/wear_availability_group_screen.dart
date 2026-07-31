@@ -228,7 +228,7 @@ class _WearAvailabilityGroupScreenState
         .toList(growable: false);
     return VoiceDynamicItemsSnapshot(
       revision: Object.hashAll(
-        items.map((VoiceDynamicItem item) => Object.hash(item.id, item.label)),
+        items.map((VoiceDynamicItem item) => item.revisionHash),
       ),
       items: items,
     );
@@ -283,15 +283,21 @@ class _WearAvailabilityGroupScreenState
   }
 
   bool _onVoicePartialPhrase(String phrase) {
-    if (!VoiceListMatcher.canMatchPartial(phrase)) return false;
     final List<WearAvailabilityGroup>? groups =
         ref.read(wearAvailabilityGroupsProvider).valueOrNull;
     if (groups == null || groups.isEmpty) return false;
-    final VoiceListMatch<WearAvailabilityGroup> match = VoiceListMatcher.match(
-      phrase,
-      groups,
-      (WearAvailabilityGroup group) => group.name,
-    );
+    final VoiceListMatch<WearAvailabilityGroup> match =
+        VoiceListMatcher.canMatchPartial(phrase)
+            ? VoiceListMatcher.match(
+                phrase,
+                groups,
+                (WearAvailabilityGroup group) => group.name,
+              )
+            : VoiceListMatcher.matchExactPhrase(
+                phrase,
+                groups,
+                (WearAvailabilityGroup group) => group.name,
+              );
     if (match.type != VoiceListMatchType.unique) {
       return false;
     }
@@ -305,7 +311,7 @@ class _WearAvailabilityGroupScreenState
       _scrollToFocused();
       _sendGlassesState(groups, fast: true);
     }
-    return false;
+    return index >= 0;
   }
 
   void _scrollToFocused() {

@@ -54,6 +54,9 @@ class SegmentedRecognitionResult {
     this.commandUtteranceStartedAtMillis,
     this.freeTextEpoch = 0,
     this.isLiveFreeText = false,
+    this.recognizedAtMillis = 0,
+    this.listRevision = 0,
+    this.dynamicItemId,
   });
 
   final int captureEpoch;
@@ -71,4 +74,7 @@ class SegmentedRecognitionResult {
   final int? commandUtteranceStartedAtMillis;
   final int freeTextEpoch;
   final bool isLiveFreeText;
+  final int recognizedAtMillis;
+  final int listRevision;
+  final String? dynamicItemId;
 }

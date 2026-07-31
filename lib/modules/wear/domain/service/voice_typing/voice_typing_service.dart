@@ -102,8 +102,13 @@ class VoiceTypingService {
       return;
     }
     if (result.sourceScreen != _speechRecognitionService.sourceScreen ||
+        _speechRecognitionService.captureEpoch > 0 &&
+            result.captureEpoch != _speechRecognitionService.captureEpoch ||
         result.routeRevision != _speechRecognitionService.routeRevision ||
-        result.grammarRevision != _speechRecognitionService.grammarRevision) {
+        result.grammarRevision != _speechRecognitionService.grammarRevision ||
+        result.freeTextEpoch != _speechRecognitionService.freeTextEpoch ||
+        result.listRevision !=
+            _speechRecognitionService.currentDynamicItemsRevision) {
       return;
     }
     _onResolvedPhrase(result.text);
@@ -111,8 +116,15 @@ class VoiceTypingService {
 
   void _onResolvedPhraseEvent(WearVoicePhraseEvent event) {
     if (event.sourceScreen != _speechRecognitionService.sourceScreen ||
+        _speechRecognitionService.captureEpoch > 0 &&
+            event.captureEpoch != _speechRecognitionService.captureEpoch ||
         event.routeRevision != _speechRecognitionService.routeRevision ||
-        event.grammarRevision != _speechRecognitionService.grammarRevision) {
+        event.grammarRevision != _speechRecognitionService.grammarRevision ||
+        event.freeTextEpoch > 0 &&
+            event.freeTextEpoch != _speechRecognitionService.freeTextEpoch ||
+        event.listRevision > 0 &&
+            event.listRevision !=
+                _speechRecognitionService.currentDynamicItemsRevision) {
       return;
     }
     _onResolvedPhrase(event.phrase);

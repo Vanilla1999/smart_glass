@@ -153,6 +153,53 @@ void main() {
     );
   });
 
+  test('exact advertised hint takes priority over a conflicting command', () {
+    final VoiceUtteranceCoordinator coordinator = VoiceUtteranceCoordinator();
+    final VoiceDecisionContext current = context();
+
+    final VoiceDecision decision = coordinator.decide(
+      context: current,
+      currentContext: current,
+      command: const CommandCandidate(
+        command: WearVoiceCommand.back,
+        text: 'назад',
+      ),
+      freeText: const FreeTextCandidate(
+        text: 'безалкогольное',
+        matchType: VoiceListMatchType.unique,
+        itemId: 'drinks',
+        isExactHint: true,
+      ),
+      itemStillExists: (_) => true,
+    );
+
+    expect(decision.kind, VoiceDecisionKind.dynamicItem);
+  });
+
+  test('stable dynamic match takes priority over a conflicting home command',
+      () {
+    final VoiceUtteranceCoordinator coordinator = VoiceUtteranceCoordinator();
+    final VoiceDecisionContext current = context();
+
+    final VoiceDecision decision = coordinator.decide(
+      context: current,
+      currentContext: current,
+      command: const CommandCandidate(
+        command: WearVoiceCommand.home,
+        text: 'домой',
+      ),
+      freeText: const FreeTextCandidate(
+        text: 'безалкогольное',
+        matchType: VoiceListMatchType.unique,
+        itemId: '2',
+        isStableMatch: true,
+      ),
+      itemStillExists: (_) => true,
+    );
+
+    expect(decision.kind, VoiceDecisionKind.dynamicItem);
+  });
+
   test('T11 ambiguous dynamic result is rejected', () {
     final VoiceUtteranceCoordinator coordinator = VoiceUtteranceCoordinator();
     final VoiceDecisionContext current = context();

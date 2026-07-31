@@ -14,6 +14,9 @@ import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_phrase_event.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_preview_event.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_delay_event.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/navigation/wear_routes.dart';
@@ -33,6 +36,8 @@ class WearModuleApp extends StatefulWidget {
     this.voiceCommandEventStream,
     this.voicePhraseStream,
     this.voicePhraseEventStream,
+    this.voicePreviewEventStream,
+    this.voiceDelayEventStream,
     this.routes,
     this.initialLocation,
     this.onStartVoice,
@@ -49,6 +54,8 @@ class WearModuleApp extends StatefulWidget {
   final Stream<WearVoiceCommandEvent>? voiceCommandEventStream;
   final Stream<String>? voicePhraseStream;
   final Stream<WearVoicePhraseEvent>? voicePhraseEventStream;
+  final Stream<WearVoicePreviewEvent>? voicePreviewEventStream;
+  final Stream<WearVoiceDelayEvent>? voiceDelayEventStream;
   final List<RouteBase>? routes;
   final String? initialLocation;
   final Future<void> Function()? onStartVoice;
@@ -67,6 +74,8 @@ class _WearModuleAppState extends State<WearModuleApp>
   late final GoRouter _router;
   StreamSubscription<_VoiceCommandInput>? _voiceSub;
   StreamSubscription<_VoicePhraseInput>? _voicePhraseSub;
+  StreamSubscription<WearVoicePreviewEvent>? _voicePreviewSub;
+  StreamSubscription<WearVoiceDelayEvent>? _voiceDelaySub;
   StreamSubscription<WearScreenId>? _screenActionsSub;
   StreamSubscription<dynamic>? _authorizedSub;
   StreamSubscription<void>? _clearedSub;
@@ -77,6 +86,9 @@ class _WearModuleAppState extends State<WearModuleApp>
   VoiceState _voiceState = const VoiceState.disabled();
   bool _voiceStartRequested = false;
   bool _voiceCommandsEnabled = true;
+  int? _visibleVoiceDelaySegmentId;
+  int? _latestVoiceDelayCaptureEpoch;
+  int? _latestVoiceDelaySegmentId;
   int? _voiceStartupToken;
   bool _restartVoiceAfterInterruption = false;
   bool _appResumed = true;
@@ -116,6 +128,25 @@ class _WearModuleAppState extends State<WearModuleApp>
     }
     return WearDependencies.I.voiceControlService.phraseEventStream
         .map(_VoicePhraseInput.withContext);
+  }
+
+  Stream<WearVoicePreviewEvent> get _voicePreviews {
+    final Stream<WearVoicePreviewEvent>? stream =
+        widget.voicePreviewEventStream;
+    if (stream != null) return stream;
+    if (widget.onStartVoice != null) {
+      return const Stream<WearVoicePreviewEvent>.empty();
+    }
+    return WearDependencies.I.voiceControlService.previewEventStream;
+  }
+
+  Stream<WearVoiceDelayEvent> get _voiceDelays {
+    final Stream<WearVoiceDelayEvent>? stream = widget.voiceDelayEventStream;
+    if (stream != null) return stream;
+    if (widget.onStartVoice != null) {
+      return const Stream<WearVoiceDelayEvent>.empty();
+    }
+    return WearDependencies.I.voiceControlService.delayEventStream;
   }
 
   @override
@@ -170,6 +201,7 @@ class _WearModuleAppState extends State<WearModuleApp>
           final actualScreen = WearDependencies.I.actualScreenStore.screen;
           final speech = WearDependencies.I.speechRecognitionService;
           if (event.sourceScreen != actualScreen ||
+              event.captureEpoch != speech.captureEpoch ||
               event.routeRevision != speech.routeRevision ||
               event.grammarRevision != speech.grammarRevision) {
             print(
@@ -213,9 +245,14 @@ class _WearModuleAppState extends State<WearModuleApp>
         if (input.event case final WearVoicePhraseEvent event) {
           final actualScreen = WearDependencies.I.actualScreenStore.screen;
           final speech = WearDependencies.I.speechRecognitionService;
+          final VoiceDynamicItemsSnapshot items =
+              flow.dynamicVoiceItemsFor(actualScreen);
           if (event.sourceScreen != actualScreen ||
+              event.captureEpoch != speech.captureEpoch ||
               event.routeRevision != speech.routeRevision ||
-              event.grammarRevision != speech.grammarRevision) {
+              event.grammarRevision != speech.grammarRevision ||
+              event.freeTextEpoch != speech.freeTextEpoch ||
+              event.listRevision != items.revision) {
             return;
           }
         }
@@ -235,6 +272,72 @@ class _WearModuleAppState extends State<WearModuleApp>
         print('[WearModuleApp] voice phrase stream error=$error\n$stackTrace');
       },
     );
+    _voicePreviewSub = _voicePreviews.listen(
+      (WearVoicePreviewEvent event) async {
+        if (!_voiceCommandsEnabled || !_voiceState.acceptsCommands) return;
+        final actualScreen = WearDependencies.I.actualScreenStore.screen;
+        final speech = WearDependencies.I.speechRecognitionService;
+        final VoiceDynamicItemsSnapshot items =
+            flow.dynamicVoiceItemsFor(actualScreen);
+        if (event.sourceScreen != actualScreen ||
+            event.captureEpoch != speech.captureEpoch ||
+            event.routeRevision != speech.routeRevision ||
+            event.grammarRevision != speech.grammarRevision ||
+            event.freeTextEpoch != speech.freeTextEpoch ||
+            event.commandUtteranceId != speech.commandUtteranceId ||
+            event.partialRevision !=
+                (event.isCommandLane
+                    ? speech.commandPartialRevision
+                    : speech.freeTextPartialRevision) ||
+            event.listRevision != items.revision) {
+          print('[WearModuleApp] suppress stale voice preview');
+          return;
+        }
+        VoiceDynamicItem? item;
+        for (final VoiceDynamicItem candidate in items.items) {
+          if (candidate.id == event.itemId) {
+            item = candidate;
+            break;
+          }
+        }
+        if (item == null) return;
+        final bool useful = await flow.handleVoicePartialPhrase(item.label);
+        if (useful &&
+            widget.voicePreviewEventStream == null &&
+            widget.onStartVoice == null) {
+          WearDependencies.I.voiceControlService.markPreviewUseful(event);
+        }
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        print('[WearModuleApp] voice preview stream error=$error\n$stackTrace');
+      },
+    );
+    _voiceDelaySub = _voiceDelays.listen((WearVoiceDelayEvent event) async {
+      final actualScreen = WearDependencies.I.actualScreenStore.screen;
+      final speech = WearDependencies.I.speechRecognitionService;
+      if (event.sourceScreen != actualScreen ||
+          event.captureEpoch != speech.captureEpoch ||
+          event.routeRevision != speech.routeRevision ||
+          event.grammarRevision != speech.grammarRevision ||
+          event.freeTextEpoch != speech.freeTextEpoch) {
+        return;
+      }
+      if (_latestVoiceDelayCaptureEpoch == event.captureEpoch &&
+          _latestVoiceDelaySegmentId != null &&
+          event.segmentId < _latestVoiceDelaySegmentId!) {
+        return;
+      }
+      _latestVoiceDelayCaptureEpoch = event.captureEpoch;
+      _latestVoiceDelaySegmentId = event.segmentId;
+      if (event.visible) {
+        _visibleVoiceDelaySegmentId = event.segmentId;
+      } else if (_visibleVoiceDelaySegmentId != event.segmentId) {
+        return;
+      } else {
+        _visibleVoiceDelaySegmentId = null;
+      }
+      await flow.setRecognitionDelayVisible(event.sourceScreen, event.visible);
+    });
     _voiceReconnectingSub = widget.voiceReconnectingStream?.listen(
       (bool reconnecting) {
         _setVoiceState(_voiceState.copyWith(
@@ -687,6 +790,8 @@ class _WearModuleAppState extends State<WearModuleApp>
     _router.routerDelegate.removeListener(_onRouterChange);
     _voiceSub?.cancel();
     _voicePhraseSub?.cancel();
+    _voicePreviewSub?.cancel();
+    _voiceDelaySub?.cancel();
     _voiceReconnectingSub?.cancel();
     _voiceReconnectErrorSub?.cancel();
     _voiceStateSub?.cancel();

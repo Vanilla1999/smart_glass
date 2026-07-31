@@ -16,12 +16,14 @@ class WearVoiceSession {
     Future<void> Function(Duration duration)? delay,
     Timer Function(Duration duration, void Function() callback)? scheduleRetry,
     VoiceActionCatalog? actionCatalog,
+    List<String> Function(WearScreenId screen)? dynamicGrammarPhrases,
   })  : _speechRecognitionService = speechRecognitionService,
         _ensurePrepared = ensurePrepared,
         _nowMillis = nowMillis ?? (() => DateTime.now().millisecondsSinceEpoch),
         _delay = delay ?? Future<void>.delayed,
         _scheduleRetry = scheduleRetry ?? Timer.new,
-        _actionCatalog = actionCatalog;
+        _actionCatalog = actionCatalog,
+        _dynamicGrammarPhrases = dynamicGrammarPhrases;
 
   static final WearVoiceSession I = WearVoiceSession();
   final SpeechRecognitionService? _speechRecognitionService;
@@ -31,6 +33,7 @@ class WearVoiceSession {
   final Timer Function(Duration duration, void Function() callback)
       _scheduleRetry;
   final VoiceActionCatalog? _actionCatalog;
+  final List<String> Function(WearScreenId screen)? _dynamicGrammarPhrases;
   bool _shouldListen = false;
   int _listeningGeneration = 0;
   Future<void> _operation = Future<void>.value();
@@ -99,6 +102,10 @@ class WearVoiceSession {
     if (_handledNativeTerminationRevision == event.revision) return;
     _handledNativeTerminationRevision = event.revision;
     final String code = event.errorCode ?? 'NATIVE_CAPTURE_FAILED';
+    print(
+      '[VOICE_NATIVE_TERMINATION] code=$code revision=${event.revision} '
+      'leaseId=${event.leaseId} details=${event.errorDetails}',
+    );
     final bool terminal = code == 'UNSUPPORTED_FIRMWARE' ||
         code == 'ACTIVATION_FAILED' ||
         code == 'ACTIVATION_TIMEOUT' ||
@@ -135,6 +142,16 @@ class WearVoiceSession {
       final VoiceActionCatalog catalog =
           _actionCatalog ?? WearDependencies.I.voiceActionCatalog;
       final bool freeText = _usesFreeTextRecognition(screen);
+      final List<String> dynamicPhrases =
+          _dynamicGrammarPhrases?.call(screen) ??
+              (_speechRecognitionService == null
+                  ? WearDependencies.I.wearFlowController
+                      .voiceGrammarPhrasesFor(screen)
+                  : const <String>[]);
+      final List<String> grammar = <String>{
+        ...catalog.grammarFor(screen),
+        ...dynamicPhrases,
+      }.toList(growable: false);
       print(
         '[WearVoiceSession] configureForScreen screen=$screen '
         'mode=${freeText ? 'freeText' : 'grammar'}',
@@ -142,7 +159,7 @@ class WearVoiceSession {
       try {
         await _speech.switchCommandGrammar(
           screen: screen,
-          grammar: catalog.grammarFor(screen),
+          grammar: grammar,
         );
       } catch (_) {
         if (generation != _configurationGeneration) rethrow;
@@ -153,7 +170,7 @@ class WearVoiceSession {
         try {
           await _speech.switchCommandGrammar(
             screen: screen,
-            grammar: catalog.grammarFor(screen),
+            grammar: grammar,
           );
         } catch (error) {
           if (_shouldListen) {
@@ -627,6 +644,7 @@ class WearVoiceSession {
       WearScreenId.voiceClarification ||
       WearScreenId.availabilityGroup ||
       WearScreenId.availabilityProduct ||
+      WearScreenId.availabilityDirectScan ||
       WearScreenId.availabilityFill ||
       WearScreenId.printCodeInput =>
         true,

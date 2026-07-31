@@ -61,6 +61,30 @@ void main() {
     expect(cubit.state.performanceSentAtMillis, 1040);
   });
 
+  test('retains structured voice hints', () {
+    final WearGlassesCubit cubit = WearGlassesCubit();
+    addTearDown(cubit.close);
+
+    cubit.updateFromPayload(const WearGlassesPayload(
+      screenType: WearGlassesScreenType.printer,
+      phase: WearGlassesPhase.idle,
+      title: 'Принтеры',
+      items: <String>['MOCK Белый 1'],
+      voiceHints: <WearGlassesVoiceHint>[
+        WearGlassesVoiceHint(
+          itemId: 'printer-1',
+          phrase: 'белый',
+          start: 5,
+          end: 10,
+        ),
+      ],
+    ).toJson());
+
+    expect(cubit.state.voiceHints, hasLength(1));
+    expect(cubit.state.voiceHints.single.phrase, 'белый');
+    expect(cubit.state.voiceHints.single.isValidFor('MOCK Белый 1'), isTrue);
+  });
+
   test('maps item maps to titles defensively', () {
     final WearGlassesCubit cubit = WearGlassesCubit();
     addTearDown(cubit.close);

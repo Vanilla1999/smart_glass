@@ -11,6 +11,7 @@ import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_loggi
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
+import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_voice_hints.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/printers/cubit/wear_printer_select_cubit.dart';
 
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_scan_idle_screen.dart';
@@ -302,7 +303,7 @@ class _WearPrinterSelectScreenState
         .toList(growable: false);
     return VoiceDynamicItemsSnapshot(
       revision: Object.hashAll(
-        items.map((VoiceDynamicItem item) => Object.hash(item.id, item.label)),
+        items.map((VoiceDynamicItem item) => item.revisionHash),
       ),
       items: items,
     );
@@ -382,11 +383,10 @@ class _WearPrinterSelectScreenState
                 printers,
                 (WearPrinter printer) => printer.name,
               )
-            : VoiceListMatcher.matchExactWord(
+            : VoiceListMatcher.matchExactPhrase(
                 phrase,
                 printers,
                 (WearPrinter printer) => printer.name,
-                minLength: 5,
               );
     if (match.type != VoiceListMatchType.unique) {
       return false;
@@ -404,7 +404,7 @@ class _WearPrinterSelectScreenState
         fast: true,
       );
     }
-    return false;
+    return index >= 0;
   }
 
   List<WearPrinter> _visiblePrinters(WearPrinterSelectState state) {
@@ -591,6 +591,7 @@ class _WearPrinterSelectScreenState
         .skip(start)
         .take(_visibleGlassesItemCount)
         .toList(growable: false);
+    final VoiceDynamicItemsSnapshot snapshot = _dynamicVoiceItems();
     final WearGlassesPayload payload = WearGlassesPayload(
       screenType: WearGlassesScreenType.printer,
       phase: WearGlassesPhase.idle,
@@ -601,6 +602,13 @@ class _WearPrinterSelectScreenState
       items: visiblePrinters
           .map((WearPrinter printer) => printer.name)
           .toList(growable: false),
+      voiceHints: WearGlassesVoiceHints.forVisibleItems(
+        screen: WearScreenId.printerSelect,
+        snapshot: snapshot,
+        visibleItemIds: visiblePrinters
+            .map((WearPrinter printer) => printer.id)
+            .toList(growable: false),
+      ),
       selectedIndex: selected - start,
       pageText: _pageText(printers.length, selected),
     );

@@ -209,6 +209,38 @@ void main() {
       expect(glasses.payloads.last.isLoading, isTrue);
     });
 
+    test('direct-scan remembered hints become runtime grammar', () {
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+
+      controller.rememberScreenPayload(
+        WearScreenId.availabilityDirectScan,
+        const WearGlassesPayload(
+          screenType: WearGlassesScreenType.productSelect,
+          phase: WearGlassesPhase.idle,
+          title: 'Выберите товар',
+          items: <String>['Молоко Альфа'],
+          voiceHints: <WearGlassesVoiceHint>[
+            WearGlassesVoiceHint(
+              itemId: '1',
+              phrase: 'альфа',
+              start: 7,
+              end: 12,
+            ),
+          ],
+        ),
+      );
+
+      expect(
+        controller.voiceGrammarPhrasesFor(
+          WearScreenId.availabilityDirectScan,
+        ),
+        <String>['альфа'],
+      );
+    });
+
     test('returning from home confirmation restores printer payload', () async {
       final _FakeGlassesOutput glasses = _FakeGlassesOutput();
       final WearFlowController controller = WearFlowController(
@@ -1375,11 +1407,19 @@ void main() {
         WearScreenId.availabilityProduct,
         WearScreenActionHandler(
           onDynamicItem: (String itemId) => selectedId = itemId,
+          dynamicVoiceItems: () => const VoiceDynamicItemsSnapshot(
+            revision: 1,
+            items: <VoiceDynamicItem>[
+              VoiceDynamicItem(id: '1', label: 'Коровка из Кореновки пломбир'),
+              VoiceDynamicItem(id: '2', label: 'Коровка из Кореновки стакан'),
+            ],
+          ),
         ),
       );
       const VoiceClarificationArgs args = VoiceClarificationArgs(
         sourceScreen: WearScreenId.availabilityProduct,
         phrase: 'коровка из кореновки',
+        sourceListRevision: 1,
         matches: <VoiceDynamicItem>[
           VoiceDynamicItem(id: '1', label: 'Коровка из Кореновки пломбир'),
           VoiceDynamicItem(id: '2', label: 'Коровка из Кореновки стакан'),
@@ -1417,6 +1457,7 @@ void main() {
       const VoiceClarificationArgs args = VoiceClarificationArgs(
         sourceScreen: WearScreenId.availabilityProduct,
         phrase: 'товар',
+        sourceListRevision: 1,
         matches: <VoiceDynamicItem>[
           VoiceDynamicItem(id: '2', label: 'Исчезнувший товар'),
         ],
@@ -1429,6 +1470,81 @@ void main() {
       expect(selected, isFalse);
       expect(navigation.backCalls, 0);
       expect(controller.state.screen, WearScreenId.voiceClarification);
+    });
+
+    test('rejects clarification selection after source revision changes',
+        () async {
+      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: navigation,
+      );
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.registerScreenActions(
+        WearScreenId.availabilityProduct,
+        WearScreenActionHandler(
+          onDynamicItem: (String itemId) {},
+          dynamicVoiceItems: () => const VoiceDynamicItemsSnapshot(
+            revision: 2,
+            items: <VoiceDynamicItem>[
+              VoiceDynamicItem(id: '1', label: 'Товар обновленный'),
+            ],
+          ),
+        ),
+      );
+      const VoiceClarificationArgs args = VoiceClarificationArgs(
+        sourceScreen: WearScreenId.availabilityProduct,
+        sourceListRevision: 1,
+        phrase: 'товар',
+        matches: <VoiceDynamicItem>[
+          VoiceDynamicItem(id: '1', label: 'Товар исходный'),
+        ],
+      );
+      controller.enterScreen(WearScreenId.voiceClarification, extra: args);
+
+      final bool selected =
+          await controller.selectVoiceClarificationItem(args, '1');
+
+      expect(selected, isFalse);
+      expect(navigation.backCalls, 0);
+    });
+
+    test('clarification grammar follows the visible candidate page', () async {
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      const VoiceClarificationArgs args = VoiceClarificationArgs(
+        sourceScreen: WearScreenId.availabilityProduct,
+        sourceListRevision: 1,
+        phrase: 'молоко',
+        matches: <VoiceDynamicItem>[
+          VoiceDynamicItem(id: '1', label: 'Молоко Альфа'),
+          VoiceDynamicItem(id: '2', label: 'Молоко Бета'),
+          VoiceDynamicItem(id: '3', label: 'Молоко Гамма'),
+          VoiceDynamicItem(id: '4', label: 'Молоко Дельта'),
+          VoiceDynamicItem(id: '5', label: 'Молоко Омега'),
+        ],
+        excludedWords: <String>{'молоко'},
+      );
+      final List<WearScreenId> changed = <WearScreenId>[];
+      controller.screenActionsChanged.listen(changed.add);
+      controller.enterScreen(WearScreenId.voiceClarification, extra: args);
+      final List<String> firstPage = controller.voiceGrammarPhrasesFor(
+        WearScreenId.voiceClarification,
+      );
+
+      controller.setVoiceClarificationFocusedIndex(4, 5);
+      await Future<void>.delayed(Duration.zero);
+      final List<String> secondPage = controller.voiceGrammarPhrasesFor(
+        WearScreenId.voiceClarification,
+      );
+
+      expect(
+          firstPage, containsAll(<String>['альфа', 'бета', 'гамма', 'дельта']));
+      expect(firstPage, isNot(contains('омега')));
+      expect(secondPage, <String>['омега']);
+      expect(changed, contains(WearScreenId.voiceClarification));
     });
 
     test('ignores a repeated clarification selection in flight', () async {
@@ -1457,6 +1573,7 @@ void main() {
       const VoiceClarificationArgs args = VoiceClarificationArgs(
         sourceScreen: WearScreenId.availabilityProduct,
         phrase: 'товар',
+        sourceListRevision: 1,
         matches: <VoiceDynamicItem>[
           VoiceDynamicItem(id: '2', label: 'Второй товар'),
         ],
@@ -1483,6 +1600,7 @@ void main() {
       const VoiceClarificationArgs root = VoiceClarificationArgs(
         sourceScreen: WearScreenId.availabilityProduct,
         phrase: 'коровка',
+        sourceListRevision: 1,
         matches: <VoiceDynamicItem>[
           VoiceDynamicItem(id: '1', label: 'Коровка пломбир'),
           VoiceDynamicItem(id: '2', label: 'Коровка стакан'),
@@ -1492,6 +1610,7 @@ void main() {
       const VoiceClarificationArgs refined = VoiceClarificationArgs(
         sourceScreen: WearScreenId.availabilityProduct,
         phrase: 'пломбир',
+        sourceListRevision: 1,
         matches: <VoiceDynamicItem>[
           VoiceDynamicItem(id: '1', label: 'Коровка пломбир'),
           VoiceDynamicItem(id: '2', label: 'Коровка стакан'),
@@ -1523,6 +1642,7 @@ void main() {
       const VoiceClarificationArgs args = VoiceClarificationArgs(
         sourceScreen: WearScreenId.availabilityProduct,
         phrase: 'коровка',
+        sourceListRevision: 1,
         matches: <VoiceDynamicItem>[
           VoiceDynamicItem(id: '1', label: 'Коровка пломбир'),
           VoiceDynamicItem(id: '2', label: 'Коровка стакан'),
@@ -1534,6 +1654,16 @@ void main() {
       await controller.renderCurrentGlasses();
 
       expect(glasses.payloads.last.statusText, 'Назовите точнее');
+      expect(glasses.payloads.last.items, <String>[
+        'Коровка пломбир',
+        'Коровка стакан',
+      ]);
+
+      await controller.setRecognitionDelayVisible(
+        WearScreenId.voiceClarification,
+        true,
+      );
+      expect(glasses.payloads.last.statusText, 'Распознаю...');
       expect(glasses.payloads.last.items, <String>[
         'Коровка пломбир',
         'Коровка стакан',
@@ -1551,6 +1681,7 @@ void main() {
       const VoiceClarificationArgs args = VoiceClarificationArgs(
         sourceScreen: WearScreenId.availabilityProduct,
         phrase: 'товар',
+        sourceListRevision: 1,
         matches: <VoiceDynamicItem>[],
       );
       controller.enterScreen(WearScreenId.voiceClarification, extra: args);

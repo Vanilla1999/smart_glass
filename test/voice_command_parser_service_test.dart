@@ -77,6 +77,7 @@ void main() {
     test('T04 capability removes command without handler', () {
       expect(catalog.grammarFor(WearScreenId.help), <String>[
         'назад',
+        'домой',
         'выключить микрофон',
         'стоп микрофон',
         'включить микрофон',
@@ -138,6 +139,39 @@ void main() {
         ),
         WearVoiceCommand.previousPage,
       );
+    });
+
+    test('printer grammar includes page navigation and home commands', () {
+      expect(
+        catalog.grammarFor(WearScreenId.printerSelect),
+        containsAll(<String>[
+          'домой',
+          'следующая страница',
+          'предыдущая страница',
+        ]),
+      );
+      expect(
+        VoiceCommandParserService(catalog: catalog).parseExactForScreen(
+          WearScreenId.printerSelect,
+          'домой',
+        ),
+        WearVoiceCommand.home,
+      );
+    });
+
+    test('home is available on every screen outside the home flow', () {
+      final VoiceCommandParserService parser =
+          VoiceCommandParserService(catalog: catalog);
+
+      for (final WearScreenId screen in WearScreenId.values) {
+        final bool isHomeFlow =
+            screen == WearScreenId.menu || screen == WearScreenId.homeConfirm;
+        expect(
+          parser.parseExactForScreen(screen, 'домой'),
+          isHomeFlow ? isNull : WearVoiceCommand.home,
+          reason: 'Unexpected home command availability on ${screen.name}',
+        );
+      }
     });
 
     test('T06 duplicate alias fails validation', () {

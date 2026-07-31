@@ -7,6 +7,8 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_co
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_phrase_event.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_preview_event.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_delay_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 
@@ -68,8 +70,10 @@ class WearVoiceControlService {
       StreamController<String>.broadcast();
   final StreamController<WearVoicePhraseEvent> _phraseEventController =
       StreamController<WearVoicePhraseEvent>.broadcast();
-  final StreamController<String?> _freeTextPreviewController =
-      StreamController<String?>.broadcast();
+  final StreamController<WearVoicePreviewEvent> _previewEventController =
+      StreamController<WearVoicePreviewEvent>.broadcast();
+  final StreamController<WearVoiceDelayEvent> _delayEventController =
+      StreamController<WearVoiceDelayEvent>.broadcast();
   StreamSubscription<SegmentedRecognitionResult>? _recognitionSubscription;
   StreamSubscription<SpeechSegmentStarted>? _segmentStartedSubscription;
   StreamSubscription<SpeechSegmentEnded>? _segmentEndedSubscription;
@@ -77,24 +81,36 @@ class WearVoiceControlService {
   final Map<String, int> _segmentStartedAt = <String, int>{};
   final Map<String, Timer> _stabilityTimers = <String, Timer>{};
   final Map<String, int> _latestPartialRevisions = <String, int>{};
+  final Map<String, _PreviewStabilityState> _previewStates =
+      <String, _PreviewStabilityState>{};
+  Timer? _recognitionDelayTimer;
+  bool _recognitionDelayVisible = false;
+  _RecognitionDelayContext? _recognitionDelayContext;
   static const Duration _stablePartialDelay = Duration(milliseconds: 150);
+  static const Duration _recognitionDelay = Duration(milliseconds: 900);
 
-  static const int _minPartialPhraseLength = 6;
   Stream<WearVoiceCommand> get commandStream => _commandController.stream;
   Stream<WearVoiceCommandEvent> get commandEventStream =>
       _commandEventController.stream;
   Stream<String> get phraseStream => _phraseController.stream;
   Stream<WearVoicePhraseEvent> get phraseEventStream =>
       _phraseEventController.stream;
-  Stream<String?> get freeTextPreviewStream =>
-      _freeTextPreviewController.stream;
+  Stream<WearVoicePreviewEvent> get previewEventStream =>
+      _previewEventController.stream;
+  Stream<WearVoiceDelayEvent> get delayEventStream =>
+      _delayEventController.stream;
   int get debugRetainedPartialRevisionCount => _latestPartialRevisions.length;
 
   void _onRecognitionResult(SegmentedRecognitionResult result) {
-    final String timerKey = '${result.captureEpoch}:'
+    final String timerKey = '${result.lane.name}:${result.captureEpoch}:'
         '${result.commandUtteranceId}:${result.routeRevision}:'
-        '${result.grammarRevision}';
+        '${result.grammarRevision}:${result.freeTextEpoch}:'
+        '${result.sourceScreen.name}';
     final RecognitionArbitration? outcome = _arbiter.accept(result);
+    if (result.kind == RecognitionKind.partial &&
+        result.dynamicItemId == null) {
+      _cancelPendingPreview(result);
+    }
     if (outcome?.ignoredEndpointOnly ?? false) return;
     if (result.kind == RecognitionKind.partial) {
       _stabilityTimers.remove(timerKey)?.cancel();
@@ -103,8 +119,7 @@ class WearVoiceControlService {
         _latestPartialRevisions.remove(_latestPartialRevisions.keys.first);
       }
     } else {
-      _stabilityTimers.remove(timerKey)?.cancel();
-      _latestPartialRevisions.remove(timerKey);
+      _cancelUtteranceStabilityTimers(result);
     }
     if (outcome == null) return;
     if (outcome.stableCandidate
@@ -117,7 +132,6 @@ class WearVoiceControlService {
         if (_latestPartialRevisions[key] != expectedPartialRevision) return;
         final RecognitionArbitration? stable = _arbiter.claimStable(candidate);
         if (stable?.command case final WearVoiceCommand command) {
-          _emitFreeTextPreview(null);
           _emitCommand(
             command,
             result: candidate,
@@ -128,7 +142,7 @@ class WearVoiceControlService {
       return;
     }
     if (outcome.command case final WearVoiceCommand command) {
-      if (outcome.clearPreview) _emitFreeTextPreview(null);
+      _clearRecognitionDelay(result: result);
       _emitCommand(
         command,
         result: result,
@@ -136,11 +150,12 @@ class WearVoiceControlService {
       );
       return;
     }
-    if (outcome.preview case final String preview) {
-      _emitFreeTextPreview(preview);
+    if (outcome.preview case final SegmentedRecognitionResult preview) {
+      _schedulePreview(preview);
       return;
     }
     if (outcome.phrase case final SegmentedRecognitionResult phrase) {
+      _clearRecognitionDelay(result: phrase);
       _emitPhrase(phrase);
     }
   }
@@ -149,7 +164,6 @@ class WearVoiceControlService {
     try {
       final RecognitionArbitration? outcome = _arbiter.endSegment(ended);
       if (outcome?.command case final WearVoiceCommand command) {
-        if (outcome!.clearPreview) _emitFreeTextPreview(null);
         _emitCommand(
           command,
           result: null,
@@ -161,6 +175,7 @@ class WearVoiceControlService {
         _emitPhrase(phrase);
       }
     } finally {
+      _clearRecognitionDelay(ended: ended);
       _segmentStartedAt.remove('${ended.captureEpoch}:${ended.segmentId}');
     }
   }
@@ -209,6 +224,22 @@ class WearVoiceControlService {
     _arbiter.startSegment(started);
     _segmentStartedAt['${started.captureEpoch}:${started.segmentId}'] =
         _clock();
+    _clearRecognitionDelay();
+    final _RecognitionDelayContext context = _RecognitionDelayContext(
+      captureEpoch: started.captureEpoch,
+      segmentId: started.segmentId,
+      sourceScreen: _speechRecognitionService.sourceScreen,
+      routeRevision: _speechRecognitionService.routeRevision,
+      grammarRevision: _speechRecognitionService.grammarRevision,
+      freeTextEpoch: _speechRecognitionService.freeTextEpoch,
+    );
+    _recognitionDelayContext = context;
+    _recognitionDelayTimer = _timerFactory(_recognitionDelay, () {
+      if (_recognitionDelayContext != context) return;
+      _recognitionDelayTimer = null;
+      _recognitionDelayVisible = true;
+      _emitDelay(visible: true, context: context);
+    });
   }
 
   void _emitPhrase(SegmentedRecognitionResult result) {
@@ -229,25 +260,172 @@ class WearVoiceControlService {
         sourceScreen: result.sourceScreen,
         routeRevision: result.routeRevision,
         grammarRevision: result.grammarRevision,
+        freeTextEpoch: result.freeTextEpoch,
+        listRevision: result.listRevision,
       ));
     }
   }
 
-  void _emitFreeTextPreview(String? phrase) {
-    if (_freeTextPreviewController.isClosed) return;
-    if (phrase == null) {
-      _freeTextPreviewController.add(null);
-      return;
-    }
-    final String trimmed = phrase.trim();
-    if (trimmed.length < _minPartialPhraseLength) {
-      return;
-    }
-    print(
-      '[WearVoiceControlService] emitting free-text preview: "$trimmed" '
-      'hasListener=${_freeTextPreviewController.hasListener}',
+  void _emitPreview(SegmentedRecognitionResult result) {
+    if (_previewEventController.isClosed) return;
+    final String trimmed = result.text.trim();
+    if (trimmed.isEmpty) return;
+    final int recognizedAtMillis =
+        result.recognizedAtMillis > 0 ? result.recognizedAtMillis : _clock();
+    final WearVoicePreviewEvent event = WearVoicePreviewEvent(
+      text: trimmed,
+      captureEpoch: result.captureEpoch,
+      commandUtteranceId: result.commandUtteranceId,
+      routeRevision: result.routeRevision,
+      grammarRevision: result.grammarRevision,
+      freeTextEpoch: result.freeTextEpoch,
+      sourceScreen: result.sourceScreen,
+      partialRevision: result.partialRevision,
+      recognizedAtMillis: recognizedAtMillis,
+      listRevision: result.listRevision,
+      segmentId: result.segmentId,
+      itemId: result.dynamicItemId!,
+      isCommandLane: result.lane == RecognitionLane.command,
     );
-    _freeTextPreviewController.add(trimmed);
+    print(
+      '[VOICE_PREVIEW_SHADOW] text="$trimmed" '
+      'captureEpoch=${event.captureEpoch} '
+      'utteranceId=${event.commandUtteranceId} '
+      'routeRevision=${event.routeRevision} '
+      'grammarRevision=${event.grammarRevision} '
+      'freeTextEpoch=${event.freeTextEpoch} '
+      'screen=${event.sourceScreen.name} '
+      'partialRevision=${event.partialRevision} '
+      'admissionMs=${_clock() - recognizedAtMillis}',
+    );
+    _previewEventController.add(event);
+  }
+
+  void _schedulePreview(SegmentedRecognitionResult candidate) {
+    final String key = _previewKey(candidate);
+    final String itemId = candidate.dynamicItemId!;
+    final String observation = '${candidate.lane.name}:'
+        '${candidate.partialRevision}';
+    _PreviewStabilityState state = _previewStates.putIfAbsent(
+      key,
+      _PreviewStabilityState.new,
+    );
+    if (state.emittedItemId != null) return;
+    if (state.itemId != itemId) {
+      state = _PreviewStabilityState()
+        ..itemId = itemId
+        ..candidate = candidate;
+      _previewStates[key] = state;
+    } else {
+      state.candidate = candidate;
+    }
+    state.observations.add(observation);
+    while (_previewStates.length > 128) {
+      final String oldest = _previewStates.keys.first;
+      _stabilityTimers.remove('preview:$oldest')?.cancel();
+      _previewStates.remove(oldest);
+    }
+    final String timerKey = 'preview:$key';
+    _stabilityTimers.remove(timerKey)?.cancel();
+    final _PreviewStabilityState expectedState = state;
+    _stabilityTimers[timerKey] = _timerFactory(_stablePartialDelay, () {
+      _stabilityTimers.remove(timerKey);
+      if (!identical(_previewStates[key], expectedState) ||
+          expectedState.emittedItemId != null ||
+          expectedState.observations.length < 2) {
+        return;
+      }
+      final SegmentedRecognitionResult preview = expectedState.candidate!;
+      if (!_arbiter.canPreview(preview)) return;
+      expectedState.emittedItemId = preview.dynamicItemId;
+      _emitPreview(preview);
+    });
+  }
+
+  void _cancelPendingPreview(SegmentedRecognitionResult result) {
+    final String key = _previewKey(result);
+    final _PreviewStabilityState? state = _previewStates[key];
+    if (state?.emittedItemId != null || state?.candidate?.lane != result.lane) {
+      return;
+    }
+    _stabilityTimers.remove('preview:$key')?.cancel();
+    _previewStates.remove(key);
+  }
+
+  String _previewKey(SegmentedRecognitionResult result) =>
+      '${result.captureEpoch}:${result.commandUtteranceId}:'
+      '${result.routeRevision}:${result.grammarRevision}:'
+      '${result.freeTextEpoch}:${result.sourceScreen.name}';
+
+  void _clearRecognitionDelay({
+    SegmentedRecognitionResult? result,
+    SpeechSegmentEnded? ended,
+  }) {
+    final _RecognitionDelayContext? context = _recognitionDelayContext;
+    if (context != null &&
+        ((result != null &&
+                (result.captureEpoch != context.captureEpoch ||
+                    result.segmentId != context.segmentId)) ||
+            (ended != null &&
+                (ended.captureEpoch != context.captureEpoch ||
+                    ended.segmentId != context.segmentId)))) {
+      return;
+    }
+    final bool wasActive = _recognitionDelayTimer != null;
+    _recognitionDelayTimer?.cancel();
+    _recognitionDelayTimer = null;
+    if (wasActive || _recognitionDelayVisible) {
+      _recognitionDelayVisible = false;
+      if (context != null) _emitDelay(visible: false, context: context);
+    }
+    _recognitionDelayContext = null;
+  }
+
+  void markPreviewUseful(WearVoicePreviewEvent event) {
+    final _RecognitionDelayContext? context = _recognitionDelayContext;
+    if (context == null ||
+        context.captureEpoch != event.captureEpoch ||
+        context.segmentId != event.segmentId ||
+        context.sourceScreen != event.sourceScreen ||
+        context.routeRevision != event.routeRevision ||
+        context.grammarRevision != event.grammarRevision ||
+        context.freeTextEpoch != event.freeTextEpoch) {
+      return;
+    }
+    _clearRecognitionDelay();
+  }
+
+  void _emitDelay({
+    required bool visible,
+    required _RecognitionDelayContext context,
+  }) {
+    if (_delayEventController.isClosed) return;
+    _delayEventController.add(WearVoiceDelayEvent(
+      visible: visible,
+      captureEpoch: context.captureEpoch,
+      segmentId: context.segmentId,
+      sourceScreen: context.sourceScreen,
+      routeRevision: context.routeRevision,
+      grammarRevision: context.grammarRevision,
+      freeTextEpoch: context.freeTextEpoch,
+    ));
+  }
+
+  void _cancelUtteranceStabilityTimers(SegmentedRecognitionResult result) {
+    final String utteranceKey = ':${result.captureEpoch}:'
+        '${result.commandUtteranceId}:${result.routeRevision}:'
+        '${result.grammarRevision}:${result.freeTextEpoch}:'
+        '${result.sourceScreen.name}';
+    final List<String> keys = _stabilityTimers.keys
+        .where((String key) => key.endsWith(utteranceKey))
+        .toList(growable: false);
+    for (final String key in keys) {
+      _stabilityTimers.remove(key)?.cancel();
+      _latestPartialRevisions.remove(key);
+    }
+    final String previewKey = _previewKey(result);
+    _stabilityTimers.remove('preview:$previewKey')?.cancel();
+    _previewStates.remove(previewKey);
   }
 
   void _onRecognitionError(Object error, StackTrace stackTrace) {
@@ -263,6 +441,8 @@ class WearVoiceControlService {
     }
     _stabilityTimers.clear();
     _latestPartialRevisions.clear();
+    _previewStates.clear();
+    _recognitionDelayTimer?.cancel();
     await _recognitionSubscription?.cancel();
     await _segmentStartedSubscription?.cancel();
     await _segmentEndedSubscription?.cancel();
@@ -271,6 +451,32 @@ class WearVoiceControlService {
     await _commandEventController.close();
     await _phraseController.close();
     await _phraseEventController.close();
-    await _freeTextPreviewController.close();
+    await _previewEventController.close();
+    await _delayEventController.close();
   }
+}
+
+class _PreviewStabilityState {
+  String? itemId;
+  SegmentedRecognitionResult? candidate;
+  final Set<String> observations = <String>{};
+  String? emittedItemId;
+}
+
+class _RecognitionDelayContext {
+  const _RecognitionDelayContext({
+    required this.captureEpoch,
+    required this.segmentId,
+    required this.sourceScreen,
+    required this.routeRevision,
+    required this.grammarRevision,
+    required this.freeTextEpoch,
+  });
+
+  final int captureEpoch;
+  final int segmentId;
+  final WearScreenId sourceScreen;
+  final int routeRevision;
+  final int grammarRevision;
+  final int freeTextEpoch;
 }

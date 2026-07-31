@@ -5,6 +5,8 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availability_glasses_payloads.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_input_screen.dart';
@@ -47,6 +49,10 @@ class _WearAvailabilityDirectScanScreenState
         onDown: _onVoiceDown,
         onSelect: _onVoiceSelect,
         onManualInput: _manualInput,
+        onPhrase: _onVoicePhrase,
+        onPartialPhrase: _onVoicePartialPhrase,
+        onDynamicItem: _onVoiceDynamicItem,
+        dynamicVoiceItems: _dynamicVoiceItems,
       ),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -182,6 +188,76 @@ class _WearAvailabilityDirectScanScreenState
     _openCheck(products[productIndex]);
   }
 
+  VoiceDynamicItemsSnapshot _dynamicVoiceItems() {
+    final List<VoiceDynamicItem> items = ref
+        .read(wearAvailabilityDirectScanProvider)
+        .duplicateProducts
+        .map((WearAvailabilityProduct product) => VoiceDynamicItem(
+              id: product.id.toString(),
+              label: product.name,
+            ))
+        .toList(growable: false);
+    return VoiceDynamicItemsSnapshot(
+      revision: Object.hashAll(
+        items.map((VoiceDynamicItem item) => item.revisionHash),
+      ),
+      items: items,
+    );
+  }
+
+  Future<void> _onVoicePhrase(String phrase) async {
+    final VoiceListMatch<VoiceDynamicItem> match = VoiceListMatcher.match(
+      phrase,
+      _dynamicVoiceItems().items,
+      (VoiceDynamicItem item) => item.label,
+      aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
+    );
+    if (match.type == VoiceListMatchType.unique) {
+      await _onVoiceDynamicItem(match.item!.id);
+    }
+  }
+
+  bool _onVoicePartialPhrase(String phrase) {
+    final List<VoiceDynamicItem> items = _dynamicVoiceItems().items;
+    final VoiceListMatch<VoiceDynamicItem> match =
+        VoiceListMatcher.canMatchPartial(phrase)
+            ? VoiceListMatcher.match(
+                phrase,
+                items,
+                (VoiceDynamicItem item) => item.label,
+                aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
+              )
+            : VoiceListMatcher.matchExactPhrase(
+                phrase,
+                items,
+                (VoiceDynamicItem item) => item.label,
+                aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
+              );
+    if (match.type != VoiceListMatchType.unique) return false;
+    final int index = items.indexWhere(
+      (VoiceDynamicItem item) => item.id == match.item!.id,
+    );
+    if (index < 0) return false;
+    _focusedIndex = index;
+    _scrollToFocused();
+    _sendGlassesState(
+      ref.read(wearAvailabilityDirectScanProvider),
+      fast: true,
+    );
+    return true;
+  }
+
+  Future<void> _onVoiceDynamicItem(String itemId) async {
+    final List<WearAvailabilityProduct> products =
+        ref.read(wearAvailabilityDirectScanProvider).duplicateProducts;
+    final int index = products.indexWhere(
+      (WearAvailabilityProduct product) => product.id.toString() == itemId,
+    );
+    if (index < 0) return;
+    _focusedIndex = index;
+    await _openCheck(products[index]);
+  }
+
   void _scrollToFocused() {
     if (!_scroll.hasClients) return;
     final double target = ((_focusedIndex + 1) * 56.0).clamp(
@@ -217,6 +293,10 @@ class _WearAvailabilityDirectScanScreenState
           statusText: state.message,
         );
       }
+      WearDependencies.I.wearFlowController.rememberScreenPayload(
+        WearScreenId.availabilityDirectScan,
+        payload,
+      );
       if (fast) {
         WearStatusIconReporter.I.sendFast(payload);
       } else {

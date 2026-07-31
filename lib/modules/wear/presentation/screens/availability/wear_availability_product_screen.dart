@@ -39,6 +39,8 @@ class _WearAvailabilityProductScreenState
     extends ConsumerState<WearAvailabilityProductScreen> {
   final ScrollController _scroll = ScrollController();
   int _focusedIndex = 0;
+  List<WearAvailabilityProduct>? _voiceSnapshotProducts;
+  VoiceDynamicItemsSnapshot _voiceSnapshot = VoiceDynamicItemsSnapshot.empty;
 
   @override
   void initState() {
@@ -260,18 +262,27 @@ class _WearAvailabilityProductScreenState
         ? <WearAvailabilityProduct>[]
         : ref.read(wearAvailabilityProductsProvider(group)).valueOrNull ??
             <WearAvailabilityProduct>[];
+    if (identical(products, _voiceSnapshotProducts)) return _voiceSnapshot;
+    final Stopwatch stopwatch = Stopwatch()..start();
     final List<VoiceDynamicItem> items = products
         .map((WearAvailabilityProduct item) => VoiceDynamicItem(
               id: item.id.toString(),
               label: item.name,
             ))
         .toList(growable: false);
-    return VoiceDynamicItemsSnapshot(
+    _voiceSnapshotProducts = products;
+    _voiceSnapshot = VoiceDynamicItemsSnapshot(
       revision: Object.hashAll(
-        items.map((VoiceDynamicItem item) => Object.hash(item.id, item.label)),
+        items.map((VoiceDynamicItem item) => item.revisionHash),
       ),
       items: items,
     );
+    stopwatch.stop();
+    print(
+      '[VOICE_DYNAMIC_PERF] phase=snapshot screen=availabilityProduct '
+      'items=${items.length} durationMs=${stopwatch.elapsedMilliseconds}',
+    );
+    return _voiceSnapshot;
   }
 
   void _onVoicePhrase(String phrase) {
@@ -332,18 +343,23 @@ class _WearAvailabilityProductScreenState
   }
 
   bool _onVoicePartialPhrase(String phrase) {
-    if (!VoiceListMatcher.canMatchPartial(phrase)) return false;
     final WearAvailabilityGroup? group = widget.group;
     if (group == null) return false;
     final List<WearAvailabilityProduct>? products =
         ref.read(wearAvailabilityProductsProvider(group)).valueOrNull;
     if (products == null || products.isEmpty) return false;
     final VoiceListMatch<WearAvailabilityProduct> match =
-        VoiceListMatcher.match(
-      phrase,
-      products,
-      (WearAvailabilityProduct product) => product.name,
-    );
+        VoiceListMatcher.canMatchPartial(phrase)
+            ? VoiceListMatcher.match(
+                phrase,
+                products,
+                (WearAvailabilityProduct product) => product.name,
+              )
+            : VoiceListMatcher.matchExactPhrase(
+                phrase,
+                products,
+                (WearAvailabilityProduct product) => product.name,
+              );
     if (match.type != VoiceListMatchType.unique) {
       return false;
     }
@@ -359,7 +375,7 @@ class _WearAvailabilityProductScreenState
       _scrollToFocused();
       _sendGlassesState(group, products, fast: true);
     }
-    return false;
+    return index >= 0;
   }
 
   void _scrollToFocused() {
@@ -411,11 +427,21 @@ class _WearAvailabilityProductScreenState
     List<WearAvailabilityProduct> products, {
     bool fast = false,
   }) {
+    final Stopwatch stopwatch = Stopwatch()..start();
     final payload = WearAvailabilityGlassesPayloads.products(
       group: group,
       products: products,
+      voiceSnapshot: _dynamicVoiceItems(),
       selectedIndex: _focusedIndex,
     );
+    stopwatch.stop();
+    if (products.length >= 100 || stopwatch.elapsedMilliseconds >= 20) {
+      print(
+        '[VOICE_DYNAMIC_PERF] phase=glasses_payload '
+        'screen=availabilityProduct items=${products.length} '
+        'durationMs=${stopwatch.elapsedMilliseconds} fast=$fast',
+      );
+    }
     WearDependencies.I.wearFlowController.rememberScreenPayload(
       WearScreenId.availabilityProduct,
       payload,

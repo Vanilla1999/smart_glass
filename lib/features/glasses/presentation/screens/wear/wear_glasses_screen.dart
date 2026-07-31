@@ -5,6 +5,7 @@ import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_glas
 import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_glasses_state.dart';
 import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_voice_overlay_cubit.dart';
 import 'package:smart_glasses/features/glasses/presentation/widgets/wear/wear_glasses_scaffold.dart';
+import 'package:smart_glasses/features/glasses/presentation/widgets/wear/wear_voice_hint_text.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 
@@ -502,6 +503,9 @@ class _WearList extends StatelessWidget {
                         child: _WearListItem(
                           text: visible[i],
                           selected: i == state.selectedIndex,
+                          voiceHint: i < state.voiceHints.length
+                              ? state.voiceHints[i]
+                              : null,
                         ),
                       ),
                   ],
@@ -719,10 +723,12 @@ class _WearListItem extends StatelessWidget {
   const _WearListItem({
     required this.text,
     required this.selected,
+    this.voiceHint,
   });
 
   final String text;
   final bool selected;
+  final WearGlassesVoiceHint? voiceHint;
 
   @override
   Widget build(BuildContext context) {
@@ -751,8 +757,9 @@ class _WearListItem extends StatelessWidget {
                 const SizedBox(width: 4),
               ],
               Expanded(
-                child: Text(
-                  text,
+                child: WearVoiceHintText(
+                  text: text,
+                  hint: voiceHint,
                   style: TextStyle(
                     color: selected
                         ? Colors.white
@@ -761,8 +768,6 @@ class _WearListItem extends StatelessWidget {
                     height: 1.4,
                     fontWeight: FontWeight.w400,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],

@@ -35,6 +35,7 @@ class NativeVoiceStateEvent {
     required this.revision,
     required this.timestampMs,
     this.errorCode,
+    this.errorDetails,
   });
 
   final NativeVoiceCaptureState state;
@@ -43,6 +44,7 @@ class NativeVoiceStateEvent {
   final int revision;
   final int timestampMs;
   final String? errorCode;
+  final String? errorDetails;
 }
 
 class NativePcmPacket {
@@ -50,12 +52,14 @@ class NativePcmPacket {
     required this.leaseId,
     required this.sequence,
     required this.elapsedRealtimeNanos,
+    required this.capturedAtEpochMicros,
     required this.bytes,
   });
 
   final int leaseId;
   final int sequence;
   final int elapsedRealtimeNanos;
+  final int capturedAtEpochMicros;
   final Uint8List bytes;
 }
 
@@ -251,12 +255,12 @@ class NativeVoiceCapture {
   }
 
   Future<ByteData> _onPacket(ByteData? packet) async {
-    if (packet == null || packet.lengthInBytes < 32) {
+    if (packet == null || packet.lengthInBytes < 40) {
       return _acknowledgement(2, 0, 0);
     }
-    final ByteData header = ByteData.sublistView(packet, 0, 32);
-    if (header.getUint32(0, Endian.big) != 1 ||
-        header.getUint32(4, Endian.big) != 32) {
+    final ByteData header = ByteData.sublistView(packet, 0, 40);
+    if (header.getUint32(0, Endian.big) != 2 ||
+        header.getUint32(4, Endian.big) != 40) {
       return _acknowledgement(2, 0, 0);
     }
     final int leaseId = header.getInt64(8, Endian.big);
@@ -265,14 +269,16 @@ class NativeVoiceCapture {
       return _acknowledgement(1, leaseId, sequence);
     }
     final int timestampNanos = header.getInt64(24, Endian.big);
+    final int capturedAtEpochMicros = header.getInt64(32, Endian.big);
     final Uint8List bytes = packet.buffer.asUint8List(
-      packet.offsetInBytes + 32,
-      packet.lengthInBytes - 32,
+      packet.offsetInBytes + 40,
+      packet.lengthInBytes - 40,
     );
     if (bytes.isEmpty ||
         bytes.lengthInBytes.isOdd ||
         sequence < 0 ||
         timestampNanos <= 0 ||
+        capturedAtEpochMicros <= 0 ||
         (_lastSequence != null && sequence != _lastSequence! + 1) ||
         (_lastTimestampNanos != null &&
             timestampNanos <= _lastTimestampNanos!) ||
@@ -285,6 +291,7 @@ class NativeVoiceCapture {
       leaseId: leaseId,
       sequence: sequence,
       elapsedRealtimeNanos: timestampNanos,
+      capturedAtEpochMicros: capturedAtEpochMicros,
       bytes: Uint8List.fromList(bytes),
     );
     try {
@@ -344,6 +351,7 @@ class NativeVoiceCapture {
       revision: (event['revision'] as num?)?.toInt() ?? 0,
       timestampMs: (event['timestampMs'] as num?)?.toInt() ?? 0,
       errorCode: event['errorCode'] as String?,
+      errorDetails: event['errorDetails'] as String?,
     );
   }
 

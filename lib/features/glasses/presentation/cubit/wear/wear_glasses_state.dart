@@ -12,6 +12,7 @@ class WearGlassesState {
     this.isLoading = false,
     this.isError = false,
     this.items = const <String>[],
+    this.voiceHints = const <WearGlassesVoiceHint>[],
     this.bodyLines = const <String>[],
     this.checkLines = const <String>[],
     this.selectedIndex = 0,
@@ -59,6 +60,7 @@ class WearGlassesState {
       isLoading: _bool(payload['isLoading']),
       isError: _bool(payload['isError']),
       items: _items(payload['items']),
+      voiceHints: _voiceHints(payload['voiceHints']),
       bodyLines: _items(payload['bodyLines']),
       checkLines: _items(payload['checkLines']),
       selectedIndex: _int(payload['selectedIndex']),
@@ -93,6 +95,7 @@ class WearGlassesState {
   final bool isLoading;
   final bool isError;
   final List<String> items;
+  final List<WearGlassesVoiceHint> voiceHints;
   final List<String> bodyLines;
   final List<String> checkLines;
   final int selectedIndex;
@@ -136,6 +139,14 @@ class WearGlassesState {
       if (item is Map && item['title'] != null) return item['title'].toString();
       return item.toString();
     }).toList(growable: false);
+  }
+
+  static List<WearGlassesVoiceHint> _voiceHints(dynamic raw) {
+    if (raw is! List) return const <WearGlassesVoiceHint>[];
+    return raw
+        .whereType<Map>()
+        .map(WearGlassesVoiceHint.fromJson)
+        .toList(growable: false);
   }
 
   static String? _string(dynamic raw) {

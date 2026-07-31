@@ -30,6 +30,8 @@ import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_phrase_event.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_preview_event.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_delay_event.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_glasses_output.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
@@ -419,6 +421,232 @@ void main() {
       expect(commands, <WearVoiceCommand>[WearVoiceCommand.up]);
     });
 
+    test('stable free-text preview waits 150 ms and final cancels it',
+        () async {
+      final _ManualTimerScheduler timers = _ManualTimerScheduler();
+      final _FakeSpeechRecognitionService speech =
+          _FakeSpeechRecognitionService();
+      final WearVoiceControlService voiceControl = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => WearScreenId.menu,
+        timerFactory: timers.schedule,
+      );
+      addTearDown(voiceControl.dispose);
+      addTearDown(speech.dispose);
+      final List<WearVoicePreviewEvent> previews = <WearVoicePreviewEvent>[];
+      voiceControl.previewEventStream.listen(previews.add);
+
+      speech.emitFreeTextPartial(
+        'желтый принтер',
+        dynamicItemId: 'yellow',
+      );
+      await Future<void>.delayed(Duration.zero);
+      timers.elapse(const Duration(milliseconds: 149));
+      expect(previews, isEmpty);
+      timers.elapse(const Duration(milliseconds: 1));
+      await Future<void>.delayed(Duration.zero);
+      expect(previews, isEmpty);
+
+      speech.emitFreeTextPartial('желтый', dynamicItemId: 'yellow');
+      await Future<void>.delayed(Duration.zero);
+      timers.elapse(const Duration(milliseconds: 150));
+      await Future<void>.delayed(Duration.zero);
+      expect(previews, hasLength(1));
+
+      speech.emitFreeTextPartial(
+        'мобильный',
+        utteranceId: 2,
+        dynamicItemId: 'mobile',
+      );
+      speech.emitCommandResult('вверх', utteranceId: 2);
+      await Future<void>.delayed(Duration.zero);
+      timers.elapse(const Duration(milliseconds: 150));
+      await Future<void>.delayed(Duration.zero);
+      expect(previews, hasLength(1));
+    });
+
+    test('one utterance cannot preview two dynamic items', () async {
+      final _ManualTimerScheduler timers = _ManualTimerScheduler();
+      final _FakeSpeechRecognitionService speech =
+          _FakeSpeechRecognitionService();
+      final WearVoiceControlService voiceControl = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => WearScreenId.menu,
+        timerFactory: timers.schedule,
+      );
+      addTearDown(voiceControl.dispose);
+      addTearDown(speech.dispose);
+      final List<WearVoicePreviewEvent> previews = <WearVoicePreviewEvent>[];
+      voiceControl.previewEventStream.listen(previews.add);
+
+      speech.emitFreeTextPartial('желтый', dynamicItemId: 'yellow');
+      speech.emitFreeTextPartial('желтый принтер', dynamicItemId: 'yellow');
+      await Future<void>.delayed(Duration.zero);
+      timers.elapse(const Duration(milliseconds: 150));
+      await Future<void>.delayed(Duration.zero);
+
+      speech.emitFreeTextPartial('мобильный', dynamicItemId: 'mobile');
+      speech.emitFreeTextPartial(
+        'мобильный принтер',
+        dynamicItemId: 'mobile',
+      );
+      await Future<void>.delayed(Duration.zero);
+      timers.elapse(const Duration(milliseconds: 150));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(previews.map((event) => event.itemId), <String>['yellow']);
+    });
+
+    test('command-lane correction cancels its pending dynamic preview',
+        () async {
+      final _ManualTimerScheduler timers = _ManualTimerScheduler();
+      final _FakeSpeechRecognitionService speech =
+          _FakeSpeechRecognitionService();
+      final WearVoiceControlService voiceControl = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => WearScreenId.menu,
+        timerFactory: timers.schedule,
+      );
+      addTearDown(voiceControl.dispose);
+      addTearDown(speech.dispose);
+      final List<WearVoicePreviewEvent> previews = <WearVoicePreviewEvent>[];
+      voiceControl.previewEventStream.listen(previews.add);
+
+      speech.emitCommandPartial('желтый', dynamicItemId: 'yellow');
+      speech.emitCommandPartial(
+        'желтый принтер',
+        dynamicItemId: 'yellow',
+      );
+      speech.emitCommandPartial('шум');
+      await Future<void>.delayed(Duration.zero);
+      timers.elapse(const Duration(milliseconds: 150));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(previews, isEmpty);
+    });
+
+    test('command-lane dynamic partials produce a command-owned preview',
+        () async {
+      final _ManualTimerScheduler timers = _ManualTimerScheduler();
+      final _FakeSpeechRecognitionService speech =
+          _FakeSpeechRecognitionService();
+      final WearVoiceControlService voiceControl = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => WearScreenId.menu,
+        timerFactory: timers.schedule,
+      );
+      addTearDown(voiceControl.dispose);
+      addTearDown(speech.dispose);
+      final List<WearVoicePreviewEvent> previews = <WearVoicePreviewEvent>[];
+      voiceControl.previewEventStream.listen(previews.add);
+
+      speech.emitCommandPartial('желтый', dynamicItemId: 'yellow');
+      speech.emitCommandPartial(
+        'желтый принтер',
+        dynamicItemId: 'yellow',
+      );
+      await Future<void>.delayed(Duration.zero);
+      timers.elapse(const Duration(milliseconds: 150));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(previews.single.isCommandLane, isTrue);
+      expect(previews.single.itemId, 'yellow');
+    });
+
+    test('recognition delay shows at 900 ms and clears with original context',
+        () async {
+      final _ManualTimerScheduler timers = _ManualTimerScheduler();
+      final _FakeSpeechRecognitionService speech =
+          _FakeSpeechRecognitionService(WearScreenId.help);
+      final WearVoiceControlService voiceControl = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => WearScreenId.help,
+        timerFactory: timers.schedule,
+      );
+      addTearDown(voiceControl.dispose);
+      addTearDown(speech.dispose);
+      final List<WearVoiceDelayEvent> delays = <WearVoiceDelayEvent>[];
+      voiceControl.delayEventStream.listen(delays.add);
+
+      speech.emitFreeTextPartial('неоднозначно');
+      await Future<void>.delayed(Duration.zero);
+      timers.elapse(const Duration(milliseconds: 899));
+      expect(delays, isEmpty);
+      timers.elapse(const Duration(milliseconds: 1));
+      await Future<void>.delayed(Duration.zero);
+      expect(delays.single.visible, isTrue);
+      expect(delays.single.sourceScreen, WearScreenId.help);
+
+      speech.endSegment();
+      await Future<void>.delayed(Duration.zero);
+      expect(delays.last.visible, isFalse);
+      expect(delays.last.sourceScreen, WearScreenId.help);
+    });
+
+    test('recognition delay cannot acquire a newer route context', () async {
+      final _ManualTimerScheduler timers = _ManualTimerScheduler();
+      final _FakeSpeechRecognitionService speech =
+          _FakeSpeechRecognitionService();
+      final WearVoiceControlService voiceControl = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => speech.sourceScreen,
+        timerFactory: timers.schedule,
+      );
+      addTearDown(voiceControl.dispose);
+      addTearDown(speech.dispose);
+      final List<WearVoiceDelayEvent> delays = <WearVoiceDelayEvent>[];
+      voiceControl.delayEventStream.listen(delays.add);
+
+      speech.emitFreeTextPartial('старый экран');
+      await Future<void>.delayed(Duration.zero);
+      speech.sourceScreen = WearScreenId.settings;
+      speech.currentRouteRevision = 2;
+      timers.elapse(const Duration(milliseconds: 900));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(delays.single.sourceScreen, WearScreenId.menu);
+      expect(delays.single.routeRevision, 1);
+    });
+
+    test('preview from another segment cannot clear recognition delay',
+        () async {
+      final _ManualTimerScheduler timers = _ManualTimerScheduler();
+      final _FakeSpeechRecognitionService speech =
+          _FakeSpeechRecognitionService();
+      final WearVoiceControlService voiceControl = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => WearScreenId.menu,
+        timerFactory: timers.schedule,
+      );
+      addTearDown(voiceControl.dispose);
+      addTearDown(speech.dispose);
+      final List<WearVoiceDelayEvent> delays = <WearVoiceDelayEvent>[];
+      voiceControl.delayEventStream.listen(delays.add);
+
+      speech.emitFreeTextPartial('шум');
+      await Future<void>.delayed(Duration.zero);
+      voiceControl.markPreviewUseful(const WearVoicePreviewEvent(
+        text: 'желтый',
+        captureEpoch: 1,
+        commandUtteranceId: 1,
+        routeRevision: 1,
+        grammarRevision: 1,
+        freeTextEpoch: 0,
+        sourceScreen: WearScreenId.menu,
+        partialRevision: 1,
+        recognizedAtMillis: 1,
+        listRevision: 1,
+        segmentId: 2,
+        itemId: 'yellow',
+        isCommandLane: false,
+      ));
+      timers.elapse(const Duration(milliseconds: 900));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(delays.single.visible, isTrue);
+      expect(delays.single.segmentId, 1);
+    });
+
     test('control-service partial revision state remains bounded', () async {
       final _FakeSpeechRecognitionService speech =
           _FakeSpeechRecognitionService();
@@ -709,6 +937,14 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       await _expectStaleRevisionDropped(
         tester,
         grammarRevisionDelta: 1,
+      );
+    });
+
+    testWearWidget('typed command is dropped after capture epoch changes',
+        (WidgetTester tester) async {
+      await _expectStaleRevisionDropped(
+        tester,
+        captureEpochDelta: 1,
       );
     });
 
@@ -1505,6 +1741,7 @@ Future<void> _expectStaleRevisionDropped(
   WidgetTester tester, {
   int routeRevisionDelta = 0,
   int grammarRevisionDelta = 0,
+  int captureEpochDelta = 0,
 }) async {
   final StreamController<WearVoiceCommandEvent> commands =
       StreamController<WearVoiceCommandEvent>.broadcast();
@@ -1531,7 +1768,7 @@ Future<void> _expectStaleRevisionDropped(
     traceId: 'stale-revision',
     recognizedAtMillis: 1,
     asrMillis: 1,
-    captureEpoch: 1,
+    captureEpoch: speech.captureEpoch + captureEpochDelta,
     commandUtteranceId: 1,
     sourceScreen: WearScreenId.menu,
     routeRevision: speech.routeRevision + routeRevisionDelta,
@@ -1591,7 +1828,8 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   _FakeSpeechRecognitionService([this.sourceScreen = WearScreenId.menu]);
 
   @override
-  final WearScreenId sourceScreen;
+  WearScreenId sourceScreen;
+  int currentRouteRevision = 1;
 
   @override
   FreeTextPipelineMode get freeTextPipelineMode =>
@@ -1599,6 +1837,12 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
 
   @override
   int get freeTextEpoch => 0;
+
+  @override
+  int get captureEpoch => 0;
+
+  @override
+  int get currentDynamicItemsRevision => 0;
 
   @override
   VoiceRecognitionMetricsSnapshot get metricsSnapshot =>
@@ -1710,10 +1954,16 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   int get grammarRevision => 1;
 
   @override
-  int get routeRevision => 1;
+  int get routeRevision => currentRouteRevision;
 
   @override
   int get commandUtteranceId => 1;
+
+  @override
+  int get freeTextPartialRevision => _partialRevision;
+
+  @override
+  int get commandPartialRevision => _partialRevision;
 
   @override
   int get bufferedUtteranceBytes => 0;
@@ -1730,16 +1980,39 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
     required List<String> grammar,
   }) async {}
 
-  void emitCommandPartial(String text, {int utteranceId = 1}) {
+  void emitCommandPartial(
+    String text, {
+    int utteranceId = 1,
+    String? dynamicItemId,
+  }) {
     _emitSegmented(
       text,
       RecognitionKind.partial,
       utteranceId: utteranceId,
+      dynamicItemId: dynamicItemId,
     );
   }
 
-  void emitCommandResult(String text) {
-    _emitSegmented(text, RecognitionKind.endpointResult);
+  void emitCommandResult(String text, {int utteranceId = 1}) {
+    _emitSegmented(
+      text,
+      RecognitionKind.endpointResult,
+      utteranceId: utteranceId,
+    );
+  }
+
+  void emitFreeTextPartial(
+    String text, {
+    int utteranceId = 1,
+    String? dynamicItemId,
+  }) {
+    _emitSegmented(
+      text,
+      RecognitionKind.partial,
+      utteranceId: utteranceId,
+      lane: RecognitionLane.freeText,
+      dynamicItemId: dynamicItemId,
+    );
   }
 
   void endSegment() {
@@ -1754,6 +2027,8 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
     String text,
     RecognitionKind kind, {
     int utteranceId = 1,
+    RecognitionLane lane = RecognitionLane.command,
+    String? dynamicItemId,
   }) {
     if (!_segmentStarted) {
       _segmentStarted = true;
@@ -1766,12 +2041,14 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
     _segmentedResultsController.add(SegmentedRecognitionResult(
       captureEpoch: 1,
       segmentId: 1,
-      lane: RecognitionLane.command,
+      lane: lane,
       kind: kind,
       text: text,
       lastChunkId: 1,
-      parsedCommand: VoiceCommandParserService()
-          .parseExactForScreen(WearScreenId.menu, text),
+      parsedCommand: lane == RecognitionLane.command
+          ? VoiceCommandParserService()
+              .parseExactForScreen(WearScreenId.menu, text)
+          : null,
       commandUtteranceId: utteranceId,
       routeRevision: 1,
       grammarRevision: 1,
@@ -1779,6 +2056,7 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
       partialRevision: kind == RecognitionKind.partial
           ? ++_partialRevision
           : _partialRevision,
+      dynamicItemId: dynamicItemId,
     ));
   }
 

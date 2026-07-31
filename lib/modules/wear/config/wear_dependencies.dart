@@ -15,12 +15,14 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_ac
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/free_text_pipeline_mode.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_device_profile.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_typing_service.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_glasses_output.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/services/wear_photo_store.dart';
 import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_voice_hints.dart';
 
 // На следующих этапах пригодится, поэтому можно сразу оставить импорты
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/use_case/get_available_printers_use_case.dart';
@@ -71,6 +73,7 @@ class WearDependencies {
         runtimeResolver: wearFlowController.canHandleVoiceCommand,
       ),
     );
+    WearGlassesVoiceHints.configureActionCatalog(voiceActionCatalog);
     speechRecognitionService = SpeechRecognitionService(
       audioStreamService: audioStreamService,
       commandGrammar: voiceActionCatalog.grammarFor(WearScreenId.menu),
@@ -89,6 +92,16 @@ class WearDependencies {
       speechRecognitionService: speechRecognitionService,
       audioStreamService: audioStreamService,
       resolvedPhrases: voiceControlService.phraseEventStream,
+    );
+    print(
+      '[VoiceRuntime] freeTextMode=${dotenv.env['WEAR_FREE_TEXT_PIPELINE_MODE']} '
+      'mocks=${WearMockConfig.isEnabled} '
+      'wavDiagnostics=$voiceCaptureWavDiagnostics '
+      'deviceProfile=${audioStreamService.deviceProfile.id} '
+      'vadOn=${audioStreamService.deviceProfile.vadSpeechOnRms} '
+      'vadOff=${audioStreamService.deviceProfile.vadSpeechOffRms} '
+      'grammarSize=${voiceActionCatalog.grammarFor(WearScreenId.menu).length} '
+      'audio=pcm16le/16000Hz/mono endpoint=vosk',
     );
   }
 

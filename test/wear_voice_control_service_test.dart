@@ -345,6 +345,51 @@ void main() {
       expect(arbiter.accept(_event(text: '[unk]', utteranceId: 1)), isNull);
     });
 
+    test('typed dynamic partial produces an unclaimed focus preview', () {
+      final RecognitionArbiter arbiter = RecognitionArbiter(
+        freeTextEpochProvider: () => 3,
+      );
+      final SegmentedRecognitionResult partial = _event(
+        text: 'желтый',
+        utteranceId: 60,
+        kind: RecognitionKind.partial,
+        lane: RecognitionLane.freeText,
+        freeTextEpoch: 3,
+        dynamicItemId: 'yellow',
+        listRevision: 7,
+      );
+
+      expect(arbiter.accept(partial)?.preview, same(partial));
+      expect(
+        arbiter
+            .accept(_event(
+              text: 'желтый принтер',
+              utteranceId: 60,
+              lane: RecognitionLane.freeText,
+              freeTextEpoch: 3,
+            ))
+            ?.phrase,
+        isNotNull,
+      );
+    });
+
+    test('arbitrary untyped free-text partial produces no preview', () {
+      final RecognitionArbiter arbiter = RecognitionArbiter(
+        freeTextEpochProvider: () => 3,
+      );
+
+      expect(
+        arbiter.accept(_event(
+          text: 'произвольная фраза',
+          utteranceId: 61,
+          kind: RecognitionKind.partial,
+          lane: RecognitionLane.freeText,
+          freeTextEpoch: 3,
+        )),
+        isNull,
+      );
+    });
+
     test('T29 destructive confirmation action cannot run from partial', () {
       final RecognitionArbiter arbiter = RecognitionArbiter();
       expect(
@@ -411,11 +456,15 @@ SegmentedRecognitionResult _event({
   WearScreenId screen = WearScreenId.menu,
   int routeRevision = 1,
   int grammarRevision = 1,
+  RecognitionLane lane = RecognitionLane.command,
+  int freeTextEpoch = 0,
+  String? dynamicItemId,
+  int listRevision = 0,
 }) {
   return SegmentedRecognitionResult(
     captureEpoch: 1,
     segmentId: 1,
-    lane: RecognitionLane.command,
+    lane: lane,
     kind: kind,
     text: text,
     lastChunkId: 1,
@@ -424,5 +473,10 @@ SegmentedRecognitionResult _event({
     routeRevision: routeRevision,
     grammarRevision: grammarRevision,
     sourceScreen: screen,
+    freeTextEpoch: freeTextEpoch,
+    partialRevision: kind == RecognitionKind.partial ? 1 : 0,
+    recognizedAtMillis: 1000,
+    dynamicItemId: dynamicItemId,
+    listRevision: listRevision,
   );
 }

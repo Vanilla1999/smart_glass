@@ -1,7 +1,38 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
+import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availability_glasses_payloads.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
+import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_voice_hints.dart';
 
 void main() {
+  test('runtime command phrase cannot be advertised as a voice hint', () {
+    WearGlassesVoiceHints.configureActionCatalog(VoiceActionCatalog(
+      capabilities: VoiceScreenCapabilities(
+        runtimeResolver: (WearScreenId screen, command) =>
+            screen == WearScreenId.productSelect,
+      ),
+    ));
+    addTearDown(
+      () => WearGlassesVoiceHints.configureActionCatalog(VoiceActionCatalog()),
+    );
+
+    final hints = WearGlassesVoiceHints.forVisibleItems(
+      screen: WearScreenId.productSelect,
+      snapshot: const VoiceDynamicItemsSnapshot(
+        revision: 1,
+        items: <VoiceDynamicItem>[
+          VoiceDynamicItem(id: 'cancel-item', label: 'Отмена'),
+        ],
+      ),
+      visibleItemIds: const <String>['cancel-item'],
+    );
+
+    expect(hints.single.phrase, isEmpty);
+  });
+
   test('auth waiting payload matches bridge contract', () {
     final Map<String, dynamic> json =
         WearGlassesPayload.authWaitingBarcode().toJson();
@@ -48,5 +79,69 @@ void main() {
     expect(json['performanceRecognizedAtMillis'], 1000);
     expect(json['performanceAsrMillis'], 125);
     expect(json['performanceSentAtMillis'], 1040);
+  });
+
+  test('structured voice hint survives bridge serialization', () {
+    final Map<String, dynamic> json = const WearGlassesPayload(
+      screenType: WearGlassesScreenType.printer,
+      phase: WearGlassesPhase.idle,
+      title: 'Принтеры',
+      items: <String>['MOCK Белый 1'],
+      voiceHints: <WearGlassesVoiceHint>[
+        WearGlassesVoiceHint(
+          itemId: 'printer-1',
+          phrase: 'белый',
+          start: 5,
+          end: 10,
+        ),
+      ],
+    ).toJson();
+
+    expect(json['voiceHints'], <Map<String, dynamic>>[
+      <String, dynamic>{
+        'itemId': 'printer-1',
+        'phrase': 'белый',
+        'start': 5,
+        'end': 10,
+      },
+    ]);
+  });
+
+  test('availability duplicate rows receive dynamic voice hints', () {
+    final WearGlassesPayload payload = WearAvailabilityGlassesPayloads
+        .duplicates(const <WearAvailabilityProduct>[
+      WearAvailabilityProduct(
+        id: 1,
+        groupId: 1,
+        name: 'Молоко Альфа',
+        code: '1',
+        barcodes: <String>[],
+        priceTagBarcodes: <String>[],
+        price: 1,
+        rest: 1,
+        checkPrice: false,
+        photoControl: false,
+        unpackaged: false,
+        priceTagActual: true,
+      ),
+      WearAvailabilityProduct(
+        id: 2,
+        groupId: 1,
+        name: 'Молоко Бета',
+        code: '2',
+        barcodes: <String>[],
+        priceTagBarcodes: <String>[],
+        price: 1,
+        rest: 1,
+        checkPrice: false,
+        photoControl: false,
+        unpackaged: false,
+        priceTagActual: true,
+      ),
+    ]);
+
+    expect(payload.voiceHints.map((hint) => hint.itemId), <String>['1', '2']);
+    expect(payload.voiceHints.map((hint) => hint.phrase),
+        <String>['альфа', 'бета']);
   });
 }

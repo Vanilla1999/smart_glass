@@ -3,10 +3,17 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_li
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 
 class VoiceDynamicItem {
-  const VoiceDynamicItem({required this.id, required this.label});
+  const VoiceDynamicItem({
+    required this.id,
+    required this.label,
+    this.voiceAliases = const <String>[],
+  });
 
   final String id;
   final String label;
+  final List<String> voiceAliases;
+
+  int get revisionHash => Object.hash(id, label, Object.hashAll(voiceAliases));
 }
 
 class VoiceDynamicItemsSnapshot {
@@ -84,11 +91,15 @@ class FreeTextCandidate {
     required this.text,
     required this.matchType,
     this.itemId,
+    this.isExactHint = false,
+    this.isStableMatch = false,
   });
 
   final String text;
   final VoiceListMatchType matchType;
   final String? itemId;
+  final bool isExactHint;
+  final bool isStableMatch;
 }
 
 sealed class VoiceResolvedIntent {
@@ -209,6 +220,15 @@ class VoiceUtteranceCoordinator {
         freeText?.matchType == VoiceListMatchType.unique &&
             dynamicItemId != null &&
             itemStillExists(dynamicItemId);
+    if (uniqueDynamic && (freeText!.isExactHint || freeText.isStableMatch)) {
+      return VoiceDecision(
+        VoiceDecisionKind.dynamicItem,
+        intent: DynamicVoiceItemIntent(
+          itemId: dynamicItemId,
+          spokenPhrase: freeText.text,
+        ),
+      );
+    }
     if (command != null) {
       return VoiceDecision(
         VoiceDecisionKind.command,

@@ -11,7 +11,7 @@ class WearMockConfig {
     _prefs ??= await SharedPreferences.getInstance();
   }
 
-  static bool get isEnabled => _envFlag('WEAR_USE_MOCKS');
+  static bool get isEnabled => _envFlag(_keyUseMocks);
 
   static bool _envFlag(String key) {
     if (_prefs != null) {

@@ -53,6 +53,7 @@ class VoiceScreenCapabilities {
     if (_globalCommands.contains(command)) return true;
     final VoiceCapabilityResolver? resolver = runtimeResolver;
     if (resolver != null) return resolver(screen, command);
+    if (command == WearVoiceCommand.home) return _homeScreens.contains(screen);
     return _commandsByScreen[screen]?.contains(command) ?? false;
   }
 
@@ -67,6 +68,29 @@ class VoiceScreenCapabilities {
     WearVoiceCommand.select,
     WearVoiceCommand.back,
     WearVoiceCommand.home,
+  };
+
+  static const Set<WearScreenId> _homeScreens = <WearScreenId>{
+    WearScreenId.scannerConnect,
+    WearScreenId.main,
+    WearScreenId.status,
+    WearScreenId.printerSelect,
+    WearScreenId.scanIdle,
+    WearScreenId.productSelect,
+    WearScreenId.voiceClarification,
+    WearScreenId.printCodeInput,
+    WearScreenId.availabilityInteraction,
+    WearScreenId.availabilityGroup,
+    WearScreenId.availabilityProduct,
+    WearScreenId.availabilityDirectScan,
+    WearScreenId.availabilityCheck,
+    WearScreenId.availabilityFill,
+    WearScreenId.continueScan,
+    WearScreenId.help,
+    WearScreenId.settings,
+    WearScreenId.dbSettings,
+    WearScreenId.wifiSettings,
+    WearScreenId.printerSettings,
   };
 
   static const Map<WearScreenId, Set<WearVoiceCommand>> _commandsByScreen =
@@ -97,7 +121,11 @@ class VoiceScreenCapabilities {
       WearVoiceCommand.nextPage,
       WearVoiceCommand.previousPage,
     },
-    WearScreenId.printerSelect: _listNavigation,
+    WearScreenId.printerSelect: <WearVoiceCommand>{
+      ..._listNavigation,
+      WearVoiceCommand.nextPage,
+      WearVoiceCommand.previousPage,
+    },
     WearScreenId.availabilityDirectScan: <WearVoiceCommand>{
       WearVoiceCommand.back,
       WearVoiceCommand.home,
@@ -160,14 +188,19 @@ class VoiceActionCatalog {
       };
 
   List<String> grammarFor(WearScreenId screen) {
+    final Set<String> phrases = phrasesFor(screen).toSet();
+    if (includeUnknown) phrases.add('[unk]');
+    return List<String>.unmodifiable(phrases);
+  }
+
+  Set<String> phrasesFor(WearScreenId screen) {
     final Set<String> phrases = <String>{};
     for (final VoiceActionEntry action in actionsFor(screen)) {
       phrases
-        ..addAll(action.fullPhrases)
-        ..addAll(action.fastAliases);
+        ..addAll(action.fullPhrases.map(normalize))
+        ..addAll(action.fastAliases.map(normalize));
     }
-    if (includeUnknown) phrases.add('[unk]');
-    return List<String>.unmodifiable(phrases);
+    return Set<String>.unmodifiable(phrases);
   }
 
   Iterable<VoiceActionEntry> actionsFor(WearScreenId screen) sync* {
@@ -277,12 +310,7 @@ class VoiceActionCatalog {
     _action(WearVoiceCommand.back, 'назад', VoiceActivationPolicy.endpointOnly,
         screens: _backScreens, aliases: <String>{'назад'}),
     _action(WearVoiceCommand.home, 'домой', VoiceActivationPolicy.endpointOnly,
-        screens: <WearScreenId>{
-          WearScreenId.availabilityInteraction,
-          WearScreenId.availabilityGroup,
-          WearScreenId.availabilityProduct,
-          WearScreenId.availabilityDirectScan
-        }),
+        screens: VoiceScreenCapabilities._homeScreens),
     _action(WearVoiceCommand.openPrintPriceTag, 'печать ценников',
         VoiceActivationPolicy.endpointOnly,
         screens: <WearScreenId>{WearScreenId.menu},
@@ -315,6 +343,7 @@ class VoiceActionCatalog {
           WearScreenId.availabilityGroup,
           WearScreenId.availabilityProduct,
           WearScreenId.productSelect,
+          WearScreenId.printerSelect,
           WearScreenId.voiceClarification,
         }),
     _action(WearVoiceCommand.previousPage, 'предыдущая страница',
@@ -323,6 +352,7 @@ class VoiceActionCatalog {
           WearScreenId.availabilityGroup,
           WearScreenId.availabilityProduct,
           WearScreenId.productSelect,
+          WearScreenId.printerSelect,
           WearScreenId.voiceClarification,
         },
         phrases: <String>{

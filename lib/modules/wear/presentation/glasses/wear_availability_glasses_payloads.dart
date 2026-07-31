@@ -2,7 +2,10 @@ import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availa
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_group.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/use_case/wear_availability_flow_use_case.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
+import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_voice_hints.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 
 class WearAvailabilityGlassesPayloads {
@@ -41,6 +44,18 @@ class WearAvailabilityGlassesPayloads {
         .skip(start)
         .take(_visibleListItemCount)
         .toList(growable: false);
+    final List<VoiceDynamicItem> voiceItems = products
+        .map((WearAvailabilityProduct product) => VoiceDynamicItem(
+              id: product.id.toString(),
+              label: product.name,
+            ))
+        .toList(growable: false);
+    final VoiceDynamicItemsSnapshot snapshot = VoiceDynamicItemsSnapshot(
+      revision: Object.hashAll(
+        voiceItems.map((VoiceDynamicItem item) => item.revisionHash),
+      ),
+      items: voiceItems,
+    );
 
     return WearGlassesPayload(
       screenType: WearGlassesScreenType.availability,
@@ -50,6 +65,13 @@ class WearAvailabilityGlassesPayloads {
       items: visibleProducts
           .map((WearAvailabilityProduct product) => product.name)
           .toList(growable: false),
+      voiceHints: WearGlassesVoiceHints.forVisibleItems(
+        screen: WearScreenId.availabilityDirectScan,
+        snapshot: snapshot,
+        visibleItemIds: visibleProducts
+            .map((WearAvailabilityProduct product) => product.id.toString())
+            .toList(growable: false),
+      ),
       selectedIndex: selected - start,
       pageText: _pageText(products.length, selected),
     );
@@ -81,6 +103,18 @@ class WearAvailabilityGlassesPayloads {
           .map((WearAvailabilityGroup group) =>
               '${group.name} · ${group.counter}')
           .toList(growable: false),
+      voiceHints: _voiceHints(
+        WearScreenId.availabilityGroup,
+        groups
+            .map((WearAvailabilityGroup group) => VoiceDynamicItem(
+                  id: group.id.toString(),
+                  label: group.name,
+                ))
+            .toList(growable: false),
+        visibleGroups
+            .map((WearAvailabilityGroup group) => group.id.toString())
+            .toList(growable: false),
+      ),
       selectedIndex: selected - start,
       pageText: _pageText(groups.length, selected),
     );
@@ -89,6 +123,7 @@ class WearAvailabilityGlassesPayloads {
   static WearGlassesPayload products({
     required WearAvailabilityGroup group,
     required List<WearAvailabilityProduct> products,
+    required VoiceDynamicItemsSnapshot voiceSnapshot,
     int selectedIndex = 0,
   }) {
     if (products.isEmpty) {
@@ -118,8 +153,33 @@ class WearAvailabilityGlassesPayloads {
                 '${product.name} · ост. ${_rest(product.rest)}',
           )
           .toList(growable: false),
+      voiceHints: _voiceHints(
+        WearScreenId.availabilityProduct,
+        voiceSnapshot.items,
+        visibleProducts
+            .map((WearAvailabilityProduct product) => product.id.toString())
+            .toList(growable: false),
+      ),
       selectedIndex: selected - start,
       pageText: _pageText(products.length, selected),
+    );
+  }
+
+  static List<WearGlassesVoiceHint> _voiceHints(
+    WearScreenId screen,
+    List<VoiceDynamicItem> items,
+    List<String> visibleItemIds,
+  ) {
+    final VoiceDynamicItemsSnapshot snapshot = VoiceDynamicItemsSnapshot(
+      revision: Object.hashAll(
+        items.map((VoiceDynamicItem item) => item.revisionHash),
+      ),
+      items: items,
+    );
+    return WearGlassesVoiceHints.forVisibleItems(
+      screen: screen,
+      snapshot: snapshot,
+      visibleItemIds: visibleItemIds,
     );
   }
 

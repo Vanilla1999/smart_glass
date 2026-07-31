@@ -20,6 +20,45 @@ enum WearGlassesPhase {
   error,
 }
 
+class WearGlassesVoiceHint {
+  const WearGlassesVoiceHint({
+    required this.itemId,
+    required this.phrase,
+    required this.start,
+    required this.end,
+  });
+
+  factory WearGlassesVoiceHint.fromJson(Map<dynamic, dynamic> json) {
+    return WearGlassesVoiceHint(
+      itemId: json['itemId']?.toString() ?? '',
+      phrase: json['phrase']?.toString() ?? '',
+      start: _parseInt(json['start']),
+      end: _parseInt(json['end']),
+    );
+  }
+
+  final String itemId;
+  final String phrase;
+  final int start;
+  final int end;
+
+  bool isValidFor(String label) =>
+      start >= 0 && end > start && end <= label.length;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'itemId': itemId,
+        'phrase': phrase,
+        'start': start,
+        'end': end,
+      };
+
+  static int _parseInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+}
+
 class WearGlassesPayload {
   const WearGlassesPayload({
     required this.screenType,
@@ -30,6 +69,7 @@ class WearGlassesPayload {
     this.isLoading = false,
     this.isError = false,
     this.items = const <String>[],
+    this.voiceHints = const <WearGlassesVoiceHint>[],
     this.bodyLines = const <String>[],
     this.checkLines = const <String>[],
     this.selectedIndex = 0,
@@ -215,6 +255,7 @@ class WearGlassesPayload {
   final bool isLoading;
   final bool isError;
   final List<String> items;
+  final List<WearGlassesVoiceHint> voiceHints;
   final List<String> bodyLines;
   final List<String> checkLines;
   final int selectedIndex;
@@ -252,6 +293,7 @@ class WearGlassesPayload {
       isLoading: isLoading,
       isError: isError,
       items: items,
+      voiceHints: voiceHints,
       bodyLines: bodyLines,
       checkLines: checkLines,
       selectedIndex: selectedIndex,
@@ -290,6 +332,7 @@ class WearGlassesPayload {
       isLoading: isLoading,
       isError: isError,
       items: items,
+      voiceHints: voiceHints,
       bodyLines: bodyLines,
       checkLines: checkLines,
       selectedIndex: selectedIndex,
@@ -312,6 +355,34 @@ class WearGlassesPayload {
     );
   }
 
+  WearGlassesPayload copyWithStatusText(String? value) {
+    return WearGlassesPayload(
+      screenType: screenType,
+      phase: phase,
+      title: title,
+      subtitle: subtitle,
+      statusText: value,
+      isLoading: isLoading,
+      isError: isError,
+      items: items,
+      voiceHints: voiceHints,
+      bodyLines: bodyLines,
+      checkLines: checkLines,
+      selectedIndex: selectedIndex,
+      pageText: pageText,
+      footerText: footerText,
+      primaryAction: primaryAction,
+      secondaryAction: secondaryAction,
+      statusIcon: statusIcon,
+      showWifiIcon: showWifiIcon,
+      wifiAvailable: wifiAvailable,
+      wifiLevel: wifiLevel,
+      showPrinterIcon: showPrinterIcon,
+      printerAvailable: printerAvailable,
+      voiceCommandsEnabled: voiceCommandsEnabled,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'screenType': screenType.name,
@@ -322,6 +393,9 @@ class WearGlassesPayload {
       'isLoading': isLoading,
       'isError': isError,
       'items': items,
+      'voiceHints': voiceHints
+          .map((WearGlassesVoiceHint hint) => hint.toJson())
+          .toList(growable: false),
       'bodyLines': bodyLines,
       'checkLines': checkLines,
       'selectedIndex': selectedIndex,
