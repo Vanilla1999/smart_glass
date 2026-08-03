@@ -30,6 +30,7 @@ class _WearVoiceClarificationScreenState
     extends State<WearVoiceClarificationScreen> {
   final ScrollController _scroll = ScrollController();
   int _focusedIndex = 0;
+  bool _isProgrammaticScroll = false;
   bool _isSelecting = false;
   String? _notice;
   Timer? _noticeTimer;
@@ -121,6 +122,7 @@ class _WearVoiceClarificationScreenState
           );
         },
         onFocusChanged: (int listIndex) {
+          if (_isProgrammaticScroll) return;
           final int next = (listIndex - 1).clamp(0, _matches.length - 1);
           if (next == _focusedIndex) return;
           _focusedIndex = next;
@@ -183,6 +185,7 @@ class _WearVoiceClarificationScreenState
         ),
       ),
       items: _matches,
+      excludedWords: _currentArgs?.excludedWords ?? const <String>{},
     );
   }
 
@@ -352,11 +355,11 @@ class _WearVoiceClarificationScreenState
     if (!_scroll.hasClients) return;
     final double target = ((_focusedIndex + 1) * 56.0)
         .clamp(0.0, _scroll.position.maxScrollExtent);
-    _scroll.animateTo(
-      target,
-      duration: const Duration(milliseconds: 150),
-      curve: Curves.easeOut,
-    );
+    _isProgrammaticScroll = true;
+    _scroll.jumpTo(target);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _isProgrammaticScroll = false;
+    });
   }
 
   static const int _visibleGlassesItemCount = 4;

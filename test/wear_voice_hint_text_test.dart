@@ -58,4 +58,33 @@ void main() {
     expect(root.text, 'Принтер');
     expect(root.children, isNull);
   });
+
+  testWidgets('underlines Russian word after skipped Latin words',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: WearVoiceHintText(
+        text: 'Coca Cola напиток',
+        style: TextStyle(fontWeight: FontWeight.w400),
+        hint: WearGlassesVoiceHint(
+          itemId: 'drink',
+          phrase: 'напиток',
+          start: 10,
+          end: 17,
+        ),
+      ),
+    ));
+
+    final Text text = tester.widget<Text>(
+      find.byWidgetPredicate(
+        (Widget widget) => widget is Text && widget.textSpan != null,
+      ),
+    );
+    final List<InlineSpan> spans = (text.textSpan! as TextSpan).children!;
+
+    expect((spans[0] as TextSpan).text, 'Coca Cola ');
+    final WidgetSpan hintSpan = spans[1] as WidgetSpan;
+    final DecoratedBox box = hintSpan.child as DecoratedBox;
+    final Padding padding = box.child as Padding;
+    expect((padding.child as Text).data, 'напиток');
+  });
 }

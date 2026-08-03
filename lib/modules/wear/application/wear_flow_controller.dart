@@ -111,10 +111,12 @@ class WearFlowController {
       <WearScreenId, WearScreenActionHandler>{};
   final Map<WearScreenId, WearGlassesPayload> _screenPayloads =
       <WearScreenId, WearGlassesPayload>{};
-  final List<WearVoiceCommand> _commandQueue = <WearVoiceCommand>[];
+  final List<({WearVoiceCommand command, bool isController})> _commandQueue =
+      <({WearVoiceCommand command, bool isController})>[];
   final WearFlashlightToggle _flashlightToggle;
   final WearPhotoCapture? _photoCapture;
   bool _isProcessingCommand = false;
+  bool _isHandlingControllerCommand = false;
   bool _isVoiceClarificationSelectionInProgress = false;
   int _nextNavigationRequestId = 0;
   int? _deliveredNavigationRequestId;
@@ -375,7 +377,14 @@ class WearFlowController {
   }
 
   Future<void> handleVoiceCommand(WearVoiceCommand command) async {
-    _commandQueue.add(command);
+    _commandQueue.add((command: command, isController: false));
+    if (!_isProcessingCommand) {
+      await _drainCommandQueue();
+    }
+  }
+
+  Future<void> handleControllerCommand(WearVoiceCommand command) async {
+    _commandQueue.add((command: command, isController: true));
     if (!_isProcessingCommand) {
       await _drainCommandQueue();
     }
@@ -500,7 +509,10 @@ class WearFlowController {
   Future<void> _drainCommandQueue() async {
     _isProcessingCommand = true;
     while (_commandQueue.isNotEmpty) {
-      final WearVoiceCommand command = _commandQueue.removeAt(0);
+      final ({WearVoiceCommand command, bool isController}) queued =
+          _commandQueue.removeAt(0);
+      final WearVoiceCommand command = queued.command;
+      _isHandlingControllerCommand = queued.isController;
       try {
         print('[WearFlowController] command=$command state=$_state');
         switch (command) {
@@ -628,6 +640,8 @@ class WearFlowController {
       } catch (error, stackTrace) {
         print('[WearFlowController] command error=$error\n$stackTrace');
         _setState(_state.copyWith(error: error.toString()));
+      } finally {
+        _isHandlingControllerCommand = false;
       }
     }
     _isProcessingCommand = false;
@@ -682,7 +696,8 @@ class WearFlowController {
       return;
     }
     if (_state.screen != WearScreenId.menu) {
-      if (_uiLifecycle == WearUiLifecycle.active) {
+      if (_uiLifecycle == WearUiLifecycle.active ||
+          _isHandlingControllerCommand) {
         await _invokeScreenAction(_state.screen, (handler) => handler.onUp);
       }
       return;
@@ -697,7 +712,8 @@ class WearFlowController {
       return;
     }
     if (_state.screen != WearScreenId.menu) {
-      if (_uiLifecycle == WearUiLifecycle.active) {
+      if (_uiLifecycle == WearUiLifecycle.active ||
+          _isHandlingControllerCommand) {
         await _invokeScreenAction(_state.screen, (handler) => handler.onDown);
       }
       return;
@@ -713,7 +729,10 @@ class WearFlowController {
       return;
     }
     if (await _handleControllerSelect()) return;
-    if (_uiLifecycle == WearUiLifecycle.inactive) return;
+    if (_uiLifecycle == WearUiLifecycle.inactive &&
+        !_isHandlingControllerCommand) {
+      return;
+    }
     await _invokeScreenAction(_state.screen, (handler) => handler.onSelect);
   }
 
@@ -1177,7 +1196,10 @@ class WearFlowController {
     WearScreenId screen,
     WearFlowAction? Function(WearScreenActionHandler handler) selector,
   ) async {
-    if (_uiLifecycle == WearUiLifecycle.inactive) return false;
+    if (_uiLifecycle == WearUiLifecycle.inactive &&
+        !_isHandlingControllerCommand) {
+      return false;
+    }
     final WearScreenActionHandler? handler = _screenActions[screen];
     final WearFlowAction? action =
         selector(handler ?? const WearScreenActionHandler());
@@ -1220,7 +1242,6 @@ class WearFlowController {
 
   Future<void> _renderGlasses() async {
     final WearGlassesPayload payload = _payloadForState(_state);
-    print('[WearFlowController] render glasses screen=${_state.screen}');
     try {
       await _glassesOutput.send(payload);
     } catch (error, stackTrace) {
@@ -1335,6 +1356,7 @@ class WearFlowController {
         matches.map((VoiceDynamicItem item) => item.revisionHash),
       ),
       items: matches,
+      excludedWords: args?.excludedWords ?? const <String>{},
     );
     return WearGlassesPayload(
       screenType: WearGlassesScreenType.productSelect,
@@ -1347,7 +1369,6 @@ class WearFlowController {
       voiceHints: WearGlassesVoiceHints.forVisibleItems(
         screen: WearScreenId.voiceClarification,
         snapshot: snapshot,
-        excludedWords: args?.excludedWords ?? const <String>{},
         visibleItemIds: visibleMatches
             .map((VoiceDynamicItem item) => item.id)
             .toList(growable: false),

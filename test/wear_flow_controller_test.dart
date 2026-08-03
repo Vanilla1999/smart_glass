@@ -184,6 +184,49 @@ void main() {
       expect(controller.state.screen, WearScreenId.printerSelect);
     });
 
+    test('controller commands invoke current handler while UI is inactive',
+        () async {
+      int upCalls = 0;
+      int selectCalls = 0;
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      controller.setUiLifecycle(WearUiLifecycle.inactive);
+      controller.enterScreen(WearScreenId.printerSelect);
+      controller.registerScreenActions(
+        WearScreenId.printerSelect,
+        WearScreenActionHandler(
+          onUp: () => upCalls++,
+          onSelect: () async => selectCalls++,
+        ),
+      );
+
+      await controller.handleControllerCommand(WearVoiceCommand.up);
+      await controller.handleControllerCommand(WearVoiceCommand.select);
+
+      expect(upCalls, 1);
+      expect(selectCalls, 1);
+    });
+
+    test('voice commands remain blocked while UI is inactive', () async {
+      int upCalls = 0;
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      controller.setUiLifecycle(WearUiLifecycle.inactive);
+      controller.enterScreen(WearScreenId.printerSelect);
+      controller.registerScreenActions(
+        WearScreenId.printerSelect,
+        WearScreenActionHandler(onUp: () => upCalls++),
+      );
+
+      await controller.handleVoiceCommand(WearVoiceCommand.up);
+
+      expect(upCalls, 0);
+    });
+
     test('printer select clears remembered payload on re-enter', () async {
       final _FakeGlassesOutput glasses = _FakeGlassesOutput();
       final WearFlowController controller = WearFlowController(

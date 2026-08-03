@@ -151,13 +151,13 @@ void main() {
 
     expect(payload.voiceHints.map((hint) => hint.itemId), <String>['1', '2']);
     expect(payload.voiceHints.map((hint) => hint.phrase),
-        <String>['альфа', 'бета']);
+        <String>['молоко', 'молоко']);
   });
 
   test('large list refreshes visible hints after async preparation', () async {
     final Completer<VoiceHintSet> build = Completer<VoiceHintSet>();
     final VoiceHintIndexCache cache = VoiceHintIndexCache(
-      builder: (snapshot, reserved, excluded) => build.future,
+      builder: (snapshot, reserved) => build.future,
     );
     WearGlassesVoiceHints.configureVoiceHintIndexCache(cache);
     final List<VoiceDynamicItem> items = <VoiceDynamicItem>[

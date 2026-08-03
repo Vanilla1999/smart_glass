@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/core/services/method_channel_service.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
@@ -153,6 +154,15 @@ class _WearModuleAppState extends State<WearModuleApp>
   void initState() {
     super.initState();
     print('[VOICE-LIFECYCLE] WearModuleApp initState');
+    MethodChannelService().setAppMethodCallHandler(_handleAppMethodCall);
+    unawaited(
+      MethodChannelService().startWearControlService().catchError(
+            (Object error, StackTrace stackTrace) => print(
+              '[WearModuleApp] foreground service start failed: '
+              '$error\n$stackTrace',
+            ),
+          ),
+    );
     WidgetsBinding.instance.addObserver(this);
     _router = GoRouter(
       initialLocation: widget.initialLocation ?? WearRoute.initialRoute,
@@ -384,6 +394,19 @@ class _WearModuleAppState extends State<WearModuleApp>
       }
       _startVoice('post-frame');
     });
+  }
+
+  Future<void> _handleAppMethodCall(MethodCall call) async {
+    if (call.method != 'wearButtonCommand') return;
+    final WearVoiceCommand? command = switch (call.arguments) {
+      'up' => WearVoiceCommand.up,
+      'down' => WearVoiceCommand.down,
+      'enter' => WearVoiceCommand.select,
+      _ => null,
+    };
+    if (command != null) {
+      await _flow.handleControllerCommand(command);
+    }
   }
 
   void _onRouterChange() {
@@ -777,6 +800,15 @@ class _WearModuleAppState extends State<WearModuleApp>
   @override
   void dispose() {
     print('[VOICE-LIFECYCLE] WearModuleApp dispose');
+    unawaited(
+      MethodChannelService().stopWearControlService().catchError(
+            (Object error, StackTrace stackTrace) => print(
+              '[WearModuleApp] foreground service stop failed: '
+              '$error\n$stackTrace',
+            ),
+          ),
+    );
+    MethodChannelService().setAppMethodCallHandler(null);
     _updateGlassesVoiceOverlay(visible: false);
     WearStatusIconReporter.I.endVoiceStartup(_voiceStartupToken);
     unawaited(

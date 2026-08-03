@@ -1874,24 +1874,15 @@ class SpeechRecognitionService {
     final int hintMs = dynamicStopwatch.elapsedMilliseconds;
     dynamicStopwatch.reset();
     final String normalizedFreeText = VoiceListMatcher.normalize(freeText);
-    final String? exactHintItemId = hintSet.itemIdByPhrase[normalizedFreeText];
-    VoiceDynamicItem? exactHintItem;
-    if (exactHintItemId != null) {
-      for (final VoiceDynamicItem item in items.items) {
-        if (item.id == exactHintItemId) {
-          exactHintItem = item;
-          break;
-        }
-      }
-    }
-    final VoiceListMatch<VoiceDynamicItem> match = exactHintItem != null
-        ? VoiceListMatch<VoiceDynamicItem>.unique(exactHintItem)
-        : VoiceListMatcher.match(
-            freeText,
-            items.items,
-            (VoiceDynamicItem item) => item.label,
-            aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
-          );
+    final VoiceListMatch<VoiceDynamicItem> match = VoiceListMatcher.match(
+      freeText,
+      items.items,
+      (VoiceDynamicItem item) => item.label,
+      aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
+    );
+    final bool isExactHint =
+        hintSet.advertisedPhrases.contains(normalizedFreeText) &&
+            match.type == VoiceListMatchType.unique;
     final int matchMs = dynamicStopwatch.elapsedMilliseconds;
     if (items.items.length >= 100 || snapshotMs + hintMs + matchMs >= 20) {
       print(
@@ -1936,7 +1927,7 @@ class SpeechRecognitionService {
         text: freeText,
         matchType: match.type,
         itemId: match.item?.id,
-        isExactHint: exactHintItem != null,
+        isExactHint: isExactHint,
         isStableMatch: shadowItemId != null && shadowItemId == match.item?.id,
       ),
       itemStillExists: (String itemId) =>
@@ -2394,21 +2385,22 @@ class SpeechRecognitionService {
         _dynamicItemsProvider(context.sourceScreen);
     final int snapshotMs = dynamicStopwatch.elapsedMilliseconds;
     dynamicStopwatch.reset();
-    final VoiceListMatch<VoiceDynamicItem> match =
-        source == _RecognitionSource.freeText
-            ? VoiceListMatcher.match(
-                text,
-                items.items,
-                (VoiceDynamicItem item) => item.label,
-                aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
-              )
-            : VoiceListMatch<VoiceDynamicItem>.none();
-    final int matchMs = dynamicStopwatch.elapsedMilliseconds;
-    dynamicStopwatch.reset();
     final VoiceHintSet? hints = source == _RecognitionSource.command
         ? _voiceHintsFor(context.sourceScreen, items).hints
         : null;
     final int hintMs = dynamicStopwatch.elapsedMilliseconds;
+    dynamicStopwatch.reset();
+    final bool shouldMatch = source == _RecognitionSource.freeText ||
+        hints!.advertisedPhrases.contains(normalized);
+    final VoiceListMatch<VoiceDynamicItem> match = shouldMatch
+        ? VoiceListMatcher.match(
+            text,
+            items.items,
+            (VoiceDynamicItem item) => item.label,
+            aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
+          )
+        : VoiceListMatch<VoiceDynamicItem>.none();
+    final int matchMs = dynamicStopwatch.elapsedMilliseconds;
     if (items.items.length >= 100 || snapshotMs + matchMs + hintMs >= 20) {
       print(
         '[VOICE_DYNAMIC_PERF] phase=partial screen=${context.sourceScreen.name} '
@@ -2419,7 +2411,10 @@ class SpeechRecognitionService {
     }
     String? dynamicItemId;
     if (source == _RecognitionSource.command) {
-      dynamicItemId = hints!.itemIdByPhrase[normalized];
+      if (hints!.advertisedPhrases.contains(normalized) &&
+          match.type == VoiceListMatchType.unique) {
+        dynamicItemId = match.item!.id;
+      }
     } else if (match.type == VoiceListMatchType.unique) {
       dynamicItemId = match.item!.id;
     }
@@ -2473,7 +2468,7 @@ class SpeechRecognitionService {
       hints: VoiceHintSet(
         revision: items.revision,
         hintsByItemId: const <String, VoiceHint>{},
-        itemIdByPhrase: const <String, String>{},
+        advertisedPhrases: const <String>{},
         issues: const <VoiceHintValidationIssue>[],
       ),
       isReady: false,

@@ -20,6 +20,7 @@ class VoiceDynamicItemsSnapshot {
   const VoiceDynamicItemsSnapshot({
     required this.revision,
     required this.items,
+    this.excludedWords = const <String>{},
   });
 
   static const VoiceDynamicItemsSnapshot empty = VoiceDynamicItemsSnapshot(
@@ -29,6 +30,7 @@ class VoiceDynamicItemsSnapshot {
 
   final int revision;
   final List<VoiceDynamicItem> items;
+  final Set<String> excludedWords;
 }
 
 class VoiceUtteranceKey {

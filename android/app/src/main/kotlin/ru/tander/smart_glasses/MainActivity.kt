@@ -2,6 +2,7 @@ package ru.tander.smart_glasses
 
 import android.app.Presentation
 import android.content.Context
+import android.content.Intent
 import android.hardware.display.DisplayManager
 import android.os.Bundle
 import android.os.Build
@@ -24,10 +25,17 @@ import io.flutter.embedding.engine.dart.DartExecutor
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.embedding.android.FlutterView
 import java.util.concurrent.atomic.AtomicBoolean
+import java.lang.ref.WeakReference
 
 class MainActivity : FlutterFragmentActivity() {
     companion object {
         private const val WEAR_OPERATION_TIMEOUT_MS = 5_000L
+        private var activeActivity = WeakReference<MainActivity>(null)
+
+        fun dispatchWearButtonCommand(value: String) {
+            activeActivity.get()?.appChannel?.invokeMethod("wearButtonCommand", value)
+                ?: Log.w("SmartWear", "Button command ignored: Flutter activity unavailable")
+        }
     }
 
     private var engineGroup: FlutterEngineGroup? = null
@@ -45,7 +53,6 @@ class MainActivity : FlutterFragmentActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val pendingWearResults = mutableSetOf<BoundedResult>()
     private var pendingWearShowResult: BoundedResult? = null
-
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -82,7 +89,6 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     "updateWearGlasses" -> {
                         val payload = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
-                        Log.d("SmartWear", "updateWearGlasses called: $payload")
                         updateWearGlasses(payload, result)
                     }
                     "updateWearVoiceOverlay" -> {
@@ -108,6 +114,14 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     "clearLogs" -> {
                         clearLogs()
+                        result.success(true)
+                    }
+                    "startWearControlService" -> {
+                        WearControlForegroundService.start(this)
+                        result.success(true)
+                    }
+                    "stopWearControlService" -> {
+                        WearControlForegroundService.stop(this)
                         result.success(true)
                     }
                     else -> result.notImplemented()
@@ -173,6 +187,7 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        activeActivity = WeakReference(this)
         val packageInfo = packageManager.getPackageInfo(packageName, 0)
         Log.d(
             "VoiceCapture",
@@ -477,6 +492,7 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     override fun onDestroy() {
+        if (activeActivity.get() === this) activeActivity.clear()
         invalidatePendingWearShow()
         supersedePendingWearResults()
         nativeVoiceCapturePlugin?.dispose()

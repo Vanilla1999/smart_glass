@@ -31,13 +31,13 @@ class VoiceHintSet {
   const VoiceHintSet({
     required this.revision,
     required this.hintsByItemId,
-    required this.itemIdByPhrase,
+    required this.advertisedPhrases,
     required this.issues,
   });
 
   final int revision;
   final Map<String, VoiceHint> hintsByItemId;
-  final Map<String, String> itemIdByPhrase;
+  final Set<String> advertisedPhrases;
   final List<VoiceHintValidationIssue> issues;
 }
 
@@ -72,153 +72,73 @@ class VoiceHintGenerator {
   }) {
     final Set<String> normalizedReserved =
         reservedPhrases.map(VoiceListMatcher.normalize).toSet();
-    final Set<String> normalizedExcluded =
-        excludedWords.map(VoiceListMatcher.normalize).toSet();
-    if (excludedWords.isNotEmpty && snapshot.items.isNotEmpty) {
+    final Set<String> normalizedExcluded = excludedWords
+        .map(VoiceListMatcher.normalize)
+        .expand((String phrase) => phrase.split(' '))
+        .where((String word) => word.isNotEmpty)
+        .toSet();
+    if (excludedWords.isNotEmpty && snapshot.items.length > 1) {
       final Set<String> commonWords = _tokens(snapshot.items.first.label)
           .map((_LabelToken token) => token.normalized)
           .where(_isMeaningful)
           .toSet();
       for (final VoiceDynamicItem item in snapshot.items.skip(1)) {
-        commonWords.retainAll(
-          _tokens(item.label)
-              .map((_LabelToken token) => token.normalized)
-              .where(_isMeaningful),
-        );
+        final List<String> itemWords = _tokens(item.label)
+            .map((_LabelToken token) => token.normalized)
+            .where(_isMeaningful)
+            .toList(growable: false);
+        commonWords.removeWhere((String commonWord) => !itemWords.any(
+              (String itemWord) =>
+                  VoiceListMatcher.wordsMatch(commonWord, itemWord),
+            ));
       }
       normalizedExcluded.addAll(commonWords);
     }
-    final Map<String, Set<String>> phraseOwners = _phraseOwners(snapshot.items);
     final Map<String, VoiceHint> hints = <String, VoiceHint>{};
     final List<VoiceHintValidationIssue> issues = <VoiceHintValidationIssue>[];
     for (final VoiceDynamicItem item in snapshot.items) {
       final List<_LabelToken> tokens = _tokens(item.label);
-      VoiceHint? selected;
-      VoiceHint? tryCandidate(List<_LabelToken> candidate) {
-        if (!_isValid(candidate)) return null;
-        final String phrase =
-            candidate.map((_LabelToken token) => token.normalized).join(' ');
-        if (normalizedReserved.contains(phrase) ||
-            !candidate.any((_LabelToken token) =>
+      final _LabelToken? selected = tokens.cast<_LabelToken?>().firstWhere(
+            (_LabelToken? token) =>
+                token != null &&
                 _isMeaningful(token.normalized) &&
-                !normalizedExcluded.contains(token.normalized))) {
-          return null;
-        }
-        final Set<String>? owners = phraseOwners[phrase];
-        if (owners == null || owners.length != 1 || !owners.contains(item.id)) {
-          return null;
-        }
-        return VoiceHint(
-          itemId: item.id,
-          phrase: phrase,
-          ranges: <VoiceHintRange>[
-            VoiceHintRange(
-              start: candidate.first.start,
-              end: candidate.last.end,
-            ),
-          ],
-        );
-      }
-
-      for (final String alias in item.voiceAliases) {
-        final String normalizedAlias = VoiceListMatcher.normalize(alias);
-        for (int wordCount = 1;
-            wordCount <= tokens.length && selected == null;
-            wordCount++) {
-          for (int start = 0;
-              start + wordCount <= tokens.length && selected == null;
-              start++) {
-            final candidate = tokens.sublist(start, start + wordCount);
-            final phrase = candidate.map((token) => token.normalized).join(' ');
-            if (phrase == normalizedAlias) selected = tryCandidate(candidate);
-          }
-        }
-      }
-      for (int wordCount = 1;
-          wordCount <= tokens.length && selected == null;
-          wordCount++) {
-        final List<List<_LabelToken>> candidates = <List<_LabelToken>>[
-          for (int start = 0; start + wordCount <= tokens.length; start++)
-            tokens.sublist(start, start + wordCount),
-        ]..sort((List<_LabelToken> left, List<_LabelToken> right) {
-            final int byLength = left
-                .map((_LabelToken token) => token.normalized)
-                .join(' ')
-                .length
-                .compareTo(right
-                    .map((_LabelToken token) => token.normalized)
-                    .join(' ')
-                    .length);
-            return byLength != 0
-                ? byLength
-                : left.first.start.compareTo(right.first.start);
-          });
-        for (final List<_LabelToken> candidate in candidates) {
-          selected = tryCandidate(candidate);
-          if (selected != null) break;
-        }
-      }
+                !normalizedReserved.contains(token.normalized) &&
+                !normalizedExcluded.any((String excluded) =>
+                    VoiceListMatcher.wordsMatch(token.normalized, excluded)),
+            orElse: () => null,
+          );
       if (selected == null) {
         issues.add(VoiceHintValidationIssue(
           itemId: item.id,
-          reason: 'no_unique_meaningful_phrase',
+          reason: 'no_valid_cyrillic_word',
         ));
       } else {
-        hints[item.id] = selected;
+        hints[item.id] = VoiceHint(
+          itemId: item.id,
+          phrase: selected.normalized,
+          ranges: <VoiceHintRange>[
+            VoiceHintRange(
+              start: selected.start,
+              end: selected.end,
+            ),
+          ],
+        );
       }
     }
     return VoiceHintSet(
       revision: snapshot.revision,
       hintsByItemId: Map<String, VoiceHint>.unmodifiable(hints),
-      itemIdByPhrase: Map<String, String>.unmodifiable(
-        <String, String>{
-          for (final VoiceHint hint in hints.values) hint.phrase: hint.itemId,
-        },
+      advertisedPhrases: Set<String>.unmodifiable(
+        hints.values.map((VoiceHint hint) => hint.phrase),
       ),
       issues: List<VoiceHintValidationIssue>.unmodifiable(issues),
     );
   }
 
-  static bool _isValid(List<_LabelToken> tokens) {
-    if (tokens.isEmpty) return false;
-    return tokens.any((_LabelToken token) {
-      final String word = token.normalized;
-      return _isMeaningful(word);
-    });
-  }
-
   static bool _isMeaningful(String word) =>
       word.length > 1 &&
       !_stopWords.contains(word) &&
-      !RegExp(r'^\d+$').hasMatch(word);
-
-  static Map<String, Set<String>> _phraseOwners(
-    List<VoiceDynamicItem> items,
-  ) {
-    final Map<String, Set<String>> owners = <String, Set<String>>{};
-    for (final VoiceDynamicItem item in items) {
-      for (final String searchable in <String>[
-        item.label,
-        ...item.voiceAliases,
-      ]) {
-        final List<String> words = VoiceListMatcher.normalize(searchable)
-            .split(' ')
-            .where((String word) => word.isNotEmpty)
-            .toList(growable: false);
-        for (int start = 0; start < words.length; start++) {
-          final StringBuffer phrase = StringBuffer();
-          for (int end = start; end < words.length; end++) {
-            if (phrase.isNotEmpty) phrase.write(' ');
-            phrase.write(words[end]);
-            owners
-                .putIfAbsent(phrase.toString(), () => <String>{})
-                .add(item.id);
-          }
-        }
-      }
-    }
-    return owners;
-  }
+      RegExp(r'^[а-яё]+$', caseSensitive: false).hasMatch(word);
 
   static List<_LabelToken> _tokens(String label) {
     return RegExp(r'[0-9A-Za-zА-Яа-яЁё]+')

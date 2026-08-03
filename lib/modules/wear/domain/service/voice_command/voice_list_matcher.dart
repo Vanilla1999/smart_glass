@@ -49,6 +49,18 @@ class VoiceListMatcher {
     return normalize(phrase).length >= minPartialMatchLength;
   }
 
+  static bool wordsMatch(String left, String right) {
+    final String normalizedLeft = normalize(left);
+    final String normalizedRight = normalize(right);
+    if (normalizedLeft.isEmpty ||
+        normalizedRight.isEmpty ||
+        normalizedLeft.contains(' ') ||
+        normalizedRight.contains(' ')) {
+      return false;
+    }
+    return _wordMatches(normalizedLeft, normalizedRight);
+  }
+
   static VoiceListMatch<T> matchExactWord<T>(
     String phrase,
     List<T> items,

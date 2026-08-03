@@ -47,11 +47,6 @@ class GlassesCoordinatorCubit extends Cubit<GlassesCoordinatorState> {
 
   /// Handle method calls from native
   Future<dynamic> _handleMethodCall(MethodCall call) async {
-    // TODO: Replace with proper logging framework
-    // ignore: avoid_print
-    print(
-        "GlassesCoordinator: received method=${call.method}, args=${call.arguments}");
-
     switch (call.method) {
       case 'navigateToScreen':
         _handleNavigateToScreen(call.arguments);

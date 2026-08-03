@@ -65,24 +65,26 @@ void main() {
 
   test('T02 grammar-only mode does not feed free-text live lane', () async {
     final _FakeRecognizer command = _FakeRecognizer();
+    final _FakeRecognizer freeText = _FakeRecognizer();
     final SpeechRecognitionService service = SpeechRecognitionService(
       commandGrammar: const <String>['вверх', '[unk]'],
       freeTextPipelineMode: FreeTextPipelineMode.liveWithReplayFallback,
       speechSegmenter: SpeechSegmenter(calibrationDuration: Duration.zero),
       recognizerFactory: (RecognitionLane lane, List<String> grammar) async {
-        expect(lane, RecognitionLane.command);
-        return command;
+        return lane == RecognitionLane.command ? command : freeText;
       },
     );
     addTearDown(service.dispose);
     await service.prepare();
     await service.startSession();
     service.beginProcessingCapture();
+    final int freeTextWarmupCalls = freeText.accepted.length;
 
     await service.processAudioChunk(_pcmFrame(1000));
     await service.waitForProcessing();
 
     expect(command.accepted, hasLength(1));
+    expect(freeText.accepted, hasLength(freeTextWarmupCalls));
   });
 
   test('T03 live yellow publishes once without replay', () async {
@@ -197,6 +199,38 @@ void main() {
     expect((await phrase).text, 'коровка из кореновки');
   });
 
+  test('shared advertised word stays ambiguous without an item id', () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpoints.add(true)
+      ..results.add(_json(text: 'не команда'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finals.addAll(<String>[_json(), _json(text: 'молоко')]);
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeText: freeText,
+      dynamicItems: const VoiceDynamicItemsSnapshot(
+        revision: 2,
+        items: <VoiceDynamicItem>[
+          VoiceDynamicItem(id: '1', label: 'Молоко Альфа'),
+          VoiceDynamicItem(id: '2', label: 'Молоко Бета'),
+        ],
+      ),
+    );
+    addTearDown(service.dispose);
+    await _start(service);
+    final Future<SegmentedRecognitionResult> result = service
+        .segmentedResultsStream
+        .firstWhere((event) => event.kind == RecognitionKind.streamFinal);
+
+    await _processUtterance(service);
+    await service.waitForProcessing();
+
+    final SegmentedRecognitionResult phrase = await result;
+    expect(phrase.lane, RecognitionLane.freeText);
+    expect(phrase.text, 'молоко');
+    expect(phrase.dynamicItemId, isNull);
+  });
+
   test('T10 exact dynamic hint takes priority over a false command match',
       () async {
     final _FakeRecognizer command = _FakeRecognizer()
@@ -230,7 +264,7 @@ void main() {
     final Completer<VoiceHintSet> hintBuild = Completer<VoiceHintSet>();
     var buildCount = 0;
     final VoiceHintIndexCache hintIndexCache = VoiceHintIndexCache(
-      builder: (snapshot, reserved, excluded) {
+      builder: (snapshot, reserved) {
         buildCount++;
         return hintBuild.future;
       },
@@ -274,7 +308,7 @@ void main() {
   test('screen preparation preserves exact-hint dynamic priority', () async {
     final Completer<VoiceHintSet> hintBuild = Completer<VoiceHintSet>();
     final VoiceHintIndexCache hintIndexCache = VoiceHintIndexCache(
-      builder: (snapshot, reserved, excluded) => hintBuild.future,
+      builder: (snapshot, reserved) => hintBuild.future,
     );
     final List<VoiceDynamicItem> items = <VoiceDynamicItem>[
       const VoiceDynamicItem(id: 'yellow', label: 'Жёлтый товар'),
@@ -289,7 +323,7 @@ void main() {
       ..endpoints.add(true)
       ..results.add(_json(text: 'выбрать'));
     final _FakeRecognizer freeText = _FakeRecognizer()
-      ..finals.addAll(<String>[_json(), _json(text: 'товар')]);
+      ..finals.addAll(<String>[_json(), _json(text: 'жёлтый')]);
     final SpeechRecognitionService service = _service(
       command: command,
       freeText: freeText,
@@ -314,7 +348,7 @@ void main() {
 
     final SegmentedRecognitionResult decision = await result;
     expect(decision.lane, RecognitionLane.freeText);
-    expect(decision.text, 'товар');
+    expect(decision.text, 'жёлтый');
   });
 
   test('production callback batches four VAD frames per recognizer call',

@@ -153,6 +153,14 @@ class MethodChannelService {
     }
   }
 
+  Future<void> startWearControlService() async {
+    await _appChannel.invokeMethod('startWearControlService');
+  }
+
+  Future<void> stopWearControlService() async {
+    await _appChannel.invokeMethod('stopWearControlService');
+  }
+
   /// Get initial counter value from glasses
   Future<int> getInitialCounter() async {
     try {
@@ -169,5 +177,11 @@ class MethodChannelService {
   void setGlassesMethodCallHandler(
       Future<dynamic> Function(MethodCall call) handler) {
     _glassesChannel.setMethodCallHandler(handler);
+  }
+
+  void setAppMethodCallHandler(
+    Future<dynamic> Function(MethodCall call)? handler,
+  ) {
+    _appChannel.setMethodCallHandler(handler);
   }
 }

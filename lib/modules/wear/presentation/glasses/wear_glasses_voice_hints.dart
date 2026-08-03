@@ -25,7 +25,6 @@ class WearGlassesVoiceHints {
     required WearScreenId screen,
     required VoiceDynamicItemsSnapshot snapshot,
     required List<String> visibleItemIds,
-    Set<String> excludedWords = const <String>{},
     void Function()? onPrepared,
   }) {
     final List<String> reservedPhrases =
@@ -35,7 +34,6 @@ class WearGlassesVoiceHints {
       snapshot: snapshot,
       screen: screen.name,
       reservedPhrases: reserved,
-      excludedWords: excludedWords,
     );
     if (ready == null &&
         snapshot.items.length <= VoiceHintIndexCache.synchronousItemLimit) {
@@ -43,7 +41,6 @@ class WearGlassesVoiceHints {
         snapshot: snapshot,
         screen: screen.name,
         reservedPhrases: reserved,
-        excludedWords: excludedWords,
       );
     }
     if (ready == null) {
@@ -54,7 +51,6 @@ class WearGlassesVoiceHints {
           snapshot: snapshot,
           screen: screen.name,
           reservedPhrases: reserved,
-          excludedWords: excludedWords,
         )
             .then((VoiceHintSet generated) {
           stopwatch.stop();

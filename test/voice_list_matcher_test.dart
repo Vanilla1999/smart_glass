@@ -2,6 +2,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
 
 void main() {
+  test('word equivalence follows matcher inflection and fuzzy rules', () {
+    expect(VoiceListMatcher.wordsMatch('жёлтый', 'жёлтого'), isTrue);
+    expect(VoiceListMatcher.wordsMatch('принтер', 'принтера'), isTrue);
+    expect(VoiceListMatcher.wordsMatch('молоко', 'кефир'), isFalse);
+  });
   group('VoiceListMatcher', () {
     test('returns unique match by enough product name words', () {
       final VoiceListMatch<String> match = VoiceListMatcher.match(

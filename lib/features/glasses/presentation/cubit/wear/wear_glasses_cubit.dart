@@ -13,12 +13,6 @@ class WearGlassesCubit extends Cubit<WearGlassesState> {
       updateId: ++_updateId,
       payloadReceivedAtMillis: receivedAtMillis,
     );
-    // ignore: avoid_print
-    print(
-      '[WearGlassesCubit] payload received update#${next.updateId} '
-      'screen=${next.screenType.name} selectedIndex=${next.selectedIndex} '
-      'at=$receivedAtMillis',
-    );
     emit(next);
   }
 }

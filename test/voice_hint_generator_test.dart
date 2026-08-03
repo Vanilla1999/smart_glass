@@ -4,7 +4,7 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_li
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 
 void main() {
-  test('selects the shortest unique meaningful word', () {
+  test('selects the first valid Russian word even when it is shared', () {
     final VoiceDynamicItemsSnapshot snapshot = _snapshot(<VoiceDynamicItem>[
       const VoiceDynamicItem(id: '1', label: 'Молоко Простоквашино'),
       const VoiceDynamicItem(id: '2', label: 'Молоко Домик'),
@@ -12,12 +12,13 @@ void main() {
 
     final VoiceHintSet hints = VoiceHintGenerator.generate(snapshot);
 
-    expect(hints.hintsByItemId['1']?.phrase, 'простоквашино');
-    expect(hints.hintsByItemId['2']?.phrase, 'домик');
+    expect(hints.hintsByItemId['1']?.phrase, 'молоко');
+    expect(hints.hintsByItemId['2']?.phrase, 'молоко');
+    expect(hints.advertisedPhrases, contains('молоко'));
     expect(hints.issues, isEmpty);
   });
 
-  test('prefers the shortest of multiple unique words', () {
+  test('prefers the first word over a shorter later word', () {
     final VoiceHintSet hints = VoiceHintGenerator.generate(_snapshot(
       <VoiceDynamicItem>[
         const VoiceDynamicItem(
@@ -28,10 +29,10 @@ void main() {
       ],
     ));
 
-    expect(hints.hintsByItemId['1']?.phrase, 'чай');
+    expect(hints.hintsByItemId['1']?.phrase, 'простоквашино');
   });
 
-  test('uses a unique contiguous phrase when single words are shared', () {
+  test('never combines shared words into a phrase', () {
     final VoiceDynamicItemsSnapshot snapshot = _snapshot(<VoiceDynamicItem>[
       const VoiceDynamicItem(id: '1', label: 'Молоко Домик'),
       const VoiceDynamicItem(id: '2', label: 'Домик Молоко'),
@@ -39,8 +40,13 @@ void main() {
 
     final VoiceHintSet hints = VoiceHintGenerator.generate(snapshot);
 
-    expect(hints.hintsByItemId['1']?.phrase, 'молоко домик');
-    expect(hints.hintsByItemId['2']?.phrase, 'домик молоко');
+    expect(hints.hintsByItemId['1']?.phrase, 'молоко');
+    expect(hints.hintsByItemId['2']?.phrase, 'домик');
+    expect(hints.hintsByItemId.values.every((hint) => hint.ranges.length == 1),
+        isTrue);
+    expect(
+        hints.hintsByItemId.values.every((hint) => !hint.phrase.contains(' ')),
+        isTrue);
   });
 
   test('rejects one-letter stop-word and number-only labels', () {
@@ -79,7 +85,7 @@ void main() {
     );
   });
 
-  test('reports indistinguishable duplicate labels', () {
+  test('renders hints for duplicate labels without direct item mapping', () {
     final VoiceHintSet hints = VoiceHintGenerator.generate(_snapshot(
       <VoiceDynamicItem>[
         const VoiceDynamicItem(id: '1', label: 'Белый принтер'),
@@ -87,8 +93,10 @@ void main() {
       ],
     ));
 
-    expect(hints.hintsByItemId, isEmpty);
-    expect(hints.issues, hasLength(2));
+    expect(hints.hintsByItemId['1']?.phrase, 'белый');
+    expect(hints.hintsByItemId['2']?.phrase, 'белый');
+    expect(hints.advertisedPhrases, contains('белый'));
+    expect(hints.issues, isEmpty);
   });
 
   test('does not advertise a fixed command as a voice hint', () {
@@ -119,7 +127,7 @@ void main() {
     expect(first.revisionHash, isNot(second.revisionHash));
   });
 
-  test('prefers an explicit alias that is visible in the label', () {
+  test('aliases do not override the first visible label word', () {
     final VoiceHintSet hints = VoiceHintGenerator.generate(_snapshot(
       <VoiceDynamicItem>[
         const VoiceDynamicItem(
@@ -131,7 +139,51 @@ void main() {
       ],
     ));
 
-    expect(hints.hintsByItemId['milk']?.phrase, 'домик');
+    expect(hints.hintsByItemId['milk']?.phrase, 'молоко');
+  });
+
+  test('skips Latin mixed and numeric tokens', () {
+    final VoiceHintSet hints = VoiceHintGenerator.generate(_snapshot(
+      <VoiceDynamicItem>[
+        const VoiceDynamicItem(id: 'latin', label: 'Coca Cola'),
+        const VoiceDynamicItem(id: 'drink', label: 'Coca Cola напиток'),
+        const VoiceDynamicItem(id: 'shoes', label: 'Adidas кроссовки мужские'),
+        const VoiceDynamicItem(id: 'milk', label: 'A12 Товар12 Молоко'),
+        const VoiceDynamicItem(id: 'numeric', label: '123 456'),
+      ],
+    ));
+
+    expect(hints.hintsByItemId.containsKey('latin'), isFalse);
+    expect(hints.hintsByItemId['drink']?.phrase, 'напиток');
+    expect(hints.hintsByItemId['shoes']?.phrase, 'кроссовки');
+    expect(hints.hintsByItemId['milk']?.phrase, 'молоко');
+    expect(hints.hintsByItemId.containsKey('numeric'), isFalse);
+    expect(hints.hintsByItemId['drink']?.ranges.single.start, 10);
+  });
+
+  test('skips excluded and reserved words from left to right', () {
+    final VoiceHintSet hints = VoiceHintGenerator.generate(
+      _snapshot(<VoiceDynamicItem>[
+        const VoiceDynamicItem(id: '1', label: 'Назад Молоко Домик'),
+      ]),
+      reservedPhrases: const <String>{'назад'},
+      excludedWords: const <String>{'молоко'},
+    );
+
+    expect(hints.hintsByItemId['1']?.phrase, 'домик');
+  });
+
+  test('excludes inflected words using matcher semantics', () {
+    final VoiceHintSet hints = VoiceHintGenerator.generate(
+      _snapshot(<VoiceDynamicItem>[
+        const VoiceDynamicItem(id: '1', label: 'Жёлтый принтер Альфа'),
+        const VoiceDynamicItem(id: '2', label: 'Жёлтого принтера Бета'),
+      ]),
+      excludedWords: const <String>{'жёлтый'},
+    );
+
+    expect(hints.hintsByItemId['1']?.phrase, 'альфа');
+    expect(hints.hintsByItemId['2']?.phrase, 'бета');
   });
 
   test('indexes a large availability catalog without pairwise scans', () {
@@ -151,6 +203,36 @@ void main() {
     expect(hints.hintsByItemId, hasLength(items.length));
     expect(stopwatch.elapsed, lessThan(const Duration(seconds: 2)));
   });
+
+  test('indexes a large catalog with unique first words', () {
+    final List<VoiceDynamicItem> items = List<VoiceDynamicItem>.generate(
+      2000,
+      (int index) => VoiceDynamicItem(
+        id: '$index',
+        label: 'Товар${_russianSuffix(index)} газированный',
+      ),
+      growable: false,
+    );
+
+    final Stopwatch stopwatch = Stopwatch()..start();
+    final VoiceHintSet hints = VoiceHintGenerator.generate(_snapshot(items));
+    stopwatch.stop();
+
+    expect(hints.hintsByItemId, hasLength(items.length));
+    expect(hints.advertisedPhrases, hasLength(items.length));
+    expect(stopwatch.elapsed, lessThan(const Duration(seconds: 2)));
+  });
+}
+
+String _russianSuffix(int value) {
+  const String alphabet = 'абвгдежзиклмнопрстуфхцчшщэюя';
+  final StringBuffer result = StringBuffer();
+  var current = value;
+  do {
+    result.write(alphabet[current % alphabet.length]);
+    current ~/= alphabet.length;
+  } while (current > 0);
+  return result.toString();
 }
 
 VoiceDynamicItemsSnapshot _snapshot(List<VoiceDynamicItem> items) {
