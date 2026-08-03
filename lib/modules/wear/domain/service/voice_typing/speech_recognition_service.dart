@@ -18,6 +18,7 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_segmenter.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_device_profile.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_recognition_metrics.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_replay_ownership.dart';
 import 'package:vosk_flutter_service/vosk_flutter.dart' as vosk;
 
 class VoiceRecognitionCaptureEpoch {
@@ -200,6 +201,7 @@ class SpeechRecognitionService {
   Future<void> _lifecycleOperation = Future<void>.value();
   int _freeTextEpoch = 0;
   int _commandUtteranceId = 1;
+  int _latestActionableCommandUtteranceId = 0;
   int _admittedCommandUtteranceId = 1;
   int _latestAdmittedSegmentId = 0;
   int _pendingCommandFrames = 0;
@@ -237,6 +239,8 @@ class SpeechRecognitionService {
   final VoicePcmBacklog _commandBacklog;
   final VoicePcmBacklog _freeTextBacklog;
   final VoiceRecognitionMetrics _voiceMetrics = VoiceRecognitionMetrics();
+  final VoiceReplayOwnershipStateMachine _replayOwnership =
+      VoiceReplayOwnershipStateMachine();
   final Map<int, List<String>> _liveFreeTextResults = <int, List<String>>{};
   final Map<int, String> _naturalCommandFinals = <int, String>{};
   final Map<int, _VoiceResultContext> _utteranceContexts =
@@ -302,6 +306,22 @@ class SpeechRecognitionService {
   int get conflictCount => _conflictCount;
   VoiceRecognitionMetricsSnapshot get metricsSnapshot =>
       _voiceMetrics.snapshot();
+  VoiceReplayOwnership get replayOwnership => _replayOwnership.current;
+  Stream<VoiceReplayOwnership> get replayOwnershipStream =>
+      _replayOwnership.transitions;
+
+  void markActionableCommandUtterance(int commandUtteranceId) {
+    if (commandUtteranceId > _latestActionableCommandUtteranceId) {
+      _latestActionableCommandUtteranceId = commandUtteranceId;
+    }
+    final VoiceReplayOwnership ownership = _replayOwnership.current;
+    final VoiceReplayContext? context = ownership.context;
+    if (ownership.status == VoiceReplayOwnershipStatus.pending &&
+        context != null &&
+        commandUtteranceId > context.commandUtteranceId) {
+      _supersedeReplay(context, supersededBy: commandUtteranceId);
+    }
+  }
 
   Future<void> waitForProcessing() async {
     while (true) {
@@ -322,6 +342,7 @@ class SpeechRecognitionService {
     _beginCaptureEpoch(captureEpoch);
     _utterancePcm.clear();
     _commandUtteranceStartedAtMillis = null;
+    _latestActionableCommandUtteranceId = 0;
     _admittedCommandUtteranceId = _commandUtteranceId;
     _pendingCommandFrames = 0;
     _cancelPendingGrammarSwitch(
@@ -1539,6 +1560,10 @@ class SpeechRecognitionService {
               _commandPartialText,
             ) !=
             null;
+    if (commandFound &&
+        commandUtteranceId > _latestActionableCommandUtteranceId) {
+      _latestActionableCommandUtteranceId = commandUtteranceId;
+    }
     Future<void>? liveFinalization;
     if (_freeTextEnabled && replay.isNotEmpty) {
       if (_usesLiveFreeText) {
@@ -1700,6 +1725,12 @@ class SpeechRecognitionService {
             captureEpoch: captureEpoch,
             segment: segment,
             commandUtteranceId: commandUtteranceId,
+            replayContext: _replayContext(
+              captureEpoch,
+              segment,
+              commandUtteranceId,
+              resultContext,
+            ),
             resultContext: resultContext,
             onCompleted: (String replayText, int replayMs) {
               _logShadowComparison(
@@ -1732,6 +1763,12 @@ class SpeechRecognitionService {
             captureEpoch: captureEpoch,
             segment: segment,
             commandUtteranceId: commandUtteranceId,
+            replayContext: _replayContext(
+              captureEpoch,
+              segment,
+              commandUtteranceId,
+              resultContext,
+            ),
             resultContext: resultContext,
           );
         } else {
@@ -1986,6 +2023,12 @@ class SpeechRecognitionService {
     _VoiceResultContext? resultContext,
     void Function(String text, int replayMs)? onCompleted,
   }) {
+    final VoiceReplayContext replayContext = _replayContext(
+      captureEpoch,
+      segment,
+      commandUtteranceId,
+      resultContext,
+    );
     final Future<void> next =
         _freeTextAudioProcessing.then((_) => _runFreeTextReplay(
               bytes,
@@ -1993,6 +2036,7 @@ class SpeechRecognitionService {
               captureEpoch: captureEpoch,
               segment: segment,
               commandUtteranceId: commandUtteranceId,
+              replayContext: replayContext,
               resultContext: resultContext,
               onCompleted: onCompleted,
             ));
@@ -2002,41 +2046,109 @@ class SpeechRecognitionService {
     });
   }
 
+  VoiceReplayContext _replayContext(
+    int captureEpoch,
+    SpeechSegment segment,
+    int commandUtteranceId,
+    _VoiceResultContext? resultContext,
+  ) {
+    final _VoiceResultContext voiceContext =
+        resultContext ?? _currentResultContext(commandUtteranceId);
+    return VoiceReplayContext(
+      captureEpoch: captureEpoch,
+      segmentId: segment.segmentId,
+      commandUtteranceId: commandUtteranceId,
+      sourceScreen: voiceContext.sourceScreen,
+      routeRevision: voiceContext.routeRevision,
+      grammarRevision: voiceContext.grammarRevision,
+      freeTextEpoch: voiceContext.freeTextEpoch,
+      listRevision: voiceContext.listRevision,
+    );
+  }
+
   Future<void> _runFreeTextReplay(
     Uint8List bytes, {
     required int epoch,
     required int captureEpoch,
     required SpeechSegment segment,
     required int commandUtteranceId,
+    required VoiceReplayContext replayContext,
     _VoiceResultContext? resultContext,
     void Function(String text, int replayMs)? onCompleted,
   }) async {
+    _replayOwnership.begin(replayContext);
     final int startedAt = DateTime.now().millisecondsSinceEpoch;
     final int replayBatchCount = (bytes.lengthInBytes + 2559) ~/ 2560;
     print(
       '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=start '
-      'captureEpoch=$captureEpoch segmentId=${segment.segmentId} '
+      '${replayContext.describeCaptured()} '
       'utteranceId=$commandUtteranceId replayBytes=${bytes.lengthInBytes} '
       'batchCount=$replayBatchCount epoch=$epoch '
       'freeTextEpoch=$_freeTextEpoch '
       'recognizerPresent=${_freeTextRecognizer != null}',
     );
-    await _freeTextRecognizerReady.timeout(
-      _remainingReplayTimeout(startedAt),
-    );
+    final Future<void> recognizerReady = _freeTextRecognizerReady;
+    try {
+      await recognizerReady.timeout(
+        _remainingReplayTimeout(startedAt),
+      );
+    } catch (error) {
+      if (error is TimeoutException &&
+          identical(_freeTextRecognizerReady, recognizerReady)) {
+        _freeTextRecognizerReady = Future<void>.value();
+      }
+      _replayOwnership.resolve(
+        replayContext,
+        error is TimeoutException
+            ? VoiceReplayOwnershipStatus.timedOut
+            : VoiceReplayOwnershipStatus.failed,
+        failure: error,
+      );
+      _logReplayDecision(
+        replayContext,
+        'failed',
+        error is TimeoutException ? 'recognizer_ready_timeout' : 'ready',
+      );
+      rethrow;
+    }
     print(
       '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=recognizer_ready '
       'utteranceId=$commandUtteranceId elapsedMs='
       '${DateTime.now().millisecondsSinceEpoch - startedAt} '
       'remainingMs=${_remainingReplayTimeout(startedAt).inMilliseconds}',
     );
-    final VoiceRecognizer? recognizer = _freeTextRecognizer;
-    if (recognizer == null ||
-        !_canProcess(
-          _RecognitionSource.freeText,
+    VoiceRecognizer? recognizer = _freeTextRecognizer;
+    if (recognizer == null) {
+      try {
+        recognizer = await _createFreeTextRecognizerForReplay(
           epoch,
-          captureEpoch,
-        )) {
+          _remainingReplayTimeout(startedAt),
+        );
+      } catch (error) {
+        _replayOwnership.resolve(
+          replayContext,
+          error is TimeoutException
+              ? VoiceReplayOwnershipStatus.timedOut
+              : VoiceReplayOwnershipStatus.failed,
+          failure: error,
+        );
+        _logReplayDecision(replayContext, 'failed', 'recognizer_recovery');
+        return;
+      }
+    }
+    if (recognizer == null) {
+      _replayOwnership.resolve(
+        replayContext,
+        VoiceReplayOwnershipStatus.failed,
+        failure: StateError('Free-text recognizer is unavailable'),
+      );
+      _logReplayDecision(replayContext, 'failed', 'recognizer_unavailable');
+      return;
+    }
+    final VoiceReplayContextCancellation? initialStaleReason =
+        _replayStaleReason(replayContext);
+    if (initialStaleReason != null) {
+      _rejectReplay(replayContext, initialStaleReason);
       return;
     }
     Future<void>? pendingOperation;
@@ -2068,7 +2180,10 @@ class SpeechRecognitionService {
         final int end = requestedEnd < bytes.lengthInBytes
             ? requestedEnd
             : bytes.lengthInBytes;
-        if (!_canProcess(_RecognitionSource.freeText, epoch, captureEpoch)) {
+        final VoiceReplayContextCancellation? staleReason =
+            _replayStaleReason(replayContext);
+        if (staleReason != null) {
+          _rejectReplay(replayContext, staleReason);
           return;
         }
         batchIndex++;
@@ -2091,6 +2206,9 @@ class SpeechRecognitionService {
         final bool endpoint =
             await accept.timeout(_remainingReplayTimeout(startedAt));
         final int acceptFinishedAt = DateTime.now().millisecondsSinceEpoch;
+        _voiceMetrics.recordReplayAcceptLatency(
+          acceptFinishedAt - callFinishedAt,
+        );
         print(
           '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=accept_done '
           'utteranceId=$commandUtteranceId batch=$batchIndex/'
@@ -2117,7 +2235,10 @@ class SpeechRecognitionService {
           if (endpointText.isNotEmpty) results.add(endpointText);
         }
       }
-      if (!_canProcess(_RecognitionSource.freeText, epoch, captureEpoch)) {
+      final VoiceReplayContextCancellation? staleReason =
+          _replayStaleReason(replayContext);
+      if (staleReason != null) {
+        _rejectReplay(replayContext, staleReason);
         return;
       }
       stage = 'final_result_call';
@@ -2139,12 +2260,24 @@ class SpeechRecognitionService {
       final String text = results.join(' ').trim();
       final int replayMs = DateTime.now().millisecondsSinceEpoch - startedAt;
       onCompleted?.call(text, replayMs);
+      print(
+        '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=final_result_done '
+        'utteranceId=$commandUtteranceId text="$text" replayMs=$replayMs',
+      );
+      if (_latestActionableCommandUtteranceId > commandUtteranceId) {
+        _supersedeReplay(
+          replayContext,
+          supersededBy: _latestActionableCommandUtteranceId,
+        );
+        return;
+      }
+      final VoiceReplayContextCancellation? finalStaleReason =
+          _replayStaleReason(replayContext);
+      if (finalStaleReason != null) {
+        _rejectReplay(replayContext, finalStaleReason);
+        return;
+      }
       if (text.isNotEmpty) {
-        if (_commandUtteranceId != commandUtteranceId + 1 ||
-            _commandUtteranceStartedAtMillis != null) {
-          _voiceMetrics.recordStale();
-          return;
-        }
         _emitResult(
           _RecognitionSource.freeText,
           text,
@@ -2155,6 +2288,17 @@ class SpeechRecognitionService {
           commandUtteranceId: commandUtteranceId,
           resultContext: resultContext,
         );
+        _replayOwnership.resolve(
+          replayContext,
+          VoiceReplayOwnershipStatus.resolvedAsDynamicPhrase,
+        );
+        _logReplayDecision(replayContext, 'accepted', 'dynamic_phrase');
+      } else {
+        _replayOwnership.resolve(
+          replayContext,
+          VoiceReplayOwnershipStatus.resolvedEmpty,
+        );
+        _logReplayDecision(replayContext, 'rejected', 'empty_result');
       }
       print(
         '[VOICE_FREE_TEXT] replayBytes=${bytes.lengthInBytes} '
@@ -2163,11 +2307,23 @@ class SpeechRecognitionService {
     } catch (error, stackTrace) {
       print(
         '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=failed operation=$stage '
-        'captureEpoch=$captureEpoch utteranceId=$commandUtteranceId '
+        '${replayContext.describeCaptured()} '
         'batch=$batchIndex/$replayBatchCount '
         'elapsedMs=${DateTime.now().millisecondsSinceEpoch - startedAt} '
         'remainingMs=${_remainingReplayTimeout(startedAt).inMilliseconds} '
         'error=$error\n$stackTrace',
+      );
+      _logReplayDecision(
+        replayContext,
+        'failed',
+        error is TimeoutException ? 'timeout' : stage,
+      );
+      _replayOwnership.resolve(
+        replayContext,
+        error is TimeoutException
+            ? VoiceReplayOwnershipStatus.timedOut
+            : VoiceReplayOwnershipStatus.failed,
+        failure: error,
       );
       await _replaceUncertainFreeTextRecognizer(
         failedRecognizer: recognizer,
@@ -2176,6 +2332,75 @@ class SpeechRecognitionService {
       );
       rethrow;
     }
+  }
+
+  VoiceReplayContextCancellation? _replayStaleReason(
+    VoiceReplayContext context,
+  ) {
+    if (!_isSessionActive) return VoiceReplayContextCancellation.sessionStopped;
+    if (!_captureEpoch.isCurrent(context.captureEpoch)) {
+      return VoiceReplayContextCancellation.captureChanged;
+    }
+    if (!_freeTextEnabled || context.freeTextEpoch != _freeTextEpoch) {
+      return VoiceReplayContextCancellation.freeTextChanged;
+    }
+    if (context.sourceScreen != _sourceScreen) {
+      return VoiceReplayContextCancellation.screenChanged;
+    }
+    if (context.routeRevision != _routeRevision) {
+      return VoiceReplayContextCancellation.routeChanged;
+    }
+    if (context.grammarRevision != _grammarRevision) {
+      return VoiceReplayContextCancellation.grammarChanged;
+    }
+    if (context.listRevision != _dynamicItemsProvider(_sourceScreen).revision) {
+      return VoiceReplayContextCancellation.dynamicItemsChanged;
+    }
+    return null;
+  }
+
+  void _rejectReplay(
+    VoiceReplayContext context,
+    VoiceReplayContextCancellation reason,
+  ) {
+    _voiceMetrics.recordStale();
+    _replayOwnership.resolve(
+      context,
+      VoiceReplayOwnershipStatus.cancelledByContextChange,
+      cancellation: reason,
+    );
+    _logReplayDecision(context, 'rejected', reason.name);
+  }
+
+  void _supersedeReplay(
+    VoiceReplayContext context, {
+    int? supersededBy,
+  }) {
+    _voiceMetrics.recordStale();
+    _replayOwnership.resolve(
+      context,
+      VoiceReplayOwnershipStatus.supersededByActionableUtterance,
+      supersededByUtteranceId: supersededBy,
+    );
+    _logReplayDecision(
+      context,
+      'rejected',
+      'newer_actionable_command',
+      supersededBy: supersededBy,
+    );
+  }
+
+  void _logReplayDecision(
+    VoiceReplayContext context,
+    String outcome,
+    String reason, {
+    int? supersededBy,
+  }) {
+    print(
+      '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=decision_$outcome reason=$reason '
+      '${context.describeCaptured()} ${context.describeCurrent(this)} '
+      'supersededBy=${supersededBy ?? 0}',
+    );
   }
 
   Duration _remainingReplayTimeout(int startedAtMillis) {
@@ -2205,14 +2430,59 @@ class SpeechRecognitionService {
         );
       },
     ));
-    final VoiceRecognizer replacement =
-        await _createRecognizer(_RecognitionSource.freeText);
+    VoiceRecognizer? replacement;
+    try {
+      replacement = await _createFreeTextRecognizer(
+        _segmentCloseGuard.timeout,
+      );
+    } catch (error, stackTrace) {
+      print(
+        '[VOICE_FREE_TEXT] recognizer replacement failed: '
+        '$error\n$stackTrace',
+      );
+      return;
+    }
     if (recognizerEpoch == _freeTextEpoch &&
         _freeTextEnabled &&
         _freeTextRecognizer == null) {
       _freeTextRecognizer = replacement;
     } else {
       await replacement.dispose();
+    }
+  }
+
+  Future<VoiceRecognizer?> _createFreeTextRecognizerForReplay(
+    int recognizerEpoch,
+    Duration timeout,
+  ) async {
+    if (recognizerEpoch != _freeTextEpoch || !_freeTextEnabled) return null;
+    final VoiceRecognizer replacement =
+        await _createFreeTextRecognizer(timeout);
+    if (recognizerEpoch == _freeTextEpoch &&
+        _freeTextEnabled &&
+        _freeTextRecognizer == null) {
+      _freeTextRecognizer = replacement;
+      return replacement;
+    }
+    await replacement.dispose();
+    return _freeTextRecognizer;
+  }
+
+  Future<VoiceRecognizer> _createFreeTextRecognizer(Duration timeout) async {
+    final Future<VoiceRecognizer> creation =
+        _createRecognizer(_RecognitionSource.freeText);
+    var timedOut = false;
+    try {
+      return await creation.timeout(timeout);
+    } on TimeoutException {
+      timedOut = true;
+      rethrow;
+    } finally {
+      if (timedOut) {
+        unawaited(creation.then((VoiceRecognizer recognizer) {
+          return recognizer.dispose();
+        }).catchError((Object _, StackTrace __) {}));
+      }
     }
   }
 
@@ -2887,6 +3157,7 @@ class SpeechRecognitionService {
     await _segmentedResultsController.close();
     await _segmentEndedController.close();
     await _segmentStartedController.close();
+    await _replayOwnership.dispose();
   }
 
   _RecognitionMetrics _metrics(_RecognitionSource source) {
@@ -3055,6 +3326,23 @@ class _VoiceResultContext {
   final WearScreenId sourceScreen;
   final int? startedAtMillis;
   final int listRevision;
+}
+
+extension on VoiceReplayContext {
+  String describeCaptured() => 'captureEpoch=$captureEpoch '
+      'segmentId=$segmentId utteranceId=$commandUtteranceId '
+      'sourceScreen=${sourceScreen.name} routeRevision=$routeRevision '
+      'grammarRevision=$grammarRevision freeTextEpoch=$freeTextEpoch '
+      'listRevision=$listRevision';
+
+  String describeCurrent(SpeechRecognitionService service) =>
+      'currentCaptureEpoch=${service.captureEpoch} '
+      'currentUtteranceId=${service.commandUtteranceId} '
+      'currentScreen=${service.sourceScreen.name} '
+      'currentRouteRevision=${service.routeRevision} '
+      'currentGrammarRevision=${service.grammarRevision} '
+      'currentFreeTextEpoch=${service.freeTextEpoch} '
+      'currentListRevision=${service.currentDynamicItemsRevision}';
 }
 
 class _FreeTextBoundary {

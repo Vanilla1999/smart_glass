@@ -2,6 +2,10 @@ import 'package:dio/dio.dart';
 import 'package:smart_glasses/modules/wear/data/auth/data_source/auth_data_source.dart';
 import 'package:smart_glasses/modules/wear/data/auth/data_source/auth_dio_client.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_availability_runtime.dart';
+import 'package:smart_glasses/modules/wear/application/wear_background_runtime.dart';
+import 'package:smart_glasses/modules/wear/application/wear_printer_runtime.dart';
+import 'package:smart_glasses/modules/wear/application/wear_scan_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_actual_screen_store.dart';
 import 'package:smart_glasses/modules/wear/data/availability/local_wear_availability_repository.dart';
@@ -21,7 +25,12 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_typ
 import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_glasses_output.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/services/wear_photo_store.dart';
+import 'package:smart_glasses/modules/wear/services/wear_scanner_runtime.dart';
+import 'package:smart_glasses/modules/wear/services/wear_barcode_dispatcher.dart';
 import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
+import 'package:smart_glasses/modules/wear/config/wear_session.dart';
+import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
+import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_voice_hints.dart';
 
@@ -52,6 +61,7 @@ class WearDependencies {
   late final VoiceHintIndexCache voiceHintIndexCache;
 
   late final WearFlowController wearFlowController;
+  late final WearBarcodeDispatcher barcodeDispatcher;
   final WearActualScreenStore actualScreenStore = WearActualScreenStore();
 
   /// Shared audio stream — один на оба голосовых сервиса.
@@ -65,6 +75,77 @@ class WearDependencies {
       glassesOutput: FlutterWearGlassesOutput(),
       navigationOutput: NoopWearNavigationOutput(),
       photoCapture: photoStore.captureLatestPhoto,
+    );
+    Future<void> navigate(
+      WearScreenId screen, {
+      Object? extra,
+      bool replaceCurrent = false,
+    }) {
+      return wearFlowController.requestNavigation(
+        screen,
+        extra: extra,
+        replaceCurrent: replaceCurrent,
+      );
+    }
+
+    wearFlowController.setBackgroundRuntime(
+      CompositeWearBackgroundRuntime(<WearBackgroundRuntime>[
+        WearPrinterRuntime(
+          loadPrinters: getAvailablePrintersUseCase().call,
+          navigate: navigate,
+        ),
+        WearScanRuntime(
+          lookupBarcode: getBarcodeInfoUseCase().call,
+          navigate: navigate,
+          printProduct: (BarcodeProductInfo product) async {
+            final selection = WearSession.printerSelectionOrNull;
+            final user = WearSession.userOrNull;
+            if (selection == null) {
+              throw StateError('Не выбраны принтеры');
+            }
+            if (user == null) {
+              throw StateError('Пользователь не авторизован');
+            }
+            return printPriceTagUseCase.call(
+              userId: user.idUser,
+              employeeId: user.idEmployee,
+              articleId: product.id,
+              whiteTagsPrinterName: selection.whitePrinter.name,
+              yellowTagsPrinterName: selection.yellowPrinter.name,
+            );
+          },
+        ),
+        WearAvailabilityRuntime(
+          flowUseCase: availabilityFlowUseCase,
+          navigate: navigate,
+          capturePhoto: () async {
+            await photoStore.captureLatestPhoto();
+          },
+          printPriceTag: (WearAvailabilityProduct product) async {
+            final selection = WearSession.printerSelectionOrNull;
+            final user = WearSession.userOrNull;
+            if (selection == null) {
+              throw StateError('Не выбраны принтеры');
+            }
+            if (user == null) {
+              throw StateError('Пользователь не авторизован');
+            }
+            if (WearMockConfig.isEnabled) {
+              return selection.whitePrinter.name;
+            }
+            return printPriceTagUseCase.call(
+              userId: user.idUser,
+              employeeId: user.idEmployee,
+              articleId: product.id,
+              whiteTagsPrinterName: selection.whitePrinter.name,
+              yellowTagsPrinterName: selection.yellowPrinter.name,
+            );
+          },
+        ),
+      ]),
+    );
+    barcodeDispatcher = WearBarcodeDispatcher(
+      flowController: wearFlowController,
     );
     voiceActionCatalog = VoiceActionCatalog(
       includeUnknown: const bool.fromEnvironment(
@@ -90,7 +171,7 @@ class WearDependencies {
     );
     voiceControlService = WearVoiceControlService(
       speechRecognitionService: speechRecognitionService,
-      screenProvider: () => actualScreenStore.screen,
+      screenProvider: () => wearFlowController.state.screen,
       actionCatalog: voiceActionCatalog,
     );
     voiceTypingService = VoiceTypingService(
@@ -114,6 +195,7 @@ class WearDependencies {
       LocalWearAvailabilityRepository();
 
   final WearPhotoStore photoStore = WearPhotoStore();
+  final WearScannerRuntime scannerRuntime = WearScannerRuntime();
 
   late final WearAvailabilityFlowUseCase availabilityFlowUseCase =
       WearAvailabilityFlowUseCase(availabilityRepository);

@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:multi_scanner/multi_scanner.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_flow_state.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
@@ -67,34 +66,13 @@ class WearAvailabilityDirectScanState {
 }
 
 class WearAvailabilityDirectScanNotifier
-    extends StateNotifier<WearAvailabilityDirectScanState>
-    implements MultiScannerDelegate {
+    extends StateNotifier<WearAvailabilityDirectScanState> {
   WearAvailabilityDirectScanNotifier()
       : _flowUseCase = WearDependencies.I.availabilityFlowUseCase,
-        super(WearAvailabilityDirectScanState.initial()) {
-    _scanner.addDelegate(this);
-  }
+        super(WearAvailabilityDirectScanState.initial());
 
   final WearAvailabilityFlowUseCase _flowUseCase;
-  final MultiScanner _scanner = MultiScanner.last();
   String? _lastAcceptedBarcode;
-
-  @override
-  void dispose() {
-    _scanner.removeDelegate(this);
-    super.dispose();
-  }
-
-  @override
-  bool? onScanEvent(String payload) {
-    handleBarcode(payload);
-    return true;
-  }
-
-  @override
-  bool? onErrorScan(Exception error) {
-    return false;
-  }
 
   Future<void> handleBarcode(String barcode) async {
     if (state.isLoading) return;

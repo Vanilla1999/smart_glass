@@ -53,6 +53,9 @@ class _WearAvailabilityDirectScanScreenState
         onPartialPhrase: _onVoicePartialPhrase,
         onDynamicItem: _onVoiceDynamicItem,
         dynamicVoiceItems: _dynamicVoiceItems,
+        onBarcode: (String barcode) => ref
+            .read(wearAvailabilityDirectScanProvider.notifier)
+            .handleBarcode(barcode),
       ),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {

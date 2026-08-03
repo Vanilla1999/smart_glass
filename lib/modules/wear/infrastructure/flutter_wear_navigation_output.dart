@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/ports/wear_navigation_output.dart';
+import 'package:smart_glasses/modules/wear/application/wear_navigation_entry.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_input_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_check_screen.dart';
@@ -38,8 +41,24 @@ class FlutterWearNavigationOutput implements WearNavigationOutput {
     if (_shouldReplace(screen)) {
       _router.go(route, extra: extra);
     } else {
-      await _router.push(route, extra: extra);
+      unawaited(_router.push(route, extra: extra));
     }
+  }
+
+  @override
+  Future<void> replace(WearScreenId screen, {Object? extra}) async {
+    final String route = _routeFor(screen);
+    final bool isExistingRoute = _router
+        .routerDelegate.currentConfiguration.matches
+        .any((match) => match.matchedLocation == route);
+    if (isExistingRoute) {
+      while (_router.canPop() && _router.state.matchedLocation != route) {
+        _router.pop();
+      }
+      unawaited(_router.replace(route, extra: extra));
+      return;
+    }
+    unawaited(_router.pushReplacement(route, extra: extra));
   }
 
   @override
@@ -52,6 +71,16 @@ class FlutterWearNavigationOutput implements WearNavigationOutput {
   @override
   Future<void> home() async {
     _router.go(WearMenuScreen.route);
+  }
+
+  @override
+  Future<void> synchronize(List<WearNavigationEntry> history) async {
+    if (history.isEmpty) return;
+    final WearNavigationEntry root = history.first;
+    _router.go(_routeFor(root.screen), extra: root.extra);
+    for (final WearNavigationEntry entry in history.skip(1)) {
+      unawaited(_router.push(_routeFor(entry.screen), extra: entry.extra));
+    }
   }
 
   static WearScreenId? screenIdForRoute(String route) {

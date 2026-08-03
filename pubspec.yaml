@@ -14,11 +14,10 @@ dependencies:
   flutter_bloc: ^8.1.6
   bloc: ^8.1.4
   cupertino_icons: ^1.0.8
-  vosk_flutter_service: 0.1.1
+  vosk_flutter_service:
+    path: packages/vosk_flutter_service
   multi_scanner:
-    git:
-      url: https://coderepo.corp.tander.ru/rmr_team/libraries/multiscanner.git
-      ref: 3.17.4-glass
+    path: packages/multi_scanner
 
   flutter_riverpod: ^2.6.1
   flutter_svg:

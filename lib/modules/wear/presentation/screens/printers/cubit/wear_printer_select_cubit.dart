@@ -148,6 +148,10 @@ class WearPrinterSelectNotifier extends StateNotifier<WearPrinterSelectState> {
     );
   }
 
+  void restoreState(WearPrinterSelectState next) {
+    state = next;
+  }
+
   String _asUiMessage(Object error) {
     final String raw = error.toString();
     if (raw.startsWith('Exception: ')) {

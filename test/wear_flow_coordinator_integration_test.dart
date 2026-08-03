@@ -19,11 +19,13 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_co
 import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_glasses_state.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_recognition_metrics.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_replay_ownership.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/free_text_pipeline_mode.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_device_profile.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
 import 'package:smart_glasses/modules/wear/application/ports/wear_glasses_output.dart';
 import 'package:smart_glasses/modules/wear/application/ports/wear_navigation_output.dart';
+import 'package:smart_glasses/modules/wear/application/wear_navigation_entry.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
@@ -784,6 +786,14 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
         routerFlow.state.screen,
         WearScreenId.scanIdle,
       );
+      expect(
+        routerFlow.state.navigationHistory.map((entry) => entry.screen),
+        <WearScreenId>[
+          WearScreenId.menu,
+          WearScreenId.printerSelect,
+          WearScreenId.scanIdle,
+        ],
+      );
 
       router!.pop();
       await tester.pumpAndSettle();
@@ -1522,6 +1532,44 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       expect(restartReason, 'app_lifecycle_resumed');
     });
 
+    testWearWidget('paused UI keeps logical runtime commands active',
+        (WidgetTester tester) async {
+      WearSession.setUser(AuthenticatedUser(
+        idUser: 1,
+        idEmployee: 1,
+        name: 'Test User',
+      ));
+      addTearDown(WearSession.clear);
+      final StreamController<WearVoiceCommand> commands =
+          StreamController<WearVoiceCommand>.broadcast(sync: true);
+      addTearDown(commands.close);
+      final WearFlowController flow = WearFlowController(
+        glassesOutput: _TestGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+
+      await tester.pumpWidget(
+        WearModuleApp(
+          flowController: flow,
+          routes: _testRoutes,
+          initialLocation: WearMenuScreen.route,
+          voiceCommandStream: commands.stream,
+          onStartVoice: () async {},
+          onStopVoice: () async {},
+          onRestartVoice: (_) async {},
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      commands.add(WearVoiceCommand.down);
+      await tester.pump();
+
+      expect(flow.state.menuFocusedIndex, 1);
+      expect(flow.state.screen, WearScreenId.menu);
+    });
+
     testWearWidget('shows voice reconnection overlay without changing route',
         (WidgetTester tester) async {
       WearSession.setUser(AuthenticatedUser(
@@ -1711,12 +1759,18 @@ WearPrinterSelection _printerSelection() {
 
 class _FakeNavigationOutput implements WearNavigationOutput {
   final List<WearScreenId> goToCalls = <WearScreenId>[];
+  final List<WearScreenId> replaceCalls = <WearScreenId>[];
   int backCalls = 0;
   int homeCalls = 0;
 
   @override
   Future<void> goTo(WearScreenId screen, {Object? extra}) async {
     goToCalls.add(screen);
+  }
+
+  @override
+  Future<void> replace(WearScreenId screen, {Object? extra}) async {
+    replaceCalls.add(screen);
   }
 
   @override
@@ -1728,6 +1782,9 @@ class _FakeNavigationOutput implements WearNavigationOutput {
   Future<void> home() async {
     homeCalls++;
   }
+
+  @override
+  Future<void> synchronize(List<WearNavigationEntry> history) async {}
 }
 
 class _PresetPrinterSelectNotifier extends WearPrinterSelectNotifier {
@@ -1868,6 +1925,13 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   int get currentDynamicItemsRevision => 0;
 
   @override
+  VoiceReplayOwnership get replayOwnership => VoiceReplayOwnership.idle;
+
+  @override
+  Stream<VoiceReplayOwnership> get replayOwnershipStream =>
+      const Stream<VoiceReplayOwnership>.empty();
+
+  @override
   VoiceRecognitionMetricsSnapshot get metricsSnapshot =>
       const VoiceRecognitionMetricsSnapshot(
         commandQueueDelay: VoiceMetricPercentiles(p50: 0, p95: 0, p99: 0),
@@ -1885,6 +1949,8 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
         conflictCount: 0,
         staleResultCount: 0,
         freeTextDroppedFrames: 0,
+        replayAcceptLatency: VoiceMetricPercentiles(p50: 0, p95: 0, p99: 0),
+        slowReplayAcceptCount: 0,
       );
 
   @override
@@ -1892,6 +1958,10 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
 
   @override
   int get conflictCount => 0;
+
+  @override
+  void markActionableCommandUtterance(int commandUtteranceId) {}
+
   final StreamController<SegmentedRecognitionResult>
       _segmentedResultsController =
       StreamController<SegmentedRecognitionResult>.broadcast();

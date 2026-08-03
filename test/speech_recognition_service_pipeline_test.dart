@@ -7,10 +7,12 @@ import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_control_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_phrase_event.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_segmenter.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_typing_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_replay_ownership.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -517,6 +519,10 @@ void main() {
     await service.waitForProcessing().timeout(const Duration(seconds: 1));
 
     expect(freeText.finalCalls, 0);
+    expect(
+      service.replayOwnership.status,
+      VoiceReplayOwnershipStatus.timedOut,
+    );
   });
 
   test('free-text timeout replaces recognizer for the next replay', () async {
@@ -827,6 +833,350 @@ void main() {
     expect(freeText.accepted, isNotEmpty);
   });
 
+  test('empty trailing utterance does not discard delayed free-text replay',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.addAll(<bool>[true, true])
+      ..resultSequence.addAll(<String>[
+        _json(text: 'молочная'),
+        _json(),
+      ]);
+    final Completer<void> firstReplayStarted = Completer<void>();
+    final Completer<bool> releaseFirstReplay = Completer<bool>();
+    var replayAcceptCalls = 0;
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..acceptOverride = ((_) {
+        replayAcceptCalls++;
+        if (replayAcceptCalls == 1) {
+          firstReplayStarted.complete();
+          return releaseFirstReplay.future;
+        }
+        return Future<bool>.value(false);
+      })
+      ..finalSequence.addAll(<String>[
+        _json(text: 'молочную'),
+        _json(),
+      ]);
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final List<SegmentedRecognitionResult> freeTextResults =
+        <SegmentedRecognitionResult>[];
+    final StreamSubscription<SegmentedRecognitionResult> subscription = service
+        .segmentedResultsStream
+        .where((event) => event.lane == RecognitionLane.freeText)
+        .listen(freeTextResults.add);
+    addTearDown(subscription.cancel);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await firstReplayStarted.future;
+    await service.processAudioChunk(_pcmFrame(0));
+    releaseFirstReplay.complete(false);
+    await service.waitForProcessing();
+
+    expect(service.commandUtteranceId, 3);
+    expect(freeTextResults.map((event) => event.text), <String>['молочную']);
+    expect(freeTextResults.single.commandUtteranceId, 1);
+    expect(
+      service.replayOwnership.status,
+      VoiceReplayOwnershipStatus.resolvedEmpty,
+    );
+  });
+
+  test('free-text replay remains valid after more than 1700 milliseconds',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.add(true)
+      ..resultSequence.add(_json(text: 'молочная'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..acceptOverride = (_) async {
+        await Future<void>.delayed(const Duration(milliseconds: 1750));
+        return false;
+      }
+      ..finalSequence.add(_json(text: 'молочную'));
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+      recognizerOperationTimeout: const Duration(seconds: 3),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final Future<SegmentedRecognitionResult> result = service
+        .segmentedResultsStream
+        .firstWhere((event) => event.lane == RecognitionLane.freeText);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing();
+
+    expect((await result).text, 'молочную');
+    expect(
+      service.replayOwnership.status,
+      VoiceReplayOwnershipStatus.resolvedAsDynamicPhrase,
+    );
+    expect(service.metricsSnapshot.slowReplayAcceptCount, 1);
+    expect(service.metricsSnapshot.replayAcceptLatency.p99, greaterThan(1700));
+  });
+
+  test('newer actionable command supersedes delayed free-text replay',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.addAll(<bool>[true, true])
+      ..resultSequence.addAll(<String>[
+        _json(text: 'молочная'),
+        _json(text: 'вверх'),
+      ]);
+    final Completer<void> firstReplayStarted = Completer<void>();
+    final Completer<bool> releaseFirstReplay = Completer<bool>();
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..acceptOverride = ((_) {
+        firstReplayStarted.complete();
+        return releaseFirstReplay.future;
+      })
+      ..finalSequence.add(_json(text: 'молочную'));
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final List<SegmentedRecognitionResult> freeTextResults =
+        <SegmentedRecognitionResult>[];
+    final StreamSubscription<SegmentedRecognitionResult> subscription = service
+        .segmentedResultsStream
+        .where((event) => event.lane == RecognitionLane.freeText)
+        .listen(freeTextResults.add);
+    addTearDown(subscription.cancel);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await firstReplayStarted.future;
+    await service.processAudioChunk(_pcmFrame(1000));
+    releaseFirstReplay.complete(false);
+    await service.waitForProcessing();
+
+    expect(freeTextResults, isEmpty);
+    expect(service.metricsSnapshot.staleResultCount, 1);
+    expect(
+      service.replayOwnership.status,
+      VoiceReplayOwnershipStatus.supersededByActionableUtterance,
+    );
+  });
+
+  test('actionable partial immediately supersedes older replay', () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.addAll(<bool>[true, false])
+      ..resultSequence.add(_json(text: 'молочная'))
+      ..partialSequence.add(_json(partial: 'вверх'));
+    final Completer<void> replayStarted = Completer<void>();
+    final Completer<bool> releaseReplay = Completer<bool>();
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..acceptOverride = (_) {
+        replayStarted.complete();
+        return releaseReplay.future;
+      }
+      ..finalSequence.add(_json(text: 'молочную'));
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+    );
+    final WearVoiceControlService control = WearVoiceControlService(
+      speechRecognitionService: service,
+      screenProvider: () => WearScreenId.menu,
+    );
+    final List<WearVoiceCommand> commands = <WearVoiceCommand>[];
+    control.commandStream.listen(commands.add);
+    addTearDown(control.dispose);
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await replayStarted.future;
+    await service.processAudioChunk(_pcmFrame(1000));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(commands, <WearVoiceCommand>[WearVoiceCommand.up]);
+    expect(
+      service.replayOwnership.status,
+      VoiceReplayOwnershipStatus.supersededByActionableUtterance,
+    );
+    releaseReplay.complete(false);
+    await service.waitForProcessing();
+  });
+
+  test('empty replay still applies final context cancellation', () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.add(true)
+      ..resultSequence.add(_json(text: 'молочная'));
+    final Completer<bool> releaseReplay = Completer<bool>();
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..acceptOverride = ((_) => releaseReplay.future)
+      ..finalSequence.add(_json());
+    var listRevision = 1;
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+      dynamicItemsProvider: (_) => VoiceDynamicItemsSnapshot(
+        revision: listRevision,
+        items: const <VoiceDynamicItem>[],
+      ),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    listRevision = 2;
+    releaseReplay.complete(false);
+    await service.waitForProcessing();
+
+    expect(
+      service.replayOwnership.status,
+      VoiceReplayOwnershipStatus.cancelledByContextChange,
+    );
+    expect(
+      service.replayOwnership.cancellation,
+      VoiceReplayContextCancellation.dynamicItemsChanged,
+    );
+  });
+
+  test('failed replay replacement allows a later replay to recover', () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.addAll(<bool>[true, true])
+      ..resultSequence.addAll(<String>[
+        _json(text: 'молочная'),
+        _json(text: 'бакалея'),
+      ]);
+    final _FakeRecognizer blocked = _FakeRecognizer()
+      ..acceptOverride = (_) => Completer<bool>().future;
+    final _FakeRecognizer recovered = _FakeRecognizer()
+      ..finalSequence.add(_json(text: 'бакалею'));
+    var factoryCalls = 0;
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async {
+        factoryCalls++;
+        if (factoryCalls == 1) return blocked;
+        if (factoryCalls == 2) throw StateError('replacement failed');
+        return recovered;
+      },
+      recognizerOperationTimeout: const Duration(milliseconds: 20),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing();
+    final Future<SegmentedRecognitionResult> result = service
+        .segmentedResultsStream
+        .firstWhere((event) => event.lane == RecognitionLane.freeText);
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing();
+
+    expect((await result).text, 'бакалею');
+    expect(factoryCalls, 3);
+  });
+
+  test('dynamic list revision change rejects delayed free-text replay',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.add(true)
+      ..resultSequence.add(_json(text: 'молочная'));
+    final Completer<bool> releaseReplay = Completer<bool>();
+    final _FakeRecognizer freeText = _FakeRecognizer();
+    freeText.acceptOverride = (_) => releaseReplay.future;
+    freeText.finalSequence.add(_json(text: 'молочную'));
+    var listRevision = 1;
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+      dynamicItemsProvider: (_) => VoiceDynamicItemsSnapshot(
+        revision: listRevision,
+        items: const <VoiceDynamicItem>[],
+      ),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final List<SegmentedRecognitionResult> results =
+        <SegmentedRecognitionResult>[];
+    service.segmentedResultsStream.listen(results.add);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    listRevision = 2;
+    releaseReplay.complete(false);
+    await service.waitForProcessing();
+
+    expect(results.where((event) => event.lane == RecognitionLane.freeText),
+        isEmpty);
+    expect(service.metricsSnapshot.staleResultCount, 1);
+    expect(
+      service.replayOwnership.cancellation,
+      VoiceReplayContextCancellation.dynamicItemsChanged,
+    );
+  });
+
+  test('two delayed dynamic utterances publish once in utterance order',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.addAll(<bool>[true, true])
+      ..resultSequence.addAll(<String>[
+        _json(text: 'молочная'),
+        _json(text: 'бакалея'),
+      ]);
+    final Completer<bool> releaseFirst = Completer<bool>();
+    var acceptCalls = 0;
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..acceptOverride = (_) {
+        acceptCalls++;
+        return acceptCalls == 1 ? releaseFirst.future : Future.value(false);
+      }
+      ..finalSequence.addAll(<String>[
+        _json(text: 'молочную'),
+        _json(text: 'бакалею'),
+      ]);
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final List<String> phrases = <String>[];
+    service.segmentedResultsStream
+        .where((event) => event.lane == RecognitionLane.freeText)
+        .listen((event) => phrases.add(event.text));
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(1000));
+    releaseFirst.complete(false);
+    await service.waitForProcessing();
+
+    expect(phrases, <String>['молочную', 'бакалею']);
+  });
+
   test('empty forced final after command partial does not replay free-text',
       () async {
     final _FakeRecognizer command = _FakeRecognizer()
@@ -995,6 +1345,7 @@ SpeechRecognitionService _service({
   Future<VoiceRecognizer> Function()? freeTextFactory,
   SpeechSegmenter? segmenter,
   Duration recognizerOperationTimeout = const Duration(seconds: 2),
+  VoiceDynamicItemsSnapshot Function(WearScreenId)? dynamicItemsProvider,
 }) {
   return SpeechRecognitionService(
     commandGrammar: const <String>['вверх', '[unk]'],
@@ -1008,6 +1359,7 @@ SpeechRecognitionService _service({
       return freeTextFactory!();
     },
     recognizerOperationTimeout: recognizerOperationTimeout,
+    dynamicItemsProvider: dynamicItemsProvider,
   );
 }
 

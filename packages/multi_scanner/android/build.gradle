@@ -1,0 +1,77 @@
+group 'ru.tander.multi_scanner'
+version '1.0-SNAPSHOT'
+
+buildscript {
+    ext.kotlin_version = '2.3.20'
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.1'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        flatDir {
+            dirs 'libs'
+        }
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+android {
+    namespace = "ru.tander.multi_scanner"
+    compileSdkVersion 36
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    buildFeatures {
+        viewBinding true
+    }
+
+    buildTypes {
+        release {
+            consumerProguardFiles 'proguard-rules.pro'
+        }
+    }
+
+    dependencies {
+        implementation("androidx.activity:activity-ktx:1.9.3")
+        implementation "androidx.fragment:fragment-ktx:1.3.4"
+        implementation("io.github.zxing-cpp:android:2.3.0")
+        implementation("com.google.android.material:material:1.12.0")
+        implementation("androidx.recyclerview:recyclerview:1.3.2")
+        api(name: 'ViScanner', ext: 'aar')
+        api(name: 'ViScannerAIDL-release', ext: 'aar')
+        implementation 'com.google.code.gson:gson:2.8.5'
+        implementation("com.squareup.okio:okio:3.4.0")
+        api 'androidx.lifecycle:lifecycle-runtime-ktx:2.5.1'
+        testImplementation "org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version"
+        testImplementation 'org.mockito:mockito-core:5.21.0'
+    }
+
+    defaultConfig {
+        minSdkVersion 24
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}

@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:multi_scanner/multi_scanner.dart';
+import 'package:smart_glasses/modules/wear/application/wear_background_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/ports/wear_glasses_output.dart';
 import 'package:smart_glasses/modules/wear/application/ports/wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
+import 'package:smart_glasses/modules/wear/application/wear_navigation_entry.dart';
 import 'package:smart_glasses/modules/wear/application/wear_navigation_request.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
@@ -20,7 +22,10 @@ typedef WearFlowAction = FutureOr<void> Function();
 typedef WearFlowPhraseAction = FutureOr<void> Function(String phrase);
 typedef WearFlowDynamicItemAction = FutureOr<void> Function(String itemId);
 typedef WearFlowPartialPhraseAction = FutureOr<bool> Function(String phrase);
+typedef WearFlowBarcodeAction = FutureOr<void> Function(String barcode);
 typedef WearDynamicVoiceItems = VoiceDynamicItemsSnapshot Function();
+typedef WearPresentationState = Object? Function();
+typedef WearPresentationStateRestore = FutureOr<void> Function(Object state);
 typedef WearFlashlightToggle = Future<void> Function();
 typedef WearPhotoCapture = Future<void> Function();
 
@@ -51,7 +56,10 @@ class WearScreenActionHandler {
     this.onPhrase,
     this.onDynamicItem,
     this.onPartialPhrase,
+    this.onBarcode,
     this.dynamicVoiceItems,
+    this.presentationState,
+    this.restorePresentationState,
   });
 
   final WearFlowAction? onUp;
@@ -79,7 +87,10 @@ class WearScreenActionHandler {
   final WearFlowPhraseAction? onPhrase;
   final WearFlowDynamicItemAction? onDynamicItem;
   final WearFlowPartialPhraseAction? onPartialPhrase;
+  final WearFlowBarcodeAction? onBarcode;
   final WearDynamicVoiceItems? dynamicVoiceItems;
+  final WearPresentationState? presentationState;
+  final WearPresentationStateRestore? restorePresentationState;
 }
 
 class WearFlowController {
@@ -102,6 +113,7 @@ class WearFlowController {
   WearGlassesOutput _glassesOutput;
   WearNavigationOutput _navigationOutput;
   WearUiLifecycle _uiLifecycle = WearUiLifecycle.inactive;
+  bool _runtimeActive = true;
   WearFlowState _state = WearFlowState.initial();
   final StreamController<WearFlowState> _stateController =
       StreamController<WearFlowState>.broadcast();
@@ -111,15 +123,17 @@ class WearFlowController {
       <WearScreenId, WearScreenActionHandler>{};
   final Map<WearScreenId, WearGlassesPayload> _screenPayloads =
       <WearScreenId, WearGlassesPayload>{};
-  final List<({WearVoiceCommand command, bool isController})> _commandQueue =
-      <({WearVoiceCommand command, bool isController})>[];
+  final List<WearVoiceCommand> _commandQueue = <WearVoiceCommand>[];
   final WearFlashlightToggle _flashlightToggle;
   final WearPhotoCapture? _photoCapture;
   bool _isProcessingCommand = false;
-  bool _isHandlingControllerCommand = false;
   bool _isVoiceClarificationSelectionInProgress = false;
   int _nextNavigationRequestId = 0;
   int? _deliveredNavigationRequestId;
+  int _inactiveNavigationCount = 0;
+  WearBackgroundRuntime? _backgroundRuntime;
+  StreamSubscription<WearBackgroundScreenUpdate>? _backgroundRuntimeSub;
+  Future<void> _runtimeReset = Future<void>.value();
 
   WearFlowState get state => _state;
 
@@ -128,6 +142,12 @@ class WearFlowController {
       _screenActionsController.stream;
 
   VoiceDynamicItemsSnapshot dynamicVoiceItemsFor(WearScreenId screen) {
+    final WearBackgroundRuntime? runtime = _backgroundRuntime;
+    if (_uiLifecycle == WearUiLifecycle.inactive &&
+        runtime != null &&
+        runtime.handles(screen)) {
+      return runtime.dynamicVoiceItemsFor(screen);
+    }
     return _screenActions[screen]?.dynamicVoiceItems?.call() ??
         VoiceDynamicItemsSnapshot.empty;
   }
@@ -156,6 +176,20 @@ class WearFlowController {
     _navigationOutput = output;
   }
 
+  void setBackgroundRuntime(WearBackgroundRuntime runtime) {
+    unawaited(_backgroundRuntimeSub?.cancel());
+    _backgroundRuntime = runtime;
+    _backgroundRuntimeSub = runtime.updates.listen(
+      (WearBackgroundScreenUpdate update) {
+        rememberScreenPayload(update.screen, update.payload);
+        _screenActionsController.add(update.screen);
+        if (_state.screen == update.screen) {
+          unawaited(_renderGlasses());
+        }
+      },
+    );
+  }
+
   Future<void> renderCurrentGlasses() {
     return _renderGlasses();
   }
@@ -177,17 +211,78 @@ class WearFlowController {
   }
 
   void setUiLifecycle(WearUiLifecycle lifecycle) {
+    if (_uiLifecycle == lifecycle) return;
+    final WearScreenId screen = _state.screen;
+    final WearBackgroundRuntime? runtime = _backgroundRuntime;
+    final WearScreenActionHandler? handler = _screenActions[screen];
+    if (lifecycle == WearUiLifecycle.inactive &&
+        runtime?.handles(screen) == true) {
+      final Object? presentationState = handler?.presentationState?.call();
+      if (presentationState != null) {
+        runtime!.restorePresentationState(screen, presentationState);
+      }
+    }
     _uiLifecycle = lifecycle;
     print('[WearFlowController] uiLifecycle=$lifecycle');
     if (lifecycle == WearUiLifecycle.active) {
+      final Object? presentationState = runtime?.presentationStateFor(screen);
+      if (presentationState != null &&
+          handler?.restorePresentationState != null) {
+        unawaited(Future<void>.sync(
+          () => handler!.restorePresentationState!(presentationState),
+        ));
+      }
       unawaited(flushPendingNavigation());
+    }
+  }
+
+  void setRuntimeActive(bool active) {
+    _runtimeActive = active;
+    print('[WearFlowController] runtimeActive=$active');
+    if (!active) {
+      _commandQueue.clear();
+      _inactiveNavigationCount = 0;
+      _deliveredNavigationRequestId = null;
+      _setState(WearFlowState.initial());
+      final WearBackgroundRuntime? runtime = _backgroundRuntime;
+      if (runtime != null) {
+        _runtimeReset = _runtimeReset
+            .catchError((Object _) {})
+            .then<void>((_) => runtime.reset());
+      }
     }
   }
 
   void enterScreen(WearScreenId screen, {Object? extra}) {
     _clearContextPayload(screen, extra);
-    _setState(_stateForEnteredScreen(screen, extra: extra));
+    final List<WearNavigationEntry> history = _confirmedHistory(screen, extra);
+    _setState(
+      _stateForEnteredScreen(screen, extra: extra).copyWith(
+        navigationHistory: history,
+      ),
+    );
     unawaited(_renderGlasses());
+    unawaited(_enterBackgroundScreen(screen, extra: extra));
+  }
+
+  void observeRoute(
+    WearScreenId screen, {
+    Object? extra,
+    required bool canPop,
+  }) {
+    _clearContextPayload(screen, extra);
+    final WearNavigationEntry entry =
+        WearNavigationEntry(screen: screen, extra: extra);
+    final List<WearNavigationEntry> history = canPop
+        ? _confirmedHistory(screen, extra)
+        : List<WearNavigationEntry>.unmodifiable(<WearNavigationEntry>[entry]);
+    _setState(
+      _stateForEnteredScreen(screen, extra: extra).copyWith(
+        navigationHistory: history,
+      ),
+    );
+    unawaited(_renderGlasses());
+    unawaited(_enterBackgroundScreen(screen, extra: extra));
   }
 
   void registerScreenActions(
@@ -209,6 +304,9 @@ class WearFlowController {
     if (command == WearVoiceCommand.flashlight) return true;
     if (command == WearVoiceCommand.home) {
       return screen != WearScreenId.menu && screen != WearScreenId.homeConfirm;
+    }
+    if (_backgroundRuntime?.supportsCommand(screen, command) ?? false) {
+      return true;
     }
     final WearScreenActionHandler? handler = _screenActions[screen];
     final bool registered = switch (command) {
@@ -377,22 +475,39 @@ class WearFlowController {
   }
 
   Future<void> handleVoiceCommand(WearVoiceCommand command) async {
-    _commandQueue.add((command: command, isController: false));
+    if (!_runtimeActive) return;
+    _commandQueue.add(command);
     if (!_isProcessingCommand) {
       await _drainCommandQueue();
     }
   }
 
   Future<void> handleControllerCommand(WearVoiceCommand command) async {
-    _commandQueue.add((command: command, isController: true));
+    if (!_runtimeActive) return;
+    _commandQueue.add(command);
     if (!_isProcessingCommand) {
       await _drainCommandQueue();
     }
   }
 
+  Future<bool> handleBarcode(String barcode) async {
+    if (!_runtimeActive) return false;
+    if (_uiLifecycle == WearUiLifecycle.active) {
+      final WearFlowBarcodeAction? action =
+          _screenActions[_state.screen]?.onBarcode;
+      if (action == null) return false;
+      await action(barcode);
+      return true;
+    }
+    await _runtimeReset.catchError((Object _) {});
+    if (!_runtimeActive) return false;
+    return await _backgroundRuntime?.handleBarcode(_state.screen, barcode) ??
+        false;
+  }
+
   Future<void> handleVoicePhrase(String phrase) async {
     final String trimmed = phrase.trim();
-    if (trimmed.isEmpty || _uiLifecycle == WearUiLifecycle.inactive) return;
+    if (trimmed.isEmpty || !_runtimeActive) return;
     print('[WearFlowController] phrase="$trimmed" state=$_state');
     if (_state.screen != WearScreenId.voiceClarification) {
       final VoiceDynamicItemsSnapshot items =
@@ -421,7 +536,15 @@ class WearFlowController {
         return;
       }
     }
-    await _invokeScreenPhrase(_state.screen, trimmed);
+    final WearBackgroundRuntime? runtime = _backgroundRuntime;
+    if (_uiLifecycle == WearUiLifecycle.inactive &&
+        runtime != null &&
+        await runtime.handlePhrase(_state.screen, trimmed)) {
+      return;
+    }
+    if (_uiLifecycle == WearUiLifecycle.active) {
+      await _invokeScreenPhrase(_state.screen, trimmed);
+    }
   }
 
   void setVoiceClarificationFocusedIndex(int index, int itemCount) {
@@ -459,6 +582,11 @@ class WearFlowController {
     }
     final WearScreenActionHandler? sourceHandler =
         _screenActions[args.sourceScreen];
+    final WearBackgroundRuntime? runtime = _backgroundRuntime;
+    final bool runtimeHandlesSource =
+        _uiLifecycle == WearUiLifecycle.inactive &&
+            runtime != null &&
+            runtime.handles(args.sourceScreen);
     VoiceDynamicItem? selected;
     for (final VoiceDynamicItem item in args.matches) {
       if (item.id == itemId) {
@@ -467,14 +595,16 @@ class WearFlowController {
       }
     }
     if (selected == null ||
-        sourceHandler == null ||
-        (sourceHandler.onDynamicItem == null &&
-            sourceHandler.onPhrase == null)) {
+        !runtimeHandlesSource &&
+            (sourceHandler == null ||
+                (sourceHandler.onDynamicItem == null &&
+                    sourceHandler.onPhrase == null))) {
       return false;
     }
     final VoiceDynamicItem selectedItem = selected;
-    final VoiceDynamicItemsSnapshot? currentItems =
-        sourceHandler.dynamicVoiceItems?.call();
+    final VoiceDynamicItemsSnapshot? currentItems = runtimeHandlesSource
+        ? runtime.dynamicVoiceItemsFor(args.sourceScreen)
+        : sourceHandler?.dynamicVoiceItems?.call();
     if (currentItems == null ||
         currentItems.revision != args.sourceListRevision ||
         !currentItems.items.any((VoiceDynamicItem item) {
@@ -486,7 +616,10 @@ class WearFlowController {
     _isVoiceClarificationSelectionInProgress = true;
     try {
       await _returnToPreviousScreen(args.sourceScreen);
-      if (sourceHandler.onDynamicItem != null) {
+      if (runtimeHandlesSource) {
+        return runtime.handleDynamicItem(args.sourceScreen, selectedItem.id);
+      }
+      if (sourceHandler!.onDynamicItem != null) {
         await sourceHandler.onDynamicItem!(selectedItem.id);
       } else {
         await sourceHandler.onPhrase!(selectedItem.label);
@@ -499,7 +632,9 @@ class WearFlowController {
 
   Future<bool> handleVoicePartialPhrase(String phrase) async {
     final String trimmed = phrase.trim();
-    if (trimmed.isEmpty || _uiLifecycle == WearUiLifecycle.inactive) {
+    if (trimmed.isEmpty ||
+        !_runtimeActive ||
+        _uiLifecycle == WearUiLifecycle.inactive) {
       return false;
     }
     print('[WearFlowController] partial phrase="$trimmed" state=$_state');
@@ -509,12 +644,17 @@ class WearFlowController {
   Future<void> _drainCommandQueue() async {
     _isProcessingCommand = true;
     while (_commandQueue.isNotEmpty) {
-      final ({WearVoiceCommand command, bool isController}) queued =
-          _commandQueue.removeAt(0);
-      final WearVoiceCommand command = queued.command;
-      _isHandlingControllerCommand = queued.isController;
+      final WearVoiceCommand command = _commandQueue.removeAt(0);
       try {
+        await _runtimeReset.catchError((Object _) {});
+        if (!_runtimeActive) continue;
         print('[WearFlowController] command=$command state=$_state');
+        final WearBackgroundRuntime? runtime = _backgroundRuntime;
+        if (_uiLifecycle == WearUiLifecycle.inactive &&
+            runtime != null &&
+            await runtime.handleCommand(_state.screen, command)) {
+          continue;
+        }
         switch (command) {
           case WearVoiceCommand.up:
             await _handleUp();
@@ -640,8 +780,6 @@ class WearFlowController {
       } catch (error, stackTrace) {
         print('[WearFlowController] command error=$error\n$stackTrace');
         _setState(_state.copyWith(error: error.toString()));
-      } finally {
-        _isHandlingControllerCommand = false;
       }
     }
     _isProcessingCommand = false;
@@ -654,12 +792,16 @@ class WearFlowController {
     print('[WearFlowController] ui active flush pendingNavigation=$request');
     _deliveredNavigationRequestId = request.requestId;
     try {
+      if (_inactiveNavigationCount > 1) {
+        await _navigationOutput.synchronize(_state.navigationHistory);
+        return;
+      }
       if (request.popCurrent) {
         await _navigationOutput.back();
         return;
       }
       if (request.replaceCurrent) {
-        await _navigationOutput.home();
+        await _navigationOutput.replace(request.screen, extra: request.extra);
         return;
       }
       await _navigationOutput.goTo(request.screen, extra: request.extra);
@@ -687,6 +829,7 @@ class WearFlowController {
     }
     print('[WearFlowController] navigation acknowledged request=$request');
     _deliveredNavigationRequestId = null;
+    _inactiveNavigationCount = 0;
     _setState(_state.copyWith(clearPendingNavigation: true));
     return true;
   }
@@ -696,8 +839,7 @@ class WearFlowController {
       return;
     }
     if (_state.screen != WearScreenId.menu) {
-      if (_uiLifecycle == WearUiLifecycle.active ||
-          _isHandlingControllerCommand) {
+      if (_uiLifecycle == WearUiLifecycle.active) {
         await _invokeScreenAction(_state.screen, (handler) => handler.onUp);
       }
       return;
@@ -712,8 +854,7 @@ class WearFlowController {
       return;
     }
     if (_state.screen != WearScreenId.menu) {
-      if (_uiLifecycle == WearUiLifecycle.active ||
-          _isHandlingControllerCommand) {
+      if (_uiLifecycle == WearUiLifecycle.active) {
         await _invokeScreenAction(_state.screen, (handler) => handler.onDown);
       }
       return;
@@ -729,8 +870,7 @@ class WearFlowController {
       return;
     }
     if (await _handleControllerSelect()) return;
-    if (_uiLifecycle == WearUiLifecycle.inactive &&
-        !_isHandlingControllerCommand) {
+    if (_uiLifecycle == WearUiLifecycle.inactive) {
       return;
     }
     await _invokeScreenAction(_state.screen, (handler) => handler.onSelect);
@@ -764,8 +904,14 @@ class WearFlowController {
   }
 
   Future<void> _handleBack() async {
+    if (_state.navigationHistory.length <= 1 ||
+        _state.screen == WearScreenId.menu) {
+      return;
+    }
+    final WearNavigationEntry previous =
+        _state.navigationHistory[_state.navigationHistory.length - 2];
     if (_uiLifecycle == WearUiLifecycle.inactive) {
-      await _navigateTo(WearScreenId.menu, replaceCurrent: true);
+      await _returnToPreviousScreen(previous.screen, extra: previous.extra);
       return;
     }
     final bool handled = await _invokeScreenAction(
@@ -773,10 +919,7 @@ class WearFlowController {
       (handler) => handler.onBack,
     );
     if (handled) return;
-    if (_uiLifecycle == WearUiLifecycle.active) {
-      print('[WearFlowController] request navigation back');
-      await _navigationOutput.back();
-    }
+    await _returnToPreviousScreen(previous.screen, extra: previous.extra);
   }
 
   Future<void> _handleHome() async {
@@ -916,6 +1059,12 @@ class WearFlowController {
     bool replaceCurrent = false,
     bool popCurrent = false,
   }) {
+    final List<WearNavigationEntry> history = _updatedHistory(
+      target,
+      extra: extra,
+      replaceCurrent: replaceCurrent,
+      popCurrent: popCurrent,
+    );
     final WearNavigationRequest request = WearNavigationRequest(
       requestId: ++_nextNavigationRequestId,
       screen: target,
@@ -925,16 +1074,139 @@ class WearFlowController {
     );
     _clearContextPayload(target, extra);
     _setState(
-      _stateForEnteredScreen(target, extra: extra)
-          .copyWith(pendingNavigation: request),
+      _stateForEnteredScreen(target, extra: extra).copyWith(
+        pendingNavigation: request,
+        navigationHistory: history,
+      ),
     );
     unawaited(_renderGlasses());
+    unawaited(_enterBackgroundScreen(target, extra: extra));
     if (_uiLifecycle == WearUiLifecycle.active) {
       print('[WearFlowController] request navigation target=$request');
       unawaited(flushPendingNavigation());
     } else {
+      _inactiveNavigationCount++;
       print('[WearFlowController] ui inactive pendingNavigation=$request');
     }
+  }
+
+  List<WearNavigationEntry> _confirmedHistory(
+    WearScreenId screen,
+    Object? extra,
+  ) {
+    final List<WearNavigationEntry> history =
+        List<WearNavigationEntry>.of(_state.navigationHistory);
+    final WearNavigationEntry entry =
+        WearNavigationEntry(screen: screen, extra: extra);
+    if (history.length == 1 &&
+        history.single.screen == WearScreenId.scannerConnect &&
+        screen != WearScreenId.scannerConnect) {
+      return _defaultHistoryFor(entry);
+    }
+    if (history.isNotEmpty && history.last.screen == screen) {
+      history[history.length - 1] = entry;
+      return List<WearNavigationEntry>.unmodifiable(history);
+    }
+    final int existingIndex =
+        history.lastIndexWhere((item) => item.screen == screen);
+    if (existingIndex >= 0) {
+      history
+        ..removeRange(existingIndex + 1, history.length)
+        ..[existingIndex] = entry;
+      return List<WearNavigationEntry>.unmodifiable(history);
+    }
+    if (screen == WearScreenId.scannerConnect ||
+        screen == WearScreenId.main ||
+        screen == WearScreenId.menu) {
+      return <WearNavigationEntry>[entry];
+    }
+    history.add(entry);
+    return List<WearNavigationEntry>.unmodifiable(history);
+  }
+
+  List<WearNavigationEntry> _defaultHistoryFor(WearNavigationEntry entry) {
+    const WearNavigationEntry menu =
+        WearNavigationEntry(screen: WearScreenId.menu);
+    const WearNavigationEntry availability =
+        WearNavigationEntry(screen: WearScreenId.availabilityInteraction);
+    const WearNavigationEntry groups =
+        WearNavigationEntry(screen: WearScreenId.availabilityGroup);
+    final List<WearNavigationEntry> parents = switch (entry.screen) {
+      WearScreenId.menu => <WearNavigationEntry>[],
+      WearScreenId.availabilityInteraction => <WearNavigationEntry>[menu],
+      WearScreenId.availabilityGroup => <WearNavigationEntry>[
+          menu,
+          availability,
+        ],
+      WearScreenId.availabilityProduct => <WearNavigationEntry>[
+          menu,
+          availability,
+          groups,
+        ],
+      WearScreenId.availabilityCheck => <WearNavigationEntry>[
+          menu,
+          availability,
+          groups,
+          const WearNavigationEntry(screen: WearScreenId.availabilityProduct),
+        ],
+      WearScreenId.scanIdle => <WearNavigationEntry>[
+          menu,
+          const WearNavigationEntry(screen: WearScreenId.printerSelect),
+        ],
+      WearScreenId.productSelect => <WearNavigationEntry>[
+          menu,
+          const WearNavigationEntry(screen: WearScreenId.printerSelect),
+          const WearNavigationEntry(screen: WearScreenId.scanIdle),
+        ],
+      _ => <WearNavigationEntry>[menu],
+    };
+    return List<WearNavigationEntry>.unmodifiable(<WearNavigationEntry>[
+      ...parents,
+      entry,
+    ]);
+  }
+
+  List<WearNavigationEntry> _updatedHistory(
+    WearScreenId target, {
+    Object? extra,
+    required bool replaceCurrent,
+    required bool popCurrent,
+  }) {
+    final List<WearNavigationEntry> history =
+        List<WearNavigationEntry>.of(_state.navigationHistory);
+    final WearNavigationEntry entry =
+        WearNavigationEntry(screen: target, extra: extra);
+    if (target == WearScreenId.menu) return <WearNavigationEntry>[entry];
+    if (popCurrent) {
+      if (history.length > 1) history.removeLast();
+      if (history.isEmpty || history.last.screen != target) {
+        history.add(entry);
+      }
+      return List<WearNavigationEntry>.unmodifiable(history);
+    }
+    if (replaceCurrent && history.isNotEmpty) {
+      final int existingIndex =
+          history.lastIndexWhere((item) => item.screen == target);
+      if (existingIndex >= 0) {
+        history
+          ..removeRange(existingIndex + 1, history.length)
+          ..[existingIndex] = entry;
+      } else {
+        history[history.length - 1] = entry;
+      }
+    } else {
+      history.add(entry);
+    }
+    return List<WearNavigationEntry>.unmodifiable(history);
+  }
+
+  Future<void> _enterBackgroundScreen(
+    WearScreenId screen, {
+    Object? extra,
+  }) async {
+    await _runtimeReset.catchError((Object _) {});
+    if (!_runtimeActive) return;
+    await _backgroundRuntime?.enterScreen(screen, extra: extra);
   }
 
   WearFlowState _stateForEnteredScreen(WearScreenId screen, {Object? extra}) {
@@ -1196,8 +1468,7 @@ class WearFlowController {
     WearScreenId screen,
     WearFlowAction? Function(WearScreenActionHandler handler) selector,
   ) async {
-    if (_uiLifecycle == WearUiLifecycle.inactive &&
-        !_isHandlingControllerCommand) {
+    if (_uiLifecycle == WearUiLifecycle.inactive) {
       return false;
     }
     final WearScreenActionHandler? handler = _screenActions[screen];
@@ -1415,6 +1686,8 @@ class WearFlowController {
   }
 
   Future<void> dispose() async {
+    await _backgroundRuntimeSub?.cancel();
+    await _backgroundRuntime?.dispose();
     await _screenActionsController.close();
     await _stateController.close();
   }

@@ -562,11 +562,9 @@ packages:
   multi_scanner:
     dependency: "direct main"
     description:
-      path: "."
-      ref: "3.17.4-glass"
-      resolved-ref: e5e011a746bd0e92034771d766731f42be53d683
-      url: "https://coderepo.corp.tander.ru/rmr_team/libraries/multiscanner.git"
-    source: git
+      path: "packages/multi_scanner"
+      relative: true
+    source: path
     version: "3.17.4"
   native_toolchain_c:
     dependency: transitive
@@ -1040,10 +1038,9 @@ packages:
   vosk_flutter_service:
     dependency: "direct main"
     description:
-      name: vosk_flutter_service
-      sha256: "3a33da4ad222bd62c180adc35c594d30a2ae7115c7a7276a5f3a1e5c19dbcf59"
-      url: "https://pub.dev"
-    source: hosted
+      path: "packages/vosk_flutter_service"
+      relative: true
+    source: path
     version: "0.1.1"
   watcher:
     dependency: transitive

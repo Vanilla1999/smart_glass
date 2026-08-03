@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:multi_scanner/multi_scanner.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
@@ -91,8 +90,7 @@ class WearAvailabilityCheckState {
 }
 
 class WearAvailabilityCheckNotifier
-    extends StateNotifier<WearAvailabilityCheckState>
-    implements MultiScannerDelegate {
+    extends StateNotifier<WearAvailabilityCheckState> {
   WearAvailabilityCheckNotifier(
     WearAvailabilityProduct product, {
     Future<String> Function()? capturePhoto,
@@ -106,35 +104,23 @@ class WearAvailabilityCheckNotifier
             product,
             flowUseCase ?? WearDependencies.I.availabilityFlowUseCase,
           ),
-        ) {
-    _scanner.addDelegate(this);
-  }
+        );
 
   final WearAvailabilityFlowUseCase _flowUseCase;
   final Future<String> Function() _capturePhoto;
-  final MultiScanner _scanner = MultiScanner.last();
   String? _lastAcceptedBarcode;
   WearAvailabilityFlowStep? _lastAcceptedStep;
 
-  @override
-  void dispose() {
-    _scanner.removeDelegate(this);
-    super.dispose();
-  }
-
-  @override
-  bool? onScanEvent(String payload) {
-    handleBarcode(payload);
-    return true;
-  }
-
-  @override
-  bool? onErrorScan(Exception error) {
-    return false;
-  }
-
   void consumeNavigation() {
     state = state.copyWith(clearNav: true);
+  }
+
+  void restoreFlow(WearAvailabilityFlowState flow) {
+    state = state.copyWith(
+      phase: WearAvailabilityCheckPhase.idle,
+      flow: flow,
+      clearNav: true,
+    );
   }
 
   void answerProductAvailable(bool available) {

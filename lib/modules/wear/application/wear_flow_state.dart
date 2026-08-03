@@ -1,4 +1,5 @@
 import 'package:smart_glasses/modules/wear/application/wear_navigation_request.dart';
+import 'package:smart_glasses/modules/wear/application/wear_navigation_entry.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 
 class WearFlowState {
@@ -8,6 +9,9 @@ class WearFlowState {
     this.isLoading = false,
     this.error,
     this.pendingNavigation,
+    this.navigationHistory = const <WearNavigationEntry>[
+      WearNavigationEntry(screen: WearScreenId.scannerConnect),
+    ],
     this.homeConfirmReturnScreen = WearScreenId.menu,
     this.homeConfirmFocusedIndex = 0,
     this.menuFocusedIndex = 0,
@@ -38,6 +42,7 @@ class WearFlowState {
   final bool isLoading;
   final String? error;
   final WearNavigationRequest? pendingNavigation;
+  final List<WearNavigationEntry> navigationHistory;
   final WearScreenId homeConfirmReturnScreen;
   final int homeConfirmFocusedIndex;
   final int menuFocusedIndex;
@@ -66,6 +71,7 @@ class WearFlowState {
     bool clearError = false,
     WearNavigationRequest? pendingNavigation,
     bool clearPendingNavigation = false,
+    List<WearNavigationEntry>? navigationHistory,
     WearScreenId? homeConfirmReturnScreen,
     int? homeConfirmFocusedIndex,
     int? menuFocusedIndex,
@@ -96,6 +102,7 @@ class WearFlowState {
       pendingNavigation: clearPendingNavigation
           ? null
           : pendingNavigation ?? this.pendingNavigation,
+      navigationHistory: navigationHistory ?? this.navigationHistory,
       homeConfirmReturnScreen:
           homeConfirmReturnScreen ?? this.homeConfirmReturnScreen,
       homeConfirmFocusedIndex:
@@ -140,6 +147,7 @@ class WearFlowState {
   String toString() {
     return 'WearFlowState(screen: $screen, focusedIndex: $focusedIndex, '
         'menuFocusedIndex: $menuFocusedIndex, isLoading: $isLoading, '
-        'error: $error, pendingNavigation: $pendingNavigation)';
+        'error: $error, pendingNavigation: $pendingNavigation, '
+        'navigationHistory: $navigationHistory)';
   }
 }

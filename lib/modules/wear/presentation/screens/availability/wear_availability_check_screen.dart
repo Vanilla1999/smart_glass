@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_availability_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
@@ -63,6 +64,30 @@ class _WearAvailabilityCheckScreenState
         onPrint: _onVoicePrint,
         onPhoto: _onVoicePhoto,
         onBackToList: _onVoiceBackToList,
+        onBarcode: (String barcode) {
+          final WearAvailabilityProduct? product = widget.product;
+          if (product == null) return;
+          return ref
+              .read(wearAvailabilityCheckNotifierProvider(product).notifier)
+              .handleBarcode(barcode);
+        },
+        presentationState: () {
+          final WearAvailabilityProduct? product = widget.product;
+          if (product == null) return null;
+          return WearAvailabilityRuntimeState(
+            flow: ref.read(wearAvailabilityCheckNotifierProvider(product)).flow,
+            focusedIndex: 0,
+          );
+        },
+        restorePresentationState: (Object snapshot) {
+          final WearAvailabilityProduct? product = widget.product;
+          if (product == null || snapshot is! WearAvailabilityRuntimeState) {
+            return;
+          }
+          ref
+              .read(wearAvailabilityCheckNotifierProvider(product).notifier)
+              .restoreFlow(snapshot.flow);
+        },
       ),
     );
   }

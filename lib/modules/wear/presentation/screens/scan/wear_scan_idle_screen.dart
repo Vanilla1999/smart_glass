@@ -58,6 +58,8 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen>
       WearScreenActionHandler(
         onSelect: _onVoiceSelect,
         onManualInput: _onVoiceSelect,
+        onBarcode: (String barcode) =>
+            ref.read(_provider.notifier).handleBarcode(barcode),
       ),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {

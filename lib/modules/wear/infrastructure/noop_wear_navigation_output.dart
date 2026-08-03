@@ -1,10 +1,16 @@
 import 'package:smart_glasses/modules/wear/application/ports/wear_navigation_output.dart';
+import 'package:smart_glasses/modules/wear/application/wear_navigation_entry.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 
 class NoopWearNavigationOutput implements WearNavigationOutput {
   @override
   Future<void> goTo(WearScreenId screen, {Object? extra}) async {
     print('[NoopWearNavigationOutput] goTo screen=$screen extra=$extra');
+  }
+
+  @override
+  Future<void> replace(WearScreenId screen, {Object? extra}) async {
+    print('[NoopWearNavigationOutput] replace screen=$screen extra=$extra');
   }
 
   @override
@@ -15,5 +21,10 @@ class NoopWearNavigationOutput implements WearNavigationOutput {
   @override
   Future<void> home() async {
     print('[NoopWearNavigationOutput] home');
+  }
+
+  @override
+  Future<void> synchronize(List<WearNavigationEntry> history) async {
+    print('[NoopWearNavigationOutput] synchronize history=$history');
   }
 }

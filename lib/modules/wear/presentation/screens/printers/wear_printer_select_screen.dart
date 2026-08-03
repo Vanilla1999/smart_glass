@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_printer_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
@@ -66,6 +67,34 @@ class _WearPrinterSelectScreenState
         onDynamicItem: _onVoiceDynamicItem,
         dynamicVoiceItems: _dynamicVoiceItems,
         onPartialPhrase: _onVoicePartialPhrase,
+        presentationState: () {
+          final WearPrinterSelectState state =
+              ref.read(wearPrinterSelectNotifierProvider);
+          return WearPrinterRuntimeState(
+            printers: state.printers,
+            whitePrinter: state.whitePrinter,
+            step: state.step == WearPrinterSelectStep.white
+                ? WearPrinterRuntimeStep.white
+                : WearPrinterRuntimeStep.yellow,
+            focusedIndex: _focusedIndex,
+          );
+        },
+        restorePresentationState: (Object snapshot) {
+          if (snapshot is! WearPrinterRuntimeState) return;
+          _focusedIndex = snapshot.focusedIndex;
+          ref.read(wearPrinterSelectNotifierProvider.notifier).restoreState(
+                WearPrinterSelectState(
+                  phase: WearPrinterSelectPhase.idle,
+                  printers: snapshot.printers,
+                  error: null,
+                  whitePrinter: snapshot.whitePrinter,
+                  yellowPrinter: null,
+                  step: snapshot.step == WearPrinterRuntimeStep.white
+                      ? WearPrinterSelectStep.white
+                      : WearPrinterSelectStep.yellow,
+                ),
+              );
+        },
       ),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {

@@ -28,6 +28,8 @@ class WearWifiStatus {
 class WearWifiStatusService {
   const WearWifiStatusService();
 
+  static WearWifiStatus? _lastKnownStatus;
+
   Future<WearWifiStatus> getStatus() async {
     try {
       if (WearMockConfig.isEnabled) {
@@ -38,7 +40,8 @@ class WearWifiStatusService {
           WidgetsBinding.instance.lifecycleState;
       if (lifecycleState != null &&
           lifecycleState != AppLifecycleState.resumed) {
-        return const WearWifiStatus(isAvailable: false, level: 0);
+        return _lastKnownStatus ??
+            const WearWifiStatus(isAvailable: true, level: 1);
       }
 
       final bool canReadWifiDetails = await _ensureWifiDetailsPermission();
@@ -48,7 +51,10 @@ class WearWifiStatusService {
 
       final WifiInfoWrapper? details = await WifiInfoPlugin.wifiDetails;
       if (details == null) {
-        return const WearWifiStatus(isAvailable: false, level: 0);
+        const WearWifiStatus status =
+            WearWifiStatus(isAvailable: false, level: 0);
+        _lastKnownStatus = status;
+        return status;
       }
 
       final String connectionType = details.connectionType.toLowerCase().trim();
@@ -66,16 +72,20 @@ class WearWifiStatusService {
       final bool isAvailable =
           isWifi || hasKnownNetwork || hasIp || hasNetworkId || hasSignal;
 
-      return WearWifiStatus(
+      final WearWifiStatus status = WearWifiStatus(
         isAvailable: isAvailable,
         level: isAvailable ? _signalToLevel(signalStrength) : 0,
       );
+      _lastKnownStatus = status;
+      return status;
     } on PlatformException catch (error, stackTrace) {
       print('[WearWifiStatusService] platform error: $error\n$stackTrace');
-      return const WearWifiStatus(isAvailable: false, level: 0);
+      return _lastKnownStatus ??
+          const WearWifiStatus(isAvailable: true, level: 1);
     } catch (error, stackTrace) {
       print('[WearWifiStatusService] error: $error\n$stackTrace');
-      return const WearWifiStatus(isAvailable: false, level: 0);
+      return _lastKnownStatus ??
+          const WearWifiStatus(isAvailable: true, level: 1);
     }
   }
 

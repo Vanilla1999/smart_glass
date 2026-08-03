@@ -26,6 +26,8 @@ class VoiceRecognitionMetricsSnapshot {
     required this.conflictCount,
     required this.staleResultCount,
     required this.freeTextDroppedFrames,
+    required this.replayAcceptLatency,
+    required this.slowReplayAcceptCount,
   });
 
   final VoiceMetricPercentiles commandQueueDelay;
@@ -42,6 +44,8 @@ class VoiceRecognitionMetricsSnapshot {
   final int conflictCount;
   final int staleResultCount;
   final int freeTextDroppedFrames;
+  final VoiceMetricPercentiles replayAcceptLatency;
+  final int slowReplayAcceptCount;
 }
 
 class VoiceRecognitionMetrics {
@@ -60,6 +64,8 @@ class VoiceRecognitionMetrics {
   int _conflicts = 0;
   int _stale = 0;
   int _dropped = 0;
+  final List<int> _replayAcceptLatency = <int>[];
+  int _slowReplayAccepts = 0;
 
   void recordCommandQueueDelay(int milliseconds) =>
       _record(_commandQueueDelay, milliseconds);
@@ -106,6 +112,11 @@ class VoiceRecognitionMetrics {
   void recordStale() => _stale++;
   void recordDroppedFrame() => _dropped++;
 
+  void recordReplayAcceptLatency(int milliseconds) {
+    _record(_replayAcceptLatency, milliseconds);
+    if (milliseconds >= 150) _slowReplayAccepts++;
+  }
+
   VoiceRecognitionMetricsSnapshot snapshot() => VoiceRecognitionMetricsSnapshot(
         commandQueueDelay: _percentiles(_commandQueueDelay),
         freeTextQueueDelay: _percentiles(_freeTextQueueDelay),
@@ -124,6 +135,8 @@ class VoiceRecognitionMetrics {
         conflictCount: _conflicts,
         staleResultCount: _stale,
         freeTextDroppedFrames: _dropped,
+        replayAcceptLatency: _percentiles(_replayAcceptLatency),
+        slowReplayAcceptCount: _slowReplayAccepts,
       );
 
   void _record(List<int> values, int value) {

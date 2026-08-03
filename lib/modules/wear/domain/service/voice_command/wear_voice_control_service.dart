@@ -189,6 +189,9 @@ class WearVoiceControlService {
       final int emitSeq = ++_emittedCommandSeq;
       final int recognizedAtMillis = _clock();
       if (result == null) return;
+      _speechRecognitionService.markActionableCommandUtterance(
+        result.commandUtteranceId,
+      );
       final String segmentKey = '${result.captureEpoch}:${result.segmentId}';
       final int decoderUtteranceOpenAgeMs = recognizedAtMillis -
           (result.commandUtteranceStartedAtMillis ?? recognizedAtMillis);

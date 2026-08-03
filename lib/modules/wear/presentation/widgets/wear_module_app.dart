@@ -78,6 +78,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   StreamSubscription<WearVoicePreviewEvent>? _voicePreviewSub;
   StreamSubscription<WearVoiceDelayEvent>? _voiceDelaySub;
   StreamSubscription<WearScreenId>? _screenActionsSub;
+  StreamSubscription<WearFlowState>? _flowStateSub;
   StreamSubscription<dynamic>? _authorizedSub;
   StreamSubscription<void>? _clearedSub;
   StreamSubscription<bool>? _voiceReconnectingSub;
@@ -92,7 +93,6 @@ class _WearModuleAppState extends State<WearModuleApp>
   int? _latestVoiceDelaySegmentId;
   int? _voiceStartupToken;
   bool _restartVoiceAfterInterruption = false;
-  bool _appResumed = true;
   bool _wasActuallyBackgrounded = false;
   static int _nextVoiceOverlayRevision = 0;
 
@@ -175,13 +175,35 @@ class _WearModuleAppState extends State<WearModuleApp>
     final flow = _flow;
     WearStatusIconReporter.I.setVoiceCommandsEnabled(_voiceCommandsEnabled);
     flow.setNavigationOutput(FlutterWearNavigationOutput(router: _router));
+    flow.setRuntimeActive(true);
     flow.setUiLifecycle(WearUiLifecycle.active);
+    if (widget.flowController == null) {
+      if (WearSession.isAuthorized) {
+        WearDependencies.I.barcodeDispatcher.start();
+      }
+      if (WearSession.isAuthorized) {
+        unawaited(
+          WearDependencies.I.scannerRuntime.start().catchError(
+                (Object error, StackTrace stackTrace) => print(
+                  '[WearModuleApp] scanner runtime start failed: '
+                  '$error\n$stackTrace',
+                ),
+              ),
+        );
+      }
+    }
     if (widget.onStartVoice == null) {
       _screenActionsSub =
           flow.screenActionsChanged.listen((WearScreenId screen) {
-        if (screen == WearDependencies.I.actualScreenStore.screen) {
+        if (screen == flow.state.screen) {
           _configureVoiceForScreen(screen, force: true);
         }
+      });
+      WearScreenId logicalScreen = flow.state.screen;
+      _flowStateSub = flow.stateStream.listen((WearFlowState state) {
+        if (state.screen == logicalScreen) return;
+        logicalScreen = state.screen;
+        _configureVoiceForScreen(state.screen);
       });
     }
     _voiceSub = _voiceCommands.listen(
@@ -208,16 +230,16 @@ class _WearModuleAppState extends State<WearModuleApp>
         }
         final int startedAt = DateTime.now().millisecondsSinceEpoch;
         if (input.event case final WearVoiceCommandEvent event) {
-          final actualScreen = WearDependencies.I.actualScreenStore.screen;
+          final logicalScreen = flow.state.screen;
           final speech = WearDependencies.I.speechRecognitionService;
-          if (event.sourceScreen != actualScreen ||
+          if (event.sourceScreen != logicalScreen ||
               event.captureEpoch != speech.captureEpoch ||
               event.routeRevision != speech.routeRevision ||
               event.grammarRevision != speech.grammarRevision) {
             print(
               '[WearModuleApp] suppress stale voice command '
               'command=$command sourceScreen=${event.sourceScreen} '
-              'actualScreen=$actualScreen routeRevision='
+              'logicalScreen=$logicalScreen routeRevision='
               '${event.routeRevision}/${speech.routeRevision} '
               'grammarRevision='
               '${event.grammarRevision}/${speech.grammarRevision}',
@@ -253,11 +275,11 @@ class _WearModuleAppState extends State<WearModuleApp>
           return;
         }
         if (input.event case final WearVoicePhraseEvent event) {
-          final actualScreen = WearDependencies.I.actualScreenStore.screen;
+          final logicalScreen = flow.state.screen;
           final speech = WearDependencies.I.speechRecognitionService;
           final VoiceDynamicItemsSnapshot items =
-              flow.dynamicVoiceItemsFor(actualScreen);
-          if (event.sourceScreen != actualScreen ||
+              flow.dynamicVoiceItemsFor(logicalScreen);
+          if (event.sourceScreen != logicalScreen ||
               event.captureEpoch != speech.captureEpoch ||
               event.routeRevision != speech.routeRevision ||
               event.grammarRevision != speech.grammarRevision ||
@@ -285,11 +307,11 @@ class _WearModuleAppState extends State<WearModuleApp>
     _voicePreviewSub = _voicePreviews.listen(
       (WearVoicePreviewEvent event) async {
         if (!_voiceCommandsEnabled || !_voiceState.acceptsCommands) return;
-        final actualScreen = WearDependencies.I.actualScreenStore.screen;
+        final logicalScreen = flow.state.screen;
         final speech = WearDependencies.I.speechRecognitionService;
         final VoiceDynamicItemsSnapshot items =
-            flow.dynamicVoiceItemsFor(actualScreen);
-        if (event.sourceScreen != actualScreen ||
+            flow.dynamicVoiceItemsFor(logicalScreen);
+        if (event.sourceScreen != logicalScreen ||
             event.captureEpoch != speech.captureEpoch ||
             event.routeRevision != speech.routeRevision ||
             event.grammarRevision != speech.grammarRevision ||
@@ -323,9 +345,9 @@ class _WearModuleAppState extends State<WearModuleApp>
       },
     );
     _voiceDelaySub = _voiceDelays.listen((WearVoiceDelayEvent event) async {
-      final actualScreen = WearDependencies.I.actualScreenStore.screen;
+      final logicalScreen = flow.state.screen;
       final speech = WearDependencies.I.speechRecognitionService;
-      if (event.sourceScreen != actualScreen ||
+      if (event.sourceScreen != logicalScreen ||
           event.captureEpoch != speech.captureEpoch ||
           event.routeRevision != speech.routeRevision ||
           event.grammarRevision != speech.grammarRevision ||
@@ -379,11 +401,35 @@ class _WearModuleAppState extends State<WearModuleApp>
                 : null))
         ?.listen(_onVoiceStateChanged);
     _authorizedSub = WearSession.authorizedStream.listen((_) {
+      flow.setRuntimeActive(true);
+      if (widget.flowController == null) {
+        WearDependencies.I.barcodeDispatcher.start();
+        unawaited(
+          WearDependencies.I.scannerRuntime.start().catchError(
+                (Object error, StackTrace stackTrace) => print(
+                  '[WearModuleApp] scanner runtime start failed: '
+                  '$error\n$stackTrace',
+                ),
+              ),
+        );
+      }
       if (_voiceState.phase == VoicePhase.disabled) {
         _startVoice('authorized');
       }
     });
     _clearedSub = WearSession.clearedStream.listen((_) {
+      flow.setRuntimeActive(false);
+      if (widget.flowController == null) {
+        WearDependencies.I.barcodeDispatcher.stop();
+        unawaited(
+          WearDependencies.I.scannerRuntime.pause().catchError(
+                (Object error, StackTrace stackTrace) => print(
+                  '[WearModuleApp] scanner runtime pause failed: '
+                  '$error\n$stackTrace',
+                ),
+              ),
+        );
+      }
       _stopVoiceForLogout();
     });
     _router.routerDelegate.addListener(_onRouterChange);
@@ -449,9 +495,21 @@ class _WearModuleAppState extends State<WearModuleApp>
         screen: screenId,
       );
     }
-    if (screenId != null && screenId != flow.state.screen) {
-      print('[ROUTER-CHANGE] enterScreen $screenId');
-      flow.enterScreen(screenId, extra: _router.state.extra);
+    if (screenId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final WearScreenId? confirmedScreen =
+            FlutterWearNavigationOutput.screenIdForRoute(
+          _router.state.matchedLocation,
+        );
+        if (confirmedScreen == null) return;
+        print('[ROUTER-CHANGE] observeRoute $confirmedScreen');
+        flow.observeRoute(
+          confirmedScreen,
+          extra: _router.state.extra,
+          canPop: _router.canPop(),
+        );
+      });
     }
   }
 
@@ -557,7 +615,6 @@ class _WearModuleAppState extends State<WearModuleApp>
     _voiceHealthTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!mounted ||
           !WearSession.isAuthorized ||
-          !_appResumed ||
           _voiceState.phase != VoicePhase.ready) {
         return;
       }
@@ -711,13 +768,18 @@ class _WearModuleAppState extends State<WearModuleApp>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     print('[WearModuleApp] lifecycle state=$state');
     if (state == AppLifecycleState.detached) {
-      _appResumed = false;
       _wasActuallyBackgrounded = false;
       _voiceHealthTimer?.cancel();
       _voiceHealthTimer = null;
       _flow.setUiLifecycle(
         WearUiLifecycle.inactive,
       );
+      _flow.setRuntimeActive(false);
+      if (widget.flowController == null) {
+        WearDependencies.I.barcodeDispatcher.stop();
+        unawaited(WearDependencies.I.scannerRuntime.release());
+        unawaited(MethodChannelService().stopWearControlService());
+      }
       _setVoiceState(VoiceState(
         phase: VoicePhase.disabled,
         captureEpoch: _voiceState.captureEpoch,
@@ -739,7 +801,6 @@ class _WearModuleAppState extends State<WearModuleApp>
     }
     if (state == AppLifecycleState.resumed) {
       final bool resumeRecoveryRequired = _wasActuallyBackgrounded;
-      _appResumed = true;
       _wasActuallyBackgrounded = false;
       _flow.setUiLifecycle(
         WearUiLifecycle.active,
@@ -779,11 +840,8 @@ class _WearModuleAppState extends State<WearModuleApp>
     }
     if (state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused) {
-      _appResumed = false;
       _wasActuallyBackgrounded = true;
       _restartVoiceAfterInterruption = false;
-      _voiceHealthTimer?.cancel();
-      _voiceHealthTimer = null;
     }
     _flow.setUiLifecycle(
       WearUiLifecycle.inactive,
@@ -808,6 +866,18 @@ class _WearModuleAppState extends State<WearModuleApp>
             ),
           ),
     );
+    _flow.setRuntimeActive(false);
+    if (widget.flowController == null) {
+      WearDependencies.I.barcodeDispatcher.stop();
+      unawaited(
+        WearDependencies.I.scannerRuntime.pause().catchError(
+              (Object error, StackTrace stackTrace) => print(
+                '[WearModuleApp] scanner runtime pause failed: '
+                '$error\n$stackTrace',
+              ),
+            ),
+      );
+    }
     MethodChannelService().setAppMethodCallHandler(null);
     _updateGlassesVoiceOverlay(visible: false);
     WearStatusIconReporter.I.endVoiceStartup(_voiceStartupToken);
@@ -832,6 +902,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     _voiceReconnectErrorSub?.cancel();
     _voiceStateSub?.cancel();
     _screenActionsSub?.cancel();
+    _flowStateSub?.cancel();
     _authorizedSub?.cancel();
     _clearedSub?.cancel();
     _flow.setNavigationOutput(

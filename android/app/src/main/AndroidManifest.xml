@@ -44,7 +44,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Keeps the active smart-glasses Wear session controllable from hardware buttons" />
+                android:value="Keeps the active smart-glasses Wear voice, scanner, camera-control, and hardware-button session running while the phone screen is off" />
         </service>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:multi_scanner/multi_scanner.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
@@ -75,32 +74,11 @@ class WearScanState {
   }
 }
 
-class WearScanNotifier extends StateNotifier<WearScanState>
-    implements MultiScannerDelegate {
-  WearScanNotifier(Ref ref, this._selection) : super(WearScanState.initial()) {
-    _scanner.addDelegate(this);
-  }
+class WearScanNotifier extends StateNotifier<WearScanState> {
+  WearScanNotifier(Ref ref, this._selection) : super(WearScanState.initial());
 
   final WearPrinterSelection? _selection;
-  final MultiScanner _scanner = MultiScanner.last();
   String? _lastAcceptedBarcode;
-
-  @override
-  void dispose() {
-    _scanner.removeDelegate(this);
-    super.dispose();
-  }
-
-  @override
-  bool? onScanEvent(String payload) {
-    handleBarcode(payload);
-    return true;
-  }
-
-  @override
-  bool? onErrorScan(Exception error) {
-    return false;
-  }
 
   Future<void> handleBarcode(String barcode) async {
     if (state.isLoading) return;
