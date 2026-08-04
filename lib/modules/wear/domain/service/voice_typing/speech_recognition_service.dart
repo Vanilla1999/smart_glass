@@ -131,6 +131,12 @@ class SpeechRecognitionService {
   static const String _modelAssetPath = 'assets/vosk-model-small-ru-0.22.zip';
   static const int _slowRecognizerLatencyMs = 150;
   static const int _slowAudioQueueDelayMs = 200;
+  // A replay is a sequence of native calls. Keep its total deadline separate
+  // from the timeout that detects one stuck JNI/Vosk operation.
+  static const Duration _minimumFreeTextReplayBudget = Duration(seconds: 4);
+  static const Duration _freeTextReplayHeadroom = Duration(seconds: 2);
+  static const Duration _maximumFreeTextReplayBudget = Duration(seconds: 8);
+
   SpeechRecognitionService({
     AudioStreamService? audioStreamService,
     List<String> commandGrammar = const <String>[],
@@ -2078,20 +2084,27 @@ class SpeechRecognitionService {
   }) async {
     _replayOwnership.begin(replayContext);
     if (_abortReplayIfInvalid(replayContext)) return;
+    final Stopwatch replayClock = Stopwatch()..start();
     final int startedAt = DateTime.now().millisecondsSinceEpoch;
     final int replayBatchCount = (bytes.lengthInBytes + 2559) ~/ 2560;
+    final int replayAudioMs = _pcmDurationMillis(bytes.lengthInBytes);
+    final Duration replayBudget =
+        _freeTextReplayBudgetForBytes(bytes.lengthInBytes);
     print(
       '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=start '
       '${replayContext.describeCaptured()} '
       'utteranceId=$commandUtteranceId replayBytes=${bytes.lengthInBytes} '
-      'batchCount=$replayBatchCount epoch=$epoch '
+      'batchCount=$replayBatchCount audioMs=$replayAudioMs '
+      'budgetMs=${replayBudget.inMilliseconds} '
+      'operationTimeoutMs=${_segmentCloseGuard.timeout.inMilliseconds} '
+      'epoch=$epoch '
       'freeTextEpoch=$_freeTextEpoch '
       'recognizerPresent=${_freeTextRecognizer != null}',
     );
     final Future<void> recognizerReady = _freeTextRecognizerReady;
     try {
       await recognizerReady.timeout(
-        _remainingReplayTimeout(startedAt),
+        _replayOperationTimeout(replayClock, replayBudget),
       );
     } catch (error) {
       if (error is TimeoutException &&
@@ -2118,14 +2131,14 @@ class SpeechRecognitionService {
       '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=recognizer_ready '
       'utteranceId=$commandUtteranceId elapsedMs='
       '${DateTime.now().millisecondsSinceEpoch - startedAt} '
-      'remainingMs=${_remainingReplayTimeout(startedAt).inMilliseconds}',
+      'remainingMs=${_remainingReplayBudget(replayClock, replayBudget).inMilliseconds}',
     );
     VoiceRecognizer? recognizer = _freeTextRecognizer;
     if (recognizer == null) {
       try {
         recognizer = await _createFreeTextRecognizerForReplay(
           epoch,
-          _remainingReplayTimeout(startedAt),
+          _replayOperationTimeout(replayClock, replayBudget),
         );
       } catch (error) {
         if (_abortReplayIfInvalid(replayContext)) return;
@@ -2163,13 +2176,13 @@ class SpeechRecognitionService {
       );
       pendingOperation = reset;
       stage = 'reset_wait';
-      await reset.timeout(_remainingReplayTimeout(startedAt));
+      await reset.timeout(_replayOperationTimeout(replayClock, replayBudget));
       if (_abortReplayIfInvalid(replayContext)) return;
       print(
         '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=reset_done '
         'utteranceId=$commandUtteranceId elapsedMs='
         '${DateTime.now().millisecondsSinceEpoch - startedAt} '
-        'remainingMs=${_remainingReplayTimeout(startedAt).inMilliseconds}',
+        'remainingMs=${_remainingReplayBudget(replayClock, replayBudget).inMilliseconds}',
       );
       const int replayBatchBytes = 2560; // 80 ms at 16 kHz mono PCM16.
       final List<String> results = <String>[];
@@ -2194,12 +2207,13 @@ class SpeechRecognitionService {
           '$replayBatchCount offset=$offset bytes=${end - offset} '
           'callMs=${callFinishedAt - operationStartedAt} '
           'elapsedMs=${callFinishedAt - startedAt} '
-          'remainingMs=${_remainingReplayTimeout(startedAt).inMilliseconds}',
+          'remainingMs=${_remainingReplayBudget(replayClock, replayBudget).inMilliseconds}',
         );
         pendingOperation = accept.then<void>((_) {});
         stage = 'accept_wait';
-        final bool endpoint =
-            await accept.timeout(_remainingReplayTimeout(startedAt));
+        final bool endpoint = await accept.timeout(
+          _replayOperationTimeout(replayClock, replayBudget),
+        );
         final int acceptFinishedAt = DateTime.now().millisecondsSinceEpoch;
         _voiceMetrics.recordReplayAcceptLatency(
           acceptFinishedAt - callFinishedAt,
@@ -2211,7 +2225,7 @@ class SpeechRecognitionService {
           '$replayBatchCount endpoint=$endpoint '
           'awaitMs=${acceptFinishedAt - callFinishedAt} '
           'elapsedMs=${acceptFinishedAt - startedAt} '
-          'remainingMs=${_remainingReplayTimeout(startedAt).inMilliseconds}',
+          'remainingMs=${_remainingReplayBudget(replayClock, replayBudget).inMilliseconds}',
         );
         if (endpoint) {
           stage = 'endpoint_result_call';
@@ -2224,8 +2238,9 @@ class SpeechRecognitionService {
           );
           pendingOperation = endpointResult.then<void>((_) {});
           stage = 'endpoint_result_wait';
-          final String endpointJson =
-              await endpointResult.timeout(_remainingReplayTimeout(startedAt));
+          final String endpointJson = await endpointResult.timeout(
+            _replayOperationTimeout(replayClock, replayBudget),
+          );
           if (_abortReplayIfInvalid(replayContext)) return;
           final String endpointText =
               _extractText(endpointJson, preferredKeys: const <String>['text']);
@@ -2244,8 +2259,9 @@ class SpeechRecognitionService {
       );
       pendingOperation = finalResult.then<void>((_) {});
       stage = 'final_result_wait';
-      final String json =
-          await finalResult.timeout(_remainingReplayTimeout(startedAt));
+      final String json = await finalResult.timeout(
+        _replayOperationTimeout(replayClock, replayBudget),
+      );
       if (_abortReplayIfInvalid(replayContext)) return;
       final String tail =
           _extractText(json, preferredKeys: const <String>['text']);
@@ -2290,7 +2306,7 @@ class SpeechRecognitionService {
         '${replayContext.describeCaptured()} '
         'batch=$batchIndex/$replayBatchCount '
         'elapsedMs=${DateTime.now().millisecondsSinceEpoch - startedAt} '
-        'remainingMs=${_remainingReplayTimeout(startedAt).inMilliseconds} '
+        'remainingMs=${_remainingReplayBudget(replayClock, replayBudget).inMilliseconds} '
         'error=$error\n$stackTrace',
       );
       _logReplayDecision(
@@ -2400,10 +2416,43 @@ class SpeechRecognitionService {
     );
   }
 
-  Duration _remainingReplayTimeout(int startedAtMillis) {
-    final int elapsed = DateTime.now().millisecondsSinceEpoch - startedAtMillis;
-    final int remaining = _segmentCloseGuard.timeout.inMilliseconds - elapsed;
+  int _pcmDurationMillis(int byteLength) {
+    if (byteLength <= 0) return 0;
+    return byteLength * 1000 ~/ (_sampleRate * 2);
+  }
+
+  Duration _freeTextReplayBudgetForBytes(int byteLength) {
+    final int requested =
+        _pcmDurationMillis(byteLength) + _freeTextReplayHeadroom.inMilliseconds;
+    final int minimum = _minimumFreeTextReplayBudget.inMilliseconds;
+    final int maximum = _maximumFreeTextReplayBudget.inMilliseconds;
+    final int bounded = requested < minimum
+        ? minimum
+        : requested > maximum
+            ? maximum
+            : requested;
+    return Duration(milliseconds: bounded);
+  }
+
+  Duration _remainingReplayBudget(
+    Stopwatch replayClock,
+    Duration replayBudget,
+  ) {
+    final int remaining =
+        replayBudget.inMilliseconds - replayClock.elapsedMilliseconds;
     return Duration(milliseconds: remaining > 0 ? remaining : 0);
+  }
+
+  Duration _replayOperationTimeout(
+    Stopwatch replayClock,
+    Duration replayBudget,
+  ) {
+    final int remaining =
+        _remainingReplayBudget(replayClock, replayBudget).inMilliseconds;
+    final int operationTimeout = _segmentCloseGuard.timeout.inMilliseconds;
+    final int bounded =
+        remaining < operationTimeout ? remaining : operationTimeout;
+    return Duration(milliseconds: bounded > 0 ? bounded : 0);
   }
 
   Future<void> _replaceUncertainFreeTextRecognizer({

@@ -926,6 +926,51 @@ void main() {
     expect(service.metricsSnapshot.replayAcceptLatency.p99, greaterThan(1700));
   });
 
+  test('free-text replay separates per-call timeout from total budget',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.addAll(<bool>[
+        ...List<bool>.filled(23, false),
+        true,
+      ])
+      ..resultSequence.add(_json(text: 'молочная'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..acceptOverride = (_) async {
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        return false;
+      }
+      ..finalSequence.add(_json(text: 'молочная'));
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+      recognizerOperationTimeout: const Duration(milliseconds: 100),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final Future<SegmentedRecognitionResult> result = service
+        .segmentedResultsStream
+        .firstWhere((event) => event.lane == RecognitionLane.freeText);
+
+    for (int index = 0; index < 24; index++) {
+      await service.processAudioChunk(_pcmFrame(1000));
+    }
+    await service.waitForProcessing();
+
+    expect(
+      (await result.timeout(const Duration(seconds: 1))).text,
+      'молочная',
+    );
+    expect(freeText.accepted, hasLength(6));
+    expect(freeText.finalCalls, 1);
+    expect(
+      service.replayOwnership.status,
+      VoiceReplayOwnershipStatus.resolvedAsDynamicPhrase,
+    );
+  });
+
   test('newer actionable command supersedes delayed free-text replay',
       () async {
     final _FakeRecognizer command = _FakeRecognizer()
