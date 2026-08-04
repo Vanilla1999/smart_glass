@@ -761,9 +761,10 @@ class _WearListItem extends StatelessWidget {
                 const SizedBox(width: 4),
               ],
               Expanded(
-                child: WearVoiceHintText(
+                child: MarqueeText(
                   text: text,
                   hint: voiceHint,
+                  selected: selected,
                   style: TextStyle(
                     color: selected
                         ? Colors.white
