@@ -509,20 +509,35 @@ class WearFlowController {
     final String trimmed = phrase.trim();
     if (trimmed.isEmpty || !_runtimeActive) return;
     print('[WearFlowController] phrase="$trimmed" state=$_state');
-    if (_state.screen != WearScreenId.voiceClarification) {
+    final WearScreenId sourceScreen = _state.screen;
+    if (sourceScreen != WearScreenId.voiceClarification) {
       final VoiceDynamicItemsSnapshot items =
-          dynamicVoiceItemsFor(_state.screen);
-      final VoiceListMatch<VoiceDynamicItem> match = VoiceListMatcher.match(
+          dynamicVoiceItemsFor(sourceScreen);
+      final VoiceListMatch<VoiceDynamicItem> exactMatch =
+          VoiceListMatcher.matchExactPhrase(
         trimmed,
         items.items,
         (VoiceDynamicItem item) => item.label,
         aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
       );
+      final VoiceDynamicItem? exactItem = exactMatch.item;
+      if (exactMatch.type == VoiceListMatchType.unique && exactItem != null) {
+        if (await _invokeExactDynamicItem(sourceScreen, exactItem)) return;
+      }
+      final VoiceListMatch<VoiceDynamicItem> match =
+          exactMatch.type == VoiceListMatchType.ambiguous
+              ? exactMatch
+              : VoiceListMatcher.match(
+                  trimmed,
+                  items.items,
+                  (VoiceDynamicItem item) => item.label,
+                  aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
+                );
       if (match.type == VoiceListMatchType.ambiguous) {
         await _navigateTo(
           WearScreenId.voiceClarification,
           extra: VoiceClarificationArgs(
-            sourceScreen: _state.screen,
+            sourceScreen: sourceScreen,
             phrase: trimmed,
             matches: match.matches,
             sourceListRevision: items.revision,
@@ -1493,6 +1508,44 @@ class WearFlowController {
     }
     print('[WearFlowController] invoke phrase action screen=$screen');
     await action(phrase);
+    return true;
+  }
+
+  Future<bool> _invokeExactDynamicItem(
+    WearScreenId screen,
+    VoiceDynamicItem item,
+  ) async {
+    final WearBackgroundRuntime? runtime = _backgroundRuntime;
+    if (_uiLifecycle == WearUiLifecycle.inactive &&
+        runtime != null &&
+        runtime.handles(screen)) {
+      final bool handled = await runtime.handleDynamicItem(screen, item.id);
+      if (handled) {
+        print(
+          '[WearFlowController] exact dynamic item handled in background '
+          'screen=$screen itemId=${item.id}',
+        );
+      }
+      return handled;
+    }
+    if (_uiLifecycle != WearUiLifecycle.active) return false;
+    final WearScreenActionHandler? handler = _screenActions[screen];
+    final WearFlowDynamicItemAction? dynamicAction = handler?.onDynamicItem;
+    if (dynamicAction != null) {
+      print(
+        '[WearFlowController] invoke exact dynamic item '
+        'screen=$screen itemId=${item.id}',
+      );
+      await dynamicAction(item.id);
+      return true;
+    }
+    final WearFlowPhraseAction? phraseAction = handler?.onPhrase;
+    if (phraseAction == null) return false;
+    print(
+      '[WearFlowController] invoke exact dynamic label '
+      'screen=$screen itemId=${item.id}',
+    );
+    await phraseAction(item.label);
     return true;
   }
 

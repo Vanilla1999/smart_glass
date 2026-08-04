@@ -351,6 +351,45 @@ void main() {
       expect(handledPhrase, 'чудо творожок');
     });
 
+    test('exact product phrase wins over order-insensitive fuzzy ambiguity',
+        () async {
+      String? selectedItemId;
+      const VoiceDynamicItemsSnapshot items = VoiceDynamicItemsSnapshot(
+        revision: 77,
+        items: <VoiceDynamicItem>[
+          VoiceDynamicItem(
+            id: 'exact',
+            label: 'Чудо коктейль молочный',
+          ),
+          VoiceDynamicItem(
+            id: 'reordered',
+            label: 'Коктейль чудо молочный',
+          ),
+        ],
+      );
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.availabilityProduct);
+      controller.registerScreenActions(
+        WearScreenId.availabilityProduct,
+        WearScreenActionHandler(
+          dynamicVoiceItems: () => items,
+          onDynamicItem: (String itemId) {
+            selectedItemId = itemId;
+          },
+        ),
+      );
+
+      await controller.handleVoicePhrase('чудо коктейль молочный');
+
+      expect(selectedItemId, 'exact');
+      expect(controller.state.screen, WearScreenId.availabilityProduct);
+      expect(controller.state.pendingNavigation, isNull);
+    });
+
     test('routes partial phrase to current screen handler', () async {
       String? handledPhrase;
       final WearFlowController controller = WearFlowController(

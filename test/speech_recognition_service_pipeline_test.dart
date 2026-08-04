@@ -969,6 +969,226 @@ void main() {
     expect(freeText.finalCalls, 1);
   });
 
+  test('unique multi-word exact final skips fuzzy-ambiguous replay', () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.addAll(<bool>[false, true])
+      ..partialSequence.add(_json(partial: 'чудо коктейль'))
+      ..resultSequence.add(_json(text: 'чудо коктейль'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finalSequence.add(_json(text: 'не должно использоваться'));
+    const VoiceDynamicItemsSnapshot items = VoiceDynamicItemsSnapshot(
+      revision: 10,
+      items: <VoiceDynamicItem>[
+        VoiceDynamicItem(
+          id: 'exact',
+          label: 'Чудо коктейль молочный',
+        ),
+        VoiceDynamicItem(
+          id: 'reordered',
+          label: 'Коктейль чудо молочный',
+        ),
+      ],
+    );
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+      dynamicItemsProvider: (_) => items,
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.switchCommandGrammar(
+      screen: WearScreenId.availabilityProduct,
+      grammar: const <String>['назад', 'чудо коктейль', '[unk]'],
+    );
+    await service.prepareVoiceHints(WearScreenId.availabilityProduct);
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final Future<SegmentedRecognitionResult> result =
+        service.segmentedResultsStream.firstWhere((event) =>
+            event.lane == RecognitionLane.freeText &&
+            event.kind == RecognitionKind.streamFinal);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(1000));
+
+    final SegmentedRecognitionResult resolved =
+        await result.timeout(const Duration(seconds: 1));
+    expect(resolved.text, 'чудо коктейль');
+    expect(resolved.dynamicItemId, 'exact');
+    expect(freeText.accepted, isEmpty);
+    expect(freeText.finalCalls, 0);
+  });
+
+  test('queued command batch keeps its admission utterance identity', () async {
+    final Completer<void> firstAcceptStarted = Completer<void>();
+    final Completer<bool> releaseFirstAccept = Completer<bool>();
+    var acceptCalls = 0;
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..acceptOverride = (_) {
+        acceptCalls++;
+        if (acceptCalls == 1) {
+          firstAcceptStarted.complete();
+          return releaseFirstAccept.future;
+        }
+        return Future<bool>.value(false);
+      }
+      ..resultSequence.add(_json(text: 'вверх'));
+    final SpeechRecognitionService service = _service(
+      command: command,
+      segmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(seconds: 5),
+        maxSegmentDuration: const Duration(seconds: 30),
+      ),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+
+    final Future<void> first = service.processAudioChunk(_pcmFrame(1000));
+    await firstAcceptStarted.future;
+    final Future<void> queuedTail = service.processAudioChunk(_pcmFrame(1000));
+    releaseFirstAccept.complete(true);
+
+    await Future.wait<void>(<Future<void>>[first, queuedTail]);
+    await service.waitForProcessing();
+
+    expect(command.accepted, hasLength(1));
+    expect(service.commandUtteranceId, 2);
+  });
+
+  test('silent VAD tail after natural endpoint does not replay twice',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.add(true)
+      ..resultSequence.add(_json(text: 'чудо'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finalSequence.addAll(<String>[
+        _json(text: 'чудо коктейль молочный'),
+        _json(text: 'ложный хвост'),
+      ]);
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+      segmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(milliseconds: 40),
+        maxSegmentDuration: const Duration(seconds: 30),
+      ),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final List<String> results = <String>[];
+    service.segmentedResultsStream
+        .where((event) => event.lane == RecognitionLane.freeText)
+        .listen((event) => results.add(event.text));
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.waitForProcessing();
+
+    expect(command.accepted, hasLength(1));
+    expect(freeText.finalCalls, 1);
+    expect(results, <String>['чудо коктейль молочный']);
+    expect(service.commandUtteranceId, 2);
+  });
+
+  test('new speech rearms recognition after a natural endpoint', () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.addAll(<bool>[true, true])
+      ..resultSequence.addAll(<String>[
+        _json(text: 'вверх'),
+        _json(text: 'назад'),
+      ]);
+    final SpeechRecognitionService service = _service(
+      command: command,
+      segmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(seconds: 5),
+        maxSegmentDuration: const Duration(seconds: 30),
+      ),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing();
+
+    expect(command.accepted, hasLength(2));
+    expect(command.resultCalls, 2);
+    expect(service.commandUtteranceId, 3);
+  });
+
+  test('cancelled replay after PCM retires its free-text recognizer', () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.addAll(<bool>[true, true])
+      ..resultSequence.addAll(<String>[
+        _json(text: 'первая'),
+        _json(text: 'вторая'),
+      ]);
+    final Completer<void> firstReplayStarted = Completer<void>();
+    final Completer<bool> releaseFirstReplay = Completer<bool>();
+    final _FakeRecognizer firstFreeText = _FakeRecognizer()
+      ..acceptOverride = (_) {
+        if (!firstReplayStarted.isCompleted) firstReplayStarted.complete();
+        return releaseFirstReplay.future;
+      };
+    final _FakeRecognizer replacement = _FakeRecognizer()
+      ..finalSequence.add(_json(text: 'вторая'));
+    var listRevision = 1;
+    var factoryCalls = 0;
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async {
+        factoryCalls++;
+        return factoryCalls == 1 ? firstFreeText : replacement;
+      },
+      dynamicItemsProvider: (_) => VoiceDynamicItemsSnapshot(
+        revision: listRevision,
+        items: const <VoiceDynamicItem>[],
+      ),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final List<String> results = <String>[];
+    service.segmentedResultsStream
+        .where((event) => event.lane == RecognitionLane.freeText)
+        .listen((event) => results.add(event.text));
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await firstReplayStarted.future;
+    listRevision = 2;
+    releaseFirstReplay.complete(false);
+    await service.waitForProcessing();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(factoryCalls, 2);
+    expect(firstFreeText.disposeCalls, 1);
+    expect(results, isEmpty);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing();
+
+    expect(results, <String>['вторая']);
+    expect(replacement.accepted, isNotEmpty);
+    expect(
+      service.replayOwnership.status,
+      VoiceReplayOwnershipStatus.resolvedAsDynamicPhrase,
+    );
+  });
+
   test('empty trailing utterance does not discard delayed free-text replay',
       () async {
     final _FakeRecognizer command = _FakeRecognizer()
@@ -1016,12 +1236,12 @@ void main() {
     releaseFirstReplay.complete(false);
     await service.waitForProcessing();
 
-    expect(service.commandUtteranceId, 3);
+    expect(service.commandUtteranceId, 2);
     expect(freeTextResults.map((event) => event.text), <String>['молочную']);
     expect(freeTextResults.single.commandUtteranceId, 1);
     expect(
       service.replayOwnership.status,
-      VoiceReplayOwnershipStatus.resolvedEmpty,
+      VoiceReplayOwnershipStatus.resolvedAsDynamicPhrase,
     );
   });
 

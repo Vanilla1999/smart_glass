@@ -210,6 +210,11 @@ class SpeechRecognitionService {
   int _latestActionableCommandUtteranceId = 0;
   int _admittedCommandUtteranceId = 1;
   int _latestAdmittedSegmentId = 0;
+  ({
+    int captureEpoch,
+    int segmentId,
+    int commandUtteranceId
+  })? _naturalEndpointTail;
   int _pendingCommandFrames = 0;
   final List<Uint8List> _recognizerBatchFrames = <Uint8List>[];
   int? _recognizerBatchCaptureEpoch;
@@ -879,6 +884,8 @@ class SpeechRecognitionService {
       }
       return true;
     }
+    final bool suppressNaturalEndpointTail =
+        _shouldSuppressNaturalEndpointTail(captureEpoch, segment);
     if (segment.started) {
       _logVadEvent('VAD_START', segment);
       _emitSegmentStarted(segment);
@@ -889,7 +896,8 @@ class SpeechRecognitionService {
       }
       _preRollFrames.clear();
     }
-    if (!_enqueueSegmentFrame(boostedBytes, captureEpoch, segment)) {
+    if (!suppressNaturalEndpointTail &&
+        !_enqueueSegmentFrame(boostedBytes, captureEpoch, segment)) {
       return false;
     }
     if (segment.isEndpoint) {
@@ -897,11 +905,14 @@ class SpeechRecognitionService {
       final int endpointDetectedAtMillis =
           DateTime.now().millisecondsSinceEpoch;
       _logVadEvent('VAD_ENDPOINT', segment);
-      if (segment.endpointReason == AcousticEndpointReason.silence) {
-        _installFreeTextBoundary(_admittedCommandUtteranceId);
+      if (segment.endpointReason == AcousticEndpointReason.silence &&
+          !suppressNaturalEndpointTail) {
+        final int boundaryUtteranceId = _admittedCommandUtteranceId;
+        _installFreeTextBoundary(boundaryUtteranceId);
         _enqueueSilenceBoundary(
           segment,
           captureEpoch,
+          expectedUtteranceId: boundaryUtteranceId,
           endpointDetectedAtMillis: endpointDetectedAtMillis,
         );
         _admittedCommandUtteranceId++;
@@ -931,6 +942,58 @@ class SpeechRecognitionService {
       'adaptiveOnRms=${diagnostics.adaptiveOnRms.toStringAsFixed(5)} '
       'adaptiveOffRms=${diagnostics.adaptiveOffRms.toStringAsFixed(5)}',
     );
+  }
+
+  void _markNaturalEndpointTail({
+    required int captureEpoch,
+    required SpeechSegment segment,
+    required int commandUtteranceId,
+  }) {
+    if (segment.isEndpoint) return;
+    _naturalEndpointTail = (
+      captureEpoch: captureEpoch,
+      segmentId: segment.segmentId,
+      commandUtteranceId: commandUtteranceId,
+    );
+    print(
+      '[VOICE_BOUNDARY] natural endpoint tail armed '
+      'captureEpoch=$captureEpoch segmentId=${segment.segmentId} '
+      'commandUtteranceId=$commandUtteranceId',
+    );
+  }
+
+  bool _shouldSuppressNaturalEndpointTail(
+    int captureEpoch,
+    SpeechSegment segment,
+  ) {
+    final tail = _naturalEndpointTail;
+    if (tail == null) return false;
+    if (tail.captureEpoch != captureEpoch ||
+        tail.segmentId != segment.segmentId) {
+      _naturalEndpointTail = null;
+      return false;
+    }
+    if (_speechSegmenter.lastDiagnostics.speaking) {
+      _naturalEndpointTail = null;
+      _admittedCommandUtteranceId = _commandUtteranceId;
+      print(
+        '[VOICE_BOUNDARY] natural endpoint rearmed by speech '
+        'captureEpoch=$captureEpoch segmentId=${segment.segmentId} '
+        'previousUtteranceId=${tail.commandUtteranceId} '
+        'currentUtteranceId=$_commandUtteranceId',
+      );
+      return false;
+    }
+    if (segment.isEndpoint) {
+      _naturalEndpointTail = null;
+      _admittedCommandUtteranceId = _commandUtteranceId;
+      print(
+        '[VOICE_BOUNDARY] natural endpoint silent tail closed '
+        'captureEpoch=$captureEpoch segmentId=${segment.segmentId} '
+        'commandUtteranceId=${tail.commandUtteranceId}',
+      );
+    }
+    return true;
   }
 
   bool _enqueueSegmentFrame(
@@ -992,6 +1055,7 @@ class SpeechRecognitionService {
         immutableBytes,
         captureEpoch,
         segment,
+        commandUtteranceId: utteranceId,
         admitted: admittedCommandBytes > 0,
       );
     }
@@ -1031,13 +1095,20 @@ class SpeechRecognitionService {
       _latestAdmittedSegmentId = segment.segmentId;
     }
     if (segment.started) _emitSegmentStarted(segment);
+    final bool suppressNaturalEndpointTail =
+        _shouldSuppressNaturalEndpointTail(captureEpoch, segment);
     final List<Future<void>> processing = <Future<void>>[];
-    if (_commandRecognizer != null) {
+    if (_commandRecognizer != null && !suppressNaturalEndpointTail) {
       if (!_commandBacklog.admit(bytes.lengthInBytes)) {
         throw StateError('RECOGNITION_BACKLOG');
       }
-      processing.add(
-          _enqueueCommandChunk(bytes, captureEpoch, segment, admitted: true));
+      processing.add(_enqueueCommandChunk(
+        bytes,
+        captureEpoch,
+        segment,
+        commandUtteranceId: _admittedCommandUtteranceId,
+        admitted: true,
+      ));
     }
     if (_usesLiveFreeText) {
       processing.add(_enqueueFreeTextLiveChunk(
@@ -1048,11 +1119,14 @@ class SpeechRecognitionService {
       ));
     }
     await Future.wait<void>(processing);
-    if (segment.endpointReason == AcousticEndpointReason.silence) {
-      _installFreeTextBoundary(_admittedCommandUtteranceId);
+    if (segment.endpointReason == AcousticEndpointReason.silence &&
+        !suppressNaturalEndpointTail) {
+      final int boundaryUtteranceId = _admittedCommandUtteranceId;
+      _installFreeTextBoundary(boundaryUtteranceId);
       _enqueueSilenceBoundary(
         segment,
         captureEpoch,
+        expectedUtteranceId: boundaryUtteranceId,
         endpointDetectedAtMillis: DateTime.now().millisecondsSinceEpoch,
       );
       _admittedCommandUtteranceId++;
@@ -1063,9 +1137,9 @@ class SpeechRecognitionService {
   void _enqueueSilenceBoundary(
     SpeechSegment segment,
     int captureEpoch, {
+    required int expectedUtteranceId,
     required int endpointDetectedAtMillis,
   }) {
-    final int expectedUtteranceId = _commandUtteranceId;
     final VoiceRecognizer? expectedRecognizer = _commandRecognizer;
     if (expectedRecognizer == null) return;
 
@@ -1183,6 +1257,7 @@ class SpeechRecognitionService {
     Uint8List bytes,
     int captureEpoch,
     SpeechSegment segment, {
+    required int commandUtteranceId,
     bool admitted = false,
   }) {
     if (_commandRecognizer == null) return Future<void>.value();
@@ -1190,6 +1265,18 @@ class SpeechRecognitionService {
     final int queuedAt = DateTime.now().millisecondsSinceEpoch;
     final Future<void> next = _commandAudioProcessing.then((_) {
       if (_pendingCommandFrames > 0) _pendingCommandFrames--;
+      if (!_captureEpoch.isCurrent(captureEpoch) ||
+          commandUtteranceId != _commandUtteranceId) {
+        if (commandUtteranceId != _commandUtteranceId) {
+          print(
+            '[VOICE_BOUNDARY] dropped stale queued command chunk '
+            'captureEpoch=$captureEpoch segmentId=${segment.segmentId} '
+            'admittedUtteranceId=$commandUtteranceId '
+            'currentUtteranceId=$_commandUtteranceId',
+          );
+        }
+        return Future<void>.value();
+      }
       final VoiceRecognizer? recognizer = _commandRecognizer;
       if (recognizer == null) return Future<void>.value();
       return _processRecognizerChunk(
@@ -1506,6 +1593,13 @@ class SpeechRecognitionService {
             segment: segment,
             commandUtteranceId: completedUtteranceId,
           );
+          if (_commandUtteranceId == completedUtteranceId + 1) {
+            _markNaturalEndpointTail(
+              captureEpoch: captureEpoch,
+              segment: segment,
+              commandUtteranceId: completedUtteranceId,
+            );
+          }
           print(
             '[VOICE_BOUNDARY] utteranceEndOwner=vosk '
             'commandUtteranceId=$completedUtteranceId text="$resultText" '
@@ -2198,12 +2292,28 @@ class SpeechRecognitionService {
       _logReplayDecision(replayContext, 'failed', 'recognizer_unavailable');
       return;
     }
+    final VoiceRecognizer replayRecognizer = recognizer;
     Future<void>? pendingOperation;
+    bool recognizerReceivedPcm = false;
+    bool recognizerFinalized = false;
+
+    Future<bool> abortAfterRecognizerUse() async {
+      if (!_abortReplayIfInvalid(replayContext)) return false;
+      if (recognizerReceivedPcm && !recognizerFinalized) {
+        await _retireCancelledReplayRecognizer(
+          recognizer: replayRecognizer,
+          pendingOperation: pendingOperation,
+          context: replayContext,
+        );
+      }
+      return true;
+    }
+
     String stage = 'reset_call';
     int batchIndex = -1;
     try {
       int operationStartedAt = DateTime.now().millisecondsSinceEpoch;
-      final Future<void> reset = recognizer.reset();
+      final Future<void> reset = replayRecognizer.reset();
       print(
         '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=reset_called '
         'utteranceId=$commandUtteranceId callMs='
@@ -2212,7 +2322,7 @@ class SpeechRecognitionService {
       pendingOperation = reset;
       stage = 'reset_wait';
       await reset.timeout(_replayOperationTimeout(replayClock, replayBudget));
-      if (_abortReplayIfInvalid(replayContext)) return;
+      if (await abortAfterRecognizerUse()) return;
       print(
         '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=reset_done '
         'utteranceId=$commandUtteranceId elapsedMs='
@@ -2228,11 +2338,11 @@ class SpeechRecognitionService {
         final int end = requestedEnd < bytes.lengthInBytes
             ? requestedEnd
             : bytes.lengthInBytes;
-        if (_abortReplayIfInvalid(replayContext)) return;
+        if (await abortAfterRecognizerUse()) return;
         batchIndex++;
         stage = 'accept_call';
         operationStartedAt = DateTime.now().millisecondsSinceEpoch;
-        final Future<bool> accept = recognizer.acceptWaveformBytes(
+        final Future<bool> accept = replayRecognizer.acceptWaveformBytes(
           Uint8List.sublistView(bytes, offset, end),
         );
         final int callFinishedAt = DateTime.now().millisecondsSinceEpoch;
@@ -2253,7 +2363,8 @@ class SpeechRecognitionService {
         _voiceMetrics.recordReplayAcceptLatency(
           acceptFinishedAt - callFinishedAt,
         );
-        if (_abortReplayIfInvalid(replayContext)) return;
+        recognizerReceivedPcm = true;
+        if (await abortAfterRecognizerUse()) return;
         print(
           '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=accept_done '
           'utteranceId=$commandUtteranceId batch=$batchIndex/'
@@ -2265,7 +2376,7 @@ class SpeechRecognitionService {
         if (endpoint) {
           stage = 'endpoint_result_call';
           operationStartedAt = DateTime.now().millisecondsSinceEpoch;
-          final Future<String> endpointResult = recognizer.getResult();
+          final Future<String> endpointResult = replayRecognizer.getResult();
           print(
             '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=endpoint_result_called '
             'utteranceId=$commandUtteranceId batch=$batchIndex '
@@ -2276,16 +2387,16 @@ class SpeechRecognitionService {
           final String endpointJson = await endpointResult.timeout(
             _replayOperationTimeout(replayClock, replayBudget),
           );
-          if (_abortReplayIfInvalid(replayContext)) return;
+          if (await abortAfterRecognizerUse()) return;
           final String endpointText =
               _extractText(endpointJson, preferredKeys: const <String>['text']);
           if (endpointText.isNotEmpty) results.add(endpointText);
         }
       }
-      if (_abortReplayIfInvalid(replayContext)) return;
+      if (await abortAfterRecognizerUse()) return;
       stage = 'final_result_call';
       operationStartedAt = DateTime.now().millisecondsSinceEpoch;
-      final Future<String> finalResult = recognizer.getFinalResult();
+      final Future<String> finalResult = replayRecognizer.getFinalResult();
       print(
         '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=final_result_called '
         'utteranceId=$commandUtteranceId callMs='
@@ -2297,7 +2408,8 @@ class SpeechRecognitionService {
       final String json = await finalResult.timeout(
         _replayOperationTimeout(replayClock, replayBudget),
       );
-      if (_abortReplayIfInvalid(replayContext)) return;
+      recognizerFinalized = true;
+      if (await abortAfterRecognizerUse()) return;
       final String tail =
           _extractText(json, preferredKeys: const <String>['text']);
       if (tail.isNotEmpty) results.add(tail);
@@ -2357,12 +2469,47 @@ class SpeechRecognitionService {
         failure: error,
       );
       await _replaceUncertainFreeTextRecognizer(
-        failedRecognizer: recognizer,
+        failedRecognizer: replayRecognizer,
         pendingOperation: pendingOperation,
         recognizerEpoch: epoch,
       );
       rethrow;
     }
+  }
+
+  Future<void> _retireCancelledReplayRecognizer({
+    required VoiceRecognizer recognizer,
+    required Future<void>? pendingOperation,
+    required VoiceReplayContext context,
+  }) async {
+    if (!identical(_freeTextRecognizer, recognizer)) return;
+    final VoiceReplayOwnership? ownership = _replayOwnership.stateFor(context);
+    print(
+      '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=retire_cancelled_recognizer '
+      '${context.describeCaptured()} status=${ownership?.status.name} '
+      'cancellation=${ownership?.cancellation?.name}',
+    );
+    if (_isSessionActive && _freeTextEnabled) {
+      await _replaceUncertainFreeTextRecognizer(
+        failedRecognizer: recognizer,
+        pendingOperation: pendingOperation,
+        recognizerEpoch: _freeTextEpoch,
+      );
+      return;
+    }
+
+    _freeTextRecognizer = null;
+    final Future<void> safeToDispose = pendingOperation == null
+        ? Future<void>.value()
+        : pendingOperation.catchError((Object _, StackTrace __) {});
+    unawaited(safeToDispose.then((_) => recognizer.dispose()).catchError(
+      (Object error, StackTrace stackTrace) {
+        print(
+          '[VOICE_FREE_TEXT] cancelled replay cleanup failed: '
+          '$error\n$stackTrace',
+        );
+      },
+    ));
   }
 
   bool _abortReplayIfInvalid(VoiceReplayContext context) {
@@ -2869,11 +3016,17 @@ class SpeechRecognitionService {
       aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
     );
     final VoiceDynamicItem? item = exactMatch.item;
+    final bool runtimeConfirms =
+        runtimeMatch.type == VoiceListMatchType.unique &&
+            runtimeMatch.item?.id == item?.id;
+    // A generated multi-word hint is already unique by exact phrase. Allow it
+    // to bypass the intentionally broader fuzzy matcher, which ignores word
+    // order and can otherwise turn a precise product phrase into ambiguity.
+    final bool strongMultiWordExact = normalized.contains(' ');
     if (exactMatch.type != VoiceListMatchType.unique ||
-        runtimeMatch.type != VoiceListMatchType.unique ||
         item == null ||
-        runtimeMatch.item?.id != item.id ||
-        item.id != hintedItemIds.single) {
+        item.id != hintedItemIds.single ||
+        !runtimeConfirms && !strongMultiWordExact) {
       return null;
     }
     return item;
@@ -3005,6 +3158,7 @@ class SpeechRecognitionService {
   void _clearPerCaptureState() {
     _commandPartialText = '';
     _freeTextPartialText = '';
+    _naturalEndpointTail = null;
     _naturalCommandFinals.clear();
     _utteranceContexts.clear();
     _liveFreeTextResults.clear();
