@@ -1570,8 +1570,43 @@ class SpeechRecognitionService {
         commandUtteranceId > _latestActionableCommandUtteranceId) {
       _latestActionableCommandUtteranceId = commandUtteranceId;
     }
+    final bool commandContextCurrent =
+        _canProcess(_RecognitionSource.command, null, captureEpoch) &&
+            _commandUtteranceId == commandUtteranceId;
+    final VoiceDynamicItem? exactDynamicItem = commandContextCurrent &&
+            _freeTextEnabled &&
+            replay.isNotEmpty &&
+            !commandFound
+        ? _matchExactDynamicCommandFinal(resultText, resultContext)
+        : null;
+    if (exactDynamicItem != null) {
+      markActionableCommandUtterance(commandUtteranceId);
+      final int decidedAtMillis = DateTime.now().millisecondsSinceEpoch;
+      final int? speechToDecisionMs = speechStartedAtMillis == null
+          ? null
+          : decidedAtMillis - speechStartedAtMillis;
+      _emitResult(
+        _RecognitionSource.freeText,
+        resultText,
+        epoch: resultContext.freeTextEpoch,
+        captureEpoch: captureEpoch,
+        kind: RecognitionKind.streamFinal,
+        segment: segment,
+        commandUtteranceId: commandUtteranceId,
+        resultContext: resultContext,
+        dynamicItemId: exactDynamicItem.id,
+      );
+      print(
+        '[VOICE_EXACT_FINAL_FAST_PATH] accepted '
+        'screen=${resultContext.sourceScreen.name} '
+        'utteranceId=$commandUtteranceId itemId=${exactDynamicItem.id} '
+        'text="${VoiceListMatcher.normalize(resultText)}" '
+        'speechToDecisionMs=$speechToDecisionMs '
+        'replaySkipped=true',
+      );
+    }
     Future<void>? liveFinalization;
-    if (_freeTextEnabled && replay.isNotEmpty) {
+    if (_freeTextEnabled && replay.isNotEmpty && exactDynamicItem == null) {
       if (_usesLiveFreeText) {
         liveFinalization = _enqueueLiveFreeTextFinalization(
           replay,
@@ -2767,6 +2802,86 @@ class SpeechRecognitionService {
       resultContext: context,
       dynamicItemId: dynamicItemId,
     );
+  }
+
+  VoiceDynamicItem? _matchExactDynamicCommandFinal(
+    String text,
+    _VoiceResultContext context,
+  ) {
+    if (freeTextPipelineMode != FreeTextPipelineMode.replayOnly ||
+        !_supportsExactDynamicFinalFastPath(context.sourceScreen)) {
+      return null;
+    }
+
+    final String normalized = VoiceListMatcher.normalize(text);
+    final String normalizedPartial =
+        VoiceListMatcher.normalize(_commandPartialText);
+    if (normalized.isEmpty || normalizedPartial != normalized) return null;
+
+    if (context.commandUtteranceId != _commandUtteranceId ||
+        context.sourceScreen != _sourceScreen ||
+        context.routeRevision != _routeRevision ||
+        context.grammarRevision != _grammarRevision ||
+        context.freeTextEpoch != _freeTextEpoch) {
+      return null;
+    }
+    if (!_commandGrammar.any(
+      (String phrase) => VoiceListMatcher.normalize(phrase) == normalized,
+    )) {
+      return null;
+    }
+
+    final VoiceDynamicItemsSnapshot items =
+        _dynamicItemsProvider(context.sourceScreen);
+    if (items.items.isEmpty || items.revision != context.listRevision) {
+      return null;
+    }
+
+    final ({VoiceHintSet hints, bool isReady}) hintLookup =
+        _voiceHintsFor(context.sourceScreen, items);
+    if (!hintLookup.isReady ||
+        hintLookup.hints.revision != items.revision ||
+        !hintLookup.hints.advertisedPhrases.contains(normalized)) {
+      return null;
+    }
+
+    final List<String> hintedItemIds = hintLookup.hints.hintsByItemId.entries
+        .where(
+          (MapEntry<String, VoiceHint> entry) =>
+              VoiceListMatcher.normalize(entry.value.phrase) == normalized,
+        )
+        .map((MapEntry<String, VoiceHint> entry) => entry.key)
+        .toList(growable: false);
+    if (hintedItemIds.length != 1) return null;
+
+    final VoiceListMatch<VoiceDynamicItem> exactMatch =
+        VoiceListMatcher.matchExactPhrase(
+      text,
+      items.items,
+      (VoiceDynamicItem item) => item.label,
+      aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
+    );
+    final VoiceListMatch<VoiceDynamicItem> runtimeMatch =
+        VoiceListMatcher.match(
+      text,
+      items.items,
+      (VoiceDynamicItem item) => item.label,
+      aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
+    );
+    final VoiceDynamicItem? item = exactMatch.item;
+    if (exactMatch.type != VoiceListMatchType.unique ||
+        runtimeMatch.type != VoiceListMatchType.unique ||
+        item == null ||
+        runtimeMatch.item?.id != item.id ||
+        item.id != hintedItemIds.single) {
+      return null;
+    }
+    return item;
+  }
+
+  bool _supportsExactDynamicFinalFastPath(WearScreenId screen) {
+    return screen == WearScreenId.availabilityGroup ||
+        screen == WearScreenId.availabilityProduct;
   }
 
   ({VoiceHintSet hints, bool isReady}) _voiceHintsFor(

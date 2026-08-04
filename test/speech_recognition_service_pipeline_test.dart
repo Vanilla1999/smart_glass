@@ -833,6 +833,142 @@ void main() {
     expect(freeText.accepted, isNotEmpty);
   });
 
+  test('exact advertised dynamic final skips free-text replay', () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.addAll(<bool>[false, true])
+      ..partialSequence.add(_json(partial: 'молочная'))
+      ..resultSequence.add(_json(text: 'молочная'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finalSequence.add(_json(text: 'не должно использоваться'));
+    const VoiceDynamicItemsSnapshot items = VoiceDynamicItemsSnapshot(
+      revision: 7,
+      items: <VoiceDynamicItem>[
+        VoiceDynamicItem(id: 'dairy', label: 'Молочная'),
+      ],
+    );
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+      dynamicItemsProvider: (_) => items,
+    );
+    final WearVoiceControlService control = WearVoiceControlService(
+      speechRecognitionService: service,
+      screenProvider: () => WearScreenId.availabilityGroup,
+    );
+    addTearDown(control.dispose);
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.switchCommandGrammar(
+      screen: WearScreenId.availabilityGroup,
+      grammar: const <String>['назад', 'молочная', '[unk]'],
+    );
+    await service.prepareVoiceHints(WearScreenId.availabilityGroup);
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final Future<String> phrase = control.phraseStream.first;
+    final Future<SegmentedRecognitionResult> result =
+        service.segmentedResultsStream.firstWhere((event) =>
+            event.lane == RecognitionLane.freeText &&
+            event.kind == RecognitionKind.streamFinal);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(1000));
+
+    final SegmentedRecognitionResult resolved =
+        await result.timeout(const Duration(seconds: 1));
+    expect(await phrase.timeout(const Duration(seconds: 1)), 'молочная');
+    expect(resolved.text, 'молочная');
+    expect(resolved.dynamicItemId, 'dairy');
+    expect(resolved.listRevision, 7);
+    expect(freeText.accepted, isEmpty);
+    expect(freeText.finalCalls, 0);
+  });
+
+  test('corrected command final keeps free-text replay fallback', () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.addAll(<bool>[false, true])
+      ..partialSequence.add(_json(partial: 'молочная'))
+      ..resultSequence.add(_json(text: 'бакалея'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finalSequence.add(_json(text: 'бакалея'));
+    const VoiceDynamicItemsSnapshot items = VoiceDynamicItemsSnapshot(
+      revision: 8,
+      items: <VoiceDynamicItem>[
+        VoiceDynamicItem(id: 'dairy', label: 'Молочная'),
+        VoiceDynamicItem(id: 'grocery', label: 'Бакалея'),
+      ],
+    );
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+      dynamicItemsProvider: (_) => items,
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.switchCommandGrammar(
+      screen: WearScreenId.availabilityGroup,
+      grammar: const <String>['назад', 'молочная', 'бакалея', '[unk]'],
+    );
+    await service.prepareVoiceHints(WearScreenId.availabilityGroup);
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final Future<SegmentedRecognitionResult> result = service
+        .segmentedResultsStream
+        .firstWhere((event) => event.lane == RecognitionLane.freeText);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing();
+
+    expect((await result).text, 'бакалея');
+    expect(freeText.accepted, hasLength(1));
+    expect(freeText.finalCalls, 1);
+  });
+
+  test('ambiguous runtime match keeps free-text replay fallback', () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.addAll(<bool>[false, true])
+      ..partialSequence.add(_json(partial: 'молочная'))
+      ..resultSequence.add(_json(text: 'молочная'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finalSequence.add(_json(text: 'молочная'));
+    const VoiceDynamicItemsSnapshot items = VoiceDynamicItemsSnapshot(
+      revision: 9,
+      items: <VoiceDynamicItem>[
+        VoiceDynamicItem(id: 'dairy', label: 'Молочная'),
+        VoiceDynamicItem(id: 'dairy-department', label: 'Молочный отдел'),
+      ],
+    );
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+      dynamicItemsProvider: (_) => items,
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.switchCommandGrammar(
+      screen: WearScreenId.availabilityGroup,
+      grammar: const <String>['назад', 'молочная', 'молочный', '[unk]'],
+    );
+    await service.prepareVoiceHints(WearScreenId.availabilityGroup);
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final Future<SegmentedRecognitionResult> result = service
+        .segmentedResultsStream
+        .firstWhere((event) => event.lane == RecognitionLane.freeText);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing();
+
+    expect((await result).text, 'молочная');
+    expect(freeText.accepted, hasLength(1));
+    expect(freeText.finalCalls, 1);
+  });
+
   test('empty trailing utterance does not discard delayed free-text replay',
       () async {
     final _FakeRecognizer command = _FakeRecognizer()
