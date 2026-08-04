@@ -7,6 +7,7 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_search_phrase_policy.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
@@ -45,6 +46,10 @@ class _WearVoiceClarificationScreenState
   void initState() {
     super.initState();
     _currentArgs = widget.args;
+    if (_flow.state.screen == WearScreenId.voiceClarification &&
+        identical(_flow.state.currentVoiceClarificationArgs, _currentArgs)) {
+      _focusedIndex = _flow.state.voiceClarificationFocusedIndex;
+    }
     _flow.enterScreen(
       WearScreenId.voiceClarification,
       extra: _currentArgs,
@@ -63,6 +68,9 @@ class _WearVoiceClarificationScreenState
         dynamicVoiceItems: _dynamicVoiceItems,
       ),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusCurrent();
+    });
   }
 
   @override
@@ -228,6 +236,7 @@ class _WearVoiceClarificationScreenState
   }
 
   Future<void> _onPhrase(String phrase) async {
+    if (!VoiceSearchPhrasePolicy.isMeaningful(phrase)) return;
     final VoiceListMatch<VoiceDynamicItem> match = VoiceListMatcher.match(
       phrase,
       _matches,
@@ -274,6 +283,7 @@ class _WearVoiceClarificationScreenState
   }
 
   bool _onPartialPhrase(String phrase) {
+    if (!VoiceSearchPhrasePolicy.isMeaningful(phrase)) return false;
     final VoiceListMatch<VoiceDynamicItem> match =
         VoiceListMatcher.canMatchPartial(phrase)
             ? VoiceListMatcher.match(

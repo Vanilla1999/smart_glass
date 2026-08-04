@@ -73,6 +73,7 @@ class VoiceScreenCapabilities {
 
   static const Set<WearScreenId> _homeScreens = <WearScreenId>{
     WearScreenId.scannerConnect,
+    WearScreenId.homeConfirm,
     WearScreenId.main,
     WearScreenId.status,
     WearScreenId.printerSelect,
@@ -145,6 +146,8 @@ class VoiceScreenCapabilities {
       WearVoiceCommand.yes,
       WearVoiceCommand.no,
       WearVoiceCommand.back,
+      WearVoiceCommand.home,
+      WearVoiceCommand.cancel,
     },
     WearScreenId.continueScan: <WearVoiceCommand>{
       WearVoiceCommand.up,
@@ -370,8 +373,7 @@ class VoiceActionCatalog {
         }),
     _action(WearVoiceCommand.flashlight, 'фонарик',
         VoiceActivationPolicy.endpointOnly,
-        screens: _allScreens,
-        aliases: <String>{'фонарик'}),
+        screens: _allScreens, aliases: <String>{'фонарик'}),
     _action(WearVoiceCommand.takePhoto, 'сделать фото',
         VoiceActivationPolicy.endpointOnly,
         screens: <WearScreenId>{WearScreenId.availabilityCheck},
@@ -404,7 +406,10 @@ class VoiceActionCatalog {
         screens: <WearScreenId>{WearScreenId.availabilityFill}),
     _action(
         WearVoiceCommand.cancel, 'отмена', VoiceActivationPolicy.endpointOnly,
-        screens: <WearScreenId>{WearScreenId.productSelect}),
+        screens: <WearScreenId>{
+          WearScreenId.productSelect,
+          WearScreenId.homeConfirm,
+        }),
     _action(WearVoiceCommand.continueScan, 'продолжить',
         VoiceActivationPolicy.endpointOnly,
         screens: <WearScreenId>{WearScreenId.continueScan}),

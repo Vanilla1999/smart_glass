@@ -5,6 +5,7 @@ import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_glas
 import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_glasses_state.dart';
 import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_voice_overlay_cubit.dart';
 import 'package:smart_glasses/features/glasses/presentation/widgets/wear/wear_glasses_scaffold.dart';
+import 'package:smart_glasses/features/glasses/presentation/widgets/wear/wear_list_scroll_metrics.dart';
 import 'package:smart_glasses/features/glasses/presentation/widgets/wear/wear_voice_hint_text.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
@@ -517,7 +518,11 @@ class _WearList extends StatelessWidget {
               ),
               if (showPageText) ...<Widget>[
                 const SizedBox(width: 8),
-                const _ListScrollBar(),
+                _ListScrollBar(
+                  pageText: state.pageText!,
+                  selectedIndex: state.selectedIndex,
+                  visibleItemCount: visible.length,
+                ),
               ],
             ],
           ),
@@ -567,32 +572,72 @@ class _ListNotice extends StatelessWidget {
 }
 
 class _ListScrollBar extends StatelessWidget {
-  const _ListScrollBar();
+  const _ListScrollBar({
+    required this.pageText,
+    required this.selectedIndex,
+    required this.visibleItemCount,
+  });
+
+  final String pageText;
+  final int selectedIndex;
+  final int visibleItemCount;
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox(
+    return SizedBox(
       width: 16,
       height: 188,
       child: Column(
         children: <Widget>[
-          _ScrollArrow(up: true),
+          const _ScrollArrow(up: true),
           Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(top: 8),
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: WearGlassesScaffold.accentColor,
-                    borderRadius: BorderRadius.all(Radius.circular(2)),
-                  ),
-                  child: SizedBox(width: 4, height: 71),
-                ),
-              ),
+            child: LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                final WearListScrollMetrics metrics =
+                    WearListScrollMetrics.fromPageText(
+                  pageText,
+                  trackExtent: constraints.maxHeight,
+                  selectedIndex: selectedIndex,
+                  visibleItemCount: visibleItemCount,
+                );
+                return Stack(
+                  alignment: Alignment.topCenter,
+                  children: <Widget>[
+                    Center(
+                      child: Container(
+                        key: const ValueKey<String>('wear-list-scroll-track'),
+                        width: 2,
+                        height: constraints.maxHeight,
+                        decoration: BoxDecoration(
+                          color: WearGlassesScaffold.accentColor
+                              .withValues(alpha: 0.30),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    AnimatedPositioned(
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOut,
+                      top: metrics.thumbOffset,
+                      left: 6,
+                      child: DecoratedBox(
+                        key: const ValueKey<String>('wear-list-scroll-thumb'),
+                        decoration: const BoxDecoration(
+                          color: WearGlassesScaffold.accentColor,
+                          borderRadius: BorderRadius.all(Radius.circular(2)),
+                        ),
+                        child: SizedBox(
+                          width: 4,
+                          height: metrics.thumbExtent,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
-          _ScrollArrow(up: false),
+          const _ScrollArrow(up: false),
         ],
       ),
     );

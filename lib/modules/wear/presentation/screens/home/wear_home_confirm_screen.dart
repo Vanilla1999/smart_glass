@@ -38,7 +38,10 @@ class _WearHomeConfirmScreenState extends State<WearHomeConfirmScreen>
         onUp: _focusHome,
         onDown: _focusCancel,
         onSelect: _selectFocused,
+        onYes: _goHome,
+        onNo: _cancel,
         onBack: _cancel,
+        onHome: _goHome,
         onCancel: _cancel,
       ),
     );

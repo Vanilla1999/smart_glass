@@ -78,7 +78,11 @@ class RecognitionArbiter {
       if (result.kind == RecognitionKind.partial) {
         return null;
       }
+      final VoiceActionEntry? action = _catalog.resolve(screen, result.text);
       _claim(key);
+      if (action != null) {
+        return RecognitionArbitration.command(action.command);
+      }
       return RecognitionArbitration.phrase(result);
     }
 

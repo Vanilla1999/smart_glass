@@ -196,8 +196,7 @@ void main() {
           VoiceCommandParserService(catalog: catalog);
 
       for (final WearScreenId screen in WearScreenId.values) {
-        final bool isHomeFlow =
-            screen == WearScreenId.menu || screen == WearScreenId.homeConfirm;
+        final bool isHomeFlow = screen == WearScreenId.menu;
         expect(
           parser.parseExactForScreen(screen, 'домой'),
           isHomeFlow ? isNull : WearVoiceCommand.home,

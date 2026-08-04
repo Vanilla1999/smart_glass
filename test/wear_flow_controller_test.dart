@@ -726,7 +726,7 @@ void main() {
       expect(navigation.homeCalls, 0);
     });
 
-    test('repeated home on home confirm still requires confirmation', () async {
+    test('home on home confirm confirms navigation to menu', () async {
       final _FakeNavigationOutput navigation = _FakeNavigationOutput();
       final WearFlowController controller = WearFlowController(
         glassesOutput: _FakeGlassesOutput(),
@@ -738,9 +738,9 @@ void main() {
       await controller.handleVoiceCommand(WearVoiceCommand.home);
       await controller.handleVoiceCommand(WearVoiceCommand.home);
 
-      expect(controller.state.screen, WearScreenId.homeConfirm);
+      expect(controller.state.screen, WearScreenId.menu);
       expect(navigation.goToCalls, <WearScreenId>[WearScreenId.homeConfirm]);
-      expect(navigation.homeCalls, 0);
+      expect(navigation.replaceCalls, <WearScreenId>[WearScreenId.menu]);
     });
 
     test('home confirm selects home with replace navigation', () async {

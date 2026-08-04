@@ -12,6 +12,7 @@ import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/application/voice_clarification_args.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_search_phrase_policy.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availability_glasses_payloads.dart';
@@ -108,6 +109,7 @@ class WearFlowController {
   static const int _homeConfirmItemCount = 2;
   static const int _availabilityInteractionItemCount = 2;
   static const int _continueScanItemCount = 2;
+  static const int _voiceClarificationPageSize = 4;
   static int? _flashlightState;
 
   WearGlassesOutput _glassesOutput;
@@ -303,7 +305,7 @@ class WearFlowController {
   bool canHandleVoiceCommand(WearScreenId screen, WearVoiceCommand command) {
     if (command == WearVoiceCommand.flashlight) return true;
     if (command == WearVoiceCommand.home) {
-      return screen != WearScreenId.menu && screen != WearScreenId.homeConfirm;
+      return screen != WearScreenId.menu;
     }
     if (_backgroundRuntime?.supportsCommand(screen, command) ?? false) {
       return true;
@@ -354,14 +356,20 @@ class WearFlowController {
           WearVoiceCommand.openList,
           WearVoiceCommand.openDirectScan,
         }.contains(command),
-      WearScreenId.homeConfirm ||
-      WearScreenId.continueScan =>
-        <WearVoiceCommand>{
+      WearScreenId.homeConfirm => <WearVoiceCommand>{
           WearVoiceCommand.up,
           WearVoiceCommand.down,
           WearVoiceCommand.select,
           WearVoiceCommand.yes,
           WearVoiceCommand.no,
+          WearVoiceCommand.back,
+          WearVoiceCommand.home,
+          WearVoiceCommand.cancel,
+        }.contains(command),
+      WearScreenId.continueScan => <WearVoiceCommand>{
+          WearVoiceCommand.up,
+          WearVoiceCommand.down,
+          WearVoiceCommand.select,
           WearVoiceCommand.back,
         }.contains(command),
       WearScreenId.help ||
@@ -382,6 +390,9 @@ class WearFlowController {
           WearVoiceCommand.flashlight,
         }.contains(command),
       WearScreenId.voiceClarification => <WearVoiceCommand>{
+          WearVoiceCommand.up,
+          WearVoiceCommand.down,
+          WearVoiceCommand.select,
           WearVoiceCommand.back,
           WearVoiceCommand.home,
           WearVoiceCommand.nextPage,
@@ -510,9 +521,18 @@ class WearFlowController {
     if (trimmed.isEmpty || !_runtimeActive) return;
     print('[WearFlowController] phrase="$trimmed" state=$_state');
     final WearScreenId sourceScreen = _state.screen;
+    final VoiceDynamicItemsSnapshot items = dynamicVoiceItemsFor(sourceScreen);
+    final bool isDynamicSearch =
+        sourceScreen == WearScreenId.voiceClarification ||
+            items.items.isNotEmpty;
+    if (isDynamicSearch && !VoiceSearchPhrasePolicy.isMeaningful(trimmed)) {
+      print(
+        '[WearFlowController] ignored non-meaningful voice phrase '
+        'phrase="$trimmed" screen=$sourceScreen',
+      );
+      return;
+    }
     if (sourceScreen != WearScreenId.voiceClarification) {
-      final VoiceDynamicItemsSnapshot items =
-          dynamicVoiceItemsFor(sourceScreen);
       final VoiceListMatch<VoiceDynamicItem> exactMatch =
           VoiceListMatcher.matchExactPhrase(
         trimmed,
@@ -563,16 +583,7 @@ class WearFlowController {
   }
 
   void setVoiceClarificationFocusedIndex(int index, int itemCount) {
-    if (itemCount <= 0) return;
-    final int next = index.clamp(0, itemCount - 1);
-    _setState(
-      _state.copyWith(
-        focusedIndex: next,
-        voiceClarificationFocusedIndex: next,
-        clearError: true,
-      ),
-    );
-    unawaited(_renderGlasses());
+    _setVoiceClarificationFocus(index, itemCount);
   }
 
   void setVoiceClarificationNotice(String? message) {
@@ -649,7 +660,8 @@ class WearFlowController {
     final String trimmed = phrase.trim();
     if (trimmed.isEmpty ||
         !_runtimeActive ||
-        _uiLifecycle == WearUiLifecycle.inactive) {
+        _uiLifecycle == WearUiLifecycle.inactive ||
+        !VoiceSearchPhrasePolicy.isMeaningful(trimmed)) {
       return false;
     }
     print('[WearFlowController] partial phrase="$trimmed" state=$_state');
@@ -777,16 +789,10 @@ class WearFlowController {
             await _handleCancel();
             break;
           case WearVoiceCommand.nextPage:
-            await _invokeScreenAction(
-              _state.screen,
-              (handler) => handler.onNextPage,
-            );
+            await _handleNextPage();
             break;
           case WearVoiceCommand.previousPage:
-            await _invokeScreenAction(
-              _state.screen,
-              (handler) => handler.onPreviousPage,
-            );
+            await _handlePreviousPage();
             break;
           case WearVoiceCommand.stopMicrophone:
           case WearVoiceCommand.startMicrophone:
@@ -892,6 +898,10 @@ class WearFlowController {
   }
 
   Future<void> _handleYes() async {
+    if (_state.screen == WearScreenId.homeConfirm) {
+      await _confirmHome();
+      return;
+    }
     if (_uiLifecycle == WearUiLifecycle.inactive) return;
     final bool handled = await _invokeScreenAction(
       _state.screen,
@@ -903,6 +913,10 @@ class WearFlowController {
   }
 
   Future<void> _handleNo() async {
+    if (_state.screen == WearScreenId.homeConfirm) {
+      await _cancelHomeConfirm();
+      return;
+    }
     if (_uiLifecycle == WearUiLifecycle.inactive) return;
     await _invokeScreenAction(_state.screen, (handler) => handler.onNo);
   }
@@ -919,6 +933,10 @@ class WearFlowController {
   }
 
   Future<void> _handleBack() async {
+    if (_state.screen == WearScreenId.homeConfirm) {
+      await _cancelHomeConfirm();
+      return;
+    }
     if (_state.navigationHistory.length <= 1 ||
         _state.screen == WearScreenId.menu) {
       return;
@@ -939,6 +957,7 @@ class WearFlowController {
 
   Future<void> _handleHome() async {
     if (_state.screen == WearScreenId.homeConfirm) {
+      await _confirmHome();
       return;
     }
     final WearScreenId returnScreen = _state.screen;
@@ -1028,12 +1047,57 @@ class WearFlowController {
   }
 
   Future<void> _handleCancel() async {
-    if (_state.screen == WearScreenId.homeConfirm &&
-        _uiLifecycle == WearUiLifecycle.inactive) {
-      await _returnToPreviousScreen(_state.homeConfirmReturnScreen);
+    if (_state.screen == WearScreenId.homeConfirm) {
+      await _cancelHomeConfirm();
       return;
     }
     await _invokeScreenAction(_state.screen, (handler) => handler.onCancel);
+  }
+
+  Future<void> _handleNextPage() async {
+    if (_state.screen == WearScreenId.voiceClarification &&
+        (_uiLifecycle == WearUiLifecycle.inactive ||
+            _screenActions[WearScreenId.voiceClarification]?.onNextPage ==
+                null)) {
+      final List<VoiceDynamicItem> matches = _voiceClarificationMatches;
+      if (matches.isEmpty) return;
+      final int current =
+          _state.voiceClarificationFocusedIndex.clamp(0, matches.length - 1);
+      final int next = ((current ~/ _voiceClarificationPageSize) + 1) *
+          _voiceClarificationPageSize;
+      if (next < matches.length) {
+        _setVoiceClarificationFocus(next, matches.length);
+      }
+      return;
+    }
+    await _invokeScreenAction(
+      _state.screen,
+      (WearScreenActionHandler handler) => handler.onNextPage,
+    );
+  }
+
+  Future<void> _handlePreviousPage() async {
+    if (_state.screen == WearScreenId.voiceClarification &&
+        (_uiLifecycle == WearUiLifecycle.inactive ||
+            _screenActions[WearScreenId.voiceClarification]?.onPreviousPage ==
+                null)) {
+      final List<VoiceDynamicItem> matches = _voiceClarificationMatches;
+      if (matches.isEmpty) return;
+      final int current =
+          _state.voiceClarificationFocusedIndex.clamp(0, matches.length - 1);
+      final int page = current ~/ _voiceClarificationPageSize;
+      if (page > 0) {
+        _setVoiceClarificationFocus(
+          (page - 1) * _voiceClarificationPageSize,
+          matches.length,
+        );
+      }
+      return;
+    }
+    await _invokeScreenAction(
+      _state.screen,
+      (WearScreenActionHandler handler) => handler.onPreviousPage,
+    );
   }
 
   static Future<void> _toggleScannerFlashlight() async {
@@ -1229,6 +1293,12 @@ class WearFlowController {
         screen == WearScreenId.voiceClarification &&
             _state.screen == WearScreenId.homeConfirm &&
             _state.currentVoiceClarificationArgs != null;
+    final bool keepingCurrentClarification =
+        screen == WearScreenId.voiceClarification &&
+            _state.screen == WearScreenId.voiceClarification &&
+            identical(extra, _state.currentVoiceClarificationArgs);
+    final bool preserveClarification =
+        returningFromHomeConfirmToClarification || keepingCurrentClarification;
     final WearFlowState next = switch (screen) {
       WearScreenId.menu => _state.copyWith(
           screen: screen,
@@ -1258,18 +1328,15 @@ class WearFlowController {
         ),
       WearScreenId.voiceClarification => _state.copyWith(
           screen: screen,
-          focusedIndex: returningFromHomeConfirmToClarification
-              ? _state.voiceClarificationFocusedIndex
-              : 0,
+          focusedIndex:
+              preserveClarification ? _state.voiceClarificationFocusedIndex : 0,
           voiceClarificationFocusedIndex:
-              returningFromHomeConfirmToClarification
-                  ? _state.voiceClarificationFocusedIndex
-                  : 0,
-          currentVoiceClarificationArgs: returningFromHomeConfirmToClarification
+              preserveClarification ? _state.voiceClarificationFocusedIndex : 0,
+          currentVoiceClarificationArgs: preserveClarification
               ? _state.currentVoiceClarificationArgs
               : extra,
           clearCurrentVoiceClarificationArgs:
-              !returningFromHomeConfirmToClarification && extra == null,
+              !preserveClarification && extra == null,
           clearVoiceClarificationNotice: true,
           clearError: true,
         ),
@@ -1355,6 +1422,19 @@ class WearFlowController {
           math.max(0, _state.homeConfirmFocusedIndex - 1),
         );
         return true;
+      case WearScreenId.voiceClarification:
+        if (_uiLifecycle == WearUiLifecycle.active &&
+            _screenActions[WearScreenId.voiceClarification]?.onUp != null) {
+          return false;
+        }
+        final List<VoiceDynamicItem> matches = _voiceClarificationMatches;
+        if (matches.isNotEmpty) {
+          _setVoiceClarificationFocus(
+            math.max(0, _state.voiceClarificationFocusedIndex - 1),
+            matches.length,
+          );
+        }
+        return true;
       case WearScreenId.continueScan:
         _setContinueScanFocus(
           math.max(0, _state.continueScanFocusedIndex - 1),
@@ -1383,6 +1463,22 @@ class WearFlowController {
               _homeConfirmItemCount - 1, _state.homeConfirmFocusedIndex + 1),
         );
         return true;
+      case WearScreenId.voiceClarification:
+        if (_uiLifecycle == WearUiLifecycle.active &&
+            _screenActions[WearScreenId.voiceClarification]?.onDown != null) {
+          return false;
+        }
+        final List<VoiceDynamicItem> matches = _voiceClarificationMatches;
+        if (matches.isNotEmpty) {
+          _setVoiceClarificationFocus(
+            math.min(
+              matches.length - 1,
+              _state.voiceClarificationFocusedIndex + 1,
+            ),
+            matches.length,
+          );
+        }
+        return true;
       case WearScreenId.continueScan:
         _setContinueScanFocus(
           math.min(
@@ -1403,6 +1499,13 @@ class WearFlowController {
         return true;
       case WearScreenId.homeConfirm:
         await _selectHomeConfirm();
+        return true;
+      case WearScreenId.voiceClarification:
+        if (_uiLifecycle == WearUiLifecycle.active &&
+            _screenActions[WearScreenId.voiceClarification]?.onSelect != null) {
+          return false;
+        }
+        await _selectFocusedVoiceClarificationItem();
         return true;
       case WearScreenId.continueScan:
         if (_uiLifecycle == WearUiLifecycle.active) return false;
@@ -1469,14 +1572,55 @@ class WearFlowController {
 
   Future<void> _selectHomeConfirm() async {
     if (_state.homeConfirmFocusedIndex == 0) {
-      await _navigateTo(WearScreenId.menu, replaceCurrent: true);
+      await _confirmHome();
       return;
     }
-    if (_uiLifecycle == WearUiLifecycle.active) {
-      await _navigationOutput.back();
+    await _cancelHomeConfirm();
+  }
+
+  Future<void> _confirmHome() async {
+    await _navigateTo(WearScreenId.menu, replaceCurrent: true);
+  }
+
+  Future<void> _cancelHomeConfirm() async {
+    final List<WearNavigationEntry> history = _state.navigationHistory;
+    if (history.length > 1) {
+      final WearNavigationEntry previous = history[history.length - 2];
+      await _returnToPreviousScreen(previous.screen, extra: previous.extra);
       return;
     }
     await _returnToPreviousScreen(_state.homeConfirmReturnScreen);
+  }
+
+  List<VoiceDynamicItem> get _voiceClarificationMatches {
+    final VoiceClarificationArgs? args =
+        _state.currentVoiceClarificationArgs as VoiceClarificationArgs?;
+    return args?.matches ?? const <VoiceDynamicItem>[];
+  }
+
+  void _setVoiceClarificationFocus(int index, int itemCount) {
+    if (itemCount <= 0) return;
+    final int next = index.clamp(0, itemCount - 1);
+    _setState(
+      _state.copyWith(
+        focusedIndex: next,
+        voiceClarificationFocusedIndex: next,
+        clearVoiceClarificationNotice: true,
+        clearError: true,
+      ),
+    );
+    unawaited(_renderGlasses());
+  }
+
+  Future<void> _selectFocusedVoiceClarificationItem() async {
+    final VoiceClarificationArgs? args =
+        _state.currentVoiceClarificationArgs as VoiceClarificationArgs?;
+    final List<VoiceDynamicItem> matches =
+        args?.matches ?? const <VoiceDynamicItem>[];
+    if (args == null || matches.isEmpty) return;
+    final int index =
+        _state.voiceClarificationFocusedIndex.clamp(0, matches.length - 1);
+    await selectVoiceClarificationItem(args, matches[index].id);
   }
 
   Future<bool> _invokeScreenAction(
@@ -1667,7 +1811,7 @@ class WearFlowController {
         statusText: 'Совпадения не найдены',
       );
     }
-    const int pageSize = 4;
+    const int pageSize = _voiceClarificationPageSize;
     final int selected =
         state.voiceClarificationFocusedIndex.clamp(0, matches.length - 1);
     final int pageStart = (selected ~/ pageSize) * pageSize;
