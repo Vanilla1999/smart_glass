@@ -39,6 +39,7 @@ void main() {
         printCalls++;
         return 'white';
       },
+      currentScreen: () => WearScreenId.status,
       navigate: (
         WearScreenId screen, {
         Object? extra,
@@ -66,6 +67,7 @@ void main() {
         BarcodeProductInfo(id: 11, name: 'Товар второй'),
       ],
       printProduct: (_) async => 'white',
+      currentScreen: () => WearScreenId.status,
       navigate: (
         WearScreenId _, {
         Object? extra,
@@ -95,6 +97,7 @@ void main() {
         BarcodeProductInfo(id: 10, name: 'Товар', articleRest: 4),
       ],
       printProduct: (_) => printResult.future,
+      currentScreen: () => WearScreenId.status,
       navigate: (
         WearScreenId screen, {
         Object? extra,
@@ -114,5 +117,36 @@ void main() {
     await scan;
 
     expect(navigation, isEmpty);
+  });
+
+  test('status timer does not override a route chosen by the user', () async {
+    WearScreenId currentScreen = WearScreenId.scanIdle;
+    final List<WearScreenId> navigation = <WearScreenId>[];
+    final WearScanRuntime runtime = WearScanRuntime(
+      lookupBarcode: (_) async => <BarcodeProductInfo>[
+        BarcodeProductInfo(id: 10, name: 'Товар', articleRest: 4),
+      ],
+      printProduct: (_) async => 'white',
+      currentScreen: () => currentScreen,
+      statusDuration: const Duration(milliseconds: 10),
+      navigate: (
+        WearScreenId screen, {
+        Object? extra,
+        bool replaceCurrent = false,
+      }) async {
+        currentScreen = screen;
+        navigation.add(screen);
+      },
+    );
+    addTearDown(runtime.dispose);
+
+    await runtime.enterScreen(WearScreenId.scanIdle);
+    await runtime.handleBarcode(WearScreenId.scanIdle, '4600000000004');
+    expect(navigation, <WearScreenId>[WearScreenId.status]);
+
+    currentScreen = WearScreenId.menu;
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+
+    expect(navigation, <WearScreenId>[WearScreenId.status]);
   });
 }

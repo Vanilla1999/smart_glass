@@ -11,6 +11,8 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Log;
 import org.vosk.Model;
@@ -40,6 +42,7 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
   private SpeechService speechService;
   private FlutterRecognitionListener recognitionListener;
   private boolean attached;
+  private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
   @Override
   public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
@@ -75,12 +78,12 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
           try {
             Model model = new Model(modelPath);
             modelsMap.put(modelPath, model);
-            channel.invokeMethod("model.created", modelPath);
+            mainHandler.post(() -> channel.invokeMethod("model.created", modelPath));
           } catch (IOException exception) {
-            channel.invokeMethod("model.error", new HashMap<String, Object>() {{
+            mainHandler.post(() -> channel.invokeMethod("model.error", new HashMap<String, Object>() {{
               put("modelPath", modelPath);
               put("error", exception.getMessage());
-            }});
+            }}));
           }
 
           result.success(null);
@@ -97,12 +100,12 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
           try {
             SpeakerModel speakerModel = new SpeakerModel(modelPath);
             speakerModelsMap.put(modelPath, speakerModel);
-            channel.invokeMethod("speakerModel.created", modelPath);
+            mainHandler.post(() -> channel.invokeMethod("speakerModel.created", modelPath));
           } catch (IOException exception) {
-            channel.invokeMethod("speakerModel.error", new HashMap<String, Object>() {{
+            mainHandler.post(() -> channel.invokeMethod("speakerModel.error", new HashMap<String, Object>() {{
               put("modelPath", modelPath);
               put("error", exception.getMessage());
-            }});
+            }}));
           }
 
           result.success(null);

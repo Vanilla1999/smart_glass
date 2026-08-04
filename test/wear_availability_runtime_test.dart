@@ -42,6 +42,107 @@ void main() {
     expect(repository.groupCalls, 2);
   });
 
+  test('reset suppresses navigation from an in-flight group selection',
+      () async {
+    final _BlockingProductsAvailabilityRepository repository =
+        _BlockingProductsAvailabilityRepository();
+    final List<WearScreenId> navigation = <WearScreenId>[];
+    final WearAvailabilityRuntime runtime = WearAvailabilityRuntime(
+      flowUseCase: WearAvailabilityFlowUseCase(repository),
+      navigate: (
+        WearScreenId screen, {
+        Object? extra,
+        bool replaceCurrent = false,
+      }) async {
+        navigation.add(screen);
+      },
+      capturePhoto: () async {},
+      printPriceTag: (_) async => 'printer',
+    );
+    addTearDown(runtime.dispose);
+
+    await runtime.enterScreen(WearScreenId.availabilityGroup);
+    final Future<bool> selection = runtime.handleCommand(
+      WearScreenId.availabilityGroup,
+      WearVoiceCommand.select,
+    );
+    await Future<void>.delayed(Duration.zero);
+    await runtime.reset();
+    repository.products.complete(
+      const <WearAvailabilityProduct>[_AvailabilityRepository.product],
+    );
+    await selection;
+
+    expect(navigation, isEmpty);
+  });
+
+  test('new screen request suppresses an in-flight selection navigation',
+      () async {
+    final _BlockingProductsAvailabilityRepository repository =
+        _BlockingProductsAvailabilityRepository();
+    final List<WearScreenId> navigation = <WearScreenId>[];
+    final WearAvailabilityRuntime runtime = WearAvailabilityRuntime(
+      flowUseCase: WearAvailabilityFlowUseCase(repository),
+      navigate: (
+        WearScreenId screen, {
+        Object? extra,
+        bool replaceCurrent = false,
+      }) async {
+        navigation.add(screen);
+      },
+      capturePhoto: () async {},
+      printPriceTag: (_) async => 'printer',
+    );
+    addTearDown(runtime.dispose);
+
+    await runtime.enterScreen(WearScreenId.availabilityGroup);
+    final Future<bool> selection = runtime.handleCommand(
+      WearScreenId.availabilityGroup,
+      WearVoiceCommand.select,
+    );
+    await Future<void>.delayed(Duration.zero);
+    await runtime.enterScreen(WearScreenId.availabilityDirectScan);
+    repository.products.complete(
+      const <WearAvailabilityProduct>[_AvailabilityRepository.product],
+    );
+    await selection;
+
+    expect(navigation, isEmpty);
+  });
+
+  test('presentation handoff invalidates an older screen load', () async {
+    final _BlockingAvailabilityRepository repository =
+        _BlockingAvailabilityRepository();
+    final WearAvailabilityFlowUseCase useCase =
+        WearAvailabilityFlowUseCase(repository);
+    final WearAvailabilityRuntime runtime = _runtime(repository);
+    addTearDown(runtime.dispose);
+
+    final Future<void> oldLoad =
+        runtime.enterScreen(WearScreenId.availabilityGroup);
+    await Future<void>.delayed(Duration.zero);
+    final WearAvailabilityFlowState activeFlow = useCase.selectProduct(
+      state: const WearAvailabilityFlowState(
+        step: WearAvailabilityFlowStep.productSelection,
+      ),
+      product: _AvailabilityRepository.product,
+    );
+    runtime.restorePresentationState(
+      WearScreenId.availabilityCheck,
+      WearAvailabilityRuntimeState(flow: activeFlow, focusedIndex: 0),
+    );
+    repository.groups.complete(
+      const <WearAvailabilityGroup>[_AvailabilityRepository.group],
+    );
+    await oldLoad;
+
+    final WearAvailabilityRuntimeState restored = runtime.presentationStateFor(
+      WearScreenId.availabilityCheck,
+    )! as WearAvailabilityRuntimeState;
+    expect(restored.flow.selectedProduct, _AvailabilityRepository.product);
+    expect(restored.flow.step, WearAvailabilityFlowStep.productQuestion);
+  });
+
   test('direct scan failure can retry the same barcode', () async {
     final _RetryAvailabilityRepository repository =
         _RetryAvailabilityRepository();
@@ -304,5 +405,15 @@ class _RetryAvailabilityRepository extends _AvailabilityRepository {
     barcodeCalls++;
     if (barcodeCalls == 1) throw Exception('temporary failure');
     return super.findProductsByBarcode(barcode);
+  }
+}
+
+class _BlockingProductsAvailabilityRepository extends _AvailabilityRepository {
+  final Completer<List<WearAvailabilityProduct>> products =
+      Completer<List<WearAvailabilityProduct>>();
+
+  @override
+  Future<List<WearAvailabilityProduct>> getProductsByGroup(int groupId) {
+    return products.future;
   }
 }

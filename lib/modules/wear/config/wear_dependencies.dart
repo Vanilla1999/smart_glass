@@ -97,6 +97,7 @@ class WearDependencies {
         WearScanRuntime(
           lookupBarcode: getBarcodeInfoUseCase().call,
           navigate: navigate,
+          currentScreen: () => wearFlowController.state.screen,
           printProduct: (BarcodeProductInfo product) async {
             final selection = WearSession.printerSelectionOrNull;
             final user = WearSession.userOrNull;

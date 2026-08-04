@@ -1,5 +1,31 @@
 # План фоновой работы Wear при выключенном экране
 
+## Авторитетный runtime-контракт: Variant A
+
+Эта реализация поддерживает только `screen-off` при живых Android process,
+`MainActivity` и основном Flutter engine. `WearControlForegroundService` не
+владеет Flutter engine, Vosk recognizer или бизнес-состоянием: он лишь повышает
+приоритет текущей авторизованной Wear-сессии и удерживает ограниченный по
+времени wake-lock lease. Нативный session gate не позволяет сервису принимать
+команды после явного stop/logout, даже если Dart callback ещё не завершился.
+
+Сервис запускается только после авторизации и останавливается при logout/session
+clear, `detached`, dispose, уничтожении `MainActivity` или удалении task. Если Activity,
+Flutter engine либо process уничтожены, голосовая работа не продолжается и
+автоматически не восстанавливается.
+
+Timeout Dart-вызова ограничивает ожидание, но не способен прервать уже
+зависший JNI/Vosk-вызов. Replay отменяется кооперативно между native-вызовами;
+для гарантированного восстановления от native hang потребовалась бы изоляция
+распознавания в отдельном process, что не входит в Variant A.
+
+Legacy broadcast кнопок от `com.xcheng.uac4client` остаётся exported ради
+совместимости. Наблюдаемый чужой sender отклоняется на Android 14+, но старый
+UAC4 sender не гарантирует передачу identity. Поэтому этот канал допустим
+только на управляемом устройстве с контролируемым набором приложений; целевое
+устранение риска — explicit broadcast или signature permission со стороны
+vendor-клиента.
+
 ## Статус реализации от 3 августа 2026
 
 Реализовано:
@@ -8,8 +34,10 @@
 - автоматический `ViScanner.pause()` удалён из `Activity.ON_PAUSE`;
 - добавлены явные `prepareForWear()` и `pauseForWear()`;
 - scanner runtime запускается, приостанавливается и освобождается явно;
-- foreground service удерживает non-reference-counted partial wake lock;
-- service и wake lock завершаются при teardown/уничтожении Activity;
+- foreground service удерживает non-reference-counted partial wake lock с
+  10-минутным lease и контролируемым продлением;
+- service и wake lock завершаются при logout/session clear, teardown, удалении
+  task и уничтожении Activity;
 - `paused`/`hidden` останавливают phone UI, но не Wear runtime;
 - voice health-check продолжает работать при screen-off;
 - Vosk screen context и grammar привязаны к logical screen;
@@ -73,7 +101,7 @@
 - обычный `onPause`/`onStop` при выключении экрана;
 - длительный screen-off при живом процессе;
 - возврат приложения в `resumed` с синхронизацией телефонного UI;
-- foreground service с активной Wear-сессией.
+- foreground service только с активной авторизованной Wear-сессией.
 
 Не поддерживаются:
 
@@ -108,7 +136,8 @@ Health-check голоса останавливается при screen-off, а �
 service повышает приоритет процесса, но сам по себе не гарантирует работу CPU
 при выключенном экране.
 
-Разрешение `WAKE_LOCK` уже объявлено, но wake lock не захватывается.
+Разрешение `WAKE_LOCK` объявлено; foreground service использует ограниченный
+lease и продлевает его только пока доступна Activity-owned Flutter-сессия.
 
 ### 3.3 Навигация и бизнес-состояние
 
@@ -222,13 +251,16 @@ scanner runtime обязательно, чтобы оборудование не
 
 1. Оставить один существующий `WearControlForegroundService`.
 2. Оставить `START_NOT_STICKY`.
-3. Добавить non-reference-counted `PowerManager.PARTIAL_WAKE_LOCK`.
-4. Захватывать wake lock после успешного `startForeground()`.
+3. Использовать non-reference-counted `PowerManager.PARTIAL_WAKE_LOCK` с
+   ограниченным lease и продлением до истечения lease.
+4. Захватывать wake lock только после успешного `startForeground()`.
 5. Освобождать wake lock в `onDestroy()` и при явной остановке сервиса.
-6. Сделать start/stop идемпотентными.
-7. Логировать acquire/release и ошибки.
-8. Обновить описание `specialUse` в manifest: сервис поддерживает активную
-   голосовую и scanner-сессию очков, а не только аппаратные кнопки.
+6. Запускать service только после авторизации, останавливать при logout/session
+   clear.
+7. Сделать start/stop идемпотентными и логировать acquire/release/ошибки.
+8. Использовать стандартный FGS type `connectedDevice`: Android-аудио не
+   захватывается через `RECORD_AUDIO`, приложение взаимодействует с внешними
+   очками через UAC4/vendor service.
 9. Не добавлять второй foreground service.
 10. Не создавать Flutter engine внутри сервиса.
 
@@ -473,8 +505,9 @@ scanner runtime обязательно, чтобы оборудование не
 - старые screen-owned handlers могут конфликтовать с application runtime во
   время миграции;
 - строгий двухсекундный PCM ACK оставляет мало времени для блокирующего I/O;
-- текущий `specialUse` foreground-service subtype потребует актуального
-  описания фактической фоновой работы.
+- legacy exported broadcast `test` нельзя полностью аутентифицировать, пока
+  UAC4-клиент не перейдёт на explicit/signature-protected контракт;
+- зависший JNI/Vosk-вызов не прерывается Dart timeout внутри одного process.
 
 Каждый риск должен быть закрыт тестом или явно принят как ограничение до
 завершения соответствующего этапа.

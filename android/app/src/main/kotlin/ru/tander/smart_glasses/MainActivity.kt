@@ -31,10 +31,39 @@ class MainActivity : FlutterFragmentActivity() {
     companion object {
         private const val WEAR_OPERATION_TIMEOUT_MS = 5_000L
         private var activeActivity = WeakReference<MainActivity>(null)
+        private val wearControlSessionEnabled = AtomicBoolean(false)
 
-        fun dispatchWearButtonCommand(value: String) {
-            activeActivity.get()?.appChannel?.invokeMethod("wearButtonCommand", value)
-                ?: Log.w("SmartWear", "Button command ignored: Flutter activity unavailable")
+        private fun liveWearActivity(): MainActivity? {
+            val activity = activeActivity.get() ?: return null
+            return activity.takeUnless { it.isFinishing || it.isDestroyed }
+        }
+
+        fun isWearRuntimeAvailable(): Boolean {
+            return wearControlSessionEnabled.get() &&
+                liveWearActivity()?.appChannel != null
+        }
+
+        fun dispatchWearButtonCommand(value: String): Boolean {
+            if (!wearControlSessionEnabled.get()) {
+                Log.w("SmartWear", "Button command ignored: Wear session disabled")
+                return false
+            }
+            val activity = liveWearActivity()
+            val channel = activity?.appChannel
+            if (activity == null || channel == null) {
+                Log.w("SmartWear", "Button command ignored: Flutter activity unavailable")
+                return false
+            }
+            if (Looper.myLooper() != Looper.getMainLooper()) {
+                activity.mainHandler.post { dispatchWearButtonCommand(value) }
+                return true
+            }
+            if (liveWearActivity() !== activity || activity.appChannel !== channel) {
+                Log.w("SmartWear", "Button command ignored: Flutter activity detached")
+                return false
+            }
+            channel.invokeMethod("wearButtonCommand", value)
+            return true
         }
     }
 
@@ -117,12 +146,33 @@ class MainActivity : FlutterFragmentActivity() {
                         result.success(true)
                     }
                     "startWearControlService" -> {
-                        WearControlForegroundService.start(this)
-                        result.success(true)
+                        try {
+                            wearControlSessionEnabled.set(true)
+                            WearControlForegroundService.start(this)
+                            result.success(true)
+                        } catch (error: RuntimeException) {
+                            wearControlSessionEnabled.set(false)
+                            Log.e("SmartWear", "Wear control service start failed", error)
+                            result.error(
+                                "WEAR_CONTROL_SERVICE_START_FAILED",
+                                error.message ?: "Unable to start Wear control service",
+                                null,
+                            )
+                        }
                     }
                     "stopWearControlService" -> {
-                        WearControlForegroundService.stop(this)
-                        result.success(true)
+                        wearControlSessionEnabled.set(false)
+                        try {
+                            WearControlForegroundService.stop(this)
+                            result.success(true)
+                        } catch (error: RuntimeException) {
+                            Log.e("SmartWear", "Wear control service stop failed", error)
+                            result.error(
+                                "WEAR_CONTROL_SERVICE_STOP_FAILED",
+                                error.message ?: "Unable to stop Wear control service",
+                                null,
+                            )
+                        }
                     }
                     else -> result.notImplemented()
                 }
@@ -492,7 +542,11 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     override fun onDestroy() {
-        if (activeActivity.get() === this) activeActivity.clear()
+        if (activeActivity.get() === this) {
+            wearControlSessionEnabled.set(false)
+            activeActivity.clear()
+            WearControlForegroundService.stop(this)
+        }
         invalidatePendingWearShow()
         supersedePendingWearResults()
         nativeVoiceCapturePlugin?.dispose()

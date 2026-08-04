@@ -1015,6 +1015,7 @@ void main() {
     );
     releaseReplay.complete(false);
     await service.waitForProcessing();
+    expect(freeText.finalCalls, 0);
   });
 
   test('empty replay still applies final context cancellation', () async {

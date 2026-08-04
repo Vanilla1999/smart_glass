@@ -94,6 +94,9 @@ class _WearModuleAppState extends State<WearModuleApp>
   int? _voiceStartupToken;
   bool _restartVoiceAfterInterruption = false;
   bool _wasActuallyBackgrounded = false;
+  int _routerObservationRevision = 0;
+  int _wearControlServiceRequestGeneration = 0;
+  bool _wearControlServiceEnabled = false;
   static int _nextVoiceOverlayRevision = 0;
 
   WearFlowController get _flow =>
@@ -155,14 +158,6 @@ class _WearModuleAppState extends State<WearModuleApp>
     super.initState();
     print('[VOICE-LIFECYCLE] WearModuleApp initState');
     MethodChannelService().setAppMethodCallHandler(_handleAppMethodCall);
-    unawaited(
-      MethodChannelService().startWearControlService().catchError(
-            (Object error, StackTrace stackTrace) => print(
-              '[WearModuleApp] foreground service start failed: '
-              '$error\n$stackTrace',
-            ),
-          ),
-    );
     WidgetsBinding.instance.addObserver(this);
     _router = GoRouter(
       initialLocation: widget.initialLocation ?? WearRoute.initialRoute,
@@ -177,20 +172,17 @@ class _WearModuleAppState extends State<WearModuleApp>
     flow.setNavigationOutput(FlutterWearNavigationOutput(router: _router));
     flow.setRuntimeActive(true);
     flow.setUiLifecycle(WearUiLifecycle.active);
-    if (widget.flowController == null) {
-      if (WearSession.isAuthorized) {
-        WearDependencies.I.barcodeDispatcher.start();
-      }
-      if (WearSession.isAuthorized) {
-        unawaited(
-          WearDependencies.I.scannerRuntime.start().catchError(
-                (Object error, StackTrace stackTrace) => print(
-                  '[WearModuleApp] scanner runtime start failed: '
-                  '$error\n$stackTrace',
-                ),
+    if (widget.flowController == null && WearSession.isAuthorized) {
+      _startWearControlService('initial_authorized');
+      WearDependencies.I.barcodeDispatcher.start();
+      unawaited(
+        WearDependencies.I.scannerRuntime.start().catchError(
+              (Object error, StackTrace stackTrace) => print(
+                '[WearModuleApp] scanner runtime start failed: '
+                '$error\n$stackTrace',
               ),
-        );
-      }
+            ),
+      );
     }
     if (widget.onStartVoice == null) {
       _screenActionsSub =
@@ -403,6 +395,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     _authorizedSub = WearSession.authorizedStream.listen((_) {
       flow.setRuntimeActive(true);
       if (widget.flowController == null) {
+        _startWearControlService('authorized');
         WearDependencies.I.barcodeDispatcher.start();
         unawaited(
           WearDependencies.I.scannerRuntime.start().catchError(
@@ -443,7 +436,12 @@ class _WearModuleAppState extends State<WearModuleApp>
   }
 
   Future<void> _handleAppMethodCall(MethodCall call) async {
-    if (call.method != 'wearButtonCommand') return;
+    if (call.method != 'wearButtonCommand' ||
+        !mounted ||
+        !WearSession.isAuthorized ||
+        (widget.flowController == null && !_wearControlServiceEnabled)) {
+      return;
+    }
     final WearVoiceCommand? command = switch (call.arguments) {
       'up' => WearVoiceCommand.up,
       'down' => WearVoiceCommand.down,
@@ -456,6 +454,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   }
 
   void _onRouterChange() {
+    final int observationRevision = ++_routerObservationRevision;
     final flow = _flow;
     if (_voiceState.phase == VoicePhase.disabled && WearSession.isAuthorized) {
       _startVoice('router');
@@ -497,7 +496,9 @@ class _WearModuleAppState extends State<WearModuleApp>
     }
     if (screenId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+        if (!mounted || observationRevision != _routerObservationRevision) {
+          return;
+        }
         final WearScreenId? confirmedScreen =
             FlutterWearNavigationOutput.screenIdForRoute(
           _router.state.matchedLocation,
@@ -739,7 +740,45 @@ class _WearModuleAppState extends State<WearModuleApp>
     }
   }
 
+  void _startWearControlService(String reason) {
+    if (widget.flowController != null ||
+        !mounted ||
+        !WearSession.isAuthorized) {
+      return;
+    }
+    _wearControlServiceEnabled = true;
+    final int generation = ++_wearControlServiceRequestGeneration;
+    unawaited(
+      MethodChannelService().startWearControlService().catchError(
+        (Object error, StackTrace stackTrace) {
+          if (generation == _wearControlServiceRequestGeneration) {
+            _wearControlServiceEnabled = false;
+          }
+          print(
+            '[WearModuleApp] foreground service start failed '
+            'reason=$reason: $error\n$stackTrace',
+          );
+        },
+      ),
+    );
+  }
+
+  void _stopWearControlService(String reason) {
+    if (widget.flowController != null) return;
+    _wearControlServiceEnabled = false;
+    _wearControlServiceRequestGeneration += 1;
+    unawaited(
+      MethodChannelService().stopWearControlService().catchError(
+            (Object error, StackTrace stackTrace) => print(
+              '[WearModuleApp] foreground service stop failed '
+              'reason=$reason: $error\n$stackTrace',
+            ),
+          ),
+    );
+  }
+
   void _stopVoiceForLogout() {
+    _stopWearControlService('logout');
     _voiceStartRequested = false;
     _setVoiceState(VoiceState(
       phase: VoicePhase.disabled,
@@ -768,6 +807,8 @@ class _WearModuleAppState extends State<WearModuleApp>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     print('[WearModuleApp] lifecycle state=$state');
     if (state == AppLifecycleState.detached) {
+      _routerObservationRevision += 1;
+      _stopWearControlService('app_lifecycle_detached');
       _wasActuallyBackgrounded = false;
       _voiceHealthTimer?.cancel();
       _voiceHealthTimer = null;
@@ -778,7 +819,6 @@ class _WearModuleAppState extends State<WearModuleApp>
       if (widget.flowController == null) {
         WearDependencies.I.barcodeDispatcher.stop();
         unawaited(WearDependencies.I.scannerRuntime.release());
-        unawaited(MethodChannelService().stopWearControlService());
       }
       _setVoiceState(VoiceState(
         phase: VoicePhase.disabled,
@@ -806,6 +846,7 @@ class _WearModuleAppState extends State<WearModuleApp>
         WearUiLifecycle.active,
       );
       if (WearSession.isAuthorized) {
+        _startWearControlService('resumed');
         final Future<void> Function(String reason)? restartVoice =
             widget.onRestartVoice;
         if (resumeRecoveryRequired && restartVoice != null) {
@@ -858,14 +899,8 @@ class _WearModuleAppState extends State<WearModuleApp>
   @override
   void dispose() {
     print('[VOICE-LIFECYCLE] WearModuleApp dispose');
-    unawaited(
-      MethodChannelService().stopWearControlService().catchError(
-            (Object error, StackTrace stackTrace) => print(
-              '[WearModuleApp] foreground service stop failed: '
-              '$error\n$stackTrace',
-            ),
-          ),
-    );
+    _routerObservationRevision += 1;
+    _stopWearControlService('dispose');
     _flow.setRuntimeActive(false);
     if (widget.flowController == null) {
       WearDependencies.I.barcodeDispatcher.stop();

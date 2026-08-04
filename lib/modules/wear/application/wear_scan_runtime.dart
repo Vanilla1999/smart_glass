@@ -17,6 +17,7 @@ typedef WearBarcodeLookup = Future<List<BarcodeProductInfo>> Function(
   String barcode,
 );
 typedef WearProductPrint = Future<String> Function(BarcodeProductInfo product);
+typedef WearScanScreenProvider = WearScreenId Function();
 typedef WearScanNavigation = Future<void> Function(
   WearScreenId screen, {
   Object? extra,
@@ -28,14 +29,20 @@ class WearScanRuntime implements WearBackgroundRuntime {
     required WearBarcodeLookup lookupBarcode,
     required WearProductPrint printProduct,
     required WearScanNavigation navigate,
+    required WearScanScreenProvider currentScreen,
+    Duration statusDuration = const Duration(seconds: 5),
   })  : _lookupBarcode = lookupBarcode,
         _printProduct = printProduct,
-        _navigate = navigate;
+        _navigate = navigate,
+        _currentScreen = currentScreen,
+        _statusDuration = statusDuration;
 
   static const int _pageSize = 4;
   final WearBarcodeLookup _lookupBarcode;
   final WearProductPrint _printProduct;
   final WearScanNavigation _navigate;
+  final WearScanScreenProvider _currentScreen;
+  final Duration _statusDuration;
   final StreamController<WearBackgroundScreenUpdate> _updates =
       StreamController<WearBackgroundScreenUpdate>.broadcast();
 
@@ -208,17 +215,22 @@ class WearScanRuntime implements WearBackgroundRuntime {
       title: isError ? 'Ошибка' : 'Ценник отправлен на печать',
       message: message,
       details: details,
-      autoAfter: const Duration(seconds: 5),
+      autoAfter: _statusDuration,
       autoAction: WearStatusAutoAction.none,
     );
     await _navigate(WearScreenId.status, extra: args);
     _statusTimer?.cancel();
     final int generation = _generation;
-    _statusTimer = Timer(const Duration(seconds: 5), () {
-      if (generation != _generation) return;
-      _navigate(
-        isError ? WearScreenId.scanIdle : WearScreenId.continueScan,
-        replaceCurrent: true,
+    _statusTimer = Timer(_statusDuration, () {
+      if (generation != _generation ||
+          _currentScreen() != WearScreenId.status) {
+        return;
+      }
+      unawaited(
+        _navigate(
+          isError ? WearScreenId.scanIdle : WearScreenId.continueScan,
+          replaceCurrent: true,
+        ).catchError((Object _, StackTrace __) {}),
       );
     });
   }

@@ -66,6 +66,7 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
   String? _lastBarcode;
   WearAvailabilityFlowStep? _lastBarcodeStep;
   int _generation = 0;
+  int _requestRevision = 0;
   Future<void>? _enterOperation;
   WearScreenId? _enteringScreen;
   Object? _enteringExtra;
@@ -109,7 +110,12 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     }
     _enteringScreen = screen;
     _enteringExtra = extra;
-    final Future<void> operation = _enterScreen(screen, extra: extra);
+    final int requestRevision = ++_requestRevision;
+    final Future<void> operation = _enterScreen(
+      screen,
+      extra: extra,
+      requestRevision: requestRevision,
+    );
     _enterOperation = operation;
     try {
       await operation;
@@ -122,31 +128,55 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     }
   }
 
-  Future<void> _enterScreen(WearScreenId screen, {Object? extra}) async {
+  Future<void> _enterScreen(
+    WearScreenId screen, {
+    Object? extra,
+    required int requestRevision,
+  }) async {
     final int generation = _generation;
+    if (!_isCurrent(generation, requestRevision: requestRevision)) return;
     _screen = screen;
     _focusedIndex = 0;
+    _loading = false;
     _error = null;
     try {
       if (screen == WearScreenId.availabilityGroup && _flow == null) {
-        await _runLoading((int generation) async {
-          final WearAvailabilityFlowState next = await _flowUseCase.start();
-          if (generation == _generation) _flow = next;
-        });
+        await _runLoading(
+          (int operationGeneration) async {
+            final WearAvailabilityFlowState next = await _flowUseCase.start();
+            if (_isCurrent(
+              operationGeneration,
+              requestRevision: requestRevision,
+            )) {
+              _flow = next;
+            }
+          },
+          requestRevision: requestRevision,
+        );
         return;
       }
       if (screen == WearScreenId.availabilityProduct &&
           extra is WearAvailabilityGroup &&
           _flow?.selectedGroup?.id != extra.id) {
-        await _runLoading((int generation) async {
-          final WearAvailabilityFlowState next = await _flowUseCase.selectGroup(
-            state: _flow ?? await _flowUseCase.start(),
-            group: extra,
-          );
-          if (generation == _generation) _flow = next;
-        });
+        await _runLoading(
+          (int operationGeneration) async {
+            final WearAvailabilityFlowState next =
+                await _flowUseCase.selectGroup(
+              state: _flow ?? await _flowUseCase.start(),
+              group: extra,
+            );
+            if (_isCurrent(
+              operationGeneration,
+              requestRevision: requestRevision,
+            )) {
+              _flow = next;
+            }
+          },
+          requestRevision: requestRevision,
+        );
         return;
       }
+      if (!_isCurrent(generation, requestRevision: requestRevision)) return;
       if (screen == WearScreenId.availabilityCheck &&
           extra is WearAvailabilityProduct &&
           _flow?.selectedProduct?.id != extra.id) {
@@ -158,9 +188,9 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
           product: extra,
         );
       }
-      _publish();
+      if (_isCurrent(generation, requestRevision: requestRevision)) _publish();
     } catch (error) {
-      if (generation != _generation) return;
+      if (!_isCurrent(generation, requestRevision: requestRevision)) return;
       _error = _messageFor(error);
       _loading = false;
       _publish();
@@ -168,15 +198,17 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
   }
 
   Future<void> _runLoading(
-    Future<void> Function(int generation) operation,
-  ) async {
+    Future<void> Function(int generation) operation, {
+    int? requestRevision,
+  }) async {
     final int generation = _generation;
+    if (!_isCurrent(generation, requestRevision: requestRevision)) return;
     _loading = true;
     _publish();
     try {
       await operation(generation);
     } finally {
-      if (generation == _generation) {
+      if (_isCurrent(generation, requestRevision: requestRevision)) {
         _loading = false;
         _publish();
       }
@@ -276,14 +308,25 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     _lastBarcodeStep = flow.step;
     if (screen == WearScreenId.availabilityDirectScan) {
       final int generation = _generation;
+      final int requestRevision = _requestRevision;
       try {
-        await _runLoading((int generation) async {
-          final WearAvailabilityFlowState next =
-              await _flowUseCase.findProductByBarcode(flow, barcode: value);
-          if (generation == _generation) _flow = next;
-        });
+        await _runLoading(
+          (int operationGeneration) async {
+            final WearAvailabilityFlowState next =
+                await _flowUseCase.findProductByBarcode(flow, barcode: value);
+            if (_isCurrent(
+              operationGeneration,
+              requestRevision: requestRevision,
+            )) {
+              _flow = next;
+            }
+          },
+          requestRevision: requestRevision,
+        );
       } catch (error) {
-        if (generation != _generation) return true;
+        if (!_isCurrent(generation, requestRevision: requestRevision)) {
+          return true;
+        }
         _lastBarcode = null;
         _lastBarcodeStep = null;
         _error = _messageFor(error);
@@ -292,7 +335,8 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
         return true;
       }
       final WearAvailabilityProduct? product = _flow?.selectedProduct;
-      if (product != null &&
+      if (_isCurrent(generation, requestRevision: requestRevision) &&
+          product != null &&
           _flow?.step == WearAvailabilityFlowStep.productQuestion) {
         await _navigate(WearScreenId.availabilityCheck, extra: product);
       }
@@ -330,14 +374,20 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
         flow.step != WearAvailabilityFlowStep.priceTagOutdated) {
       return;
     }
-    await _runLoading((int generation) async {
-      final String printer = await _printPriceTag(product);
-      final WearAvailabilityFlowState next = _flowUseCase.markPriceTagPrinted(
-        state: flow,
-        printerName: printer,
-      );
-      if (generation == _generation) _flow = next;
-    });
+    final int requestRevision = _requestRevision;
+    await _runLoading(
+      (int generation) async {
+        final String printer = await _printPriceTag(product);
+        final WearAvailabilityFlowState next = _flowUseCase.markPriceTagPrinted(
+          state: flow,
+          printerName: printer,
+        );
+        if (_isCurrent(generation, requestRevision: requestRevision)) {
+          _flow = next;
+        }
+      },
+      requestRevision: requestRevision,
+    );
   }
 
   Future<void> _takePhoto() async {
@@ -345,12 +395,16 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     if (flow == null || flow.step != WearAvailabilityFlowStep.photoCapture) {
       return;
     }
-    await _runLoading((int generation) async {
-      await _capturePhoto();
-      if (generation == _generation) {
-        _flow = _flowUseCase.capturePhoto(flow);
-      }
-    });
+    final int requestRevision = _requestRevision;
+    await _runLoading(
+      (int generation) async {
+        await _capturePhoto();
+        if (_isCurrent(generation, requestRevision: requestRevision)) {
+          _flow = _flowUseCase.capturePhoto(flow);
+        }
+      },
+      requestRevision: requestRevision,
+    );
   }
 
   Future<void> _complete() async {
@@ -361,11 +415,21 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
       return;
     }
     final int generation = _generation;
-    await _runLoading((int operationGeneration) async {
-      final WearAvailabilityFlowState next = await _flowUseCase.complete(flow);
-      if (operationGeneration == _generation) _flow = next;
-    });
-    if (generation != _generation) return;
+    final int requestRevision = _requestRevision;
+    await _runLoading(
+      (int operationGeneration) async {
+        final WearAvailabilityFlowState next =
+            await _flowUseCase.complete(flow);
+        if (_isCurrent(
+          operationGeneration,
+          requestRevision: requestRevision,
+        )) {
+          _flow = next;
+        }
+      },
+      requestRevision: requestRevision,
+    );
+    if (!_isCurrent(generation, requestRevision: requestRevision)) return;
     await _navigate(WearScreenId.availabilityGroup, replaceCurrent: true);
   }
 
@@ -386,11 +450,22 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     final WearAvailabilityFlowState? flow = _flow;
     if (flow == null) return;
     if (value is WearAvailabilityGroup) {
-      await _runLoading((int generation) async {
-        final WearAvailabilityFlowState next =
-            await _flowUseCase.selectGroup(state: flow, group: value);
-        if (generation == _generation) _flow = next;
-      });
+      final int generation = _generation;
+      final int requestRevision = _requestRevision;
+      await _runLoading(
+        (int operationGeneration) async {
+          final WearAvailabilityFlowState next =
+              await _flowUseCase.selectGroup(state: flow, group: value);
+          if (_isCurrent(
+            operationGeneration,
+            requestRevision: requestRevision,
+          )) {
+            _flow = next;
+          }
+        },
+        requestRevision: requestRevision,
+      );
+      if (!_isCurrent(generation, requestRevision: requestRevision)) return;
       await _navigate(WearScreenId.availabilityProduct, extra: value);
       return;
     }
@@ -436,6 +511,11 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
   @override
   void restorePresentationState(WearScreenId screen, Object state) {
     if (!handles(screen) || state is! WearAvailabilityRuntimeState) return;
+    _generation += 1;
+    _requestRevision += 1;
+    _enterOperation = null;
+    _enteringScreen = null;
+    _enteringExtra = null;
     _screen = screen;
     _flow = state.flow;
     _focusedIndex = state.focusedIndex;
@@ -465,6 +545,11 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
         WearAvailabilityProduct product => product.name,
         _ => '',
       };
+
+  bool _isCurrent(int generation, {int? requestRevision}) {
+    return generation == _generation &&
+        (requestRevision == null || requestRevision == _requestRevision);
+  }
 
   void _publish() {
     if (_updates.isClosed) return;
@@ -536,6 +621,7 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
   @override
   Future<void> reset() async {
     _generation += 1;
+    _requestRevision += 1;
     _enterOperation = null;
     _enteringScreen = null;
     _enteringExtra = null;

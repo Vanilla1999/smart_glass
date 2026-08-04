@@ -2077,6 +2077,7 @@ class SpeechRecognitionService {
     void Function(String text, int replayMs)? onCompleted,
   }) async {
     _replayOwnership.begin(replayContext);
+    if (_abortReplayIfInvalid(replayContext)) return;
     final int startedAt = DateTime.now().millisecondsSinceEpoch;
     final int replayBatchCount = (bytes.lengthInBytes + 2559) ~/ 2560;
     print(
@@ -2097,6 +2098,7 @@ class SpeechRecognitionService {
           identical(_freeTextRecognizerReady, recognizerReady)) {
         _freeTextRecognizerReady = Future<void>.value();
       }
+      if (_abortReplayIfInvalid(replayContext)) return;
       _replayOwnership.resolve(
         replayContext,
         error is TimeoutException
@@ -2111,6 +2113,7 @@ class SpeechRecognitionService {
       );
       rethrow;
     }
+    if (_abortReplayIfInvalid(replayContext)) return;
     print(
       '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=recognizer_ready '
       'utteranceId=$commandUtteranceId elapsedMs='
@@ -2125,6 +2128,7 @@ class SpeechRecognitionService {
           _remainingReplayTimeout(startedAt),
         );
       } catch (error) {
+        if (_abortReplayIfInvalid(replayContext)) return;
         _replayOwnership.resolve(
           replayContext,
           error is TimeoutException
@@ -2136,6 +2140,7 @@ class SpeechRecognitionService {
         return;
       }
     }
+    if (_abortReplayIfInvalid(replayContext)) return;
     if (recognizer == null) {
       _replayOwnership.resolve(
         replayContext,
@@ -2143,12 +2148,6 @@ class SpeechRecognitionService {
         failure: StateError('Free-text recognizer is unavailable'),
       );
       _logReplayDecision(replayContext, 'failed', 'recognizer_unavailable');
-      return;
-    }
-    final VoiceReplayContextCancellation? initialStaleReason =
-        _replayStaleReason(replayContext);
-    if (initialStaleReason != null) {
-      _rejectReplay(replayContext, initialStaleReason);
       return;
     }
     Future<void>? pendingOperation;
@@ -2165,6 +2164,7 @@ class SpeechRecognitionService {
       pendingOperation = reset;
       stage = 'reset_wait';
       await reset.timeout(_remainingReplayTimeout(startedAt));
+      if (_abortReplayIfInvalid(replayContext)) return;
       print(
         '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=reset_done '
         'utteranceId=$commandUtteranceId elapsedMs='
@@ -2180,12 +2180,7 @@ class SpeechRecognitionService {
         final int end = requestedEnd < bytes.lengthInBytes
             ? requestedEnd
             : bytes.lengthInBytes;
-        final VoiceReplayContextCancellation? staleReason =
-            _replayStaleReason(replayContext);
-        if (staleReason != null) {
-          _rejectReplay(replayContext, staleReason);
-          return;
-        }
+        if (_abortReplayIfInvalid(replayContext)) return;
         batchIndex++;
         stage = 'accept_call';
         operationStartedAt = DateTime.now().millisecondsSinceEpoch;
@@ -2209,6 +2204,7 @@ class SpeechRecognitionService {
         _voiceMetrics.recordReplayAcceptLatency(
           acceptFinishedAt - callFinishedAt,
         );
+        if (_abortReplayIfInvalid(replayContext)) return;
         print(
           '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=accept_done '
           'utteranceId=$commandUtteranceId batch=$batchIndex/'
@@ -2230,17 +2226,13 @@ class SpeechRecognitionService {
           stage = 'endpoint_result_wait';
           final String endpointJson =
               await endpointResult.timeout(_remainingReplayTimeout(startedAt));
+          if (_abortReplayIfInvalid(replayContext)) return;
           final String endpointText =
               _extractText(endpointJson, preferredKeys: const <String>['text']);
           if (endpointText.isNotEmpty) results.add(endpointText);
         }
       }
-      final VoiceReplayContextCancellation? staleReason =
-          _replayStaleReason(replayContext);
-      if (staleReason != null) {
-        _rejectReplay(replayContext, staleReason);
-        return;
-      }
+      if (_abortReplayIfInvalid(replayContext)) return;
       stage = 'final_result_call';
       operationStartedAt = DateTime.now().millisecondsSinceEpoch;
       final Future<String> finalResult = recognizer.getFinalResult();
@@ -2254,29 +2246,17 @@ class SpeechRecognitionService {
       stage = 'final_result_wait';
       final String json =
           await finalResult.timeout(_remainingReplayTimeout(startedAt));
+      if (_abortReplayIfInvalid(replayContext)) return;
       final String tail =
           _extractText(json, preferredKeys: const <String>['text']);
       if (tail.isNotEmpty) results.add(tail);
       final String text = results.join(' ').trim();
       final int replayMs = DateTime.now().millisecondsSinceEpoch - startedAt;
-      onCompleted?.call(text, replayMs);
       print(
         '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=final_result_done '
         'utteranceId=$commandUtteranceId text="$text" replayMs=$replayMs',
       );
-      if (_latestActionableCommandUtteranceId > commandUtteranceId) {
-        _supersedeReplay(
-          replayContext,
-          supersededBy: _latestActionableCommandUtteranceId,
-        );
-        return;
-      }
-      final VoiceReplayContextCancellation? finalStaleReason =
-          _replayStaleReason(replayContext);
-      if (finalStaleReason != null) {
-        _rejectReplay(replayContext, finalStaleReason);
-        return;
-      }
+      onCompleted?.call(text, replayMs);
       if (text.isNotEmpty) {
         _emitResult(
           _RecognitionSource.freeText,
@@ -2332,6 +2312,23 @@ class SpeechRecognitionService {
       );
       rethrow;
     }
+  }
+
+  bool _abortReplayIfInvalid(VoiceReplayContext context) {
+    final VoiceReplayOwnership? ownership = _replayOwnership.stateFor(context);
+    if (ownership?.isTerminal == true) return true;
+    final int latestActionable = _latestActionableCommandUtteranceId;
+    if (latestActionable > context.commandUtteranceId) {
+      _supersedeReplay(context, supersededBy: latestActionable);
+      return true;
+    }
+    final VoiceReplayContextCancellation? staleReason =
+        _replayStaleReason(context);
+    if (staleReason != null) {
+      _rejectReplay(context, staleReason);
+      return true;
+    }
+    return false;
   }
 
   VoiceReplayContextCancellation? _replayStaleReason(
