@@ -4,7 +4,7 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_li
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 
 void main() {
-  test('selects a unique word when the leading word is shared', () {
+  test('keeps the first visible word even when it is shared', () {
     final VoiceDynamicItemsSnapshot snapshot = _snapshot(<VoiceDynamicItem>[
       const VoiceDynamicItem(id: '1', label: 'Молоко Простоквашино'),
       const VoiceDynamicItem(id: '2', label: 'Молоко Домик'),
@@ -12,11 +12,16 @@ void main() {
 
     final VoiceHintSet hints = VoiceHintGenerator.generate(snapshot);
 
-    expect(hints.hintsByItemId['1']?.phrase, 'простоквашино');
-    expect(hints.hintsByItemId['2']?.phrase, 'домик');
+    expect(hints.hintsByItemId['1']?.phrase, 'молоко');
+    expect(hints.hintsByItemId['2']?.phrase, 'молоко');
+    expect(hints.advertisedPhrases, <String>{'молоко'});
     expect(
-      hints.advertisedPhrases,
-      containsAll(<String>['простоквашино', 'домик']),
+      VoiceListMatcher.match<VoiceDynamicItem>(
+        'молоко',
+        snapshot.items,
+        (VoiceDynamicItem item) => item.label,
+      ).type,
+      VoiceListMatchType.ambiguous,
     );
     expect(hints.issues, isEmpty);
   });
@@ -35,7 +40,7 @@ void main() {
     expect(hints.hintsByItemId['1']?.phrase, 'простоквашино');
   });
 
-  test('combines shared words when their order makes a unique phrase', () {
+  test('keeps one compact leading word for reordered labels', () {
     final VoiceDynamicItemsSnapshot snapshot = _snapshot(<VoiceDynamicItem>[
       const VoiceDynamicItem(id: '1', label: 'Молоко Домик'),
       const VoiceDynamicItem(id: '2', label: 'Домик Молоко'),
@@ -43,12 +48,18 @@ void main() {
 
     final VoiceHintSet hints = VoiceHintGenerator.generate(snapshot);
 
-    expect(hints.hintsByItemId['1']?.phrase, 'молоко домик');
-    expect(hints.hintsByItemId['2']?.phrase, 'домик молоко');
-    expect(hints.hintsByItemId.values.every((hint) => hint.ranges.length == 1),
-        isTrue);
+    expect(hints.hintsByItemId['1']?.phrase, 'молоко');
+    expect(hints.hintsByItemId['2']?.phrase, 'домик');
     expect(
-      hints.hintsByItemId.values.every((hint) => hint.phrase.contains(' ')),
+      hints.hintsByItemId.values.every(
+        (VoiceHint hint) => hint.ranges.length == 1,
+      ),
+      isTrue,
+    );
+    expect(
+      hints.hintsByItemId.values.every(
+        (VoiceHint hint) => !hint.phrase.contains(' '),
+      ),
       isTrue,
     );
   });
@@ -89,7 +100,7 @@ void main() {
     );
   });
 
-  test('does not advertise indistinguishable duplicate labels', () {
+  test('renders the same leading hint for duplicate labels', () {
     final VoiceHintSet hints = VoiceHintGenerator.generate(_snapshot(
       <VoiceDynamicItem>[
         const VoiceDynamicItem(id: '1', label: 'Белый принтер'),
@@ -97,16 +108,10 @@ void main() {
       ],
     ));
 
-    expect(hints.hintsByItemId, isEmpty);
-    expect(hints.advertisedPhrases, isEmpty);
-    expect(hints.issues, hasLength(2));
-    expect(
-      hints.issues.every(
-        (VoiceHintValidationIssue issue) =>
-            issue.reason == 'no_unique_voice_hint',
-      ),
-      isTrue,
-    );
+    expect(hints.hintsByItemId['1']?.phrase, 'белый');
+    expect(hints.hintsByItemId['2']?.phrase, 'белый');
+    expect(hints.advertisedPhrases, <String>{'белый'});
+    expect(hints.issues, isEmpty);
   });
 
   test('does not advertise a fixed command as a voice hint', () {
@@ -149,7 +154,7 @@ void main() {
       ],
     ));
 
-    expect(hints.hintsByItemId['milk']?.phrase, 'домик');
+    expect(hints.hintsByItemId['milk']?.phrase, 'молоко');
   });
 
   test('skips Latin mixed and numeric tokens', () {

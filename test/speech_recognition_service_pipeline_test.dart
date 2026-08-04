@@ -969,13 +969,13 @@ void main() {
     expect(freeText.finalCalls, 1);
   });
 
-  test('unique multi-word exact final skips fuzzy-ambiguous replay', () async {
+  test('non-advertised wider phrase keeps free-text replay fallback', () async {
     final _FakeRecognizer command = _FakeRecognizer()
       ..endpointSequence.addAll(<bool>[false, true])
       ..partialSequence.add(_json(partial: 'чудо коктейль'))
       ..resultSequence.add(_json(text: 'чудо коктейль'));
     final _FakeRecognizer freeText = _FakeRecognizer()
-      ..finalSequence.add(_json(text: 'не должно использоваться'));
+      ..finalSequence.add(_json(text: 'чудо коктейль молочный'));
     const VoiceDynamicItemsSnapshot items = VoiceDynamicItemsSnapshot(
       revision: 10,
       items: <VoiceDynamicItem>[
@@ -1011,13 +1011,14 @@ void main() {
 
     await service.processAudioChunk(_pcmFrame(1000));
     await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing();
 
     final SegmentedRecognitionResult resolved =
         await result.timeout(const Duration(seconds: 1));
-    expect(resolved.text, 'чудо коктейль');
-    expect(resolved.dynamicItemId, 'exact');
-    expect(freeText.accepted, isEmpty);
-    expect(freeText.finalCalls, 0);
+    expect(resolved.text, 'чудо коктейль молочный');
+    expect(resolved.dynamicItemId, isNull);
+    expect(freeText.accepted, isNotEmpty);
+    expect(freeText.finalCalls, 1);
   });
 
   test('queued command batch keeps its admission utterance identity', () async {
