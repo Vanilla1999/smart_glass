@@ -39,6 +39,7 @@ class FirstScreenCubit extends Cubit<FirstScreenState> implements MultiScannerDe
       print("scannerDisabled $event");
     });
 
+    emit(const FirstScreenState.suc());
   }
 
   Future<void> disableScanner() async {

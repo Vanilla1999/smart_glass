@@ -48,6 +48,10 @@ import kotlin.coroutines.CoroutineContext
 /** AppUsagePlugin */
 class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, CoroutineScope, EventChannel.StreamHandler {
 
+    companion object {
+        private const val TAG = "MultiScannerPlugin"
+    }
+
     private lateinit var channel: MethodChannel
     private var eventChannel: EventChannel? = null
     private var eventSinkServiceConnections: EventSink? = null
@@ -137,21 +141,41 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
 
             "setFlashlight" -> {
                 val state = call.argument<Int>("state") ?: 0
+                Log.i("FlashlightTrace", "Plugin setFlashlight($state) begin")
                 launch {
                     try {
-                        ViScanner.getAdditionalMovfastGlass()?.setFlashlight(state)
+                        val glass = ViScanner.getAdditionalMovfastGlass()
+                        if (glass == null) {
+                            Log.w("FlashlightTrace", "Plugin setFlashlight($state): glass=NULL")
+                            result.success(null)
+                            return@launch
+                        }
+                        Log.i("FlashlightTrace", "Plugin setFlashlight($state): glass=$glass calling AIDL")
+                        glass.setFlashlight(state)
+                        Log.i("FlashlightTrace", "Plugin setFlashlight($state): AIDL returned ok")
                         result.success(null)
                     } catch (e: Exception) {
+                        Log.e("FlashlightTrace", "Plugin setFlashlight($state) FAILED", e)
                         result.error("0", e.message, null)
                     }
                 }
             }
 
             "getFlashlightState" -> {
+                Log.i("FlashlightTrace", "Plugin getFlashlightState begin")
                 launch {
                     try {
-                        result.success(ViScanner.getAdditionalMovfastGlass()?.getFlashlightState() ?: 0)
+                        val glass = ViScanner.getAdditionalMovfastGlass()
+                        if (glass == null) {
+                            Log.w("FlashlightTrace", "Plugin getFlashlightState: glass=NULL returning 0")
+                            result.success(0)
+                            return@launch
+                        }
+                        val state = glass.getFlashlightState() ?: 0
+                        Log.i("FlashlightTrace", "Plugin getFlashlightState: state=$state")
+                        result.success(state)
                     } catch (e: Exception) {
+                        Log.e("FlashlightTrace", "Plugin getFlashlightState FAILED", e)
                         result.error("0", e.message, null)
                     }
                 }

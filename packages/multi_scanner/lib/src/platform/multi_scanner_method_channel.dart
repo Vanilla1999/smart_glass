@@ -60,17 +60,34 @@ class MethodChannelMultiScanner extends MultiScannerPlatform {
 
   @override
   Future<void> setFlashlight(int state) async {
-    return methodChannel.invokeMethod(
-      'setFlashlight',
-      <String, int>{
-        'state': state,
-      },
-    );
+    const String tag = '[FlashlightTrace]';
+    print('$tag MethodChannel setFlashlight($state) invoke begin');
+    try {
+      await methodChannel.invokeMethod(
+        'setFlashlight',
+        <String, int>{
+          'state': state,
+        },
+      );
+      print('$tag MethodChannel setFlashlight($state) invoke success');
+    } catch (e, st) {
+      print('$tag MethodChannel setFlashlight($state) FAILED error=$e stack=$st');
+      rethrow;
+    }
   }
 
   @override
   Future<int> getFlashlightState() async {
-    return await methodChannel.invokeMethod('getFlashlightState');
+    const String tag = '[FlashlightTrace]';
+    print('$tag MethodChannel getFlashlightState invoke begin');
+    try {
+      final result = await methodChannel.invokeMethod('getFlashlightState');
+      print('$tag MethodChannel getFlashlightState invoke success result=$result');
+      return result;
+    } catch (e, st) {
+      print('$tag MethodChannel getFlashlightState FAILED error=$e stack=$st');
+      rethrow;
+    }
   }
 
   @override
