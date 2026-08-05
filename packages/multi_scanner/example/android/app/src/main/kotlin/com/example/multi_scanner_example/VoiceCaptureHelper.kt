@@ -42,9 +42,9 @@ class VoiceCaptureHelper(private val context: Context) {
 
     private fun prepareSsp(): String? {
         return try {
-            Config.setAppKey(UAC4_APP_KEY)
-            Config.setAppSecret(UAC4_APP_SECRET)
-            Config.setUdid(UAC4_UDID)
+            Config.setAppKey(BuildConfig.UAC4_APP_KEY)
+            Config.setAppSecret(BuildConfig.UAC4_APP_SECRET)
+            Config.setUdid(BuildConfig.UAC4_UDID)
             Config.setAiCode(AICodeType.AI_SSP_KWS_DICTATION_TTS_OFF)
             if (!activated) {
                 val latch = CountDownLatch(1)
@@ -208,9 +208,6 @@ class VoiceCaptureHelper(private val context: Context) {
 
     companion object {
         private const val TAG = "VoiceCaptureHelper"
-        private const val UAC4_APP_KEY = "66de2b4906744ef0ae171a0470c1db4b6b034862"
-        private const val UAC4_APP_SECRET = "03acf6c971d14983a175fc26181079c0"
-        private const val UAC4_UDID = "123456"
         private const val ACTIVATION_TIMEOUT_SECONDS = 10L
         private const val UAC4_POST_INIT_SETTLE_MILLIS = 2_000L
     }

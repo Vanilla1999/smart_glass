@@ -17,11 +17,21 @@ android {
 
     buildFeatures {
         aidl = true
+        buildConfig = true
     }
 
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
     }
+
+    def uac4Props = new Properties()
+    def uac4PropsFile = rootProject.file("uac4.properties")
+    if (uac4PropsFile.exists()) {
+        uac4PropsFile.withInputStream { uac4Props.load(it) }
+    }
+    def uac4AppKey = uac4Props.getProperty("UAC4_APP_KEY") ?: System.getenv("UAC4_APP_KEY") ?: ""
+    def uac4AppSecret = uac4Props.getProperty("UAC4_APP_SECRET") ?: System.getenv("UAC4_APP_SECRET") ?: ""
+    def uac4Udid = uac4Props.getProperty("UAC4_UDID") ?: System.getenv("UAC4_UDID") ?: ""
 
     defaultConfig {
         applicationId "com.example.multi_scanner_example"
@@ -29,6 +39,9 @@ android {
         targetSdkVersion flutter.targetSdkVersion
         versionCode flutter.versionCode
         versionName flutter.versionName
+        buildConfigField("String", "UAC4_APP_KEY", "\"$uac4AppKey\"")
+        buildConfigField("String", "UAC4_APP_SECRET", "\"$uac4AppSecret\"")
+        buildConfigField("String", "UAC4_UDID", "\"$uac4Udid\"")
     }
 
     buildTypes {
