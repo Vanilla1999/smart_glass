@@ -3,15 +3,13 @@ import 'package:multi_scanner/multi_scanner.dart';
 import 'package:multi_scanner_example/main.dart';
 import 'package:multi_scanner_example/second/cubit/second_screen_state.dart';
 
-
-
-class SecondScreenCubit extends Cubit<SecondScreenState> implements MultiScannerDelegate {
+class SecondScreenCubit extends Cubit<SecondScreenState>
+    implements MultiScannerDelegate {
   SecondScreenCubit() : super(const SecondScreenState.loading());
-
 
   final MultiScanner getAccountUseCase = getIt<MultiScanner>();
 
-  void initScanner(){
+  void initScanner() {
     getAccountUseCase.addDelegate(this);
   }
 
@@ -31,5 +29,4 @@ class SecondScreenCubit extends Cubit<SecondScreenState> implements MultiScanner
     getAccountUseCase.removeDelegate(this);
     return super.close();
   }
-
 }

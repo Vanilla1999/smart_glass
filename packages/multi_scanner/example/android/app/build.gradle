@@ -4,8 +4,13 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+def mainAppIdentityParity =
+        (project.findProperty("MAIN_APP_IDENTITY_PARITY") ?: "false")
+                .toString()
+                .toBoolean()
+
 android {
-    namespace = "com.example.multi_scanner_example"
+    namespace = "ru.tander.smart_glasses"
 
     compileSdk flutter.compileSdkVersion
     ndkVersion flutter.ndkVersion
@@ -34,19 +39,42 @@ android {
     def uac4Udid = uac4Props.getProperty("UAC4_UDID") ?: System.getenv("UAC4_UDID") ?: ""
 
     defaultConfig {
-        applicationId "com.example.multi_scanner_example"
-        minSdkVersion 27
+        // Safe default can coexist with the production app. Pass
+        // -PMAIN_APP_IDENTITY_PARITY=true to use its exact applicationId; that
+        // build replaces/conflicts with the installed production package.
+        applicationId(mainAppIdentityParity
+                ? "ru.tander.smart_glasses"
+                : "com.example.multi_scanner_example")
+        minSdkVersion 26
         targetSdkVersion flutter.targetSdkVersion
         versionCode flutter.versionCode
         versionName flutter.versionName
+        ndk {
+            abiFilters "arm64-v8a"
+        }
         buildConfigField("String", "UAC4_APP_KEY", "\"$uac4AppKey\"")
         buildConfigField("String", "UAC4_APP_SECRET", "\"$uac4AppSecret\"")
         buildConfigField("String", "UAC4_UDID", "\"$uac4Udid\"")
+        buildConfigField(
+                "boolean",
+                "MAIN_APP_IDENTITY_PARITY",
+                mainAppIdentityParity.toString()
+        )
     }
 
     buildTypes {
         release {
             signingConfig signingConfigs.debug
+        }
+    }
+
+    packaging {
+        jniLibs {
+            excludes += [
+                    "lib/armeabi-v7a/**",
+                    "lib/x86/**",
+                    "lib/x86_64/**",
+            ]
         }
     }
 }
@@ -63,7 +91,11 @@ flutter {
 
 dependencies {
     implementation("com.google.android.material:material:1.12.0")
-    implementation(fileTree("libs"))
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
+
+    // Match android/app exactly. In particular, do not package the example-only
+    // ar_sdk_v1.5.jar through implementation(fileTree("libs")).
+    implementation(files("libs/glasses4mic-ssp-1.0.2.aar"))
+    implementation(files("libs/unisound-active-release-v1.0.2-20260316.aar"))
 }

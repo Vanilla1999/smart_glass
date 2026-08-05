@@ -16,39 +16,41 @@ class _ThirdScreenState extends State<ThirdScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text("3"),
-      ),
+      appBar: AppBar(title: Text("3")),
       body: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           BlocBuilder<ThirdScreenCubit, ThirdScreenState>(
-              buildWhen: (previousState, state) {
-            return state.maybeWhen(
-                onScan: (barcode) => true, orElse: () => false);
-          }, builder: (context, state) {
-            return state.maybeWhen(
-                onScan: (barcode) => Center(
-                      child: Text('Running on: $barcode\n'),
-                    ),
-                orElse: () => Container(
-                      color: Colors.red,
-                    ));
-          }),
-          Center(
-              child: ElevatedButton(
-            child: Text("Dialog"),
-            onPressed: () {
-              showAlertDialog(context);
+            buildWhen: (previousState, state) {
+              return state.maybeWhen(
+                onScan: (barcode) => true,
+                orElse: () => false,
+              );
             },
-          )),
-          Center(
-              child: ElevatedButton(
-            child: Text("previos"),
-            onPressed: () {
-              Navigator.of(context).pop();
+            builder: (context, state) {
+              return state.maybeWhen(
+                onScan: (barcode) =>
+                    Center(child: Text('Running on: $barcode\n')),
+                orElse: () => Container(color: Colors.red),
+              );
             },
-          )),
+          ),
+          Center(
+            child: ElevatedButton(
+              child: Text("Dialog"),
+              onPressed: () {
+                showAlertDialog(context);
+              },
+            ),
+          ),
+          Center(
+            child: ElevatedButton(
+              child: Text("previos"),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ),
         ],
       ),
     );
@@ -58,25 +60,18 @@ class _ThirdScreenState extends State<ThirdScreen> {
     context.read<ThirdScreenCubit>().openDialogForScan();
 
     // set up the button
-    Widget okButton = TextButton(
-      child: Text("OK"),
-      onPressed: () {},
-    );
+    Widget okButton = TextButton(child: Text("OK"), onPressed: () {});
 
     // set up the AlertDialog
     AlertDialog alert = AlertDialog(
       title: StreamBuilder<String>(
-        stream:  context.read<ThirdScreenCubit>().barcodeStream,
+        stream: context.read<ThirdScreenCubit>().barcodeStream,
         builder: (context, snapshot) {
-          return Center(
-            child: Text('Running on: ${snapshot.data}\n'),
-          );
-        }
+          return Center(child: Text('Running on: ${snapshot.data}\n'));
+        },
       ),
       content: Text("This is my message."),
-      actions: [
-        okButton,
-      ],
+      actions: [okButton],
     );
 
     // show the dialog

@@ -8,54 +8,70 @@ import android.hardware.display.DisplayManager
 import android.os.Bundle
 import android.util.Log
 import android.view.Display
-import android.view.View
-import android.widget.LinearLayout
-import android.widget.TextView
+import io.flutter.embedding.android.FlutterTextureView
+import io.flutter.embedding.android.FlutterView
+import io.flutter.embedding.engine.FlutterEngine
 
-class GlassesDisplayHelper(private val context: Context) {
-    private var presentation: SimplePresentation? = null
+/** Secondary-display path intentionally mirrors smart_glasses MainActivity. */
+class GlassesDisplayHelper(
+    private val context: Context,
+    private val flutterEngine: FlutterEngine,
+) {
+    private var presentation: FlutterEnginePresentation? = null
 
     fun show(): Boolean {
-        val dm = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
-        val displays = dm.displays
+        val displayManager =
+            context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+        val displays = displayManager.displays
         if (displays.size <= 1) {
             Log.w(TAG, "No secondary display found")
             return false
         }
         val secondary = displays[displays.size - 1]
         presentation?.dismiss()
-        presentation = SimplePresentation(context, secondary)
+        presentation = FlutterEnginePresentation(
+            context,
+            secondary,
+            flutterEngine,
+        ) {
+            presentation = null
+        }
         presentation?.show()
-        Log.i(TAG, "Glasses presentation shown on display=${secondary.displayId}")
+        Log.i(
+            TAG,
+            "Secondary Flutter engine presentation shown display=${secondary.displayId}",
+        )
         return true
     }
 
     fun hide() {
         presentation?.dismiss()
         presentation = null
-        Log.i(TAG, "Glasses presentation dismissed")
+        Log.i(TAG, "Secondary Flutter engine presentation dismissed")
     }
 
     fun isShowing(): Boolean = presentation != null
 
-    private class SimplePresentation(
+    private class FlutterEnginePresentation(
         context: Context,
         display: Display,
+        private val flutterEngine: FlutterEngine,
+        private val onDetached: () -> Unit,
     ) : Presentation(context, display) {
         override fun onCreate(savedInstanceState: Bundle?) {
             super.onCreate(savedInstanceState)
-            window?.setBackgroundDrawable(ColorDrawable(Color.BLACK))
-            val view = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = android.view.Gravity.CENTER
-                setBackgroundColor(Color.BLACK)
-                addView(TextView(context).apply {
-                    text = "Glasses Display Active"
-                    setTextColor(Color.WHITE)
-                    textSize = 20f
-                })
-            }
-            setContentView(view)
+            window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            val textureView = FlutterTextureView(context)
+            val flutterView = FlutterView(context, textureView)
+            setContentView(flutterView)
+            flutterView.attachToFlutterEngine(flutterEngine)
+            flutterEngine.lifecycleChannel.appIsResumed()
+        }
+
+        override fun onDetachedFromWindow() {
+            super.onDetachedFromWindow()
+            flutterEngine.lifecycleChannel.appIsPaused()
+            onDetached()
         }
     }
 

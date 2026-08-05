@@ -5,9 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 import 'package:multi_scanner/multi_scanner.dart';
-import 'package:multi_scanner_example/bluetooth_dialog_portrait_widget.dart';
 import 'package:multi_scanner_example/first/cubit/first_screen_cubit.dart';
 import 'package:multi_scanner_example/first/cubit/first_screen_state.dart';
+import 'package:multi_scanner_example/main_app_parity_runtime.dart';
 import 'package:multi_scanner_example/second/cubit/second_screen_cubit.dart';
 import 'package:multi_scanner_example/second/second.dart';
 import 'package:multi_scanner_example/third/cubit/third_screen_cubit.dart';
@@ -15,40 +15,58 @@ import 'package:multi_scanner_example/third/third.dart';
 
 GetIt getIt = GetIt.instance;
 
+@pragma('vm:entry-point')
+void glassesMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const _ParityGlassesApp());
+}
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   getIt.registerSingleton<MultiScanner>(MultiScanner.last());
   runApp(const MyApp());
 }
 
-class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+class _ParityGlassesApp extends StatelessWidget {
+  const _ParityGlassesApp();
 
   @override
-  State<MyApp> createState() => _MyAppState();
+  Widget build(BuildContext context) {
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Text(
+            'Secondary Flutter engine active',
+            style: TextStyle(color: Colors.white, fontSize: 20),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _MyAppState extends State<MyApp> {
-  @override
-  void initState() {
-    super.initState();
-  }
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       routes: {
         SecondScreen.route: (context) => BlocProvider(
-              create: (_) => SecondScreenCubit()..initScanner(),
-              child: const SecondScreen(),
-            ),
+          create: (_) => SecondScreenCubit()..initScanner(),
+          child: const SecondScreen(),
+        ),
         ThirdScreen.route: (context) => BlocProvider(
-              create: (_) => ThirdScreenCubit()..initScanner(),
-              child: const ThirdScreen(),
-            ),
+          create: (_) => ThirdScreenCubit()..initScanner(),
+          child: const ThirdScreen(),
+        ),
       },
       home: BlocProvider(
-        create: (_) => FirstScreenCubit()..initScanner(),
+        // Main-app parity startup owns scanner initialization so it can overlap
+        // UAC4 voice startup instead of completing before the test begins.
+        create: (_) => FirstScreenCubit(),
         child: const NewWidget(),
       ),
     );
@@ -63,59 +81,149 @@ class NewWidget extends StatefulWidget {
 }
 
 class _NewWidgetState extends State<NewWidget> {
+  static const MethodChannel _channel = MethodChannel('flashlight_test');
+
+  late final MainAppParityRuntime _parityRuntime;
   int flashlightState = 0;
   String voiceStatus = 'voice: idle';
+  String parityStatus = 'parity: not started';
   bool voiceOn = false;
   bool glassesDisplayOn = false;
-
-  static const _channel = MethodChannel('flashlight_test');
+  bool parityStarting = false;
 
   @override
   void initState() {
     super.initState();
-    _channel.setMethodCallHandler((call) async {
-      if (call.method == 'voiceState') {
-        final capturing = call.arguments['capturing'] == true;
-        setState(() {
-          voiceOn = capturing;
-          voiceStatus = capturing ? 'voice: capturing' : 'voice: idle';
-        });
-      }
+    _channel.setMethodCallHandler((MethodCall call) async {
+      if (call.method != 'voiceState' || !mounted) return;
+      final dynamic arguments = call.arguments;
+      final bool capturing = arguments is Map && arguments['capturing'] == true;
+      setState(() {
+        voiceOn = capturing;
+        voiceStatus = capturing ? 'voice: capturing' : 'voice: idle';
+      });
     });
+    final MovfastGlassController flashlight = MovfastGlassController();
+    _parityRuntime = MainAppParityRuntime(
+      startScanner: () =>
+          context.read<FirstScreenCubit>().startMainAppParityScanner(),
+      startVoice: () async =>
+          await _channel.invokeMethod<String>('startVoice') ?? 'unknown',
+      showGlassesDisplay: () async =>
+          await _channel.invokeMethod<bool>('showGlassesDisplay') ?? false,
+      getFlashlightState: flashlight.getFlashlightState,
+      setFlashlight: flashlight.setFlashlight,
+      nativeDiagnostics: _nativeDiagnostics,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_startMainAppParity());
+    });
+  }
+
+  @override
+  void dispose() {
+    _channel.setMethodCallHandler(null);
+    super.dispose();
+  }
+
+  Future<Map<String, dynamic>> _nativeDiagnostics() async {
+    final Map<dynamic, dynamic>? raw = await _channel
+        .invokeMethod<Map<dynamic, dynamic>>('getParityNativeDiagnostics');
+    if (raw == null) return const <String, dynamic>{};
+    return raw.map<String, dynamic>(
+      (dynamic key, dynamic value) =>
+          MapEntry<String, dynamic>(key.toString(), value),
+    );
+  }
+
+  Future<void> _startMainAppParity() async {
+    if (parityStarting) return;
+    setState(() {
+      parityStarting = true;
+      parityStatus = 'parity: starting...';
+    });
+    try {
+      final MainAppParityStartReport report = await _parityRuntime.start();
+      if (!mounted) return;
+      setState(() {
+        parityStarting = false;
+        voiceOn = report.voiceStatus.contains('captur');
+        glassesDisplayOn = report.displayShown;
+        voiceStatus = 'voice: ${report.voiceStatus}';
+        parityStatus = report.toString();
+      });
+    } catch (error, stackTrace) {
+      debugPrint('[MainAppParity] startup failed: $error\n$stackTrace');
+      if (!mounted) return;
+      setState(() {
+        parityStarting = false;
+        parityStatus = 'parity error: $error';
+      });
+    }
+  }
+
+  Future<void> _toggleFlashlightLikeMain() async {
+    try {
+      final FlashlightParityProbe probe = await _parityRuntime
+          .toggleFlashlightLikeMain();
+      debugPrint('[MainAppParity] $probe');
+      if (!mounted) return;
+      setState(() {
+        flashlightState = probe.observedAfter;
+        parityStatus = probe.toString();
+      });
+    } catch (error, stackTrace) {
+      debugPrint('[MainAppParity] flashlight failed: $error\n$stackTrace');
+      if (mounted) setState(() => parityStatus = 'flashlight error: $error');
+    }
+  }
+
+  Future<void> _showDiagnostics() async {
+    try {
+      final Map<String, dynamic> diagnostics = await _nativeDiagnostics();
+      if (mounted) setState(() => parityStatus = 'native=$diagnostics');
+    } catch (error) {
+      if (mounted) setState(() => parityStatus = 'diagnostics error: $error');
+    }
   }
 
   Future<void> _toggleVoice() async {
     try {
       if (voiceOn) {
-        final res = await _channel.invokeMethod<String>('stopVoice');
+        final String? response = await _channel.invokeMethod<String>(
+          'stopVoice',
+        );
+        if (!mounted) return;
         setState(() {
           voiceOn = false;
-          voiceStatus = 'voice: $res';
+          voiceStatus = 'voice: $response';
         });
       } else {
-        final res = await _channel.invokeMethod<String>('startVoice');
+        final String? response = await _channel.invokeMethod<String>(
+          'startVoice',
+        );
+        if (!mounted) return;
         setState(() {
-          voiceOn = true;
-          voiceStatus = 'voice: $res';
+          voiceOn = response?.contains('captur') == true;
+          voiceStatus = 'voice: $response';
         });
       }
-    } catch (e) {
-      setState(() {
-        voiceStatus = 'voice error: $e';
-      });
+    } catch (error) {
+      if (mounted) setState(() => voiceStatus = 'voice error: $error');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Scanner + Voice Test'),
-      ),
+      appBar: AppBar(title: const Text('Main app flashlight parity')),
       body: BlocBuilder<FirstScreenCubit, FirstScreenState>(
-        buildWhen: (previousState, state) {
-          return state.when(
-              loading: () => true, suc: () => true, onScan: (barcode) => false);
+        buildWhen: (FirstScreenState previous, FirstScreenState current) {
+          return current.when(
+            loading: () => true,
+            suc: () => true,
+            onScan: (_) => false,
+          );
         },
         builder: _builder,
       ),
@@ -123,163 +231,163 @@ class _NewWidgetState extends State<NewWidget> {
   }
 
   Widget _builder(BuildContext context, FirstScreenState state) {
-    final cubit = context.read<FirstScreenCubit>();
-    final scannerController = MultiScannerController();
-    bool flag = false;
+    final FirstScreenCubit cubit = context.read<FirstScreenCubit>();
+    final MovfastGlassController flashlight = MovfastGlassController();
+    var bluetoothDialogFlag = false;
     return SingleChildScrollView(
+      padding: const EdgeInsets.all(12),
       child: Column(
-        children: [
-          BlocBuilder<FirstScreenCubit, FirstScreenState>(
-              buildWhen: (previousState, state) {
-            return state.maybeWhen(
-                onScan: (barcode) => true, orElse: () => false);
-          }, builder: (context, state) {
-            return state.maybeWhen(
-                onScan: (barcode) => Center(
-                      child: Text('Running on: $barcode\n'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  const Text(
+                    'Production parity mode',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  const SizedBox(height: 8),
+                  SelectableText(parityStatus),
+                  const SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: parityStarting ? null : _startMainAppParity,
+                    child: const Text('Start / read main-app parity runtime'),
+                  ),
+                  ElevatedButton(
+                    onPressed: _toggleFlashlightLikeMain,
+                    child: const Text(
+                      'Toggle flashlight exactly like main app',
                     ),
-                orElse: () => const SizedBox.shrink());
-          }),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pushNamed(SecondScreen.route);
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      _parityRuntime.resetTrackedFlashlightState();
+                      setState(
+                        () => parityStatus = 'tracked flashlight state reset',
+                      );
+                    },
+                    child: const Text('Reset tracked flashlight state'),
+                  ),
+                  ElevatedButton(
+                    onPressed: _showDiagnostics,
+                    child: const Text('Read native parity diagnostics'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text('Flashlight state: $flashlightState'),
+          Text(voiceStatus),
+          Text('Glasses display: ${glassesDisplayOn ? 'ON' : 'OFF'}'),
+          const Divider(),
+          BlocBuilder<FirstScreenCubit, FirstScreenState>(
+            buildWhen: (FirstScreenState previous, FirstScreenState current) {
+              return current.maybeWhen(
+                onScan: (_) => true,
+                orElse: () => false,
+              );
             },
-            child: const Text("нажми"),
+            builder: (BuildContext context, FirstScreenState current) {
+              return current.maybeWhen(
+                onScan: (String barcode) => Text('Running on: $barcode'),
+                orElse: () => const SizedBox.shrink(),
+              );
+            },
+          ),
+          ElevatedButton(
+            onPressed: () =>
+                Navigator.of(context).pushNamed(SecondScreen.route),
+            child: const Text('Open second scanner screen'),
           ),
           ElevatedButton(
             onPressed: () {
-              cubit.goToCOMMode(flag);
-              flag = !flag;
+              cubit.goToCOMMode(bluetoothDialogFlag);
+              bluetoothDialogFlag = !bluetoothDialogFlag;
             },
-            child: const Text("goToCOMMode"),
+            child: const Text('Show Bluetooth dialog'),
           ),
           ElevatedButton(
-            onPressed: () {
-              cubit.goToHIDMode();
-              flag = !flag;
-            },
-            child: const Text("goToHIDMode"),
+            onPressed: cubit.goToHIDMode,
+            child: const Text('goToHIDMode'),
           ),
           ElevatedButton(
-            onPressed: () {
-              cubit.scanBarcodeByCamera();
-            },
-            child: const Text("scanBarcode"),
+            onPressed: cubit.scanBarcodeByCamera,
+            child: const Text('scanBarcode'),
           ),
           ElevatedButton(
             onPressed: () async {
-              const tag = '[FlashlightTrace]';
-              debugPrint('$tag prepareForWear begin');
-              await BaseController().prepareForWear();
-              debugPrint('$tag prepareForWear done — scanner active');
-              setState(() {
-                voiceStatus = 'scanner: active (prepareForWear)';
-              });
-            },
-            child: const Text("startScanning"),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              const tag = '[FlashlightTrace]';
-              debugPrint('$tag pauseForWear begin');
-              await BaseController().pauseForWear();
-              debugPrint('$tag pauseForWear done — scanner paused');
-              setState(() {
-                voiceStatus = 'scanner: paused';
-              });
-            },
-            child: const Text("stopScanning"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              MultiScannerBluetooth().showBluetoothDialog();
-            },
-            child: const Text("bluetooth"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              cubit.disableScanner();
-            },
-            child: const Text("disableScanner"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              cubit.enableScanner();
-            },
-            child: const Text("enableScanner"),
-          ),
-          const SizedBox(height: 20),
-          Text('Flashlight state: $flashlightState',
-              style: const TextStyle(fontSize: 16)),
-          ElevatedButton(
-            onPressed: () async {
-              const tag = '[FlashlightTrace]';
-              debugPrint('$tag toggle begin, voiceOn=$voiceOn');
-              final newState = flashlightState == 0 ? 1 : 0;
-              final began = DateTime.now();
-              debugPrint('$tag setFlashlight($newState) begin');
-              await scannerController.setFlashlight(newState);
-              final elapsed =
-                  DateTime.now().difference(began).inMilliseconds;
-              debugPrint('$tag setFlashlight($newState) done in ${elapsed}ms');
-              final state = await scannerController.getFlashlightState();
-              debugPrint('$tag getFlashlightState=$state');
-              setState(() {
-                flashlightState = state;
-              });
-            },
-            child: const Text("toggleFlashlight"),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              const tag = '[FlashlightTrace]';
-              debugPrint('$tag === RAPID TOGGLE 10x BEGIN ===');
-              for (int i = 0; i < 10; i++) {
-                final target = i % 2 == 0 ? 1 : 0;
-                final began = DateTime.now();
-                debugPrint('$tag rapid #$i setFlashlight($target) begin');
-                await scannerController.setFlashlight(target);
-                final elapsed =
-                    DateTime.now().difference(began).inMilliseconds;
-                debugPrint(
-                    '$tag rapid #$i setFlashlight($target) done in ${elapsed}ms');
-                final state = await scannerController.getFlashlightState();
-                debugPrint('$tag rapid #$i getFlashlightState=$state');
-                setState(() {
-                  flashlightState = state;
-                });
-                await Future.delayed(const Duration(milliseconds: 200));
+              await cubit.initScanner();
+              if (mounted) {
+                setState(
+                  () => parityStatus = 'original example init completed',
+                );
               }
-              debugPrint('$tag === RAPID TOGGLE 10x END ===');
             },
-            child: const Text("Rapid Toggle (10x)"),
+            child: const Text('Run original example scanner init'),
           ),
-          const SizedBox(height: 20),
-          Text(voiceStatus, style: const TextStyle(fontSize: 16)),
+          ElevatedButton(
+            onPressed: () async {
+              await BaseController().pauseForWear();
+              if (mounted) setState(() => parityStatus = 'scanner paused');
+            },
+            child: const Text('pauseForWear'),
+          ),
+          ElevatedButton(
+            onPressed: cubit.disableScanner,
+            child: const Text('disableScanner'),
+          ),
+          ElevatedButton(
+            onPressed: cubit.enableScanner,
+            child: const Text('enableScanner'),
+          ),
           ElevatedButton(
             onPressed: _toggleVoice,
-            child: Text(voiceOn ? "Stop Voice" : "Start Voice"),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Glasses Display: ${glassesDisplayOn ? "ON" : "OFF"}',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            child: Text(voiceOn ? 'Stop Voice' : 'Start Voice'),
           ),
           ElevatedButton(
             onPressed: () async {
-              try {
-                if (glassesDisplayOn) {
-                  await _channel.invokeMethod('hideGlassesDisplay');
-                  setState(() => glassesDisplayOn = false);
-                } else {
-                  final ok = await _channel.invokeMethod<bool>('showGlassesDisplay') ?? false;
-                  setState(() => glassesDisplayOn = ok);
-                }
-              } catch (e) {
-                setState(() => voiceStatus = 'glasses display error: $e');
+              if (glassesDisplayOn) {
+                await _channel.invokeMethod<void>('hideGlassesDisplay');
+                if (mounted) setState(() => glassesDisplayOn = false);
+              } else {
+                final bool shown =
+                    await _channel.invokeMethod<bool>('showGlassesDisplay') ??
+                    false;
+                if (mounted) setState(() => glassesDisplayOn = shown);
               }
             },
-            child: Text(glassesDisplayOn ? "Hide Glasses Display" : "Show Glasses Display"),
+            child: Text(
+              glassesDisplayOn
+                  ? 'Hide secondary Flutter engine'
+                  : 'Show secondary Flutter engine',
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              // Baseline direct write, retained for A/B comparison with the
+              // production read/track/write path above.
+              final int target = flashlightState == 0 ? 1 : 0;
+              await flashlight.setFlashlight(target);
+              final int observed = await flashlight.getFlashlightState();
+              if (mounted) setState(() => flashlightState = observed);
+            },
+            child: const Text('Baseline direct flashlight toggle'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              for (var index = 0; index < 10; index++) {
+                final int target = index.isEven ? 1 : 0;
+                await flashlight.setFlashlight(target);
+                final int observed = await flashlight.getFlashlightState();
+                if (mounted) setState(() => flashlightState = observed);
+                await Future<void>.delayed(const Duration(milliseconds: 200));
+              }
+            },
+            child: const Text('Rapid Toggle (10x)'),
           ),
         ],
       ),
