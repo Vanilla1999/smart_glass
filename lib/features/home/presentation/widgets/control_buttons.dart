@@ -9,6 +9,8 @@ class ControlButtons extends StatelessWidget {
     required this.onPrintTags,
     required this.onPrintTagsReal,
     required this.onPrintTagsTest,
+    required this.onToggleFlashlight,
+    this.flashlightState,
     super.key,
   });
 
@@ -18,6 +20,8 @@ class ControlButtons extends StatelessWidget {
   final VoidCallback onPrintTags;
   final VoidCallback onPrintTagsReal;
   final VoidCallback onPrintTagsTest;
+  final VoidCallback onToggleFlashlight;
+  final int? flashlightState;
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +37,15 @@ class ControlButtons extends StatelessWidget {
           child: const Text('Очистить логи'),
         ),
         const SizedBox(height: 40),
+        ElevatedButton(
+          onPressed: onToggleFlashlight,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.amber,
+            foregroundColor: Colors.black,
+          ),
+          child: Text('Фонарик ${flashlightState == 1 ? "ВКЛ" : "ВЫКЛ"}'),
+        ),
+        const SizedBox(height: 10),
         ElevatedButton(
           onPressed: onPrintTags,
           style: ElevatedButton.styleFrom(

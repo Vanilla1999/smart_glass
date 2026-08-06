@@ -68,7 +68,7 @@ class MainAppParityRuntime {
     final List<Object> completed = await Future.wait<Object>(<Future<Object>>[
       scanner,
       voice,
-    ], eagerError: true);
+    ], eagerError: false);
     total.stop();
 
     final _TimedResult<bool> scannerResult = completed[0] as _TimedResult<bool>;

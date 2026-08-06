@@ -53,6 +53,7 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
     }
 
     private lateinit var channel: MethodChannel
+    private var directGlass: DirectMovfastGlassesScanner? = null
     private var eventChannel: EventChannel? = null
     private var eventSinkServiceConnections: EventSink? = null
     private var eventScannerDisabled: EventChannel? = null
@@ -136,6 +137,78 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
             "getHoneywellLight" -> {
                 launch {
                     result.success((ViScanner.getAdditionalHoneywell()?.getFlagLight()))
+                }
+            }
+
+            "directInit" -> {
+                launch {
+                    try {
+                        val ctx = activity ?: flutterPluginBinding?.applicationContext
+                        if (ctx == null) { result.error("NO_CONTEXT", "No context", null); return@launch }
+                        val glass = directGlass ?: DirectMovfastGlassesScanner().also { directGlass = it }
+                        glass.init(ctx)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        Log.e("DirectGlass", "init failed", e)
+                        result.error("DIRECT_INIT_FAILED", e.message, null)
+                    }
+                }
+            }
+
+            "directRelease" -> {
+                launch {
+                    try {
+                        val ctx = activity ?: flutterPluginBinding?.applicationContext
+                        directGlass?.release(ctx!!)
+                        directGlass = null
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("DIRECT_RELEASE_FAILED", e.message, null)
+                    }
+                }
+            }
+
+            "directSetFlashlight" -> {
+                val state = call.argument<Int>("state") ?: 0
+                Log.i("DirectGlass", "directSetFlashlight($state) begin")
+                launch {
+                    try {
+                        val glass = directGlass
+                        if (glass == null) {
+                            Log.w("DirectGlass", "directSetFlashlight($state): not initialized")
+                            result.success(null)
+                            return@launch
+                        }
+                        glass.setFlashlight(state)
+                        result.success(null)
+                    } catch (e: Exception) {
+                        Log.e("DirectGlass", "directSetFlashlight($state) FAILED", e)
+                        result.error("0", e.message, null)
+                    }
+                }
+            }
+
+            "directGetFlashlightState" -> {
+                Log.i("DirectGlass", "directGetFlashlightState begin")
+                launch {
+                    val state = directGlass?.getFlashlightState() ?: 0
+                    Log.i("DirectGlass", "directGetFlashlightState: state=$state")
+                    result.success(state)
+                }
+            }
+
+            "directTakePhoto" -> {
+                launch {
+                    try {
+                        val ctx = activity ?: flutterPluginBinding?.applicationContext
+                        if (ctx == null) { result.error("NO_CONTEXT", "No context", null); return@launch }
+                        val glass = directGlass
+                        if (glass == null) { result.error("NOT_INIT", "Call directInit first", null); return@launch }
+                        val file = glass.takePhoto(ctx.packageName, ctx)
+                        result.success(file.absolutePath)
+                    } catch (e: Exception) {
+                        result.error("PHOTO_FAILED", e.message, null)
+                    }
                 }
             }
 
@@ -323,9 +396,6 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
                                     }
                                 }
                                 ViScanner.init(activity!!, registry = componentActivity!!.activityResultRegistry)
-                                if (!ViScanner.isInitScanner()) {
-                                    ViScanner.initScanner()
-                                }
                                 ViScanner.prepare()
                                 wearPrepared = true
                                 viBluetooth = ViScanner.getViBluetoothScannerApi()

@@ -176,6 +176,9 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
                         onPrintTags: () => _openWearModule(context),
                         onPrintTagsReal: () => _openWearModuleReal(context),
                         onPrintTagsTest: () => _openWearModuleTest(context),
+                        onToggleFlashlight: () =>
+                            context.read<HomeCubit>().toggleFlashlight(),
+                        flashlightState: state.flashlightState,
                       );
                     }
                     return const CircularProgressIndicator();

@@ -12,7 +12,9 @@ class HomeInitial extends HomeState {
 class HomeLoaded extends HomeState {
   const HomeLoaded({
     required this.counter,
+    this.flashlightState,
   });
 
   final int counter;
+  final int? flashlightState;
 }

@@ -18,7 +18,6 @@ class ScannerCubit extends Cubit<ScannerState> implements MultiScannerDelegate {
 
     try {
       await _baseController.init();
-      _baseController.setRecomendedSettings();
 
       _serviceSub = _baseController.isServiceConnected.listen((connected) {
         if (connected) {

@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:multi_scanner/multi_scanner.dart';
 import 'package:smart_glasses/core/services/method_channel_service.dart';
 import 'package:smart_glasses/features/home/presentation/cubit/home_state.dart';
 
@@ -8,10 +9,26 @@ class HomeCubit extends Cubit<HomeState> {
 
   final MethodChannelService _methodChannelService;
   int _counter = 0;
+  int? _flashlightState;
 
   /// Initialize home screen
   void init() {
-    emit(HomeLoaded(counter: _counter));
+    emit(HomeLoaded(counter: _counter, flashlightState: _flashlightState));
+  }
+
+  /// Toggle glasses flashlight (same logic as WearFlowController._toggleScannerFlashlight)
+  Future<void> toggleFlashlight() async {
+    final controller = MovfastGlassController();
+    final hardwareState = await controller.getFlashlightState();
+    final currentState = _flashlightState ?? hardwareState;
+    final targetState = currentState == 1 ? 0 : 1;
+    print(
+      '[HomeCubit] flashlight hardware=$hardwareState '
+      'tracked=$currentState target=$targetState',
+    );
+    await controller.setFlashlight(targetState);
+    _flashlightState = targetState;
+    emit(HomeLoaded(counter: _counter, flashlightState: _flashlightState));
   }
 
   /// Increment counter

@@ -34,7 +34,7 @@ class InitializationCubit extends Cubit<InitializationState> {
   /// Initialize all services
   Future<void> init() async {
     await _methodChannelService.showGlassesInitialization();
-    
+
     _scannerSub = _scannerCubit.stream.listen((state) {
       if (state is ScannerReady) {
         _scannerReady = true;
@@ -42,31 +42,14 @@ class InitializationCubit extends Cubit<InitializationState> {
       }
     });
 
-    _voiceSub = _voiceCubit.stream.listen((state) {
-      if (state is VoiceReady) {
-        _voiceReady = true;
-        _updateState();
-      }
-    });
-
     if (_scannerCubit.state is ScannerReady) {
       _scannerReady = true;
     }
-    if (_voiceCubit.state is VoiceReady) {
-      _voiceReady = true;
-    }
+
+    // Vosk voice init disabled for flashlight diagnostics
+    _voiceReady = true;
 
     final scannerFuture = _scannerCubit.init();
-    final voiceFuture = _voiceCubit.init();
-
-    await Future.any([
-      voiceFuture,
-      Future.delayed(const Duration(seconds: 30)),
-    ]);
-
-    if (_voiceCubit.state is VoiceReady) {
-      _voiceReady = true;
-    }
 
     await Future.any([
       scannerFuture,

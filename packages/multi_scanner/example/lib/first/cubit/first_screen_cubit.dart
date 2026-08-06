@@ -52,7 +52,6 @@ class FirstScreenCubit extends Cubit<FirstScreenState>
     await baseScanner.init();
     await MultiScannerBluetooth().init();
     await mertechController.goToCOMMode();
-    await baseScanner.setRecomendedSettings();
     await wakeUpController.wakeUpOnScanButton();
 
     print(await BaseController().isPCH());
