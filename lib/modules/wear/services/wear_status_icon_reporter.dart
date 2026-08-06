@@ -301,6 +301,17 @@ class WearStatusIconReporter {
     });
   }
 
+  Future<void> showTransientStatusText(
+    WearScreenId screen,
+    String statusText, {
+    Duration duration = const Duration(seconds: 3),
+  }) async {
+    final WearGlassesPayload? current = _lastPayload;
+    if (current == null) return;
+    final WearGlassesPayload withNotice = current.copyWithStatusText(statusText);
+    await showTransientFastForScreen(screen, withNotice, duration: duration);
+  }
+
   Future<void> show(WearGlassesPayload payload) async {
     final int lifecycleGeneration = _lifecycleGeneration;
     if (_shouldDeferForVoiceStartup(payload)) return;

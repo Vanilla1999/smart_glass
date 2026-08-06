@@ -350,10 +350,12 @@ class _WearPrinterSelectScreenState
     );
     switch (match.type) {
       case VoiceListMatchType.none:
-        _showVoiceSearchMessage('Не найдено');
+        WearStatusIconReporter.I.showTransientStatusText(
+          WearScreenId.printerSelect, 'Ничего не найдено');
         break;
       case VoiceListMatchType.ambiguous:
-        _showVoiceSearchMessage('Назовите точнее');
+        WearStatusIconReporter.I.showTransientStatusText(
+          WearScreenId.printerSelect, 'Назовите точнее');
         break;
       case VoiceListMatchType.unique:
         final WearPrinter printer = match.item!;

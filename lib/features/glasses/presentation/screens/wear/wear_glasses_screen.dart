@@ -480,7 +480,7 @@ class _WearList extends StatelessWidget {
         state.pageText != null && state.pageText!.trim().isNotEmpty;
     final bool showNotice =
         state.statusText != null && state.statusText!.trim().isNotEmpty;
-    final bool reserveNoticeSpace = state.title == 'Товарная позиция';
+    final bool reserveNoticeSpace = true;
     return SizedBox(
       width: 403,
       child: Column(

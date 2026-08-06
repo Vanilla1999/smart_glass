@@ -227,10 +227,12 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
     );
     switch (match.type) {
       case VoiceListMatchType.none:
-        _showVoiceSearchMessage('Не найдено');
+        WearStatusIconReporter.I.showTransientStatusText(
+          WearScreenId.productSelect, 'Ничего не найдено');
         break;
       case VoiceListMatchType.ambiguous:
-        _showVoiceSearchMessage('Назовите точнее');
+        WearStatusIconReporter.I.showTransientStatusText(
+          WearScreenId.productSelect, 'Назовите точнее');
         break;
       case VoiceListMatchType.unique:
         final BarcodeProductInfo product = match.item!;

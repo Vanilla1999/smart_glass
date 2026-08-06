@@ -245,10 +245,12 @@ class _WearAvailabilityGroupScreenState
     );
     switch (match.type) {
       case VoiceListMatchType.none:
-        _showVoiceSearchMessage('Не найдено');
+        WearStatusIconReporter.I.showTransientStatusText(
+          WearScreenId.availabilityGroup, 'Ничего не найдено');
         break;
       case VoiceListMatchType.ambiguous:
-        _showVoiceSearchMessage('Назовите точнее');
+        WearStatusIconReporter.I.showTransientStatusText(
+          WearScreenId.availabilityGroup, 'Назовите точнее');
         break;
       case VoiceListMatchType.unique:
         final WearAvailabilityGroup group = match.item!;
