@@ -252,6 +252,8 @@ class SpeechRecognitionService {
   final VoiceRecognitionMetrics _voiceMetrics = VoiceRecognitionMetrics();
   final VoiceReplayOwnershipStateMachine _replayOwnership =
       VoiceReplayOwnershipStateMachine();
+  final Set<VoiceReplayContext> _replaysPreemptibleByNewSegment =
+      <VoiceReplayContext>{};
   final Map<int, List<String>> _liveFreeTextResults = <int, List<String>>{};
   final Map<int, String> _naturalCommandFinals = <int, String>{};
   final Map<int, _VoiceResultContext> _utteranceContexts =
@@ -949,7 +951,16 @@ class SpeechRecognitionService {
     required SpeechSegment segment,
     required int commandUtteranceId,
   }) {
-    if (segment.isEndpoint) return;
+    if (segment.isEndpoint) {
+      _admittedCommandUtteranceId = _commandUtteranceId;
+      print(
+        '[VOICE_BOUNDARY] natural endpoint aligned at acoustic endpoint '
+        'captureEpoch=$captureEpoch segmentId=${segment.segmentId} '
+        'previousUtteranceId=$commandUtteranceId '
+        'currentUtteranceId=$_commandUtteranceId',
+      );
+      return;
+    }
     _naturalEndpointTail = (
       captureEpoch: captureEpoch,
       segmentId: segment.segmentId,
@@ -968,9 +979,22 @@ class SpeechRecognitionService {
   ) {
     final tail = _naturalEndpointTail;
     if (tail == null) return false;
-    if (tail.captureEpoch != captureEpoch ||
-        tail.segmentId != segment.segmentId) {
+    if (tail.captureEpoch != captureEpoch) {
       _naturalEndpointTail = null;
+      return false;
+    }
+    if (tail.segmentId != segment.segmentId) {
+      _naturalEndpointTail = null;
+      if (segment.segmentId > tail.segmentId) {
+        _admittedCommandUtteranceId = _commandUtteranceId;
+        print(
+          '[VOICE_BOUNDARY] natural endpoint advanced to new segment '
+          'captureEpoch=$captureEpoch previousSegmentId=${tail.segmentId} '
+          'segmentId=${segment.segmentId} '
+          'previousUtteranceId=${tail.commandUtteranceId} '
+          'currentUtteranceId=$_commandUtteranceId',
+        );
+      }
       return false;
     }
     if (_speechSegmenter.lastDiagnostics.speaking) {
@@ -1660,6 +1684,12 @@ class SpeechRecognitionService {
               _commandPartialText,
             ) !=
             null;
+    final String commandEvidenceText =
+        resultText.trim().isNotEmpty ? resultText : _commandPartialText;
+    final String normalizedCommandEvidence =
+        VoiceListMatcher.normalize(commandEvidenceText);
+    final bool cancelReplayOnNewerSegment =
+        normalizedCommandEvidence.isEmpty || normalizedCommandEvidence == 'unk';
     if (commandFound &&
         commandUtteranceId > _latestActionableCommandUtteranceId) {
       _latestActionableCommandUtteranceId = commandUtteranceId;
@@ -1673,6 +1703,26 @@ class SpeechRecognitionService {
             !commandFound
         ? _matchExactDynamicCommandFinal(resultText, resultContext)
         : null;
+    final _StableDynamicCommandHypothesis? commandFallback =
+        exactDynamicItem == null &&
+                commandContextCurrent &&
+                _freeTextEnabled &&
+                replay.isNotEmpty &&
+                !commandFound
+            ? _matchAmbiguousAdvertisedCommandFinal(
+                resultText,
+                resultContext,
+              )
+            : null;
+    if (commandFallback != null) {
+      print(
+        '[VOICE_COMMAND_FALLBACK] captured '
+        'screen=${resultContext.sourceScreen.name} '
+        'utteranceId=$commandUtteranceId '
+        'text="${VoiceListMatcher.normalize(commandFallback.text)}" '
+        'matchCount=${commandFallback.matchCount}',
+      );
+    }
     if (exactDynamicItem != null) {
       markActionableCommandUtterance(commandUtteranceId);
       final int decidedAtMillis = DateTime.now().millisecondsSinceEpoch;
@@ -1723,6 +1773,8 @@ class SpeechRecognitionService {
           segment: segment,
           commandUtteranceId: commandUtteranceId,
           resultContext: resultContext,
+          commandFallback: commandFallback,
+          cancelOnNewerSegment: cancelReplayOnNewerSegment,
         );
       }
     }
@@ -2156,6 +2208,8 @@ class SpeechRecognitionService {
     required SpeechSegment segment,
     required int commandUtteranceId,
     _VoiceResultContext? resultContext,
+    _StableDynamicCommandHypothesis? commandFallback,
+    bool cancelOnNewerSegment = false,
     void Function(String text, int replayMs)? onCompleted,
   }) {
     final VoiceReplayContext replayContext = _replayContext(
@@ -2164,6 +2218,9 @@ class SpeechRecognitionService {
       commandUtteranceId,
       resultContext,
     );
+    if (cancelOnNewerSegment) {
+      _replaysPreemptibleByNewSegment.add(replayContext);
+    }
     final Future<void> next =
         _freeTextAudioProcessing.then((_) => _runFreeTextReplay(
               bytes,
@@ -2173,10 +2230,14 @@ class SpeechRecognitionService {
               commandUtteranceId: commandUtteranceId,
               replayContext: replayContext,
               resultContext: resultContext,
+              commandFallback: commandFallback,
               onCompleted: onCompleted,
             ));
+    final Future<void> guarded = next.whenComplete(
+      () => _replaysPreemptibleByNewSegment.remove(replayContext),
+    );
     _freeTextAudioProcessing =
-        next.catchError((Object error, StackTrace stack) async {
+        guarded.catchError((Object error, StackTrace stack) async {
       print('[VOICE_FREE_TEXT] replay failed: $error\n$stack');
     });
   }
@@ -2209,6 +2270,7 @@ class SpeechRecognitionService {
     required int commandUtteranceId,
     required VoiceReplayContext replayContext,
     _VoiceResultContext? resultContext,
+    _StableDynamicCommandHypothesis? commandFallback,
     void Function(String text, int replayMs)? onCompleted,
   }) async {
     _replayOwnership.begin(replayContext);
@@ -2420,22 +2482,39 @@ class SpeechRecognitionService {
         'utteranceId=$commandUtteranceId text="$text" replayMs=$replayMs',
       );
       onCompleted?.call(text, replayMs);
-      if (text.isNotEmpty) {
+      final _ReplayResolution resolution = _resolveReplayResult(
+        replayText: text,
+        commandFallback: commandFallback,
+        context: resultContext ?? _currentResultContext(commandUtteranceId),
+      );
+      if (commandFallback != null) {
+        print(
+          '[VOICE_REPLAY_ARBITRATION] '
+          'command="${VoiceListMatcher.normalize(commandFallback.text)}" '
+          'commandMatchCount=${commandFallback.matchCount} '
+          'replay="${VoiceListMatcher.normalize(text)}" '
+          'replayMatchType=${resolution.replayMatchType.name} '
+          'replayMatchCount=${resolution.replayMatchCount} '
+          'selected=${resolution.reason}',
+        );
+      }
+      if (resolution.text.isNotEmpty) {
         _emitResult(
           _RecognitionSource.freeText,
-          text,
+          resolution.text,
           epoch: epoch,
           captureEpoch: captureEpoch,
           kind: RecognitionKind.streamFinal,
           segment: segment,
           commandUtteranceId: commandUtteranceId,
           resultContext: resultContext,
+          dynamicItemId: resolution.dynamicItemId,
         );
         _replayOwnership.resolve(
           replayContext,
           VoiceReplayOwnershipStatus.resolvedAsDynamicPhrase,
         );
-        _logReplayDecision(replayContext, 'accepted', 'dynamic_phrase');
+        _logReplayDecision(replayContext, 'accepted', resolution.reason);
       } else {
         _replayOwnership.resolve(
           replayContext,
@@ -2475,6 +2554,108 @@ class SpeechRecognitionService {
       );
       rethrow;
     }
+  }
+
+  _ReplayResolution _resolveReplayResult({
+    required String replayText,
+    required _StableDynamicCommandHypothesis? commandFallback,
+    required _VoiceResultContext context,
+  }) {
+    final String trimmedReplay = replayText.trim();
+    if (commandFallback == null) {
+      return _ReplayResolution(
+        text: trimmedReplay,
+        replayMatchType: VoiceListMatchType.none,
+        replayMatchCount: 0,
+        reason: trimmedReplay.isEmpty ? 'empty_result' : 'dynamic_phrase',
+      );
+    }
+
+    final WearVoiceCommand? fixedCommand =
+        _commandParser.parseExactForScreen(context.sourceScreen, trimmedReplay);
+    if (fixedCommand != null) {
+      return _ReplayResolution(
+        text: commandFallback.text,
+        replayMatchType: VoiceListMatchType.none,
+        replayMatchCount: 0,
+        reason: 'command_ambiguous_replay_command_conflict',
+      );
+    }
+
+    final VoiceDynamicItemsSnapshot items =
+        _dynamicItemsProvider(context.sourceScreen);
+    VoiceListMatch<VoiceDynamicItem> replayMatch =
+        VoiceListMatch<VoiceDynamicItem>.none();
+    if (trimmedReplay.isNotEmpty) {
+      replayMatch = VoiceListMatcher.matchExactPhrase(
+        trimmedReplay,
+        items.items,
+        (VoiceDynamicItem item) => item.label,
+        aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
+      );
+      if (replayMatch.type == VoiceListMatchType.none) {
+        replayMatch = VoiceListMatcher.match(
+          trimmedReplay,
+          items.items,
+          (VoiceDynamicItem item) => item.label,
+          aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
+        );
+      }
+    }
+    final Set<String> replayItemIds =
+        replayMatch.matches.map((VoiceDynamicItem item) => item.id).toSet();
+    final List<String> commandWords = VoiceListMatcher.normalize(
+      commandFallback.text,
+    )
+        .split(' ')
+        .where((String word) => word.isNotEmpty)
+        .toList(growable: false);
+    final List<String> replayWords = VoiceListMatcher.normalize(
+      trimmedReplay,
+    )
+        .split(' ')
+        .where((String word) => word.isNotEmpty)
+        .toList(growable: false);
+    final bool replayContainsCommandEvidence = commandWords.isNotEmpty &&
+        commandWords.every(
+          (String commandWord) => replayWords.any(
+            (String replayWord) =>
+                VoiceListMatcher.wordsMatch(commandWord, replayWord),
+          ),
+        );
+    final bool narrowsCommandHypothesis = replayContainsCommandEvidence &&
+        replayItemIds.isNotEmpty &&
+        replayItemIds.every(commandFallback.itemIds.contains) &&
+        replayItemIds.length < commandFallback.matchCount;
+    if (replayMatch.type == VoiceListMatchType.unique &&
+        narrowsCommandHypothesis) {
+      return _ReplayResolution(
+        text: trimmedReplay,
+        dynamicItemId: replayMatch.item?.id,
+        replayMatchType: replayMatch.type,
+        replayMatchCount: replayItemIds.length,
+        reason: 'replay_unique_refinement',
+      );
+    }
+    if (replayMatch.type == VoiceListMatchType.ambiguous &&
+        narrowsCommandHypothesis) {
+      return _ReplayResolution(
+        text: trimmedReplay,
+        replayMatchType: replayMatch.type,
+        replayMatchCount: replayItemIds.length,
+        reason: 'replay_narrower_ambiguous_refinement',
+      );
+    }
+    return _ReplayResolution(
+      text: commandFallback.text,
+      replayMatchType: replayMatch.type,
+      replayMatchCount: replayItemIds.length,
+      reason: replayMatch.type == VoiceListMatchType.none
+          ? 'command_ambiguous_fallback'
+          : replayContainsCommandEvidence
+              ? 'command_ambiguous_more_reliable'
+              : 'command_ambiguous_replay_conflict',
+    );
   }
 
   Future<void> _retireCancelledReplayRecognizer({
@@ -2524,6 +2705,14 @@ class SpeechRecognitionService {
         _replayStaleReason(context);
     if (staleReason != null) {
       _rejectReplay(context, staleReason);
+      return true;
+    }
+    if (_replaysPreemptibleByNewSegment.contains(context) &&
+        _latestAdmittedSegmentId > context.segmentId) {
+      _rejectReplay(
+        context,
+        VoiceReplayContextCancellation.newerSegmentStarted,
+      );
       return true;
     }
     return false;
@@ -2956,7 +3145,7 @@ class SpeechRecognitionService {
     _VoiceResultContext context,
   ) {
     if (freeTextPipelineMode != FreeTextPipelineMode.replayOnly ||
-        !_supportsExactDynamicFinalFastPath(context.sourceScreen)) {
+        !_supportsDynamicListCommandArbitration(context.sourceScreen)) {
       return null;
     }
 
@@ -3032,9 +3221,88 @@ class SpeechRecognitionService {
     return item;
   }
 
-  bool _supportsExactDynamicFinalFastPath(WearScreenId screen) {
-    return screen == WearScreenId.availabilityGroup ||
-        screen == WearScreenId.availabilityProduct;
+  _StableDynamicCommandHypothesis? _matchAmbiguousAdvertisedCommandFinal(
+    String text,
+    _VoiceResultContext context,
+  ) {
+    if (freeTextPipelineMode != FreeTextPipelineMode.replayOnly ||
+        !_supportsDynamicListCommandArbitration(context.sourceScreen)) {
+      return null;
+    }
+
+    final String normalized = VoiceListMatcher.normalize(text);
+    final String normalizedPartial =
+        VoiceListMatcher.normalize(_commandPartialText);
+    if (normalized.isEmpty || normalizedPartial != normalized) return null;
+    if (context.commandUtteranceId != _commandUtteranceId ||
+        context.sourceScreen != _sourceScreen ||
+        context.routeRevision != _routeRevision ||
+        context.grammarRevision != _grammarRevision ||
+        context.freeTextEpoch != _freeTextEpoch) {
+      return null;
+    }
+    if (!_commandGrammar.any(
+      (String phrase) => VoiceListMatcher.normalize(phrase) == normalized,
+    )) {
+      return null;
+    }
+
+    final VoiceDynamicItemsSnapshot items =
+        _dynamicItemsProvider(context.sourceScreen);
+    if (items.items.isEmpty || items.revision != context.listRevision) {
+      return null;
+    }
+    final ({VoiceHintSet hints, bool isReady}) hintLookup =
+        _voiceHintsFor(context.sourceScreen, items);
+    if (!hintLookup.isReady ||
+        hintLookup.hints.revision != items.revision ||
+        !hintLookup.hints.advertisedPhrases.contains(normalized)) {
+      return null;
+    }
+
+    final Set<String> hintedItemIds = hintLookup.hints.hintsByItemId.entries
+        .where(
+          (MapEntry<String, VoiceHint> entry) =>
+              VoiceListMatcher.normalize(entry.value.phrase) == normalized,
+        )
+        .map((MapEntry<String, VoiceHint> entry) => entry.key)
+        .toSet();
+    if (hintedItemIds.isEmpty) return null;
+
+    final VoiceListMatch<VoiceDynamicItem> exactMatch =
+        VoiceListMatcher.matchExactPhrase(
+      text,
+      items.items,
+      (VoiceDynamicItem item) => item.label,
+      aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
+    );
+    if (exactMatch.type != VoiceListMatchType.ambiguous) return null;
+    final Set<String> exactItemIds =
+        exactMatch.matches.map((VoiceDynamicItem item) => item.id).toSet();
+    if (exactItemIds.length < 2 ||
+        !hintedItemIds.every(exactItemIds.contains)) {
+      return null;
+    }
+    return _StableDynamicCommandHypothesis(
+      text: text,
+      itemIds: exactItemIds,
+    );
+  }
+
+  bool _supportsDynamicListCommandArbitration(WearScreenId screen) {
+    // Preserve constrained Vosk hypotheses only where free text selects an
+    // item from the current advertised dynamic list. Free-form barcode/code
+    // input must continue to trust the unrestricted recognizer instead.
+    return switch (screen) {
+      WearScreenId.availabilityGroup ||
+      WearScreenId.availabilityProduct ||
+      WearScreenId.availabilityDirectScan ||
+      WearScreenId.printerSelect ||
+      WearScreenId.productSelect ||
+      WearScreenId.voiceClarification =>
+        true,
+      _ => false,
+    };
   }
 
   ({VoiceHintSet hints, bool isReady}) _voiceHintsFor(
@@ -3165,6 +3433,7 @@ class SpeechRecognitionService {
     _invalidLiveFreeTextUtterances.clear();
     _loggedLiveFreeTextUtterances.clear();
     _liveFreeTextInvalidReasons.clear();
+    _replaysPreemptibleByNewSegment.clear();
     _shadowPartialItemIds.clear();
     for (final _FreeTextBoundary boundary in _freeTextBoundaries.values) {
       if (!boundary.gate.isCompleted) boundary.gate.complete();
@@ -3621,6 +3890,34 @@ class PcmFrameAccumulator {
           ..setAll(first.lengthInBytes, second);
     return result;
   }
+}
+
+class _StableDynamicCommandHypothesis {
+  _StableDynamicCommandHypothesis({
+    required this.text,
+    required Set<String> itemIds,
+  }) : itemIds = Set<String>.unmodifiable(itemIds);
+
+  final String text;
+  final Set<String> itemIds;
+
+  int get matchCount => itemIds.length;
+}
+
+class _ReplayResolution {
+  const _ReplayResolution({
+    required this.text,
+    required this.replayMatchType,
+    required this.replayMatchCount,
+    required this.reason,
+    this.dynamicItemId,
+  });
+
+  final String text;
+  final String? dynamicItemId;
+  final VoiceListMatchType replayMatchType;
+  final int replayMatchCount;
+  final String reason;
 }
 
 class _VoiceResultContext {

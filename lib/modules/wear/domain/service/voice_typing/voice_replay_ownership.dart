@@ -22,6 +22,7 @@ enum VoiceReplayContextCancellation {
   routeChanged,
   grammarChanged,
   dynamicItemsChanged,
+  newerSegmentStarted,
 }
 
 class VoiceReplayContext {
