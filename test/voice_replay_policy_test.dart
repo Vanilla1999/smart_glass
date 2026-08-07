@@ -14,6 +14,78 @@ void main() {
     );
   });
 
+  test('short standalone ambiguous hint skips refinement', () {
+    final decision = policy.ambiguousHintDecision(
+      hasStableMatchingPartial: true,
+      isSingleToken: true,
+      hasVadSilenceBoundary: true,
+      replayAudioMs: 1200,
+      continuationAudioMs: 220,
+    );
+    expect(decision.skipReplay, isTrue);
+    expect(decision.reason, 'standalone_advertised_hint');
+  });
+
+  test('natural endpoint preserves a possible longer phrase', () {
+    final decision = policy.ambiguousHintDecision(
+      hasStableMatchingPartial: true,
+      isSingleToken: true,
+      hasVadSilenceBoundary: false,
+      replayAudioMs: 1200,
+      continuationAudioMs: 0,
+    );
+    expect(decision.skipReplay, isFalse);
+    expect(decision.reason, 'natural_endpoint_may_continue');
+  });
+
+  test('speech continuation after a shared hint keeps refinement', () {
+    final decision = policy.ambiguousHintDecision(
+      hasStableMatchingPartial: true,
+      isSingleToken: true,
+      hasVadSilenceBoundary: true,
+      replayAudioMs: 1200,
+      continuationAudioMs: 340,
+    );
+    expect(decision.skipReplay, isFalse);
+    expect(decision.reason, 'speech_continued_after_hint');
+  });
+
+  test('long utterance keeps refinement even with a matching partial', () {
+    final decision = policy.ambiguousHintDecision(
+      hasStableMatchingPartial: true,
+      isSingleToken: true,
+      hasVadSilenceBoundary: true,
+      replayAudioMs: 1320,
+      continuationAudioMs: 120,
+    );
+    expect(decision.skipReplay, isFalse);
+    expect(decision.reason, 'utterance_too_long');
+  });
+
+  test('unstable partial history keeps refinement', () {
+    final decision = policy.ambiguousHintDecision(
+      hasStableMatchingPartial: false,
+      isSingleToken: true,
+      hasVadSilenceBoundary: true,
+      replayAudioMs: 900,
+      continuationAudioMs: 0,
+    );
+    expect(decision.skipReplay, isFalse);
+    expect(decision.reason, 'partial_final_mismatch');
+  });
+
+  test('multi-word command final keeps refinement', () {
+    final decision = policy.ambiguousHintDecision(
+      hasStableMatchingPartial: true,
+      isSingleToken: false,
+      hasVadSilenceBoundary: true,
+      replayAudioMs: 900,
+      continuationAudioMs: 0,
+    );
+    expect(decision.skipReplay, isFalse);
+    expect(decision.reason, 'multi_word_command_final');
+  });
+
   test('short recovery keeps the existing four second floor', () {
     expect(
       policy.budgetFor(

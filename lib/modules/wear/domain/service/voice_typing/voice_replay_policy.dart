@@ -15,6 +15,9 @@ class VoiceReplayPolicy {
     this.recoveryHeadroom = const Duration(seconds: 2),
     this.maximumRecoveryBudget = const Duration(seconds: 8),
     this.commandYieldPollInterval = const Duration(milliseconds: 5),
+    this.standaloneAmbiguousHintMaxAudio = const Duration(milliseconds: 1300),
+    this.standaloneAmbiguousHintMaxContinuation =
+        const Duration(milliseconds: 320),
   });
 
   final Duration refinementBudget;
@@ -22,6 +25,34 @@ class VoiceReplayPolicy {
   final Duration recoveryHeadroom;
   final Duration maximumRecoveryBudget;
   final Duration commandYieldPollInterval;
+  final Duration standaloneAmbiguousHintMaxAudio;
+  final Duration standaloneAmbiguousHintMaxContinuation;
+
+  ({bool skipReplay, String reason}) ambiguousHintDecision({
+    required bool hasStableMatchingPartial,
+    required bool isSingleToken,
+    required bool hasVadSilenceBoundary,
+    required int replayAudioMs,
+    required int continuationAudioMs,
+  }) {
+    if (!hasStableMatchingPartial) {
+      return (skipReplay: false, reason: 'partial_final_mismatch');
+    }
+    if (!isSingleToken) {
+      return (skipReplay: false, reason: 'multi_word_command_final');
+    }
+    if (!hasVadSilenceBoundary) {
+      return (skipReplay: false, reason: 'natural_endpoint_may_continue');
+    }
+    if (replayAudioMs > standaloneAmbiguousHintMaxAudio.inMilliseconds) {
+      return (skipReplay: false, reason: 'utterance_too_long');
+    }
+    if (continuationAudioMs >
+        standaloneAmbiguousHintMaxContinuation.inMilliseconds) {
+      return (skipReplay: false, reason: 'speech_continued_after_hint');
+    }
+    return (skipReplay: true, reason: 'standalone_advertised_hint');
+  }
 
   Duration budgetFor({
     required int pcmBytes,

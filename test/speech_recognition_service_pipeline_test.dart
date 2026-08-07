@@ -886,6 +886,250 @@ void main() {
     expect(freeText.finalCalls, 0);
   });
 
+  test('exact advertised final without partial still skips replay', () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.add(true)
+      ..resultSequence.add(_json(text: 'белый'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finalSequence.add(_json(text: 'жёлтый'));
+    const VoiceDynamicItemsSnapshot items = VoiceDynamicItemsSnapshot(
+      revision: 70,
+      items: <VoiceDynamicItem>[
+        VoiceDynamicItem(id: 'white', label: 'Белый'),
+      ],
+    );
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+      dynamicItemsProvider: (_) => items,
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.switchCommandGrammar(
+      screen: WearScreenId.printerSelect,
+      grammar: const <String>['назад', 'белый', '[unk]'],
+    );
+    await service.prepareVoiceHints(WearScreenId.printerSelect);
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final Future<SegmentedRecognitionResult> result =
+        service.segmentedResultsStream.firstWhere((event) =>
+            event.lane == RecognitionLane.freeText &&
+            event.kind == RecognitionKind.streamFinal);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing();
+
+    final SegmentedRecognitionResult resolved =
+        await result.timeout(const Duration(seconds: 1));
+    expect(resolved.text, 'белый');
+    expect(resolved.dynamicItemId, 'white');
+    expect(freeText.accepted, isEmpty);
+    expect(freeText.finalCalls, 0);
+  });
+
+  test('standalone shared advertised hint opens clarification without replay',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..partialSequence.add(_json(partial: 'любимый'))
+      ..finalSequence.add(_json(text: 'любимый'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finalSequence.add(_json(text: 'не должно использоваться'));
+    const VoiceDynamicItemsSnapshot items = VoiceDynamicItemsSnapshot(
+      revision: 71,
+      items: <VoiceDynamicItem>[
+        VoiceDynamicItem(id: 'one', label: 'Любимый край молоко'),
+        VoiceDynamicItem(id: 'two', label: 'Любимый молочник кефир'),
+      ],
+    );
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+      dynamicItemsProvider: (_) => items,
+      segmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(milliseconds: 40),
+        maxSegmentDuration: const Duration(seconds: 30),
+      ),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.switchCommandGrammar(
+      screen: WearScreenId.availabilityProduct,
+      grammar: const <String>['назад', 'любимый', '[unk]'],
+    );
+    await service.prepareVoiceHints(WearScreenId.availabilityProduct);
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final Future<SegmentedRecognitionResult> result =
+        service.segmentedResultsStream.firstWhere((event) =>
+            event.lane == RecognitionLane.freeText &&
+            event.kind == RecognitionKind.streamFinal);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.waitForProcessing();
+
+    final SegmentedRecognitionResult resolved =
+        await result.timeout(const Duration(seconds: 1));
+    expect(resolved.text, 'любимый');
+    expect(resolved.dynamicItemId, isNull);
+    expect(freeText.accepted, isEmpty);
+    expect(freeText.finalCalls, 0);
+  });
+
+  test('continued speech after a shared hint keeps full-phrase replay',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..partialSequence.add(_json(partial: 'любимый'))
+      ..finalSequence.add(_json(text: 'любимый'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finalSequence.add(_json(text: 'любимый край'));
+    const VoiceDynamicItemsSnapshot items = VoiceDynamicItemsSnapshot(
+      revision: 72,
+      items: <VoiceDynamicItem>[
+        VoiceDynamicItem(id: 'one', label: 'Любимый край молоко'),
+        VoiceDynamicItem(id: 'two', label: 'Любимый молочник кефир'),
+      ],
+    );
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+      dynamicItemsProvider: (_) => items,
+      segmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(milliseconds: 40),
+        maxSegmentDuration: const Duration(seconds: 30),
+      ),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.switchCommandGrammar(
+      screen: WearScreenId.availabilityProduct,
+      grammar: const <String>['назад', 'любимый', '[unk]'],
+    );
+    await service.prepareVoiceHints(WearScreenId.availabilityProduct);
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final Future<SegmentedRecognitionResult> result =
+        service.segmentedResultsStream.firstWhere((event) =>
+            event.lane == RecognitionLane.freeText &&
+            event.kind == RecognitionKind.streamFinal);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    for (int index = 0; index < 17; index++) {
+      await service.processAudioChunk(_pcmFrame(1000));
+    }
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.waitForProcessing();
+
+    expect((await result).text, 'любимый край');
+    expect(freeText.accepted, isNotEmpty);
+    expect(freeText.finalCalls, 1);
+  });
+
+  test('unstable command partial history keeps full-phrase replay', () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..partialSequence.addAll(<String>[
+        _json(partial: 'любимый'),
+        _json(partial: 'домой'),
+        _json(partial: 'любимый'),
+      ])
+      ..finalSequence.add(_json(text: 'любимый'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finalSequence.add(_json(text: 'любимый край'));
+    const VoiceDynamicItemsSnapshot items = VoiceDynamicItemsSnapshot(
+      revision: 721,
+      items: <VoiceDynamicItem>[
+        VoiceDynamicItem(id: 'one', label: 'Любимый край молоко'),
+        VoiceDynamicItem(id: 'two', label: 'Любимый молочник кефир'),
+      ],
+    );
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+      dynamicItemsProvider: (_) => items,
+      segmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(milliseconds: 40),
+        maxSegmentDuration: const Duration(seconds: 30),
+      ),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.switchCommandGrammar(
+      screen: WearScreenId.availabilityProduct,
+      grammar: const <String>['назад', 'любимый', '[unk]'],
+    );
+    await service.prepareVoiceHints(WearScreenId.availabilityProduct);
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final Future<SegmentedRecognitionResult> result =
+        service.segmentedResultsStream.firstWhere((event) =>
+            event.lane == RecognitionLane.freeText &&
+            event.kind == RecognitionKind.streamFinal);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.processAudioChunk(_pcmFrame(0));
+    await service.waitForProcessing();
+
+    expect((await result).text, 'любимый край');
+    expect(freeText.accepted, isNotEmpty);
+    expect(freeText.finalCalls, 1);
+  });
+
+  test('natural endpoint keeps replay for a possible longer phrase', () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.addAll(<bool>[false, true])
+      ..partialSequence.add(_json(partial: 'чудо'))
+      ..resultSequence.add(_json(text: 'чудо'));
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..finalSequence.add(_json(text: 'чудо творожок'));
+    const VoiceDynamicItemsSnapshot items = VoiceDynamicItemsSnapshot(
+      revision: 73,
+      items: <VoiceDynamicItem>[
+        VoiceDynamicItem(id: 'one', label: 'Чудо творожок клубника'),
+        VoiceDynamicItem(id: 'two', label: 'Чудо коктейль ваниль'),
+      ],
+    );
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+      dynamicItemsProvider: (_) => items,
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.switchCommandGrammar(
+      screen: WearScreenId.availabilityProduct,
+      grammar: const <String>['назад', 'чудо', '[unk]'],
+    );
+    await service.prepareVoiceHints(WearScreenId.availabilityProduct);
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final Future<SegmentedRecognitionResult> result =
+        service.segmentedResultsStream.firstWhere((event) =>
+            event.lane == RecognitionLane.freeText &&
+            event.kind == RecognitionKind.streamFinal);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing();
+
+    expect((await result).text, 'чудо творожок');
+    expect(freeText.accepted, isNotEmpty);
+    expect(freeText.finalCalls, 1);
+  });
+
   test('corrected command final keeps free-text replay fallback', () async {
     final _FakeRecognizer command = _FakeRecognizer()
       ..endpointSequence.addAll(<bool>[false, true])

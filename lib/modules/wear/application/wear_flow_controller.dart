@@ -1734,6 +1734,14 @@ class WearFlowController {
     final WearGlassesPayload payload = feedbackText == null
         ? basePayload
         : basePayload.copyWithStatusText(feedbackText);
+    if (feedbackText != null) {
+      print(
+        '[VOICE_FEEDBACK_PAYLOAD] screen=${_state.screen.name} '
+        'screenType=${payload.screenType.name} phase=${payload.phase.name} '
+        'status="${payload.statusText}" items=${payload.items.length} '
+        'selectedIndex=${payload.selectedIndex}',
+      );
+    }
     try {
       await _glassesOutput.send(payload);
     } catch (error, stackTrace) {

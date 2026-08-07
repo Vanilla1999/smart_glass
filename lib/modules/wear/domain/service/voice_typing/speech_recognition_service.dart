@@ -257,6 +257,8 @@ class SpeechRecognitionService {
   final Map<int, String> _naturalCommandFinals = <int, String>{};
   final Map<int, _VoiceResultContext> _utteranceContexts =
       <int, _VoiceResultContext>{};
+  final Map<int, _CommandHypothesisTrace> _commandHypothesisTraces =
+      <int, _CommandHypothesisTrace>{};
   final Set<int> _invalidLiveFreeTextUtterances = <int>{};
   final Set<int> _loggedLiveFreeTextUtterances = <int>{};
   final Map<int, String> _liveFreeTextInvalidReasons = <int, String>{};
@@ -1650,6 +1652,13 @@ class SpeechRecognitionService {
         'partialMs=${partialFinishedAt - partialStartedAt}, '
         'chunkTotalMs=${finishedAt - startedAt})',
       );
+      if (source == _RecognitionSource.command) {
+        _recordCommandPartial(
+          commandUtteranceId: _commandUtteranceId,
+          text: partialText,
+          observedAtMillis: partialFinishedAt,
+        );
+      }
       _publishPartialChange(
         source: source,
         text: partialText,
@@ -1674,6 +1683,10 @@ class SpeechRecognitionService {
     final _VoiceResultContext resultContext =
         _utteranceContexts[commandUtteranceId] ??
             _currentResultContext(commandUtteranceId);
+    final _CommandHypothesisSnapshot commandTrace = _snapshotCommandHypothesis(
+      commandUtteranceId,
+      commandFinal: resultText,
+    );
     final Uint8List replay = _utterancePcm.take();
     final bool commandFound = _commandParser.parseExactForScreen(
                 resultContext.sourceScreen, resultText) !=
@@ -1700,7 +1713,11 @@ class SpeechRecognitionService {
             _freeTextEnabled &&
             replay.isNotEmpty &&
             !commandFound
-        ? _matchExactDynamicCommandFinal(resultText, resultContext)
+        ? _matchExactDynamicCommandFinal(
+            resultText,
+            resultContext,
+            commandTrace,
+          )
         : null;
     final _StableDynamicCommandHypothesis? commandFallback =
         exactDynamicItem == null &&
@@ -1711,8 +1728,24 @@ class SpeechRecognitionService {
             ? _matchAmbiguousAdvertisedCommandFinal(
                 resultText,
                 resultContext,
+                commandTrace,
               )
             : null;
+    final ({
+      bool skipReplay,
+      String reason,
+      int replayAudioMs,
+      int pcmContinuationAudioMs,
+      int wallContinuationAudioMs,
+      int continuationAudioMs,
+    })? ambiguousHintDecision = commandFallback == null
+        ? null
+        : _ambiguousHintDecision(
+            fallback: commandFallback,
+            replay: replay,
+            commandTrace: commandTrace,
+            endpointDetectedAtMillis: endpointDetectedAtMillis,
+          );
     if (commandFallback != null) {
       print(
         '[VOICE_COMMAND_FALLBACK] captured '
@@ -1721,7 +1754,23 @@ class SpeechRecognitionService {
         'text="${VoiceListMatcher.normalize(commandFallback.text)}" '
         'matchCount=${commandFallback.matchCount}',
       );
+      print(
+        '[VOICE_AMBIGUOUS_HINT_POLICY] '
+        'screen=${resultContext.sourceScreen.name} '
+        'utteranceId=$commandUtteranceId '
+        'text="${VoiceListMatcher.normalize(commandFallback.text)}" '
+        'decision=${ambiguousHintDecision!.skipReplay ? 'clarify_now' : 'refine'} '
+        'reason=${ambiguousHintDecision.reason} '
+        'replayAudioMs=${ambiguousHintDecision.replayAudioMs} '
+        'pcmContinuationAudioMs='
+        '${ambiguousHintDecision.pcmContinuationAudioMs} '
+        'wallContinuationAudioMs='
+        '${ambiguousHintDecision.wallContinuationAudioMs} '
+        'continuationAudioMs=${ambiguousHintDecision.continuationAudioMs}',
+      );
     }
+    final bool ambiguousHintFastPath =
+        ambiguousHintDecision?.skipReplay ?? false;
     if (exactDynamicItem != null) {
       markActionableCommandUtterance(commandUtteranceId);
       final int decidedAtMillis = DateTime.now().millisecondsSinceEpoch;
@@ -1747,9 +1796,55 @@ class SpeechRecognitionService {
         'speechToDecisionMs=$speechToDecisionMs '
         'replaySkipped=true',
       );
+      _logUtteranceDiagnostic(
+        outcome: 'exact_dynamic_fast_path',
+        trace: commandTrace,
+        captureEpoch: captureEpoch,
+        segment: segment,
+        context: resultContext,
+        selectedText: resultText,
+        reason: commandTrace.lastMeaningfulPartial.isEmpty
+            ? 'exact_final_without_partial'
+            : 'partial_final_agree',
+      );
+    } else if (ambiguousHintFastPath) {
+      markActionableCommandUtterance(commandUtteranceId);
+      _emitResult(
+        _RecognitionSource.freeText,
+        commandFallback!.text,
+        epoch: resultContext.freeTextEpoch,
+        captureEpoch: captureEpoch,
+        kind: RecognitionKind.streamFinal,
+        segment: segment,
+        commandUtteranceId: commandUtteranceId,
+        resultContext: resultContext,
+      );
+      print(
+        '[VOICE_AMBIGUOUS_HINT_FAST_PATH] accepted '
+        'screen=${resultContext.sourceScreen.name} '
+        'utteranceId=$commandUtteranceId '
+        'text="${VoiceListMatcher.normalize(commandFallback.text)}" '
+        'matchCount=${commandFallback.matchCount} '
+        'continuationAudioMs=${ambiguousHintDecision!.continuationAudioMs} '
+        'replaySkipped=true',
+      );
+      _logUtteranceDiagnostic(
+        outcome: 'ambiguous_hint_fast_path',
+        trace: commandTrace,
+        captureEpoch: captureEpoch,
+        segment: segment,
+        context: resultContext,
+        selectedText: commandFallback.text,
+        reason: ambiguousHintDecision.reason,
+        commandMatchCount: commandFallback.matchCount,
+      );
     }
     Future<void>? liveFinalization;
-    if (_freeTextEnabled && replay.isNotEmpty && exactDynamicItem == null) {
+    var replayScheduled = false;
+    if (_freeTextEnabled &&
+        replay.isNotEmpty &&
+        exactDynamicItem == null &&
+        !ambiguousHintFastPath) {
       if (_usesLiveFreeText) {
         liveFinalization = _enqueueLiveFreeTextFinalization(
           replay,
@@ -1765,6 +1860,7 @@ class SpeechRecognitionService {
           resultContext: resultContext,
         );
       } else if (!commandFound) {
+        replayScheduled = true;
         _enqueueFreeTextReplay(
           replay,
           epoch: _freeTextEpoch,
@@ -1773,9 +1869,13 @@ class SpeechRecognitionService {
           commandUtteranceId: commandUtteranceId,
           resultContext: resultContext,
           commandFallback: commandFallback,
+          commandTrace: commandTrace,
           cancelOnNewerSegment: cancelReplayOnNewerSegment,
         );
       }
+    }
+    if (!replayScheduled && liveFinalization == null) {
+      _commandHypothesisTraces.remove(commandUtteranceId);
     }
     if (!_canProcess(_RecognitionSource.command, null, captureEpoch) ||
         _commandUtteranceId != commandUtteranceId) {
@@ -2208,6 +2308,7 @@ class SpeechRecognitionService {
     required int commandUtteranceId,
     _VoiceResultContext? resultContext,
     _StableDynamicCommandHypothesis? commandFallback,
+    required _CommandHypothesisSnapshot commandTrace,
     bool cancelOnNewerSegment = false,
     void Function(String text, int replayMs)? onCompleted,
   }) {
@@ -2230,11 +2331,13 @@ class SpeechRecognitionService {
               replayContext: replayContext,
               resultContext: resultContext,
               commandFallback: commandFallback,
+              commandTrace: commandTrace,
               onCompleted: onCompleted,
             ));
-    final Future<void> guarded = next.whenComplete(
-      () => _replaysPreemptibleByNewSegment.remove(replayContext),
-    );
+    final Future<void> guarded = next.whenComplete(() {
+      _replaysPreemptibleByNewSegment.remove(replayContext);
+      _commandHypothesisTraces.remove(commandUtteranceId);
+    });
     _freeTextAudioProcessing =
         guarded.catchError((Object error, StackTrace stack) async {
       print('[VOICE_FREE_TEXT] replay failed: $error\n$stack');
@@ -2270,8 +2373,14 @@ class SpeechRecognitionService {
     required VoiceReplayContext replayContext,
     _VoiceResultContext? resultContext,
     _StableDynamicCommandHypothesis? commandFallback,
+    _CommandHypothesisSnapshot? commandTrace,
     void Function(String text, int replayMs)? onCompleted,
   }) async {
+    final _CommandHypothesisSnapshot diagnosticTrace = commandTrace ??
+        _snapshotCommandHypothesis(
+          commandUtteranceId,
+          commandFinal: commandFallback?.text ?? '',
+        );
     _replayOwnership.begin(replayContext);
     if (_abortReplayIfInvalid(replayContext)) return;
     final Stopwatch replayClock = Stopwatch()..start();
@@ -2557,6 +2666,21 @@ class SpeechRecognitionService {
           'selected=${resolution.reason}',
         );
       }
+      _logUtteranceDiagnostic(
+        outcome: commandFallback == null
+            ? 'recovery_resolved'
+            : 'refinement_resolved',
+        trace: diagnosticTrace,
+        captureEpoch: captureEpoch,
+        segment: segment,
+        context: resultContext ?? _currentResultContext(commandUtteranceId),
+        replayText: text,
+        selectedText: resolution.text,
+        reason: resolution.reason,
+        commandMatchCount: commandFallback?.matchCount ?? 0,
+        replayMatchType: resolution.replayMatchType,
+        replayMatchCount: resolution.replayMatchCount,
+      );
       if (resolution.text.isNotEmpty) {
         _emitResult(
           _RecognitionSource.freeText,
@@ -2664,6 +2788,7 @@ class SpeechRecognitionService {
     required SpeechSegment segment,
     required int commandUtteranceId,
     required _VoiceResultContext? resultContext,
+    _CommandHypothesisSnapshot? commandTrace,
     required String reason,
     required int replayMs,
     void Function(String text, int replayMs)? onCompleted,
@@ -2682,6 +2807,20 @@ class SpeechRecognitionService {
       resultContext: resultContext,
     );
     onCompleted?.call(commandFallback.text, replayMs);
+    _logUtteranceDiagnostic(
+      outcome: 'refinement_fallback',
+      trace: commandTrace ??
+          _snapshotCommandHypothesis(
+            commandUtteranceId,
+            commandFinal: commandFallback.text,
+          ),
+      captureEpoch: captureEpoch,
+      segment: segment,
+      context: resultContext ?? _currentResultContext(commandUtteranceId),
+      selectedText: commandFallback.text,
+      reason: reason,
+      commandMatchCount: commandFallback.matchCount,
+    );
     _replayOwnership.resolve(
       replayContext,
       VoiceReplayOwnershipStatus.resolvedAsDynamicPhrase,
@@ -3339,6 +3478,7 @@ class SpeechRecognitionService {
   VoiceDynamicItem? _matchExactDynamicCommandFinal(
     String text,
     _VoiceResultContext context,
+    _CommandHypothesisSnapshot commandTrace,
   ) {
     if (freeTextPipelineMode != FreeTextPipelineMode.replayOnly ||
         !_supportsDynamicListCommandArbitration(context.sourceScreen)) {
@@ -3346,9 +3486,11 @@ class SpeechRecognitionService {
     }
 
     final String normalized = VoiceListMatcher.normalize(text);
-    final String normalizedPartial =
-        VoiceListMatcher.normalize(_commandPartialText);
-    if (normalized.isEmpty || normalizedPartial != normalized) return null;
+    final String normalizedPartial = commandTrace.lastMeaningfulPartial;
+    if (normalized.isEmpty ||
+        normalizedPartial.isNotEmpty && normalizedPartial != normalized) {
+      return null;
+    }
 
     if (context.commandUtteranceId != _commandUtteranceId ||
         context.sourceScreen != _sourceScreen ||
@@ -3420,6 +3562,7 @@ class SpeechRecognitionService {
   _StableDynamicCommandHypothesis? _matchAmbiguousAdvertisedCommandFinal(
     String text,
     _VoiceResultContext context,
+    _CommandHypothesisSnapshot commandTrace,
   ) {
     if (freeTextPipelineMode != FreeTextPipelineMode.replayOnly ||
         !_supportsDynamicListCommandArbitration(context.sourceScreen)) {
@@ -3427,8 +3570,7 @@ class SpeechRecognitionService {
     }
 
     final String normalized = VoiceListMatcher.normalize(text);
-    final String normalizedPartial =
-        VoiceListMatcher.normalize(_commandPartialText);
+    final String normalizedPartial = commandTrace.lastMeaningfulPartial;
     if (normalized.isEmpty || normalizedPartial != normalized) return null;
     if (context.commandUtteranceId != _commandUtteranceId ||
         context.sourceScreen != _sourceScreen ||
@@ -3499,6 +3641,154 @@ class SpeechRecognitionService {
         true,
       _ => false,
     };
+  }
+
+  ({
+    bool skipReplay,
+    String reason,
+    int replayAudioMs,
+    int pcmContinuationAudioMs,
+    int wallContinuationAudioMs,
+    int continuationAudioMs,
+  }) _ambiguousHintDecision({
+    required _StableDynamicCommandHypothesis fallback,
+    required Uint8List replay,
+    required _CommandHypothesisSnapshot commandTrace,
+    required int? endpointDetectedAtMillis,
+  }) {
+    final String normalized = VoiceListMatcher.normalize(fallback.text);
+    final int replayAudioMs = _pcmDurationMillis(replay.lengthInBytes);
+    final int partialOffset = commandTrace.lastMeaningfulPartialPcmBytes == null
+        ? replay.lengthInBytes
+        : commandTrace.lastMeaningfulPartialPcmBytes! < 0
+            ? 0
+            : commandTrace.lastMeaningfulPartialPcmBytes! > replay.lengthInBytes
+                ? replay.lengthInBytes
+                : commandTrace.lastMeaningfulPartialPcmBytes!;
+    final int afterPartialBytes = replay.lengthInBytes - partialOffset;
+    final bool hasVadSilenceBoundary = endpointDetectedAtMillis != null;
+    final int endpointSilenceBytes = hasVadSilenceBoundary
+        ? _pcmBytesForDuration(_speechSegmenter.endpointSilence)
+        : 0;
+    final int continuationBytes = afterPartialBytes > endpointSilenceBytes
+        ? afterPartialBytes - endpointSilenceBytes
+        : 0;
+    final int pcmContinuationAudioMs = _pcmDurationMillis(continuationBytes);
+    final int? partialAtMillis = commandTrace.lastMeaningfulPartialAtMillis;
+    final int rawWallContinuationAudioMs =
+        endpointDetectedAtMillis == null || partialAtMillis == null
+            ? 0
+            : endpointDetectedAtMillis -
+                partialAtMillis -
+                _speechSegmenter.endpointSilence.inMilliseconds +
+                _recognizerBatchFrameCount * 20;
+    final int wallContinuationAudioMs =
+        rawWallContinuationAudioMs > 0 ? rawWallContinuationAudioMs : 0;
+    final int continuationAudioMs =
+        pcmContinuationAudioMs > wallContinuationAudioMs
+            ? pcmContinuationAudioMs
+            : wallContinuationAudioMs;
+    final ({bool skipReplay, String reason}) decision =
+        _replayPolicy.ambiguousHintDecision(
+      hasStableMatchingPartial: commandTrace.isStableFor(normalized),
+      isSingleToken: normalized.isNotEmpty && !normalized.contains(' '),
+      hasVadSilenceBoundary: hasVadSilenceBoundary,
+      replayAudioMs: replayAudioMs,
+      continuationAudioMs: continuationAudioMs,
+    );
+    return (
+      skipReplay: decision.skipReplay,
+      reason: decision.reason,
+      replayAudioMs: replayAudioMs,
+      pcmContinuationAudioMs: pcmContinuationAudioMs,
+      wallContinuationAudioMs: wallContinuationAudioMs,
+      continuationAudioMs: continuationAudioMs,
+    );
+  }
+
+  int _pcmBytesForDuration(Duration duration) {
+    if (duration.inMicroseconds <= 0) return 0;
+    return duration.inMicroseconds *
+        _sampleRate *
+        2 ~/
+        Duration.microsecondsPerSecond;
+  }
+
+  void _recordCommandPartial({
+    required int commandUtteranceId,
+    required String text,
+    required int observedAtMillis,
+  }) {
+    final String normalized = VoiceListMatcher.normalize(text);
+    if (normalized.isEmpty) return;
+    final _CommandHypothesisTrace trace = _commandHypothesisTraces.putIfAbsent(
+      commandUtteranceId,
+      _CommandHypothesisTrace.new,
+    );
+    trace.record(
+      normalized,
+      pcmBytes: _utterancePcm.length,
+      observedAtMillis: observedAtMillis,
+    );
+    while (_commandHypothesisTraces.length > 128) {
+      _commandHypothesisTraces.remove(_commandHypothesisTraces.keys.first);
+    }
+  }
+
+  _CommandHypothesisSnapshot _snapshotCommandHypothesis(
+    int commandUtteranceId, {
+    required String commandFinal,
+  }) {
+    final _CommandHypothesisTrace? trace =
+        _commandHypothesisTraces[commandUtteranceId];
+    return trace?.snapshot(commandFinal: commandFinal) ??
+        _CommandHypothesisSnapshot(
+          partials: const <String>[],
+          lastMeaningfulPartial: '',
+          lastMeaningfulPartialPcmBytes: null,
+          lastMeaningfulPartialAtMillis: null,
+          commandFinal: VoiceListMatcher.normalize(commandFinal),
+        );
+  }
+
+  void _logUtteranceDiagnostic({
+    required String outcome,
+    required _CommandHypothesisSnapshot trace,
+    required int captureEpoch,
+    required SpeechSegment segment,
+    required _VoiceResultContext context,
+    required String selectedText,
+    required String reason,
+    String replayText = '',
+    int commandMatchCount = 0,
+    VoiceListMatchType? replayMatchType,
+    int replayMatchCount = 0,
+  }) {
+    final String partials =
+        trace.partials.isEmpty ? '-' : trace.partials.join('>');
+    final bool hypothesisChanged = trace.partials.length > 1;
+    final String normalizedReplay = VoiceListMatcher.normalize(replayText);
+    final String normalizedSelected = VoiceListMatcher.normalize(selectedText);
+    final bool commandReplayDisagree = trace.commandFinal.isNotEmpty &&
+        normalizedReplay.isNotEmpty &&
+        normalizedReplay != trace.commandFinal;
+    final bool selectedDiffersFromCommand = trace.commandFinal.isNotEmpty &&
+        normalizedSelected.isNotEmpty &&
+        normalizedSelected != trace.commandFinal;
+    print(
+      '[VOICE_UTTERANCE_DIAGNOSTIC] '
+      'captureEpoch=$captureEpoch segmentId=${segment.segmentId} '
+      'utteranceId=${context.commandUtteranceId} '
+      'screen=${context.sourceScreen.name} outcome=$outcome '
+      'partials="$partials" commandFinal="${trace.commandFinal}" '
+      'replayFinal="$normalizedReplay" selected="$normalizedSelected" '
+      'hypothesisChanged=$hypothesisChanged '
+      'commandReplayDisagree=$commandReplayDisagree '
+      'selectedDiffersFromCommand=$selectedDiffersFromCommand '
+      'reason=$reason commandMatchCount=$commandMatchCount '
+      'replayMatchType=${replayMatchType?.name ?? 'none'} '
+      'replayMatchCount=$replayMatchCount spokenGroundTruth=unavailable',
+    );
   }
 
   ({VoiceHintSet hints, bool isReady}) _voiceHintsFor(
@@ -3625,6 +3915,7 @@ class SpeechRecognitionService {
     _naturalEndpointTail = null;
     _naturalCommandFinals.clear();
     _utteranceContexts.clear();
+    _commandHypothesisTraces.clear();
     _liveFreeTextResults.clear();
     _invalidLiveFreeTextUtterances.clear();
     _loggedLiveFreeTextUtterances.clear();
@@ -3639,6 +3930,7 @@ class SpeechRecognitionService {
 
   void _cleanupUtteranceState(int utteranceId) {
     _utteranceContexts.remove(utteranceId);
+    _commandHypothesisTraces.remove(utteranceId);
     _naturalCommandFinals.remove(utteranceId);
     _liveFreeTextResults.remove(utteranceId);
     _invalidLiveFreeTextUtterances.remove(utteranceId);
@@ -4088,6 +4380,63 @@ class PcmFrameAccumulator {
           ..setAll(0, first)
           ..setAll(first.lengthInBytes, second);
     return result;
+  }
+}
+
+class _CommandHypothesisTrace {
+  static const int _maxPartials = 8;
+
+  final List<String> _partials = <String>[];
+  String _lastMeaningfulPartial = '';
+  int? _lastMeaningfulPartialPcmBytes;
+  int? _lastMeaningfulPartialAtMillis;
+
+  void record(
+    String normalized, {
+    required int pcmBytes,
+    required int observedAtMillis,
+  }) {
+    if (_partials.isNotEmpty && _partials.last == normalized) return;
+    _partials.add(normalized);
+    if (_partials.length > _maxPartials) _partials.removeAt(0);
+    _lastMeaningfulPartial = normalized;
+    _lastMeaningfulPartialPcmBytes = pcmBytes;
+    _lastMeaningfulPartialAtMillis = observedAtMillis;
+  }
+
+  _CommandHypothesisSnapshot snapshot({required String commandFinal}) {
+    return _CommandHypothesisSnapshot(
+      partials: List<String>.unmodifiable(_partials),
+      lastMeaningfulPartial: _lastMeaningfulPartial,
+      lastMeaningfulPartialPcmBytes: _lastMeaningfulPartialPcmBytes,
+      lastMeaningfulPartialAtMillis: _lastMeaningfulPartialAtMillis,
+      commandFinal: VoiceListMatcher.normalize(commandFinal),
+    );
+  }
+}
+
+class _CommandHypothesisSnapshot {
+  const _CommandHypothesisSnapshot({
+    required this.partials,
+    required this.lastMeaningfulPartial,
+    required this.lastMeaningfulPartialPcmBytes,
+    required this.lastMeaningfulPartialAtMillis,
+    required this.commandFinal,
+  });
+
+  final List<String> partials;
+  final String lastMeaningfulPartial;
+  final int? lastMeaningfulPartialPcmBytes;
+  final int? lastMeaningfulPartialAtMillis;
+  final String commandFinal;
+
+  bool isStableFor(String normalized) {
+    final int firstMatch = partials.indexOf(normalized);
+    if (firstMatch < 0 || lastMeaningfulPartial != normalized) return false;
+    for (int index = firstMatch + 1; index < partials.length; index++) {
+      if (partials[index] != normalized) return false;
+    }
+    return true;
   }
 }
 
