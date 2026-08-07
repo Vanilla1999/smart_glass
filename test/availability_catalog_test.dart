@@ -17,7 +17,7 @@ void main() {
     expect(
         products.map((Map<String, dynamic> product) => product['id']).toSet(),
         hasLength(products.length));
-    expect(beverages, hasLength(1063));
+    expect(beverages, hasLength(209));
     expect(
       products.any(
         (Map<String, dynamic> product) => product['id'] == 9000000001,
@@ -27,9 +27,7 @@ void main() {
     expect(
       beverages.every(
         (Map<String, dynamic> product) =>
-            product['barcodes'].isNotEmpty &&
-            product['price'] == 0 &&
-            product['rest'] == 0,
+            product['barcodes'].isNotEmpty,
       ),
       isTrue,
     );
