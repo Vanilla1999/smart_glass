@@ -8,6 +8,26 @@ import '../vosk_flutter.dart';
 import 'generated_vosk_bindings.dart';
 import 'utils.dart';
 
+/// Native scheduling lane used by Android recognizer operations.
+///
+/// FFI platforms ignore this value. Android keeps one serial native worker
+/// and lets command operations overtake queued free-text replay operations.
+enum RecognizerTaskLane {
+  /// No explicit priority. Kept for callers outside the wear voice pipeline.
+  standard('default'),
+
+  /// Latency-sensitive constrained command recognition.
+  command('command'),
+
+  /// Lower-priority unrestricted recognition and replay work.
+  freeText('freeText');
+
+  const RecognizerTaskLane(this.wireName);
+
+  /// Stable value sent over the MethodChannel contract.
+  final String wireName;
+}
+
 /// Class representing the recognizer created by the plugin.
 class Recognizer {
   /// Use [VoskFlutterPlugin.createRecognizer] to create a [Recognizer]
@@ -17,6 +37,7 @@ class Recognizer {
     required this.model,
     required this.sampleRate,
     required final MethodChannel channel,
+    this.taskLane = RecognizerTaskLane.standard,
     this.recognizerPointer,
     final VoskLibrary? voskLibrary,
   }) : _channel = channel,
@@ -31,6 +52,9 @@ class Recognizer {
 
   /// The sample rate of the audio you are going to feed into the recognizer.
   final int sampleRate;
+
+  /// Native scheduling lane used on Android.
+  final RecognizerTaskLane taskLane;
   final MethodChannel _channel;
 
   /// Pointer to a native recognizer object.
@@ -214,5 +238,6 @@ class Recognizer {
 
   @override
   String toString() =>
-      'Recognizer[id=$id, model=$model, sampleRate=$sampleRate]';
+      'Recognizer[id=$id, model=$model, sampleRate=$sampleRate, '
+      'taskLane=${taskLane.wireName}]';
 }

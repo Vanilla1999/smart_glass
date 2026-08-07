@@ -18,6 +18,7 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_segmenter.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_device_profile.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_recognition_metrics.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_replay_policy.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_replay_ownership.dart';
 import 'package:vosk_flutter_service/vosk_flutter.dart' as vosk;
 
@@ -131,11 +132,6 @@ class SpeechRecognitionService {
   static const String _modelAssetPath = 'assets/vosk-model-small-ru-0.22.zip';
   static const int _slowRecognizerLatencyMs = 150;
   static const int _slowAudioQueueDelayMs = 200;
-  // A replay is a sequence of native calls. Keep its total deadline separate
-  // from the timeout that detects one stuck JNI/Vosk operation.
-  static const Duration _minimumFreeTextReplayBudget = Duration(seconds: 4);
-  static const Duration _freeTextReplayHeadroom = Duration(seconds: 2);
-  static const Duration _maximumFreeTextReplayBudget = Duration(seconds: 8);
 
   SpeechRecognitionService({
     AudioStreamService? audioStreamService,
@@ -144,6 +140,7 @@ class SpeechRecognitionService {
     VoiceActionCatalog? actionCatalog,
     VoiceRecognizerFactory? recognizerFactory,
     Duration recognizerOperationTimeout = const Duration(seconds: 2),
+    VoiceReplayPolicy? replayPolicy,
     this.freeTextPipelineMode = FreeTextPipelineMode.replayOnly,
     int commandBacklogLimitBytes = 64000,
     int freeTextBacklogLimitBytes = 7680,
@@ -164,6 +161,7 @@ class SpeechRecognitionService {
         _segmentCloseGuard = VoiceRecognitionSegmentCloseGuard(
           timeout: recognizerOperationTimeout,
         ),
+        _replayPolicy = replayPolicy ?? const VoiceReplayPolicy(),
         _commandBacklog = VoicePcmBacklog(maxBytes: commandBacklogLimitBytes),
         _freeTextBacklog = VoicePcmBacklog(maxBytes: freeTextBacklogLimitBytes),
         _voiceHintIndexCache = voiceHintIndexCache ?? VoiceHintIndexCache(),
@@ -183,6 +181,7 @@ class SpeechRecognitionService {
   final VoiceCommandParserService _commandParser;
   final VoiceRecognizerFactory? _recognizerFactory;
   final VoiceRecognitionSegmentCloseGuard _segmentCloseGuard;
+  final VoiceReplayPolicy _replayPolicy;
   final VoiceDynamicItemsProvider _dynamicItemsProvider;
   final VoiceHintIndexCache _voiceHintIndexCache;
   final VoiceUtteranceCoordinator _utteranceCoordinator =
@@ -2279,8 +2278,13 @@ class SpeechRecognitionService {
     final int startedAt = DateTime.now().millisecondsSinceEpoch;
     final int replayBatchCount = (bytes.lengthInBytes + 2559) ~/ 2560;
     final int replayAudioMs = _pcmDurationMillis(bytes.lengthInBytes);
-    final Duration replayBudget =
-        _freeTextReplayBudgetForBytes(bytes.lengthInBytes);
+    final VoiceReplayPurpose replayPurpose = commandFallback == null
+        ? VoiceReplayPurpose.recovery
+        : VoiceReplayPurpose.refinement;
+    final Duration replayBudget = _freeTextReplayBudgetForBytes(
+      bytes.lengthInBytes,
+      replayPurpose,
+    );
     print(
       '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=start '
       '${replayContext.describeCaptured()} '
@@ -2288,6 +2292,7 @@ class SpeechRecognitionService {
       'batchCount=$replayBatchCount audioMs=$replayAudioMs '
       'budgetMs=${replayBudget.inMilliseconds} '
       'operationTimeoutMs=${_segmentCloseGuard.timeout.inMilliseconds} '
+      'purpose=${replayPurpose.name} '
       'epoch=$epoch '
       'freeTextEpoch=$_freeTextEpoch '
       'recognizerPresent=${_freeTextRecognizer != null}',
@@ -2303,6 +2308,23 @@ class SpeechRecognitionService {
         _freeTextRecognizerReady = Future<void>.value();
       }
       if (_abortReplayIfInvalid(replayContext)) return;
+      final int replayMs = DateTime.now().millisecondsSinceEpoch - startedAt;
+      if (_resolveRefinementFallback(
+        commandFallback: commandFallback,
+        replayContext: replayContext,
+        epoch: epoch,
+        captureEpoch: captureEpoch,
+        segment: segment,
+        commandUtteranceId: commandUtteranceId,
+        resultContext: resultContext,
+        reason: error is TimeoutException
+            ? 'refinement_ready_budget_fallback'
+            : 'refinement_ready_failure_fallback',
+        replayMs: replayMs,
+        onCompleted: onCompleted,
+      )) {
+        return;
+      }
       _replayOwnership.resolve(
         replayContext,
         error is TimeoutException
@@ -2333,6 +2355,21 @@ class SpeechRecognitionService {
         );
       } catch (error) {
         if (_abortReplayIfInvalid(replayContext)) return;
+        final int replayMs = DateTime.now().millisecondsSinceEpoch - startedAt;
+        if (_resolveRefinementFallback(
+          commandFallback: commandFallback,
+          replayContext: replayContext,
+          epoch: epoch,
+          captureEpoch: captureEpoch,
+          segment: segment,
+          commandUtteranceId: commandUtteranceId,
+          resultContext: resultContext,
+          reason: 'refinement_recognizer_recovery_fallback',
+          replayMs: replayMs,
+          onCompleted: onCompleted,
+        )) {
+          return;
+        }
         _replayOwnership.resolve(
           replayContext,
           error is TimeoutException
@@ -2346,6 +2383,21 @@ class SpeechRecognitionService {
     }
     if (_abortReplayIfInvalid(replayContext)) return;
     if (recognizer == null) {
+      final int replayMs = DateTime.now().millisecondsSinceEpoch - startedAt;
+      if (_resolveRefinementFallback(
+        commandFallback: commandFallback,
+        replayContext: replayContext,
+        epoch: epoch,
+        captureEpoch: captureEpoch,
+        segment: segment,
+        commandUtteranceId: commandUtteranceId,
+        resultContext: resultContext,
+        reason: 'refinement_recognizer_unavailable_fallback',
+        replayMs: replayMs,
+        onCompleted: onCompleted,
+      )) {
+        return;
+      }
       _replayOwnership.resolve(
         replayContext,
         VoiceReplayOwnershipStatus.failed,
@@ -2401,6 +2453,13 @@ class SpeechRecognitionService {
             ? requestedEnd
             : bytes.lengthInBytes;
         if (await abortAfterRecognizerUse()) return;
+        if (!await _yieldReplayToCommand(
+          replayContext,
+          replayClock,
+          replayBudget,
+        )) {
+          return;
+        }
         batchIndex++;
         stage = 'accept_call';
         operationStartedAt = DateTime.now().millisecondsSinceEpoch;
@@ -2535,6 +2594,47 @@ class SpeechRecognitionService {
         'remainingMs=${_remainingReplayBudget(replayClock, replayBudget).inMilliseconds} '
         'error=$error\n$stackTrace',
       );
+      if (_abortReplayIfInvalid(replayContext)) {
+        unawaited(_replaceUncertainFreeTextRecognizer(
+          failedRecognizer: replayRecognizer,
+          pendingOperation: pendingOperation,
+          recognizerEpoch: epoch,
+        ).catchError((Object replacementError, StackTrace replacementStack) {
+          print(
+            '[VOICE_FREE_TEXT] cancelled replay recognizer replacement '
+            'failed: $replacementError\n$replacementStack',
+          );
+        }));
+        return;
+      }
+      final int replayMs = DateTime.now().millisecondsSinceEpoch - startedAt;
+      final String fallbackReason = error is TimeoutException
+          ? 'refinement_budget_fallback'
+          : 'refinement_failure_fallback';
+      if (_resolveRefinementFallback(
+        commandFallback: commandFallback,
+        replayContext: replayContext,
+        epoch: epoch,
+        captureEpoch: captureEpoch,
+        segment: segment,
+        commandUtteranceId: commandUtteranceId,
+        resultContext: resultContext,
+        reason: fallbackReason,
+        replayMs: replayMs,
+        onCompleted: onCompleted,
+      )) {
+        unawaited(_replaceUncertainFreeTextRecognizer(
+          failedRecognizer: replayRecognizer,
+          pendingOperation: pendingOperation,
+          recognizerEpoch: epoch,
+        ).catchError((Object replacementError, StackTrace replacementStack) {
+          print(
+            '[VOICE_FREE_TEXT] refinement fallback recognizer replacement '
+            'failed: $replacementError\n$replacementStack',
+          );
+        }));
+        return;
+      }
       _logReplayDecision(
         replayContext,
         'failed',
@@ -2554,6 +2654,88 @@ class SpeechRecognitionService {
       );
       rethrow;
     }
+  }
+
+  bool _resolveRefinementFallback({
+    required _StableDynamicCommandHypothesis? commandFallback,
+    required VoiceReplayContext replayContext,
+    required int epoch,
+    required int captureEpoch,
+    required SpeechSegment segment,
+    required int commandUtteranceId,
+    required _VoiceResultContext? resultContext,
+    required String reason,
+    required int replayMs,
+    void Function(String text, int replayMs)? onCompleted,
+  }) {
+    if (commandFallback == null || _abortReplayIfInvalid(replayContext)) {
+      return false;
+    }
+    _emitResult(
+      _RecognitionSource.freeText,
+      commandFallback.text,
+      epoch: epoch,
+      captureEpoch: captureEpoch,
+      kind: RecognitionKind.streamFinal,
+      segment: segment,
+      commandUtteranceId: commandUtteranceId,
+      resultContext: resultContext,
+    );
+    onCompleted?.call(commandFallback.text, replayMs);
+    _replayOwnership.resolve(
+      replayContext,
+      VoiceReplayOwnershipStatus.resolvedAsDynamicPhrase,
+    );
+    _logReplayDecision(replayContext, 'accepted', reason);
+    print(
+      '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=refinement_fallback '
+      'reason=$reason ${replayContext.describeCaptured()} '
+      'text="${VoiceListMatcher.normalize(commandFallback.text)}" '
+      'matchCount=${commandFallback.matchCount} replayMs=$replayMs',
+    );
+    return true;
+  }
+
+  Future<bool> _yieldReplayToCommand(
+    VoiceReplayContext replayContext,
+    Stopwatch replayClock,
+    Duration replayBudget,
+  ) async {
+    if (_pendingCommandFrames <= 0) return true;
+    final int startedAt = DateTime.now().millisecondsSinceEpoch;
+    print(
+      '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=yield_to_command '
+      '${replayContext.describeCaptured()} '
+      'pendingCommandFrames=$_pendingCommandFrames '
+      'remainingMs=${_remainingReplayBudget(replayClock, replayBudget).inMilliseconds}',
+    );
+    while (_pendingCommandFrames > 0) {
+      if (_abortReplayIfInvalid(replayContext)) return false;
+      final Duration remaining =
+          _remainingReplayBudget(replayClock, replayBudget);
+      if (remaining == Duration.zero) {
+        print(
+          '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=yield_budget_exhausted '
+          '${replayContext.describeCaptured()} '
+          'pendingCommandFrames=$_pendingCommandFrames',
+        );
+        throw TimeoutException(
+          'Replay budget exhausted while yielding to command recognition',
+        );
+      }
+      final Duration poll = _replayPolicy.commandYieldPollInterval;
+      final Duration delay =
+          remaining.inMicroseconds < poll.inMicroseconds ? remaining : poll;
+      await Future<void>.delayed(delay);
+    }
+    if (_abortReplayIfInvalid(replayContext)) return false;
+    print(
+      '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=resume_after_command '
+      '${replayContext.describeCaptured()} '
+      'yieldMs=${DateTime.now().millisecondsSinceEpoch - startedAt} '
+      'remainingMs=${_remainingReplayBudget(replayClock, replayBudget).inMilliseconds}',
+    );
+    return true;
   }
 
   _ReplayResolution _resolveReplayResult({
@@ -2792,17 +2974,15 @@ class SpeechRecognitionService {
     return byteLength * 1000 ~/ (_sampleRate * 2);
   }
 
-  Duration _freeTextReplayBudgetForBytes(int byteLength) {
-    final int requested =
-        _pcmDurationMillis(byteLength) + _freeTextReplayHeadroom.inMilliseconds;
-    final int minimum = _minimumFreeTextReplayBudget.inMilliseconds;
-    final int maximum = _maximumFreeTextReplayBudget.inMilliseconds;
-    final int bounded = requested < minimum
-        ? minimum
-        : requested > maximum
-            ? maximum
-            : requested;
-    return Duration(milliseconds: bounded);
+  Duration _freeTextReplayBudgetForBytes(
+    int byteLength,
+    VoiceReplayPurpose purpose,
+  ) {
+    return _replayPolicy.budgetFor(
+      pcmBytes: byteLength,
+      purpose: purpose,
+      sampleRate: _sampleRate,
+    );
   }
 
   Duration _remainingReplayBudget(
@@ -3626,6 +3806,9 @@ class SpeechRecognitionService {
       await _vosk.createRecognizer(
         model: model,
         sampleRate: _sampleRate,
+        taskLane: source == _RecognitionSource.command
+            ? vosk.RecognizerTaskLane.command
+            : vosk.RecognizerTaskLane.freeText,
       ),
     );
     if (source == _RecognitionSource.freeText) {

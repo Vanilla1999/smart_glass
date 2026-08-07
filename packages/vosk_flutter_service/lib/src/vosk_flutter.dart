@@ -80,6 +80,7 @@ class VoskFlutterPlugin {
     required final Model model,
     required final int sampleRate,
     final List<String>? grammar,
+    final RecognizerTaskLane taskLane = RecognizerTaskLane.standard,
   }) async {
     if (_supportsFFI()) {
       return using((final arena) {
@@ -98,6 +99,7 @@ class VoskFlutterPlugin {
           model: model,
           sampleRate: sampleRate,
           channel: _channel,
+          taskLane: taskLane,
           recognizerPointer: recognizerPointer,
           voskLibrary: _voskLibrary,
         );
@@ -107,6 +109,7 @@ class VoskFlutterPlugin {
     final args = <String, dynamic>{
       'modelPath': model.path,
       'sampleRate': sampleRate,
+      'taskLane': taskLane.wireName,
     };
     if (grammar != null) {
       args['grammar'] = jsonEncode(grammar);
@@ -117,6 +120,7 @@ class VoskFlutterPlugin {
       model: model,
       sampleRate: sampleRate,
       channel: _channel,
+      taskLane: taskLane,
     );
   }
 

@@ -12,6 +12,7 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_segmenter.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_typing_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_replay_policy.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_replay_ownership.dart';
 
 void main() {
@@ -1038,6 +1039,72 @@ void main() {
       },
     );
   }
+
+  test('refinement timeout falls back to the stable advertised command',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.addAll(<bool>[false, true])
+      ..partialSequence.add(_json(partial: 'напиток'))
+      ..resultSequence.add(_json(text: 'напиток'));
+    final Completer<bool> blockedAccept = Completer<bool>();
+    final _FakeRecognizer blocked = _FakeRecognizer()
+      ..acceptOverride = (_) => blockedAccept.future;
+    final _FakeRecognizer replacement = _FakeRecognizer();
+    var factoryCalls = 0;
+    const VoiceDynamicItemsSnapshot items = VoiceDynamicItemsSnapshot(
+      revision: 111,
+      items: <VoiceDynamicItem>[
+        VoiceDynamicItem(id: 'cola', label: 'Напиток кола'),
+        VoiceDynamicItem(id: 'lemon', label: 'Напиток лимон'),
+      ],
+    );
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async {
+        factoryCalls++;
+        return factoryCalls == 1 ? blocked : replacement;
+      },
+      dynamicItemsProvider: (_) => items,
+      recognizerOperationTimeout: const Duration(seconds: 1),
+      replayPolicy: const VoiceReplayPolicy(
+        refinementBudget: Duration(milliseconds: 20),
+      ),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.switchCommandGrammar(
+      screen: WearScreenId.availabilityProduct,
+      grammar: const <String>['назад', 'напиток', '[unk]'],
+    );
+    await service.prepareVoiceHints(WearScreenId.availabilityProduct);
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final Future<SegmentedRecognitionResult> result =
+        service.segmentedResultsStream.firstWhere((event) =>
+            event.lane == RecognitionLane.freeText &&
+            event.kind == RecognitionKind.streamFinal);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing().timeout(const Duration(seconds: 1));
+
+    final SegmentedRecognitionResult resolved =
+        await result.timeout(const Duration(seconds: 1));
+    expect(resolved.text, 'напиток');
+    expect(resolved.dynamicItemId, isNull);
+    expect(blocked.finalCalls, 0);
+    expect(
+      service.replayOwnership.status,
+      VoiceReplayOwnershipStatus.resolvedAsDynamicPhrase,
+    );
+    for (int attempt = 0; attempt < 10 && factoryCalls < 2; attempt++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    expect(factoryCalls, 2);
+    blockedAccept.complete(false);
+    await Future<void>.delayed(Duration.zero);
+  });
 
   test('exact advertised printer final skips free-text replay', () async {
     final _FakeRecognizer command = _FakeRecognizer()
@@ -2471,10 +2538,12 @@ SpeechRecognitionService _service({
   Future<VoiceRecognizer> Function()? freeTextFactory,
   SpeechSegmenter? segmenter,
   Duration recognizerOperationTimeout = const Duration(seconds: 2),
+  VoiceReplayPolicy? replayPolicy,
   VoiceDynamicItemsSnapshot Function(WearScreenId)? dynamicItemsProvider,
 }) {
   return SpeechRecognitionService(
     commandGrammar: const <String>['вверх', '[unk]'],
+    replayPolicy: replayPolicy,
     speechSegmenter: segmenter ??
         SpeechSegmenter(
           calibrationDuration: Duration.zero,
