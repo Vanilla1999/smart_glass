@@ -1,5 +1,10 @@
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 
+enum WearVoiceDelayKind {
+  preview,
+  processing,
+}
+
 class WearVoiceDelayEvent {
   const WearVoiceDelayEvent({
     required this.visible,
@@ -9,7 +14,11 @@ class WearVoiceDelayEvent {
     required this.routeRevision,
     required this.grammarRevision,
     required this.freeTextEpoch,
+    this.commandUtteranceId = 0,
+    this.listRevision = 0,
+    this.kind = WearVoiceDelayKind.preview,
     this.previewText,
+    this.statusText,
   });
 
   final bool visible;
@@ -19,5 +28,9 @@ class WearVoiceDelayEvent {
   final int routeRevision;
   final int grammarRevision;
   final int freeTextEpoch;
+  final int commandUtteranceId;
+  final int listRevision;
+  final WearVoiceDelayKind kind;
   final String? previewText;
+  final String? statusText;
 }

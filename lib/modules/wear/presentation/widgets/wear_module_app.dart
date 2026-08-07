@@ -28,6 +28,12 @@ import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.da
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
+typedef _VoiceDelayKey = ({
+  int captureEpoch,
+  int segmentId,
+  int commandUtteranceId,
+});
+
 class WearModuleApp extends StatefulWidget {
   const WearModuleApp({
     super.key,
@@ -88,9 +94,10 @@ class _WearModuleAppState extends State<WearModuleApp>
   VoiceState _voiceState = const VoiceState.disabled();
   bool _voiceStartRequested = false;
   bool _voiceCommandsEnabled = true;
-  int? _visibleVoiceDelaySegmentId;
-  int? _latestVoiceDelayCaptureEpoch;
-  int? _latestVoiceDelaySegmentId;
+  final Map<WearVoiceDelayKind, _VoiceDelayKey> _visibleVoiceDelayKeys =
+      <WearVoiceDelayKind, _VoiceDelayKey>{};
+  final Map<WearVoiceDelayKind, _VoiceDelayKey> _latestVoiceDelayKeys =
+      <WearVoiceDelayKind, _VoiceDelayKey>{};
   int? _voiceStartupToken;
   bool _restartVoiceAfterInterruption = false;
   bool _wasActuallyBackgrounded = false;
@@ -151,6 +158,19 @@ class _WearModuleAppState extends State<WearModuleApp>
       return const Stream<WearVoiceDelayEvent>.empty();
     }
     return WearDependencies.I.voiceControlService.delayEventStream;
+  }
+
+  bool _isOlderVoiceDelayKey(
+    _VoiceDelayKey candidate,
+    _VoiceDelayKey latest,
+  ) {
+    if (candidate.captureEpoch != latest.captureEpoch) {
+      return candidate.captureEpoch < latest.captureEpoch;
+    }
+    if (candidate.segmentId != latest.segmentId) {
+      return candidate.segmentId < latest.segmentId;
+    }
+    return candidate.commandUtteranceId < latest.commandUtteranceId;
   }
 
   @override
@@ -339,31 +359,36 @@ class _WearModuleAppState extends State<WearModuleApp>
     _voiceDelaySub = _voiceDelays.listen((WearVoiceDelayEvent event) async {
       final logicalScreen = flow.state.screen;
       final speech = WearDependencies.I.speechRecognitionService;
-      if (event.sourceScreen != logicalScreen ||
-          event.captureEpoch != speech.captureEpoch ||
-          event.routeRevision != speech.routeRevision ||
-          event.grammarRevision != speech.grammarRevision ||
-          event.freeTextEpoch != speech.freeTextEpoch) {
-        return;
-      }
-      if (_latestVoiceDelayCaptureEpoch == event.captureEpoch &&
-          _latestVoiceDelaySegmentId != null &&
-          event.segmentId < _latestVoiceDelaySegmentId!) {
-        return;
-      }
-      _latestVoiceDelayCaptureEpoch = event.captureEpoch;
-      _latestVoiceDelaySegmentId = event.segmentId;
+      final int currentListRevision =
+          flow.dynamicVoiceItemsFor(logicalScreen).revision;
+      final bool contextCurrent = event.sourceScreen == logicalScreen &&
+          event.captureEpoch == speech.captureEpoch &&
+          event.routeRevision == speech.routeRevision &&
+          event.grammarRevision == speech.grammarRevision &&
+          event.freeTextEpoch == speech.freeTextEpoch &&
+          (event.listRevision == 0 ||
+              event.listRevision == currentListRevision);
+      final _VoiceDelayKey key = (
+        captureEpoch: event.captureEpoch,
+        segmentId: event.segmentId,
+        commandUtteranceId: event.commandUtteranceId,
+      );
       if (event.visible) {
-        _visibleVoiceDelaySegmentId = event.segmentId;
-      } else if (_visibleVoiceDelaySegmentId != event.segmentId) {
-        return;
+        if (!contextCurrent) return;
+        final _VoiceDelayKey? latest = _latestVoiceDelayKeys[event.kind];
+        if (latest != null && _isOlderVoiceDelayKey(key, latest)) return;
+        _latestVoiceDelayKeys[event.kind] = key;
+        _visibleVoiceDelayKeys[event.kind] = key;
       } else {
-        _visibleVoiceDelaySegmentId = null;
+        if (_visibleVoiceDelayKeys[event.kind] != key) return;
+        _visibleVoiceDelayKeys.remove(event.kind);
       }
       await flow.setRecognitionDelayVisible(
         event.sourceScreen,
         event.visible,
         event.previewText,
+        kind: event.kind,
+        statusText: event.statusText,
       );
     });
     _voiceReconnectingSub = widget.voiceReconnectingStream?.listen(

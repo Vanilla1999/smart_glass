@@ -14,6 +14,7 @@ import 'package:smart_glasses/modules/wear/application/voice_clarification_args.
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_search_phrase_policy.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_delay_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availability_glasses_payloads.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
@@ -136,6 +137,8 @@ class WearFlowController {
   WearBackgroundRuntime? _backgroundRuntime;
   StreamSubscription<WearBackgroundScreenUpdate>? _backgroundRuntimeSub;
   Future<void> _runtimeReset = Future<void>.value();
+  String? _recognitionPreviewText;
+  String? _recognitionProcessingText;
 
   WearFlowState get state => _state;
 
@@ -199,18 +202,34 @@ class WearFlowController {
   Future<void> setRecognitionDelayVisible(
     WearScreenId screen,
     bool visible,
-    String? previewText,
-  ) async {
+    String? previewText, {
+    WearVoiceDelayKind kind = WearVoiceDelayKind.preview,
+    String? statusText,
+  }) async {
     if (_state.screen != screen) return;
-    final WearGlassesPayload payload =
-        _screenPayloads[screen] ?? _payloadForState(_state);
+    final String explicitText = statusText?.trim() ?? '';
     final String candidate = previewText?.trim() ?? '';
-    await _glassesOutput.send(
-      visible && candidate.isNotEmpty
-          ? payload.copyWithStatusText('Похоже: $candidate')
-          : payload,
-    );
+    final String? nextText = explicitText.isNotEmpty
+        ? explicitText
+        : candidate.isNotEmpty
+            ? 'Похоже: $candidate'
+            : null;
+    final String? visibleText = visible ? nextText : null;
+    if (kind == WearVoiceDelayKind.processing) {
+      _recognitionProcessingText = visibleText;
+    } else {
+      _recognitionPreviewText = visibleText;
+    }
+    await _renderGlasses();
   }
+
+  void _clearRecognitionFeedback() {
+    _recognitionPreviewText = null;
+    _recognitionProcessingText = null;
+  }
+
+  String? _recognitionFeedbackText() =>
+      _recognitionProcessingText ?? _recognitionPreviewText;
 
   void setUiLifecycle(WearUiLifecycle lifecycle) {
     if (_uiLifecycle == lifecycle) return;
@@ -242,6 +261,7 @@ class WearFlowController {
     _runtimeActive = active;
     print('[WearFlowController] runtimeActive=$active');
     if (!active) {
+      _clearRecognitionFeedback();
       _commandQueue.clear();
       _inactiveNavigationCount = 0;
       _deliveredNavigationRequestId = null;
@@ -1709,7 +1729,11 @@ class WearFlowController {
   }
 
   Future<void> _renderGlasses() async {
-    final WearGlassesPayload payload = _payloadForState(_state);
+    final WearGlassesPayload basePayload = _payloadForState(_state);
+    final String? feedbackText = _recognitionFeedbackText();
+    final WearGlassesPayload payload = feedbackText == null
+        ? basePayload
+        : basePayload.copyWithStatusText(feedbackText);
     try {
       await _glassesOutput.send(payload);
     } catch (error, stackTrace) {
@@ -1864,6 +1888,9 @@ class WearFlowController {
         _state.screen == WearScreenId.voiceClarification
             ? voiceGrammarPhrasesFor(WearScreenId.voiceClarification)
             : const <String>[];
+    if (next.screen != _state.screen) {
+      _clearRecognitionFeedback();
+    }
     _state = next;
     print('[WearFlowController] state=$_state');
     if (!_stateController.isClosed) {

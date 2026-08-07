@@ -9,8 +9,11 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voi
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_phrase_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_preview_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_delay_event.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_replay_feedback_controller.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_search_phrase_policy.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/segmented_recognition_result.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_recognition_service.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_replay_ownership.dart';
 
 typedef WearVoiceClock = int Function();
 typedef WearVoiceTimerFactory = Timer Function(
@@ -37,6 +40,20 @@ class WearVoiceControlService {
         ),
         _clock = clock ?? (() => DateTime.now().millisecondsSinceEpoch),
         _timerFactory = timerFactory ?? Timer.new {
+    _replayFeedbackController = WearVoiceReplayFeedbackController(
+      onEvent: _publishDelayEvent,
+      timerFactory: _timerFactory,
+    );
+    _replayOwnershipSubscription =
+        _speechRecognitionService.replayOwnershipStream.listen(
+      _onReplayOwnership,
+      onError: (Object error, StackTrace stackTrace) {
+        print(
+          '[WearVoiceControlService] replay ownership stream error: '
+          '$error\n$stackTrace',
+        );
+      },
+    );
     print('[WearVoiceControlService] subscribing to ASR results');
     _recognitionSubscription =
         _speechRecognitionService.segmentedResultsStream.listen(
@@ -62,6 +79,7 @@ class WearVoiceControlService {
   final RecognitionArbiter _arbiter;
   final WearVoiceClock _clock;
   final WearVoiceTimerFactory _timerFactory;
+  late final WearVoiceReplayFeedbackController _replayFeedbackController;
   final StreamController<WearVoiceCommand> _commandController =
       StreamController<WearVoiceCommand>.broadcast();
   final StreamController<WearVoiceCommandEvent> _commandEventController =
@@ -77,6 +95,8 @@ class WearVoiceControlService {
   StreamSubscription<SegmentedRecognitionResult>? _recognitionSubscription;
   StreamSubscription<SpeechSegmentStarted>? _segmentStartedSubscription;
   StreamSubscription<SpeechSegmentEnded>? _segmentEndedSubscription;
+  StreamSubscription<VoiceReplayOwnership>? _replayOwnershipSubscription;
+  final Set<String> _feedbackEligibleUtterances = <String>{};
   int _emittedCommandSeq = 0;
   final Map<String, int> _segmentStartedAt = <String, int>{};
   final Map<String, Timer> _stabilityTimers = <String, Timer>{};
@@ -102,6 +122,18 @@ class WearVoiceControlService {
   int get debugRetainedPartialRevisionCount => _latestPartialRevisions.length;
 
   void _onRecognitionResult(SegmentedRecognitionResult result) {
+    if (result.lane == RecognitionLane.command &&
+        VoiceSearchPhrasePolicy.isMeaningful(result.text)) {
+      _feedbackEligibleUtterances.add(_feedbackUtteranceKey(
+        result.captureEpoch,
+        result.commandUtteranceId,
+      ));
+      while (_feedbackEligibleUtterances.length > 128) {
+        _feedbackEligibleUtterances.remove(
+          _feedbackEligibleUtterances.first,
+        );
+      }
+    }
     final String timerKey = '${result.lane.name}:${result.captureEpoch}:'
         '${result.commandUtteranceId}:${result.routeRevision}:'
         '${result.grammarRevision}:${result.freeTextEpoch}:'
@@ -224,6 +256,10 @@ class WearVoiceControlService {
   }
 
   void _onSegmentStarted(SpeechSegmentStarted started) {
+    _replayFeedbackController.onSegmentStarted(
+      started.captureEpoch,
+      started.segmentId,
+    );
     _arbiter.startSegment(started);
     _segmentStartedAt['${started.captureEpoch}:${started.segmentId}'] =
         _clock();
@@ -238,6 +274,31 @@ class WearVoiceControlService {
     );
     _recognitionDelayContext = context;
   }
+
+  void _onReplayOwnership(VoiceReplayOwnership ownership) {
+    final VoiceReplayContext? context = ownership.context;
+    final String? utteranceKey = context == null
+        ? null
+        : _feedbackUtteranceKey(
+            context.captureEpoch,
+            context.commandUtteranceId,
+          );
+    final bool meaningfulEvidence = utteranceKey != null &&
+        _feedbackEligibleUtterances.contains(utteranceKey);
+    if (ownership.status == VoiceReplayOwnershipStatus.pending) {
+      _clearRecognitionDelay();
+    }
+    _replayFeedbackController.accept(
+      ownership,
+      meaningfulEvidence: meaningfulEvidence,
+    );
+    if (ownership.isTerminal && utteranceKey != null) {
+      _feedbackEligibleUtterances.remove(utteranceKey);
+    }
+  }
+
+  String _feedbackUtteranceKey(int captureEpoch, int commandUtteranceId) =>
+      '$captureEpoch:$commandUtteranceId';
 
   void _emitPhrase(SegmentedRecognitionResult result) {
     final String trimmed = result.text.trim();
@@ -402,17 +463,30 @@ class WearVoiceControlService {
     required _RecognitionDelayContext context,
     String? previewText,
   }) {
+    _publishDelayEvent(
+      WearVoiceDelayEvent(
+        visible: visible,
+        captureEpoch: context.captureEpoch,
+        segmentId: context.segmentId,
+        sourceScreen: context.sourceScreen,
+        routeRevision: context.routeRevision,
+        grammarRevision: context.grammarRevision,
+        freeTextEpoch: context.freeTextEpoch,
+        previewText: previewText,
+      ),
+    );
+  }
+
+  void _publishDelayEvent(WearVoiceDelayEvent event) {
     if (_delayEventController.isClosed) return;
-    _delayEventController.add(WearVoiceDelayEvent(
-      visible: visible,
-      captureEpoch: context.captureEpoch,
-      segmentId: context.segmentId,
-      sourceScreen: context.sourceScreen,
-      routeRevision: context.routeRevision,
-      grammarRevision: context.grammarRevision,
-      freeTextEpoch: context.freeTextEpoch,
-      previewText: previewText,
-    ));
+    print(
+      '[VOICE_FEEDBACK] kind=${event.kind.name} visible=${event.visible} '
+      'status="${event.statusText ?? event.previewText ?? ''}" '
+      'screen=${event.sourceScreen.name} '
+      'captureEpoch=${event.captureEpoch} segmentId=${event.segmentId} '
+      'utteranceId=${event.commandUtteranceId}',
+    );
+    _delayEventController.add(event);
   }
 
   void _cancelUtteranceStabilityTimers(SegmentedRecognitionResult result) {
@@ -446,10 +520,13 @@ class WearVoiceControlService {
     _stabilityTimers.clear();
     _latestPartialRevisions.clear();
     _previewStates.clear();
+    _feedbackEligibleUtterances.clear();
     _recognitionPreviewTimeout?.cancel();
     await _recognitionSubscription?.cancel();
     await _segmentStartedSubscription?.cancel();
     await _segmentEndedSubscription?.cancel();
+    await _replayOwnershipSubscription?.cancel();
+    _replayFeedbackController.dispose();
     _arbiter.dispose();
     await _commandController.close();
     await _commandEventController.close();
