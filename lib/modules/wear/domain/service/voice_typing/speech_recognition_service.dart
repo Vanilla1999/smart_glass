@@ -2702,6 +2702,22 @@ class SpeechRecognitionService {
     Duration replayBudget,
   ) async {
     if (_pendingCommandFrames <= 0) return true;
+    // In live modes this replay is awaited by the current command utterance
+    // finalization. Any newly admitted command frame is chained behind that
+    // same finalization, so waiting for _pendingCommandFrames to drain here
+    // would create a circular wait:
+    //   command finalization -> replay -> pending command -> finalization.
+    //
+    // replayOnly does not have that dependency, so it can safely yield until
+    // the queued command starts and let the native scheduler prioritize it.
+    if (freeTextPipelineMode.usesLiveLane) {
+      print(
+        '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=yield_skipped '
+        'reason=live_lane_dependency ${replayContext.describeCaptured()} '
+        'pendingCommandFrames=$_pendingCommandFrames',
+      );
+      return true;
+    }
     final int startedAt = DateTime.now().millisecondsSinceEpoch;
     print(
       '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=yield_to_command '

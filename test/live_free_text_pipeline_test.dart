@@ -890,8 +890,9 @@ void main() {
     await liveFinalStarted.future;
     final Future<void> next = service.processAudioChunk(_pcmFrame(2000));
     blockedLiveFinal.complete(_json(text: 'жёлтый'));
-    await Future.wait<void>(<Future<void>>[first, next]);
-    await service.waitForProcessing();
+    await Future.wait<void>(<Future<void>>[first, next])
+        .timeout(const Duration(seconds: 2));
+    await service.waitForProcessing().timeout(const Duration(seconds: 2));
 
     expect(finals.map((event) => event.text), <String>['мобильный']);
     expect(finals.single.isLiveFreeText, isFalse);
