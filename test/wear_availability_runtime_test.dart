@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/application/wear_availability_runtime.dart';
+import 'package:smart_glasses/modules/wear/application/wear_background_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_group.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
@@ -9,6 +10,7 @@ import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availa
 import 'package:smart_glasses/modules/wear/domain/availability/repository/wear_availability_repository.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/use_case/wear_availability_flow_use_case.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
+import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 
 void main() {
   test('coalesces duplicate screen entry while groups are loading', () async {
@@ -166,6 +168,23 @@ void main() {
     );
 
     expect(repository.barcodeCalls, 2);
+  });
+
+  test('direct scan publishes scanning payload before the flow is loaded',
+      () async {
+    final WearAvailabilityRuntime runtime = _runtime(_AvailabilityRepository());
+    addTearDown(runtime.dispose);
+    final List<WearBackgroundScreenUpdate> updates =
+        <WearBackgroundScreenUpdate>[];
+    final StreamSubscription<WearBackgroundScreenUpdate> subscription =
+        runtime.updates.listen(updates.add);
+    addTearDown(subscription.cancel);
+
+    await runtime.enterScreen(WearScreenId.availabilityDirectScan);
+
+    expect(updates, isNotEmpty);
+    expect(updates.last.payload.phase, WearGlassesPhase.scanning);
+    expect(updates.last.payload.statusText, 'Поиск ШК...');
   });
 
   test('loads groups and products without providers or widgets', () async {

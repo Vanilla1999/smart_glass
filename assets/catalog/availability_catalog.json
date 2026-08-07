@@ -2179,6 +2179,26 @@
       "priceTagActual": false
     },
     {
+      "id": 9000000099,
+      "groupId": 1,
+      "name": "ТЕСТ Фотоконтроль",
+      "code": "9000000099",
+      "barcodes": [
+        "1",
+        "2"
+      ],
+      "priceTagBarcodes": [
+        "99"
+      ],
+      "price": 19.99,
+      "loyaltyPrice": null,
+      "rest": 5.0,
+      "checkPrice": true,
+      "photoControl": true,
+      "unpackaged": false,
+      "priceTagActual": true
+    },
+    {
       "id": 1000011310,
       "groupId": 2,
       "name": "ЛЮБИМЫЙ Напиток земляничный лето 0,95л т/пак(Лебедянский):12",

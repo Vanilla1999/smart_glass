@@ -572,6 +572,11 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
         message: _error,
       );
     }
+    if (_screen == WearScreenId.availabilityDirectScan) {
+      return WearAvailabilityGlassesPayloads.directScanWaiting(
+        statusText: _flow?.message ?? 'Поиск ШК...',
+      );
+    }
     final WearAvailabilityFlowState? flow = _flow;
     if (flow == null) {
       return WearAvailabilityGlassesPayloads.loading(title: 'Доступность');
@@ -601,11 +606,6 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
       return WearAvailabilityGlassesPayloads.duplicates(
         flow.duplicateProducts,
         selectedIndex: _focusedIndex,
-      );
-    }
-    if (_screen == WearScreenId.availabilityDirectScan) {
-      return WearAvailabilityGlassesPayloads.directScanWaiting(
-        statusText: flow.message ?? 'Поиск ШК...',
       );
     }
     return WearAvailabilityGlassesPayloads.fromFlow(flow);
