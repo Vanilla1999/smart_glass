@@ -2,5 +2,8 @@
 /.venv/
 /model/
 /outputs/
+/labeling/clips/
+/labeling/manual_labels.json
+/labeling/labeled_results.csv
 *.pyc
 __pycache__/

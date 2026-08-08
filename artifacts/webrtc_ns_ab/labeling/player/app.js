@@ -1,0 +1,8 @@
+let rows=[], index=0, labels={};
+const types=['command','background_speech','silence','mixed_command_and_background','unclear','unlabeled'];
+fetch('../labeling_manifest.json').then(r=>r.json()).then(x=>{rows=x;render()}).catch(e=>status.textContent=e);
+function save(){const r=rows[index], q=id=>document.getElementById(id).value;labels[r.segment_id]={segment_id:r.segment_id,expected_type:q('type'),expected_text:q('text'),confidence:q('confidence'),notes:q('notes')}}
+function render(){if(!rows.length)return;const r=rows[index],l=labels[r.segment_id]||r;status.textContent=`${index+1}/${rows.length} ${r.segment_id} ${r.start_s}-${r.end_s}s`;view.innerHTML=`<div class="texts">${['source','baseline','low','moderate'].map(v=>`<div class="card"><b>${v}</b><br><audio controls preload="none" src="${r.audio[v]}"></audio><p>${r[v+'_endpoint_text']||''}</p><small>${r[v+'_partial_summary']||''}</small></div>`).join('')}</div><p>Hint: ${r.known_sequence_hint}</p><select id="type">${types.map(x=>`<option ${x==(l.expected_type||'unlabeled')?'selected':''}>${x}</option>`)}</select><input id="text" placeholder="expected text" value="${l.expected_text||''}"><input id="confidence" placeholder="confidence" value="${l.confidence||l.label_confidence||''}"><textarea id="notes" placeholder="notes">${l.notes||''}</textarea>`}
+prev.onclick=()=>{save();index=Math.max(0,index-1);render()};next.onclick=()=>{save();index=Math.min(rows.length-1,index+1);render()};
+function data(){save();return JSON.stringify(Object.values(labels),null,2)}
+copy.onclick=()=>navigator.clipboard.writeText(data());download.onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data()],{type:'application/json'}));a.download='manual_labels.json';a.click()};
