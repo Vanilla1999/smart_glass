@@ -6,8 +6,15 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
+enum class RawChannelMixMode {
+    ALIGNED_FOUR_CHANNEL,
+    LEGACY_CHANNELS_1_TO_3,
+}
+
 /** Converts 4-channel UAC4 PCM to the light-denoised mono stream used by Vosk. */
-class RawLightDenoiser {
+class RawLightDenoiser(
+    private val mixMode: RawChannelMixMode = RawChannelMixMode.ALIGNED_FOUR_CHANNEL,
+) {
     companion object {
         const val INPUT_FRAME_BYTES = 2048
         const val OUTPUT_FRAME_BYTES = INPUT_FRAME_BYTES / 4
@@ -20,6 +27,8 @@ class RawLightDenoiser {
         private const val MAX_REDUCTION_DB = 8.0
     }
 
+    private val alignedMixer = AlignedFourChannelMixer()
+    private val mixedFrame = DoubleArray(HOP_SIZE)
     private val inputWindow = DoubleArray(FFT_SIZE)
     private val overlap = DoubleArray(HOP_SIZE)
     private val real = DoubleArray(FFT_SIZE)
@@ -53,6 +62,8 @@ class RawLightDenoiser {
     }
 
     fun reset() {
+        alignedMixer.reset()
+        mixedFrame.fill(0.0)
         inputWindow.fill(0.0)
         overlap.fill(0.0)
         x1 = 0.0
@@ -66,15 +77,12 @@ class RawLightDenoiser {
         require(output.size >= OUTPUT_FRAME_BYTES)
 
         inputWindow.copyInto(inputWindow, 0, HOP_SIZE, FFT_SIZE)
+        when (mixMode) {
+            RawChannelMixMode.ALIGNED_FOUR_CHANNEL -> alignedMixer.mix(input, mixedFrame)
+            RawChannelMixMode.LEGACY_CHANNELS_1_TO_3 -> mixLegacyChannels(input)
+        }
         for (sampleIndex in 0 until HOP_SIZE) {
-            var mixed = 0.0
-            for (channel in 1..3) {
-                val offset = (sampleIndex * 4 + channel) * 2
-                val sample = ((input[offset + 1].toInt() shl 8) or
-                    (input[offset].toInt() and 0xff)).toShort().toInt()
-                mixed += sample / 32768.0
-            }
-            inputWindow[HOP_SIZE + sampleIndex] = highPass(mixed / 3.0)
+            inputWindow[HOP_SIZE + sampleIndex] = highPass(mixedFrame[sampleIndex])
         }
 
         for (index in 0 until FFT_SIZE) {
@@ -93,6 +101,19 @@ class RawLightDenoiser {
             overlap[index] = real[index + HOP_SIZE] * window[index + HOP_SIZE]
         }
         return OUTPUT_FRAME_BYTES
+    }
+
+    private fun mixLegacyChannels(input: ByteArray) {
+        for (sampleIndex in 0 until HOP_SIZE) {
+            var mixed = 0.0
+            for (channel in 1..3) {
+                val offset = (sampleIndex * 4 + channel) * 2
+                val sample = ((input[offset + 1].toInt() shl 8) or
+                    (input[offset].toInt() and 0xff)).toShort().toInt()
+                mixed += sample / 32768.0
+            }
+            mixedFrame[sampleIndex] = mixed / 3.0
+        }
     }
 
     private fun highPass(input: Double): Double {
@@ -168,8 +189,8 @@ class RawLightDenoiser {
         }
         if (inverse) {
             for (index in 0 until FFT_SIZE) {
-                real[index] /= FFT_SIZE
-                imaginary[index] /= FFT_SIZE
+                real[index] = real[index] / FFT_SIZE.toDouble()
+                imaginary[index] = imaginary[index] / FFT_SIZE.toDouble()
             }
         }
     }

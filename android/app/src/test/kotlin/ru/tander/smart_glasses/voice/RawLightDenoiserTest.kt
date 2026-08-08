@@ -1,7 +1,6 @@
 package ru.tander.smart_glasses.voice
 
 import kotlin.math.PI
-import kotlin.math.abs
 import kotlin.math.sin
 import kotlin.math.sqrt
 import org.junit.Assert.assertEquals
@@ -10,15 +9,15 @@ import org.junit.Test
 
 class RawLightDenoiserTest {
     @Test
-    fun `produces mono frame from channels two three and four`() {
+    fun `produces mono frame from aligned four channels`() {
         val denoiser = RawLightDenoiser()
         val output = ByteArray(RawLightDenoiser.OUTPUT_FRAME_BYTES)
 
         repeat(4) {
-            val input = frame(channel1 = 30_000, channel234 = 0)
+            val input = frame(channel0 = 0, channels123 = 0)
             repeat(256) { index ->
                 val sample = if ((index / 4) % 2 == 0) 4_000 else -4_000
-                for (channel in 1..3) writeSample(input, index, channel, sample)
+                for (channel in 0..3) writeSample(input, index, channel, sample)
             }
             denoiser.process(input, output)
         }
@@ -28,12 +27,29 @@ class RawLightDenoiserTest {
     }
 
     @Test
-    fun `ignores channel one`() {
+    fun `default mixer uses channel zero`() {
         val denoiser = RawLightDenoiser()
         val output = ByteArray(RawLightDenoiser.OUTPUT_FRAME_BYTES)
 
         repeat(4) {
-            denoiser.process(frame(channel1 = 30_000, channel234 = 0), output)
+            val input = frame(channel0 = 0, channels123 = 0)
+            repeat(256) { index ->
+                val sample = if ((index / 4) % 2 == 0) 12_000 else -12_000
+                writeSample(input, index, 0, sample)
+            }
+            denoiser.process(input, output)
+        }
+
+        assertTrue(rms(output) > 500.0)
+    }
+
+    @Test
+    fun `legacy mixer still ignores channel zero`() {
+        val denoiser = RawLightDenoiser(RawChannelMixMode.LEGACY_CHANNELS_1_TO_3)
+        val output = ByteArray(RawLightDenoiser.OUTPUT_FRAME_BYTES)
+
+        repeat(4) {
+            denoiser.process(frame(channel0 = 30_000, channels123 = 0), output)
         }
 
         assertEquals(0.0, rms(output), 1.0)
@@ -55,7 +71,7 @@ class RawLightDenoiserTest {
             val input = ByteArray(RawLightDenoiser.INPUT_FRAME_BYTES)
             repeat(256) { index ->
                 val sample = (8_000 * sin(2.0 * PI * frequency * (sampleOffset + index) / 16_000)).toInt()
-                for (channel in 1..3) writeSample(input, index, channel, sample)
+                for (channel in 0..3) writeSample(input, index, channel, sample)
             }
             sampleOffset += 256
             denoiser.process(input, output)
@@ -63,11 +79,11 @@ class RawLightDenoiserTest {
         return rms(output)
     }
 
-    private fun frame(channel1: Int, channel234: Int): ByteArray =
+    private fun frame(channel0: Int, channels123: Int): ByteArray =
         ByteArray(RawLightDenoiser.INPUT_FRAME_BYTES).also { bytes ->
             repeat(256) { index ->
-                writeSample(bytes, index, 0, channel1)
-                for (channel in 1..3) writeSample(bytes, index, channel, channel234)
+                writeSample(bytes, index, 0, channel0)
+                for (channel in 1..3) writeSample(bytes, index, channel, channels123)
             }
         }
 
