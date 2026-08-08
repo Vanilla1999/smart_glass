@@ -1,6 +1,7 @@
 /.venv/
 /model/
 /outputs/
+/final_dataset/
 /labeling/clips/
 /labeling/manual_labels.json
 *.pyc
