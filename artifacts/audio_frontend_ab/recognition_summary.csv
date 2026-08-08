@@ -1,0 +1,13 @@
+file,mode,duration_ms,endpoint_count,nonempty_final_count,empty_final_count,first_nonempty_partial_ms,terminal_final
+ssp_mono_1786194763609.wav,command_menu,181248.0,46,21,26,10200.0,
+ssp_mono_1786194763609.wav,free_text,181248.0,54,40,15,10440.0,
+legacy_denoised_1786194763609.wav,command_menu,181952.0,46,21,26,10200.0,
+legacy_denoised_1786194763609.wav,free_text,181952.0,54,40,15,10440.0,
+aligned_denoised_1786194763609.wav,command_menu,181952.0,46,21,26,10200.0,
+aligned_denoised_1786194763609.wav,free_text,181952.0,52,38,15,10440.0,
+ssp_mono_1786194978795.wav,command_menu,174080.0,44,23,22,17640.0,
+ssp_mono_1786194978795.wav,free_text,174080.0,51,42,10,17880.0,
+legacy_denoised_1786194978795.wav,command_menu,174176.0,44,23,22,17640.0,
+legacy_denoised_1786194978795.wav,free_text,174176.0,51,42,10,17880.0,
+aligned_denoised_1786194978795.wav,command_menu,174176.0,43,20,24,17640.0,
+aligned_denoised_1786194978795.wav,free_text,174176.0,50,41,10,17880.0,
