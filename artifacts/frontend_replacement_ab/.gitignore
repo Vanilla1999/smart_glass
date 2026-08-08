@@ -2,6 +2,9 @@
 /model/
 /outputs/
 /final_dataset/
+/continuous/outputs/
+/continuous/*.jsonl
+/continuous/hard_negative_clips/
 /labeling/clips/
 /labeling/manual_labels.json
 *.pyc

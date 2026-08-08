@@ -1,0 +1,11 @@
+frontend,mode,command_total,command_detected,command_miss,wrong_actionable_partial,duplicate_activation
+hpf80_mix123,clean_continuous,84,83,1,4,0
+hpf80_mix123,production_like,84,80,4,3,0
+legacy_reference,clean_continuous,84,81,3,4,0
+legacy_reference,production_like,84,82,2,3,0
+raw_ch3,clean_continuous,84,82,2,4,0
+raw_ch3,production_like,84,81,3,4,0
+raw_mix123,clean_continuous,84,82,2,4,0
+raw_mix123,production_like,84,81,3,3,0
+webrtc_moderate,clean_continuous,84,81,3,4,0
+webrtc_moderate,production_like,84,81,3,3,0
