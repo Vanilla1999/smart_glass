@@ -1,0 +1,5 @@
+/python_deps/
+/model/
+/outputs/
+*.pyc
+__pycache__/
