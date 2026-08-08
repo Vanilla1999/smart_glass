@@ -1,0 +1,282 @@
+recording,mode,variant,timestamp,event,text
+1786194763609,command_menu,baseline,13680.0,endpoint,вниз вниз
+1786194763609,command_menu,baseline,19920.0,endpoint,вверх вверх вверх
+1786194763609,command_menu,baseline,29040.0,endpoint,вниз вниз вниз
+1786194763609,command_menu,baseline,48240.0,endpoint,вверх
+1786194763609,command_menu,baseline,54000.0,endpoint,вниз вниз вниз
+1786194763609,command_menu,baseline,56400.0,endpoint,вверх
+1786194763609,command_menu,baseline,60240.0,endpoint,печать
+1786194763609,command_menu,baseline,67440.0,endpoint,печать
+1786194763609,command_menu,baseline,72240.0,endpoint,печать
+1786194763609,command_menu,baseline,112560.0,endpoint,доступность
+1786194763609,free_text,baseline,11280.0,endpoint,вниз
+1786194763609,free_text,baseline,17520.0,endpoint,вниз вверх
+1786194763609,free_text,baseline,19920.0,endpoint,верх
+1786194763609,free_text,baseline,29040.0,endpoint,вниз вниз вниз
+1786194763609,free_text,baseline,54000.0,endpoint,для для вниз вниз вниз
+1786194763609,free_text,baseline,56400.0,endpoint,сбер
+1786194763609,free_text,baseline,64080.0,endpoint,печать белый вода
+1786194763609,free_text,baseline,75600.0,endpoint,долгой
+1786194763609,free_text,baseline,83760.0,endpoint,трогать
+1786194763609,free_text,baseline,91920.0,endpoint,дорогой
+1786194763609,free_text,baseline,97200.0,endpoint,белый
+1786194763609,free_text,baseline,100560.0,endpoint,надо
+1786194763609,free_text,baseline,110160.0,endpoint,надо надо
+1786194763609,free_text,baseline,158160.0,endpoint,список
+1786194763609,free_text,baseline,164400.0,endpoint,были этой
+1786194763609,free_text,baseline,174480.0,endpoint,надо
+1786194763609,command_menu,webrtc_ns_low,19920.0,endpoint,вверх
+1786194763609,command_menu,webrtc_ns_low,29040.0,endpoint,вниз вниз вниз
+1786194763609,command_menu,webrtc_ns_low,48240.0,endpoint,вверх
+1786194763609,command_menu,webrtc_ns_low,50160.0,endpoint,вверх
+1786194763609,command_menu,webrtc_ns_low,52080.0,endpoint,вниз
+1786194763609,command_menu,webrtc_ns_low,54000.0,endpoint,вниз
+1786194763609,command_menu,webrtc_ns_low,57840.0,endpoint,вверх
+1786194763609,command_menu,webrtc_ns_low,60240.0,endpoint,печать
+1786194763609,command_menu,webrtc_ns_low,67440.0,endpoint,печать
+1786194763609,command_menu,webrtc_ns_low,72240.0,endpoint,печать
+1786194763609,free_text,webrtc_ns_low,11280.0,endpoint,быть
+1786194763609,free_text,webrtc_ns_low,19920.0,endpoint,для для верх
+1786194763609,free_text,webrtc_ns_low,29040.0,endpoint,вниз вниз вниз
+1786194763609,free_text,webrtc_ns_low,51120.0,endpoint,верх для для боли
+1786194763609,free_text,webrtc_ns_low,57360.0,endpoint,для верх
+1786194763609,free_text,webrtc_ns_low,64080.0,endpoint,печать белый года
+1786194763609,free_text,webrtc_ns_low,74160.0,endpoint,доп
+1786194763609,free_text,webrtc_ns_low,84240.0,endpoint,долбить
+1786194763609,free_text,webrtc_ns_low,91920.0,endpoint,долгой
+1786194763609,free_text,webrtc_ns_low,97680.0,endpoint,белый
+1786194763609,free_text,webrtc_ns_low,100560.0,endpoint,надо
+1786194763609,free_text,webrtc_ns_low,110160.0,endpoint,вода вода
+1786194763609,free_text,webrtc_ns_low,161520.0,endpoint,были
+1786194763609,free_text,webrtc_ns_low,171600.0,endpoint,готовить
+1786194763609,free_text,webrtc_ns_low,174480.0,endpoint,надо
+1786194763609,free_text,webrtc_ns_low,181200.0,endpoint,надо
+1786194763609,command_menu,webrtc_ns_moderate,19920.0,endpoint,вверх
+1786194763609,command_menu,webrtc_ns_moderate,29040.0,endpoint,вниз вниз вниз
+1786194763609,command_menu,webrtc_ns_moderate,48240.0,endpoint,вверх
+1786194763609,command_menu,webrtc_ns_moderate,50160.0,endpoint,вверх
+1786194763609,command_menu,webrtc_ns_moderate,54000.0,endpoint,вниз вниз вниз
+1786194763609,command_menu,webrtc_ns_moderate,56400.0,endpoint,вверх
+1786194763609,command_menu,webrtc_ns_moderate,60240.0,endpoint,печать
+1786194763609,command_menu,webrtc_ns_moderate,67440.0,endpoint,печать
+1786194763609,command_menu,webrtc_ns_moderate,72240.0,endpoint,печать
+1786194763609,free_text,webrtc_ns_moderate,13200.0,endpoint,мыса
+1786194763609,free_text,webrtc_ns_moderate,20880.0,endpoint,для бег
+1786194763609,free_text,webrtc_ns_moderate,29040.0,endpoint,вниз вниз вниз
+1786194763609,free_text,webrtc_ns_moderate,52080.0,endpoint,верх для для вниз вниз
+1786194763609,free_text,webrtc_ns_moderate,57360.0,endpoint,лет верх
+1786194763609,free_text,webrtc_ns_moderate,64080.0,endpoint,печать белый года
+1786194763609,free_text,webrtc_ns_moderate,74160.0,endpoint,видят
+1786194763609,free_text,webrtc_ns_moderate,84720.0,endpoint,долбить
+1786194763609,free_text,webrtc_ns_moderate,91920.0,endpoint,долгой
+1786194763609,free_text,webrtc_ns_moderate,97680.0,endpoint,белый
+1786194763609,free_text,webrtc_ns_moderate,100560.0,endpoint,надо
+1786194763609,free_text,webrtc_ns_moderate,110160.0,endpoint,вода вода
+1786194763609,free_text,webrtc_ns_moderate,120240.0,endpoint,питер
+1786194763609,free_text,webrtc_ns_moderate,160560.0,endpoint,были
+1786194763609,free_text,webrtc_ns_moderate,164400.0,endpoint,готовить
+1786194763609,free_text,webrtc_ns_moderate,174480.0,endpoint,очень надо
+1786194763609,free_text,webrtc_ns_moderate,181248.0,final,надо
+1786194763609,command_menu,webrtc_ns_high,25200.0,endpoint,вверх
+1786194763609,command_menu,webrtc_ns_high,26640.0,endpoint,вниз
+1786194763609,command_menu,webrtc_ns_high,29040.0,endpoint,вниз
+1786194763609,command_menu,webrtc_ns_high,49200.0,endpoint,вверх вверх
+1786194763609,command_menu,webrtc_ns_high,54000.0,endpoint,вниз вниз вниз
+1786194763609,command_menu,webrtc_ns_high,56400.0,endpoint,вверх
+1786194763609,command_menu,webrtc_ns_high,60240.0,endpoint,печать
+1786194763609,command_menu,webrtc_ns_high,67440.0,endpoint,печать
+1786194763609,command_menu,webrtc_ns_high,72240.0,endpoint,печать
+1786194763609,free_text,webrtc_ns_high,11280.0,endpoint,автобуса
+1786194763609,free_text,webrtc_ns_high,20880.0,endpoint,для бег
+1786194763609,free_text,webrtc_ns_high,29040.0,endpoint,вниз вниз вниз
+1786194763609,free_text,webrtc_ns_high,50160.0,endpoint,для для
+1786194763609,free_text,webrtc_ns_high,52080.0,endpoint,вниз вниз
+1786194763609,free_text,webrtc_ns_high,64080.0,endpoint,як як як печать белый года
+1786194763609,free_text,webrtc_ns_high,74160.0,endpoint,пять лет
+1786194763609,free_text,webrtc_ns_high,84720.0,endpoint,долбить
+1786194763609,free_text,webrtc_ns_high,91920.0,endpoint,долгой
+1786194763609,free_text,webrtc_ns_high,97680.0,endpoint,белый
+1786194763609,free_text,webrtc_ns_high,100560.0,endpoint,надо
+1786194763609,free_text,webrtc_ns_high,110160.0,endpoint,вода вода
+1786194763609,free_text,webrtc_ns_high,120240.0,endpoint,скидок
+1786194763609,free_text,webrtc_ns_high,164880.0,endpoint,той
+1786194763609,free_text,webrtc_ns_high,174480.0,endpoint,очень надо
+1786194763609,free_text,webrtc_ns_high,181248.0,final,надо
+1786194763609,command_menu,webrtc_ns_very_high,20400.0,endpoint,вверх
+1786194763609,command_menu,webrtc_ns_very_high,26640.0,endpoint,вниз
+1786194763609,command_menu,webrtc_ns_very_high,29040.0,endpoint,вниз
+1786194763609,command_menu,webrtc_ns_very_high,48240.0,endpoint,вверх
+1786194763609,command_menu,webrtc_ns_very_high,54000.0,endpoint,вниз вниз вниз
+1786194763609,command_menu,webrtc_ns_very_high,56400.0,endpoint,вверх
+1786194763609,command_menu,webrtc_ns_very_high,60240.0,endpoint,печать
+1786194763609,command_menu,webrtc_ns_very_high,67440.0,endpoint,печать
+1786194763609,command_menu,webrtc_ns_very_high,72240.0,endpoint,печать
+1786194763609,free_text,webrtc_ns_very_high,12240.0,endpoint,автобуса
+1786194763609,free_text,webrtc_ns_very_high,20880.0,endpoint,як як як
+1786194763609,free_text,webrtc_ns_very_high,29040.0,endpoint,для вниз вниз вниз
+1786194763609,free_text,webrtc_ns_very_high,50160.0,endpoint,верх для
+1786194763609,free_text,webrtc_ns_very_high,52080.0,endpoint,вниз вниз
+1786194763609,free_text,webrtc_ns_very_high,64080.0,endpoint,як як як печать белый года
+1786194763609,free_text,webrtc_ns_very_high,74160.0,endpoint,пять лет
+1786194763609,free_text,webrtc_ns_very_high,84720.0,endpoint,долбить
+1786194763609,free_text,webrtc_ns_very_high,91920.0,endpoint,долгой
+1786194763609,free_text,webrtc_ns_very_high,97680.0,endpoint,белый
+1786194763609,free_text,webrtc_ns_very_high,100560.0,endpoint,надо
+1786194763609,free_text,webrtc_ns_very_high,110160.0,endpoint,вода вода
+1786194763609,free_text,webrtc_ns_very_high,120240.0,endpoint,скидок
+1786194763609,free_text,webrtc_ns_very_high,164880.0,endpoint,этой
+1786194763609,free_text,webrtc_ns_very_high,174480.0,endpoint,надо
+1786194763609,free_text,webrtc_ns_very_high,181248.0,final,надо
+1786194978795,command_menu,baseline,19440.0,endpoint,вниз
+1786194978795,command_menu,baseline,22320.0,endpoint,вниз
+1786194978795,command_menu,baseline,30960.0,endpoint,вниз
+1786194978795,command_menu,baseline,87600.0,endpoint,доступность
+1786194978795,command_menu,baseline,90480.0,endpoint,доступность
+1786194978795,command_menu,baseline,93360.0,endpoint,доступность
+1786194978795,command_menu,baseline,96240.0,endpoint,доступность
+1786194978795,command_menu,baseline,99600.0,endpoint,доступность
+1786194978795,command_menu,baseline,102960.0,endpoint,доступность
+1786194978795,command_menu,baseline,107280.0,endpoint,доступность
+1786194978795,command_menu,baseline,168240.0,endpoint,справка
+1786194978795,free_text,baseline,20400.0,endpoint,вниз
+1786194978795,free_text,baseline,31920.0,endpoint,для них период
+1786194978795,free_text,baseline,35280.0,endpoint,долгой
+1786194978795,free_text,baseline,44880.0,endpoint,долгий долгий долгий долгий
+1786194978795,free_text,baseline,53520.0,endpoint,был ты был и науки
+1786194978795,free_text,baseline,63600.0,endpoint,долгий долгий
+1786194978795,free_text,baseline,66960.0,endpoint,бен
+1786194978795,free_text,baseline,68880.0,endpoint,болтун
+1786194978795,free_text,baseline,72240.0,endpoint,моделей
+1786194978795,free_text,baseline,76560.0,endpoint,надо
+1786194978795,free_text,baseline,79920.0,endpoint,надо
+1786194978795,free_text,baseline,88560.0,endpoint,доступность
+1786194978795,free_text,baseline,97200.0,endpoint,дебютной доступности доступность
+1786194978795,free_text,baseline,101520.0,endpoint,доступность
+1786194978795,free_text,baseline,108720.0,endpoint,доступность
+1786194978795,free_text,baseline,139920.0,endpoint,список
+1786194978795,free_text,baseline,151440.0,endpoint,будь проклят
+1786194978795,free_text,baseline,154800.0,endpoint,порока
+1786194978795,free_text,baseline,160080.0,endpoint,коробка а рока
+1786194978795,free_text,baseline,171120.0,endpoint,а рота
+1786194978795,command_menu,webrtc_ns_low,20400.0,endpoint,вниз
+1786194978795,command_menu,webrtc_ns_low,22320.0,endpoint,вниз
+1786194978795,command_menu,webrtc_ns_low,30960.0,endpoint,вверх вниз печать
+1786194978795,command_menu,webrtc_ns_low,87600.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_low,90480.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_low,93360.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_low,96240.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_low,99600.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_low,102960.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_low,107280.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_low,163440.0,endpoint,справка
+1786194978795,command_menu,webrtc_ns_low,168240.0,endpoint,справка
+1786194978795,free_text,webrtc_ns_low,30480.0,endpoint,для них
+1786194978795,free_text,webrtc_ns_low,35280.0,endpoint,долгой
+1786194978795,free_text,webrtc_ns_low,47760.0,endpoint,долгий долгий долгий долгий
+1786194978795,free_text,webrtc_ns_low,51600.0,endpoint,болты
+1786194978795,free_text,webrtc_ns_low,63600.0,endpoint,купить долгий долгий
+1786194978795,free_text,webrtc_ns_low,66960.0,endpoint,бен
+1786194978795,free_text,webrtc_ns_low,69840.0,endpoint,балки
+1786194978795,free_text,webrtc_ns_low,72240.0,endpoint,моделей
+1786194978795,free_text,webrtc_ns_low,76560.0,endpoint,надо
+1786194978795,free_text,webrtc_ns_low,79920.0,endpoint,надо
+1786194978795,free_text,webrtc_ns_low,90000.0,endpoint,доступность
+1786194978795,free_text,webrtc_ns_low,94800.0,endpoint,доступность
+1786194978795,free_text,webrtc_ns_low,101040.0,endpoint,доступность
+1786194978795,free_text,webrtc_ns_low,108720.0,endpoint,доступность
+1786194978795,free_text,webrtc_ns_low,139920.0,endpoint,список
+1786194978795,free_text,webrtc_ns_low,151440.0,endpoint,было очень просто
+1786194978795,free_text,webrtc_ns_low,158640.0,endpoint,того
+1786194978795,free_text,webrtc_ns_low,163920.0,endpoint,было халка
+1786194978795,free_text,webrtc_ns_low,174000.0,endpoint,рока рота
+1786194978795,command_menu,webrtc_ns_moderate,20880.0,endpoint,вниз
+1786194978795,command_menu,webrtc_ns_moderate,30960.0,endpoint,вверх вниз печать
+1786194978795,command_menu,webrtc_ns_moderate,87600.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_moderate,90480.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_moderate,93360.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_moderate,96720.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_moderate,99600.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_moderate,102960.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_moderate,107280.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_moderate,163440.0,endpoint,справка
+1786194978795,command_menu,webrtc_ns_moderate,168240.0,endpoint,справка
+1786194978795,free_text,webrtc_ns_moderate,23280.0,endpoint,мисс
+1786194978795,free_text,webrtc_ns_moderate,30480.0,endpoint,верх низ
+1786194978795,free_text,webrtc_ns_moderate,35280.0,endpoint,долгой
+1786194978795,free_text,webrtc_ns_moderate,47760.0,endpoint,долгий долгий долгий долгий долгий
+1786194978795,free_text,webrtc_ns_moderate,52080.0,endpoint,болты болты
+1786194978795,free_text,webrtc_ns_moderate,63600.0,endpoint,долгий толпы
+1786194978795,free_text,webrtc_ns_moderate,66960.0,endpoint,бен
+1786194978795,free_text,webrtc_ns_moderate,69840.0,endpoint,балки
+1786194978795,free_text,webrtc_ns_moderate,72240.0,endpoint,моделей
+1786194978795,free_text,webrtc_ns_moderate,76560.0,endpoint,надо
+1786194978795,free_text,webrtc_ns_moderate,79920.0,endpoint,надо
+1786194978795,free_text,webrtc_ns_moderate,90000.0,endpoint,доступность
+1786194978795,free_text,webrtc_ns_moderate,94800.0,endpoint,доступность
+1786194978795,free_text,webrtc_ns_moderate,101520.0,endpoint,доступность
+1786194978795,free_text,webrtc_ns_moderate,108240.0,endpoint,доступность
+1786194978795,free_text,webrtc_ns_moderate,139920.0,endpoint,список
+1786194978795,free_text,webrtc_ns_moderate,149040.0,endpoint,было очень
+1786194978795,free_text,webrtc_ns_moderate,152400.0,endpoint,проклят
+1786194978795,free_text,webrtc_ns_moderate,158640.0,endpoint,того
+1786194978795,free_text,webrtc_ns_moderate,163920.0,endpoint,было
+1786194978795,free_text,webrtc_ns_moderate,174000.0,endpoint,рота
+1786194978795,command_menu,webrtc_ns_high,20880.0,endpoint,вниз
+1786194978795,command_menu,webrtc_ns_high,30960.0,endpoint,вверх вниз печать
+1786194978795,command_menu,webrtc_ns_high,87600.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_high,90480.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_high,93360.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_high,96720.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_high,99600.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_high,102960.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_high,107280.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_high,163440.0,endpoint,справка
+1786194978795,command_menu,webrtc_ns_high,168240.0,endpoint,справка
+1786194978795,free_text,webrtc_ns_high,23280.0,endpoint,мисс
+1786194978795,free_text,webrtc_ns_high,30480.0,endpoint,верх низ
+1786194978795,free_text,webrtc_ns_high,35280.0,endpoint,долгой
+1786194978795,free_text,webrtc_ns_high,39600.0,endpoint,долгой
+1786194978795,free_text,webrtc_ns_high,47760.0,endpoint,долгий долгий бобби
+1786194978795,free_text,webrtc_ns_high,54480.0,endpoint,болты долбить
+1786194978795,free_text,webrtc_ns_high,62640.0,endpoint,бобби толпы
+1786194978795,free_text,webrtc_ns_high,66960.0,endpoint,бен
+1786194978795,free_text,webrtc_ns_high,70320.0,endpoint,болты
+1786194978795,free_text,webrtc_ns_high,73200.0,endpoint,моделей
+1786194978795,free_text,webrtc_ns_high,76560.0,endpoint,надо
+1786194978795,free_text,webrtc_ns_high,79920.0,endpoint,надо
+1786194978795,free_text,webrtc_ns_high,90000.0,endpoint,доступность
+1786194978795,free_text,webrtc_ns_high,94800.0,endpoint,доступность
+1786194978795,free_text,webrtc_ns_high,101520.0,endpoint,доступность
+1786194978795,free_text,webrtc_ns_high,108720.0,endpoint,доступность
+1786194978795,free_text,webrtc_ns_high,138960.0,endpoint,список
+1786194978795,free_text,webrtc_ns_high,149040.0,endpoint,было очень
+1786194978795,free_text,webrtc_ns_high,158640.0,endpoint,трогать адвокат
+1786194978795,free_text,webrtc_ns_high,163920.0,endpoint,было
+1786194978795,free_text,webrtc_ns_high,174000.0,endpoint,рота
+1786194978795,command_menu,webrtc_ns_very_high,20880.0,endpoint,вниз
+1786194978795,command_menu,webrtc_ns_very_high,30960.0,endpoint,вверх вниз печать
+1786194978795,command_menu,webrtc_ns_very_high,61680.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_very_high,87600.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_very_high,93360.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_very_high,96720.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_very_high,99600.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_very_high,102960.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_very_high,107280.0,endpoint,доступность
+1786194978795,command_menu,webrtc_ns_very_high,168240.0,endpoint,справка
+1786194978795,free_text,webrtc_ns_very_high,23280.0,endpoint,мисс
+1786194978795,free_text,webrtc_ns_very_high,29040.0,endpoint,я вниз
+1786194978795,free_text,webrtc_ns_very_high,35280.0,endpoint,долгой
+1786194978795,free_text,webrtc_ns_very_high,47760.0,endpoint,долгий долгий долгий долгий бобби
+1786194978795,free_text,webrtc_ns_very_high,54480.0,endpoint,болты пить
+1786194978795,free_text,webrtc_ns_very_high,62640.0,endpoint,бобби толпы
+1786194978795,free_text,webrtc_ns_very_high,66960.0,endpoint,бен
+1786194978795,free_text,webrtc_ns_very_high,73200.0,endpoint,болты моделей
+1786194978795,free_text,webrtc_ns_very_high,76560.0,endpoint,надо
+1786194978795,free_text,webrtc_ns_very_high,79920.0,endpoint,надо
+1786194978795,free_text,webrtc_ns_very_high,94800.0,endpoint,доступность
+1786194978795,free_text,webrtc_ns_very_high,101520.0,endpoint,доступность
+1786194978795,free_text,webrtc_ns_very_high,108720.0,endpoint,доступность
+1786194978795,free_text,webrtc_ns_very_high,149040.0,endpoint,было очень
+1786194978795,free_text,webrtc_ns_very_high,159120.0,endpoint,адвокат
+1786194978795,free_text,webrtc_ns_very_high,163920.0,endpoint,было
+1786194978795,free_text,webrtc_ns_very_high,174000.0,endpoint,рота

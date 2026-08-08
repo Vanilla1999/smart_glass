@@ -1,0 +1,1319 @@
+recording,mode,timestamp,baseline_text,low_text,moderate_text,high_text,very_high_text,classification
+1786194763609,command_menu,12120.0,partial:вниз,partial:,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194763609,command_menu,12160.0,partial:вниз,partial:,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194763609,command_menu,12200.0,partial:вниз,partial:,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194763609,command_menu,12240.0,partial:вниз,partial:,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194763609,command_menu,12280.0,partial:вниз,partial:,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194763609,command_menu,12320.0,partial:вниз,partial:,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194763609,command_menu,12840.0,endpoint:вниз,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194763609,command_menu,12880.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194763609,command_menu,12920.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194763609,command_menu,12960.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194763609,command_menu,13000.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194763609,command_menu,13040.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194763609,command_menu,13080.0,partial:,endpoint:вниз,endpoint:вниз,endpoint:вниз,endpoint:вниз,different_unclear
+1786194763609,command_menu,16920.0,partial:доступность,partial:вверх,partial:,partial:,partial:доступность,different_unclear
+1786194763609,command_menu,16960.0,partial:доступность,partial:вверх,partial:,partial:,partial:доступность,different_unclear
+1786194763609,command_menu,17000.0,partial:доступность,partial:вверх,partial:,partial:,partial:доступность,different_unclear
+1786194763609,command_menu,17040.0,partial:доступность,partial:вверх,partial:,partial:,partial:доступность,different_unclear
+1786194763609,command_menu,17080.0,partial:доступность,partial:вверх,partial:,partial:,partial:доступность,different_unclear
+1786194763609,command_menu,17120.0,partial:доступность,partial:вверх,partial:,partial:,partial:доступность,different_unclear
+1786194763609,command_menu,18840.0,endpoint:вверх,partial:вверх,partial:вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,command_menu,18880.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,command_menu,18920.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,command_menu,18960.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,command_menu,19000.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,command_menu,19040.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,command_menu,19080.0,partial:,endpoint:вверх,endpoint:вверх,endpoint:вверх,endpoint:вверх,different_unclear
+1786194763609,command_menu,24120.0,endpoint:вверх,endpoint:вверх,endpoint:вверх,partial:вверх,endpoint:вверх,different_unclear
+1786194763609,command_menu,24160.0,partial:,partial:,partial:,partial:вверх,partial:,different_unclear
+1786194763609,command_menu,24200.0,partial:,partial:,partial:,partial:вверх,partial:,different_unclear
+1786194763609,command_menu,24240.0,partial:,partial:,partial:,partial:вверх,partial:,different_unclear
+1786194763609,command_menu,24280.0,partial:,partial:,partial:,partial:вверх,partial:,different_unclear
+1786194763609,command_menu,24320.0,partial:,partial:,partial:,partial:вверх,partial:,different_unclear
+1786194763609,command_menu,24360.0,partial:,partial:,partial:,endpoint:вверх,partial:,different_unclear
+1786194763609,command_menu,46440.0,partial:вверх,partial:доступность,partial:доступность,partial:,partial:,different_unclear
+1786194763609,command_menu,46480.0,partial:вверх,partial:доступность,partial:доступность,partial:,partial:,different_unclear
+1786194763609,command_menu,46520.0,partial:вверх,partial:доступность,partial:доступность,partial:,partial:,different_unclear
+1786194763609,command_menu,46560.0,partial:вверх,partial:доступность,partial:доступность,partial:,partial:,different_unclear
+1786194763609,command_menu,46600.0,partial:вверх,partial:доступность,partial:доступность,partial:,partial:,different_unclear
+1786194763609,command_menu,46640.0,partial:вверх,partial:доступность,partial:доступность,partial:,partial:,different_unclear
+1786194763609,command_menu,54840.0,partial:вверх,partial:вверх,partial:печать,partial:печать,partial:печать,different_unclear
+1786194763609,command_menu,54880.0,partial:вверх,partial:вверх,partial:печать,partial:печать,partial:печать,different_unclear
+1786194763609,command_menu,54920.0,partial:вверх,partial:вверх,partial:печать,partial:печать,partial:печать,different_unclear
+1786194763609,command_menu,54960.0,partial:вверх,partial:вверх,partial:печать,partial:печать,partial:печать,different_unclear
+1786194763609,command_menu,55000.0,partial:вверх,partial:вверх,partial:печать,partial:печать,partial:печать,different_unclear
+1786194763609,command_menu,55040.0,partial:вверх,partial:вверх,partial:печать,partial:печать,partial:печать,different_unclear
+1786194763609,command_menu,60600.0,partial:,partial:печать,partial:печать,partial:печать,partial:печать,different_unclear
+1786194763609,command_menu,60640.0,partial:,partial:печать,partial:печать,partial:печать,partial:печать,different_unclear
+1786194763609,command_menu,60680.0,partial:,partial:печать,partial:печать,partial:печать,partial:печать,different_unclear
+1786194763609,command_menu,60720.0,partial:,partial:печать,partial:печать,partial:печать,partial:печать,different_unclear
+1786194763609,command_menu,60760.0,partial:,partial:печать,partial:печать,partial:печать,partial:печать,different_unclear
+1786194763609,command_menu,60800.0,partial:,partial:печать,partial:печать,partial:печать,partial:печать,different_unclear
+1786194763609,command_menu,60840.0,partial:,partial:,partial:вверх,partial:вверх,partial:,different_unclear
+1786194763609,command_menu,60880.0,partial:,partial:,partial:вверх,partial:вверх,partial:,different_unclear
+1786194763609,command_menu,60920.0,partial:,partial:,partial:вверх,partial:вверх,partial:,different_unclear
+1786194763609,command_menu,60960.0,partial:,partial:,partial:вверх,partial:вверх,partial:,different_unclear
+1786194763609,command_menu,61000.0,partial:,partial:,partial:вверх,partial:вверх,partial:,different_unclear
+1786194763609,command_menu,61040.0,partial:,partial:,partial:вверх,partial:вверх,partial:,different_unclear
+1786194763609,command_menu,66600.0,endpoint:печать,endpoint:печать,endpoint:печать,partial:печать,partial:печать,different_unclear
+1786194763609,command_menu,66640.0,partial:,partial:,partial:,partial:печать,partial:печать,different_unclear
+1786194763609,command_menu,66680.0,partial:,partial:,partial:,partial:печать,partial:печать,different_unclear
+1786194763609,command_menu,66720.0,partial:,partial:,partial:,partial:печать,partial:печать,different_unclear
+1786194763609,command_menu,66760.0,partial:,partial:,partial:,partial:печать,partial:печать,different_unclear
+1786194763609,command_menu,66800.0,partial:,partial:,partial:,partial:печать,partial:печать,different_unclear
+1786194763609,command_menu,66840.0,partial:,partial:,partial:,endpoint:печать,endpoint:печать,different_unclear
+1786194763609,command_menu,73320.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,73360.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,73400.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,73440.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,73480.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,73520.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,73560.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,73600.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,73640.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,73680.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,73720.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,73760.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,73800.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,73840.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,73880.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,73920.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,73960.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,74000.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,74040.0,partial:,endpoint:доступность,endpoint:доступность,endpoint:доступность,endpoint:доступность,different_unclear
+1786194763609,command_menu,76440.0,endpoint:,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,command_menu,79080.0,partial:,endpoint:,endpoint:,endpoint:,endpoint:,different_unclear
+1786194763609,command_menu,81480.0,endpoint:,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,command_menu,81720.0,partial:доступность,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,81760.0,partial:доступность,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,81800.0,partial:доступность,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,81840.0,partial:доступность,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,81880.0,partial:доступность,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,81920.0,partial:доступность,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,81960.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,82000.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,82040.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,82080.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,82120.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,82160.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,82200.0,partial:,partial:вниз,partial:доступность,partial:доступность,partial:вниз,different_unclear
+1786194763609,command_menu,82240.0,partial:,partial:вниз,partial:доступность,partial:доступность,partial:вниз,different_unclear
+1786194763609,command_menu,82280.0,partial:,partial:вниз,partial:доступность,partial:доступность,partial:вниз,different_unclear
+1786194763609,command_menu,82320.0,partial:,partial:вниз,partial:доступность,partial:доступность,partial:вниз,different_unclear
+1786194763609,command_menu,82360.0,partial:,partial:вниз,partial:доступность,partial:доступность,partial:вниз,different_unclear
+1786194763609,command_menu,82400.0,partial:,partial:вниз,partial:доступность,partial:доступность,partial:вниз,different_unclear
+1786194763609,command_menu,82440.0,partial:,endpoint:вниз,partial:доступность,partial:доступность,endpoint:вниз,different_unclear
+1786194763609,command_menu,82480.0,partial:,partial:,partial:доступность,partial:доступность,partial:,different_unclear
+1786194763609,command_menu,82520.0,partial:,partial:,partial:доступность,partial:доступность,partial:,different_unclear
+1786194763609,command_menu,82560.0,partial:,partial:,partial:доступность,partial:доступность,partial:,different_unclear
+1786194763609,command_menu,82600.0,partial:,partial:,partial:доступность,partial:доступность,partial:,different_unclear
+1786194763609,command_menu,82640.0,partial:,partial:,partial:доступность,partial:доступность,partial:,different_unclear
+1786194763609,command_menu,82680.0,partial:,partial:,endpoint:доступность,endpoint:доступность,partial:,different_unclear
+1786194763609,command_menu,86520.0,endpoint:,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,command_menu,87480.0,partial:,endpoint:,partial:,partial:,endpoint:,different_unclear
+1786194763609,command_menu,87720.0,partial:,partial:,endpoint:,endpoint:,partial:,different_unclear
+1786194763609,command_menu,89160.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,89200.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,89240.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,89280.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,89320.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,89360.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,89400.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,89440.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,89480.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,89520.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,89560.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,89600.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,command_menu,89640.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194763609,command_menu,89680.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194763609,command_menu,89720.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194763609,command_menu,89760.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194763609,command_menu,89800.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194763609,command_menu,89840.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194763609,command_menu,89880.0,partial:,endpoint:вниз,endpoint:вниз,endpoint:вниз,endpoint:вниз,different_unclear
+1786194763609,command_menu,91560.0,endpoint:,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,command_menu,94920.0,partial:,partial:вверх,partial:печать,partial:печать,endpoint:[unk],different_unclear
+1786194763609,command_menu,94960.0,partial:,partial:вверх,partial:печать,partial:печать,partial:,different_unclear
+1786194763609,command_menu,95000.0,partial:,partial:вверх,partial:печать,partial:печать,partial:,different_unclear
+1786194763609,command_menu,95040.0,partial:,partial:вверх,partial:печать,partial:печать,partial:,different_unclear
+1786194763609,command_menu,95080.0,partial:,partial:вверх,partial:печать,partial:печать,partial:,different_unclear
+1786194763609,command_menu,95120.0,partial:,partial:вверх,partial:печать,partial:печать,partial:,different_unclear
+1786194763609,command_menu,95160.0,partial:,endpoint:[unk],endpoint:[unk],endpoint:[unk],partial:,different_unclear
+1786194763609,command_menu,96600.0,endpoint:,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,command_menu,98040.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,98080.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,98120.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,98160.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,98200.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,98240.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,99960.0,partial:,partial:,partial:,partial:,endpoint:,different_unclear
+1786194763609,command_menu,100200.0,partial:,endpoint:,endpoint:,endpoint:,partial:,different_unclear
+1786194763609,command_menu,101640.0,endpoint:,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,command_menu,105240.0,partial:,endpoint:,endpoint:,endpoint:,endpoint:,different_unclear
+1786194763609,command_menu,106680.0,endpoint:,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,command_menu,110280.0,partial:доступность,partial:доступность,partial:доступность,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,110320.0,partial:доступность,partial:доступность,partial:доступность,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,110360.0,partial:доступность,partial:доступность,partial:доступность,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,110400.0,partial:доступность,partial:доступность,partial:доступность,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,110440.0,partial:доступность,partial:доступность,partial:доступность,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,110480.0,partial:доступность,partial:доступность,partial:доступность,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,113160.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,113200.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,113240.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,113280.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,113320.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,113360.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,113400.0,partial:,partial:справка,partial:справка,partial:справка,partial:,different_unclear
+1786194763609,command_menu,113440.0,partial:,partial:справка,partial:справка,partial:справка,partial:,different_unclear
+1786194763609,command_menu,113480.0,partial:,partial:справка,partial:справка,partial:справка,partial:,different_unclear
+1786194763609,command_menu,113520.0,partial:,partial:справка,partial:справка,partial:справка,partial:,different_unclear
+1786194763609,command_menu,113560.0,partial:,partial:справка,partial:справка,partial:справка,partial:,different_unclear
+1786194763609,command_menu,113600.0,partial:,partial:справка,partial:справка,partial:справка,partial:,different_unclear
+1786194763609,command_menu,150600.0,partial:,partial:,partial:,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,150640.0,partial:,partial:,partial:,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,150680.0,partial:,partial:,partial:,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,150720.0,partial:,partial:,partial:,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,150760.0,partial:,partial:,partial:,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,150800.0,partial:,partial:,partial:,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,155400.0,partial:справка,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,command_menu,155440.0,partial:справка,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,command_menu,155480.0,partial:справка,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,command_menu,155520.0,partial:справка,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,command_menu,155560.0,partial:справка,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,command_menu,155600.0,partial:справка,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,command_menu,158520.0,partial:,partial:доступность,partial:доступность,partial:,partial:,different_unclear
+1786194763609,command_menu,158560.0,partial:,partial:доступность,partial:доступность,partial:,partial:,different_unclear
+1786194763609,command_menu,158600.0,partial:,partial:доступность,partial:доступность,partial:,partial:,different_unclear
+1786194763609,command_menu,158640.0,partial:,partial:доступность,partial:доступность,partial:,partial:,different_unclear
+1786194763609,command_menu,158680.0,partial:,partial:доступность,partial:доступность,partial:,partial:,different_unclear
+1786194763609,command_menu,158720.0,partial:,partial:доступность,partial:доступность,partial:,partial:,different_unclear
+1786194763609,command_menu,158760.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,158800.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,158840.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,158880.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,158920.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,158960.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,159000.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,159040.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,159080.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,159120.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,159160.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,159200.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,159240.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,159280.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,159320.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,159360.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,159400.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,159440.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194763609,command_menu,159480.0,partial:,endpoint:справка,endpoint:справка,endpoint:справка,endpoint:справка,different_unclear
+1786194763609,command_menu,161880.0,endpoint:,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,command_menu,164520.0,partial:,endpoint:,endpoint:,endpoint:,endpoint:,different_unclear
+1786194763609,command_menu,166920.0,endpoint:,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,command_menu,167640.0,partial:,partial:,partial:печать,partial:,partial:,different_unclear
+1786194763609,command_menu,167680.0,partial:,partial:,partial:печать,partial:,partial:,different_unclear
+1786194763609,command_menu,167720.0,partial:,partial:,partial:печать,partial:,partial:,different_unclear
+1786194763609,command_menu,167760.0,partial:,partial:,partial:печать,partial:,partial:,different_unclear
+1786194763609,command_menu,167800.0,partial:,partial:,partial:печать,partial:,partial:,different_unclear
+1786194763609,command_menu,167840.0,partial:,partial:,partial:печать,partial:,partial:,different_unclear
+1786194763609,command_menu,168120.0,partial:,partial:ценника,partial:ценника,partial:ценника,partial:ценника,different_unclear
+1786194763609,command_menu,168160.0,partial:,partial:ценника,partial:ценника,partial:ценника,partial:ценника,different_unclear
+1786194763609,command_menu,168200.0,partial:,partial:ценника,partial:ценника,partial:ценника,partial:ценника,different_unclear
+1786194763609,command_menu,168240.0,partial:,partial:ценника,partial:ценника,partial:ценника,partial:ценника,different_unclear
+1786194763609,command_menu,168280.0,partial:,partial:ценника,partial:ценника,partial:ценника,partial:ценника,different_unclear
+1786194763609,command_menu,168320.0,partial:,partial:ценника,partial:ценника,partial:ценника,partial:ценника,different_unclear
+1786194763609,command_menu,168360.0,partial:,partial:ценника,partial:ценника,partial:ценника,partial:ценника,different_unclear
+1786194763609,command_menu,168400.0,partial:,partial:ценника,partial:ценника,partial:ценника,partial:ценника,different_unclear
+1786194763609,command_menu,168440.0,partial:,partial:ценника,partial:ценника,partial:ценника,partial:ценника,different_unclear
+1786194763609,command_menu,168480.0,partial:,partial:ценника,partial:ценника,partial:ценника,partial:ценника,different_unclear
+1786194763609,command_menu,168520.0,partial:,partial:ценника,partial:ценника,partial:ценника,partial:ценника,different_unclear
+1786194763609,command_menu,168560.0,partial:,partial:ценника,partial:ценника,partial:ценника,partial:ценника,different_unclear
+1786194763609,command_menu,168600.0,partial:,endpoint:ценника,endpoint:ценника,endpoint:ценника,endpoint:ценника,different_unclear
+1786194763609,command_menu,171960.0,endpoint:,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,command_menu,173640.0,partial:,endpoint:,endpoint:,endpoint:,endpoint:,different_unclear
+1786194763609,command_menu,175080.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,175120.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,175160.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,175200.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,175240.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,175280.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,175320.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,175360.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,175400.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,175440.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,175480.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,175520.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194763609,command_menu,175560.0,partial:,endpoint:настройки,endpoint:настройки,endpoint:настройки,endpoint:настройки,different_unclear
+1786194763609,command_menu,177000.0,endpoint:,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,command_menu,180600.0,partial:,endpoint:,endpoint:,endpoint:,endpoint:,different_unclear
+1786194763609,free_text,9480.0,partial:,partial:,partial:,partial:а,partial:а,different_unclear
+1786194763609,free_text,9520.0,partial:,partial:,partial:,partial:а,partial:а,different_unclear
+1786194763609,free_text,9560.0,partial:,partial:,partial:,partial:а,partial:а,different_unclear
+1786194763609,free_text,9600.0,partial:,partial:,partial:,partial:а,partial:а,different_unclear
+1786194763609,free_text,9640.0,partial:,partial:,partial:,partial:а,partial:а,different_unclear
+1786194763609,free_text,9680.0,partial:,partial:,partial:,partial:а,partial:а,different_unclear
+1786194763609,free_text,11640.0,partial:в,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,11680.0,partial:в,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,11720.0,partial:в,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,11760.0,partial:в,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,11800.0,partial:в,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,11840.0,partial:в,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,12360.0,partial:не,partial:низ,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,12400.0,partial:не,partial:низ,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,12440.0,partial:не,partial:низ,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,12480.0,partial:не,partial:низ,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,12520.0,partial:не,partial:низ,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,12560.0,partial:не,partial:низ,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,12600.0,partial:не,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,12640.0,partial:не,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,12680.0,partial:не,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,12720.0,partial:не,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,12760.0,partial:не,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,12800.0,partial:не,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,12840.0,partial:не,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,12880.0,partial:не,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,12920.0,partial:не,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,12960.0,partial:не,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,13000.0,partial:не,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,13040.0,partial:не,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,13080.0,partial:не,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,13120.0,partial:не,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,13160.0,partial:не,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,13200.0,partial:не,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,13240.0,partial:не,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,13280.0,partial:не,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,13320.0,endpoint:них,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,13360.0,partial:,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,13400.0,partial:,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,13440.0,partial:,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,13480.0,partial:,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,13520.0,partial:,partial:низ,partial:мисс,partial:низ,partial:низ,different_unclear
+1786194763609,free_text,13560.0,partial:,endpoint:низ,endpoint:низ,endpoint:низ,endpoint:низ,different_unclear
+1786194763609,free_text,14040.0,partial:,partial:,partial:,partial:они,partial:,different_unclear
+1786194763609,free_text,14080.0,partial:,partial:,partial:,partial:они,partial:,different_unclear
+1786194763609,free_text,14120.0,partial:,partial:,partial:,partial:они,partial:,different_unclear
+1786194763609,free_text,14160.0,partial:,partial:,partial:,partial:они,partial:,different_unclear
+1786194763609,free_text,14200.0,partial:,partial:,partial:,partial:они,partial:,different_unclear
+1786194763609,free_text,14240.0,partial:,partial:,partial:,partial:они,partial:,different_unclear
+1786194763609,free_text,14280.0,partial:вниз,partial:вниз,partial:вниз,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,14320.0,partial:вниз,partial:вниз,partial:вниз,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,14360.0,partial:вниз,partial:вниз,partial:вниз,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,14400.0,partial:вниз,partial:вниз,partial:вниз,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,14440.0,partial:вниз,partial:вниз,partial:вниз,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,14480.0,partial:вниз,partial:вниз,partial:вниз,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,14520.0,partial:вниз,partial:вниз,partial:вниз,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,14560.0,partial:вниз,partial:вниз,partial:вниз,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,14600.0,partial:вниз,partial:вниз,partial:вниз,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,14640.0,partial:вниз,partial:вниз,partial:вниз,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,14680.0,partial:вниз,partial:вниз,partial:вниз,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,14720.0,partial:вниз,partial:вниз,partial:вниз,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,14760.0,partial:вниз,partial:вниз,partial:вниз,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,14800.0,partial:вниз,partial:вниз,partial:вниз,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,14840.0,partial:вниз,partial:вниз,partial:вниз,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,14880.0,partial:вниз,partial:вниз,partial:вниз,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,14920.0,partial:вниз,partial:вниз,partial:вниз,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,14960.0,partial:вниз,partial:вниз,partial:вниз,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,15000.0,endpoint:вниз,endpoint:вниз,endpoint:вниз,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,15040.0,partial:,partial:,partial:,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,15080.0,partial:,partial:,partial:,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,15120.0,partial:,partial:,partial:,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,15160.0,partial:,partial:,partial:,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,15200.0,partial:,partial:,partial:,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,15240.0,partial:,partial:,partial:,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,15280.0,partial:,partial:,partial:,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,15320.0,partial:,partial:,partial:,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,15360.0,partial:,partial:,partial:,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,15400.0,partial:,partial:,partial:,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,15440.0,partial:,partial:,partial:,partial:танис,partial:танец,different_unclear
+1786194763609,free_text,15480.0,partial:,partial:,partial:,endpoint:тунис,endpoint:танец,different_unclear
+1786194763609,free_text,16920.0,partial:,partial:,partial:в,partial:в,partial:,different_unclear
+1786194763609,free_text,16960.0,partial:,partial:,partial:в,partial:в,partial:,different_unclear
+1786194763609,free_text,17000.0,partial:,partial:,partial:в,partial:в,partial:,different_unclear
+1786194763609,free_text,17040.0,partial:,partial:,partial:в,partial:в,partial:,different_unclear
+1786194763609,free_text,17080.0,partial:,partial:,partial:в,partial:в,partial:,different_unclear
+1786194763609,free_text,17120.0,partial:,partial:,partial:в,partial:в,partial:,different_unclear
+1786194763609,free_text,17880.0,endpoint:верх,endpoint:верх,partial:верх,endpoint:верх,endpoint:верх,different_unclear
+1786194763609,free_text,17920.0,partial:,partial:,partial:верх,partial:,partial:,different_unclear
+1786194763609,free_text,17960.0,partial:,partial:,partial:верх,partial:,partial:,different_unclear
+1786194763609,free_text,18000.0,partial:,partial:,partial:верх,partial:,partial:,different_unclear
+1786194763609,free_text,18040.0,partial:,partial:,partial:верх,partial:,partial:,different_unclear
+1786194763609,free_text,18080.0,partial:,partial:,partial:верх,partial:,partial:,different_unclear
+1786194763609,free_text,18120.0,partial:,partial:,partial:верх,partial:сбер,partial:сбер,different_unclear
+1786194763609,free_text,18160.0,partial:,partial:,partial:верх,partial:сбер,partial:сбер,different_unclear
+1786194763609,free_text,18200.0,partial:,partial:,partial:верх,partial:сбер,partial:сбер,different_unclear
+1786194763609,free_text,18240.0,partial:,partial:,partial:верх,partial:сбер,partial:сбер,different_unclear
+1786194763609,free_text,18280.0,partial:,partial:,partial:верх,partial:сбер,partial:сбер,different_unclear
+1786194763609,free_text,18320.0,partial:,partial:,partial:верх,partial:сбер,partial:сбер,different_unclear
+1786194763609,free_text,18360.0,partial:вверх,partial:вверх,partial:вверх вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,18400.0,partial:вверх,partial:вверх,partial:вверх вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,18440.0,partial:вверх,partial:вверх,partial:вверх вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,18480.0,partial:вверх,partial:вверх,partial:вверх вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,18520.0,partial:вверх,partial:вверх,partial:вверх вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,18560.0,partial:вверх,partial:вверх,partial:вверх вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,18600.0,partial:вверх,partial:вверх,partial:вверх вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,18640.0,partial:вверх,partial:вверх,partial:вверх вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,18680.0,partial:вверх,partial:вверх,partial:вверх вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,18720.0,partial:вверх,partial:вверх,partial:вверх вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,18760.0,partial:вверх,partial:вверх,partial:вверх вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,18800.0,partial:вверх,partial:вверх,partial:вверх вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,18840.0,endpoint:вверх,partial:вверх,partial:вверх вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,18880.0,partial:,partial:вверх,partial:вверх вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,18920.0,partial:,partial:вверх,partial:вверх вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,18960.0,partial:,partial:вверх,partial:вверх вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,19000.0,partial:,partial:вверх,partial:вверх вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,19040.0,partial:,partial:вверх,partial:вверх вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,19080.0,partial:,endpoint:вверх,endpoint:вверх вверх,endpoint:вверх,endpoint:вверх,different_unclear
+1786194763609,free_text,26520.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:,different_unclear
+1786194763609,free_text,26560.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:,different_unclear
+1786194763609,free_text,26600.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:,different_unclear
+1786194763609,free_text,26640.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:,different_unclear
+1786194763609,free_text,26680.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:,different_unclear
+1786194763609,free_text,26720.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:,different_unclear
+1786194763609,free_text,26760.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:низ,different_unclear
+1786194763609,free_text,26800.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:низ,different_unclear
+1786194763609,free_text,26840.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:низ,different_unclear
+1786194763609,free_text,26880.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:низ,different_unclear
+1786194763609,free_text,26920.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:низ,different_unclear
+1786194763609,free_text,26960.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:низ,different_unclear
+1786194763609,free_text,27000.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:низ,different_unclear
+1786194763609,free_text,27040.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:низ,different_unclear
+1786194763609,free_text,27080.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:низ,different_unclear
+1786194763609,free_text,27120.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:низ,different_unclear
+1786194763609,free_text,27160.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:низ,different_unclear
+1786194763609,free_text,27200.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:низ,different_unclear
+1786194763609,free_text,27720.0,partial:,partial:дни,partial:вниз,partial:вниз,partial:гнить,different_unclear
+1786194763609,free_text,27760.0,partial:,partial:дни,partial:вниз,partial:вниз,partial:гнить,different_unclear
+1786194763609,free_text,27800.0,partial:,partial:дни,partial:вниз,partial:вниз,partial:гнить,different_unclear
+1786194763609,free_text,27840.0,partial:,partial:дни,partial:вниз,partial:вниз,partial:гнить,different_unclear
+1786194763609,free_text,27880.0,partial:,partial:дни,partial:вниз,partial:вниз,partial:гнить,different_unclear
+1786194763609,free_text,27920.0,partial:,partial:дни,partial:вниз,partial:вниз,partial:гнить,different_unclear
+1786194763609,free_text,27960.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:гнить,different_unclear
+1786194763609,free_text,28000.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:гнить,different_unclear
+1786194763609,free_text,28040.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:гнить,different_unclear
+1786194763609,free_text,28080.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:гнить,different_unclear
+1786194763609,free_text,28120.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:гнить,different_unclear
+1786194763609,free_text,28160.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:гнить,different_unclear
+1786194763609,free_text,28200.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:гнить,different_unclear
+1786194763609,free_text,28240.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:гнить,different_unclear
+1786194763609,free_text,28280.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:гнить,different_unclear
+1786194763609,free_text,28320.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:гнить,different_unclear
+1786194763609,free_text,28360.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:гнить,different_unclear
+1786194763609,free_text,28400.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:гнить,different_unclear
+1786194763609,free_text,28440.0,endpoint:вниз,endpoint:вниз,endpoint:вниз,endpoint:вниз,endpoint:гнить,different_unclear
+1786194763609,free_text,46920.0,partial:вверх,partial:верх,partial:вверх,partial:верх,partial:,different_unclear
+1786194763609,free_text,46960.0,partial:вверх,partial:верх,partial:вверх,partial:верх,partial:,different_unclear
+1786194763609,free_text,47000.0,partial:вверх,partial:верх,partial:вверх,partial:верх,partial:,different_unclear
+1786194763609,free_text,47040.0,partial:вверх,partial:верх,partial:вверх,partial:верх,partial:,different_unclear
+1786194763609,free_text,47080.0,partial:вверх,partial:верх,partial:вверх,partial:верх,partial:,different_unclear
+1786194763609,free_text,47120.0,partial:вверх,partial:верх,partial:вверх,partial:верх,partial:,different_unclear
+1786194763609,free_text,47160.0,partial:вверх,partial:верх,partial:вверх,partial:верх,partial:верх,different_unclear
+1786194763609,free_text,47200.0,partial:вверх,partial:верх,partial:вверх,partial:верх,partial:верх,different_unclear
+1786194763609,free_text,47240.0,partial:вверх,partial:верх,partial:вверх,partial:верх,partial:верх,different_unclear
+1786194763609,free_text,47280.0,partial:вверх,partial:верх,partial:вверх,partial:верх,partial:верх,different_unclear
+1786194763609,free_text,47320.0,partial:вверх,partial:верх,partial:вверх,partial:верх,partial:верх,different_unclear
+1786194763609,free_text,47360.0,partial:вверх,partial:верх,partial:вверх,partial:верх,partial:верх,different_unclear
+1786194763609,free_text,47400.0,endpoint:вверх,endpoint:вверх,endpoint:вверх,endpoint:верх,endpoint:верх,different_unclear
+1786194763609,free_text,47880.0,partial:вверх,partial:,partial:,partial:вверх,partial:,different_unclear
+1786194763609,free_text,47920.0,partial:вверх,partial:,partial:,partial:вверх,partial:,different_unclear
+1786194763609,free_text,47960.0,partial:вверх,partial:,partial:,partial:вверх,partial:,different_unclear
+1786194763609,free_text,48000.0,partial:вверх,partial:,partial:,partial:вверх,partial:,different_unclear
+1786194763609,free_text,48040.0,partial:вверх,partial:,partial:,partial:вверх,partial:,different_unclear
+1786194763609,free_text,48080.0,partial:вверх,partial:,partial:,partial:вверх,partial:,different_unclear
+1786194763609,free_text,48360.0,endpoint:вверх,partial:вверх,partial:вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,48400.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,48440.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,48480.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,48520.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,48560.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,48600.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,48640.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,48680.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,48720.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,48760.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,48800.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх,different_unclear
+1786194763609,free_text,48840.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх вверх,different_unclear
+1786194763609,free_text,48880.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх вверх,different_unclear
+1786194763609,free_text,48920.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх вверх,different_unclear
+1786194763609,free_text,48960.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх вверх,different_unclear
+1786194763609,free_text,49000.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх вверх,different_unclear
+1786194763609,free_text,49040.0,partial:,partial:вверх,partial:вверх,partial:вверх,partial:вверх вверх,different_unclear
+1786194763609,free_text,49080.0,partial:верх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,different_unclear
+1786194763609,free_text,49120.0,partial:верх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,different_unclear
+1786194763609,free_text,49160.0,partial:верх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,different_unclear
+1786194763609,free_text,49200.0,partial:верх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,different_unclear
+1786194763609,free_text,49240.0,partial:верх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,different_unclear
+1786194763609,free_text,49280.0,partial:верх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,different_unclear
+1786194763609,free_text,49320.0,partial:верх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,different_unclear
+1786194763609,free_text,49360.0,partial:верх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,different_unclear
+1786194763609,free_text,49400.0,partial:верх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,different_unclear
+1786194763609,free_text,49440.0,partial:верх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,different_unclear
+1786194763609,free_text,49480.0,partial:верх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,different_unclear
+1786194763609,free_text,49520.0,partial:верх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,partial:вверх вверх,different_unclear
+1786194763609,free_text,49560.0,endpoint:верх,endpoint:вверх вверх,endpoint:вверх вверх,endpoint:вверх вверх,endpoint:вверх вверх,different_unclear
+1786194763609,free_text,52680.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:в них,different_unclear
+1786194763609,free_text,52720.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:в них,different_unclear
+1786194763609,free_text,52760.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:в них,different_unclear
+1786194763609,free_text,52800.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:в них,different_unclear
+1786194763609,free_text,52840.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:в них,different_unclear
+1786194763609,free_text,52880.0,partial:вниз,partial:вниз,partial:вниз,partial:вниз,partial:в них,different_unclear
+1786194763609,free_text,56280.0,partial:вверх,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,56320.0,partial:вверх,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,56360.0,partial:вверх,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,56400.0,partial:вверх,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,56440.0,partial:вверх,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,56480.0,partial:вверх,partial:,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,58200.0,partial:,partial:ты,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,58240.0,partial:,partial:ты,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,58280.0,partial:,partial:ты,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,58320.0,partial:,partial:ты,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,58360.0,partial:,partial:ты,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,58400.0,partial:,partial:ты,partial:,partial:,partial:,different_unclear
+1786194763609,free_text,73320.0,partial:жёлтый,partial:жёлтой,partial:жёлтые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194763609,free_text,73360.0,partial:жёлтый,partial:жёлтой,partial:жёлтые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194763609,free_text,73400.0,partial:жёлтый,partial:жёлтой,partial:жёлтые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194763609,free_text,73440.0,partial:жёлтый,partial:жёлтой,partial:жёлтые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194763609,free_text,73480.0,partial:жёлтый,partial:жёлтой,partial:жёлтые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194763609,free_text,73520.0,partial:жёлтый,partial:жёлтой,partial:жёлтые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194763609,free_text,73560.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,73600.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,73640.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,73680.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,73720.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,73760.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,73800.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,73840.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,73880.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,73920.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,73960.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,74000.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,74040.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,74080.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,74120.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,74160.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,74200.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,74240.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,74280.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,74320.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,74360.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,74400.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,74440.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,74480.0,partial:жёлтый,partial:жёлтой,partial:жёлтой,partial:жёлтой,partial:жёлтой,different_unclear
+1786194763609,free_text,74520.0,endpoint:жёлтый,endpoint:жёлтой,endpoint:жёлтой,endpoint:жёлтой,endpoint:жёлтой,different_unclear
+1786194763609,free_text,111960.0,endpoint:доступность,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,free_text,112000.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,free_text,112040.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,free_text,112080.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,free_text,112120.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,free_text,112160.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194763609,free_text,112200.0,partial:,endpoint:доступность,endpoint:доступность,endpoint:доступность,endpoint:доступность,different_unclear
+1786194763609,free_text,151320.0,endpoint:назад,endpoint:назад,partial:назад,partial:назад,partial:назад,different_unclear
+1786194763609,free_text,151360.0,partial:,partial:,partial:назад,partial:назад,partial:назад,different_unclear
+1786194763609,free_text,151400.0,partial:,partial:,partial:назад,partial:назад,partial:назад,different_unclear
+1786194763609,free_text,151440.0,partial:,partial:,partial:назад,partial:назад,partial:назад,different_unclear
+1786194763609,free_text,151480.0,partial:,partial:,partial:назад,partial:назад,partial:назад,different_unclear
+1786194763609,free_text,151520.0,partial:,partial:,partial:назад,partial:назад,partial:назад,different_unclear
+1786194763609,free_text,151560.0,partial:,partial:,endpoint:назад,endpoint:назад,endpoint:назад,different_unclear
+1786194763609,free_text,155640.0,partial:,partial:в,partial:в,partial:в,partial:в,different_unclear
+1786194763609,free_text,155680.0,partial:,partial:в,partial:в,partial:в,partial:в,different_unclear
+1786194763609,free_text,155720.0,partial:,partial:в,partial:в,partial:в,partial:в,different_unclear
+1786194763609,free_text,155760.0,partial:,partial:в,partial:в,partial:в,partial:в,different_unclear
+1786194763609,free_text,155800.0,partial:,partial:в,partial:в,partial:в,partial:в,different_unclear
+1786194763609,free_text,155840.0,partial:,partial:в,partial:в,partial:в,partial:в,different_unclear
+1786194763609,free_text,157080.0,endpoint:список,endpoint:список,endpoint:в список,endpoint:в список,endpoint:в список,different_unclear
+1786194978795,command_menu,17640.0,partial:вниз,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,17680.0,partial:вниз,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,17720.0,partial:вниз,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,17760.0,partial:вниз,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,17800.0,partial:вниз,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,17840.0,partial:вниз,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,19800.0,endpoint:вниз,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,command_menu,19840.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,command_menu,19880.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,command_menu,19920.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,command_menu,19960.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,command_menu,20000.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,command_menu,20040.0,partial:,endpoint:вниз,endpoint:вниз,endpoint:вниз,endpoint:вниз,different_unclear
+1786194978795,command_menu,21720.0,partial:доступность,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,21760.0,partial:доступность,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,21800.0,partial:доступность,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,21840.0,partial:доступность,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,21880.0,partial:доступность,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,21920.0,partial:доступность,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,26280.0,partial:,partial:,partial:доступность,partial:доступность,partial:,different_unclear
+1786194978795,command_menu,26320.0,partial:,partial:,partial:доступность,partial:доступность,partial:,different_unclear
+1786194978795,command_menu,26360.0,partial:,partial:,partial:доступность,partial:доступность,partial:,different_unclear
+1786194978795,command_menu,26400.0,partial:,partial:,partial:доступность,partial:доступность,partial:,different_unclear
+1786194978795,command_menu,26440.0,partial:,partial:,partial:доступность,partial:доступность,partial:,different_unclear
+1786194978795,command_menu,26480.0,partial:,partial:,partial:доступность,partial:доступность,partial:,different_unclear
+1786194978795,command_menu,28920.0,partial:печать,partial:печать,partial:печать,partial:печать,partial:,different_unclear
+1786194978795,command_menu,28960.0,partial:печать,partial:печать,partial:печать,partial:печать,partial:,different_unclear
+1786194978795,command_menu,29000.0,partial:печать,partial:печать,partial:печать,partial:печать,partial:,different_unclear
+1786194978795,command_menu,29040.0,partial:печать,partial:печать,partial:печать,partial:печать,partial:,different_unclear
+1786194978795,command_menu,29080.0,partial:печать,partial:печать,partial:печать,partial:печать,partial:,different_unclear
+1786194978795,command_menu,29120.0,partial:печать,partial:печать,partial:печать,partial:печать,partial:,different_unclear
+1786194978795,command_menu,32520.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,32560.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,32600.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,32640.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,32680.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,32720.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,32760.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,32800.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,32840.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,32880.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,32920.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,32960.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,38040.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,38080.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,38120.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,38160.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,38200.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,38240.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,38280.0,partial:,partial:,partial:,partial:доступность,partial:,different_unclear
+1786194978795,command_menu,38320.0,partial:,partial:,partial:,partial:доступность,partial:,different_unclear
+1786194978795,command_menu,38360.0,partial:,partial:,partial:,partial:доступность,partial:,different_unclear
+1786194978795,command_menu,38400.0,partial:,partial:,partial:,partial:доступность,partial:,different_unclear
+1786194978795,command_menu,38440.0,partial:,partial:,partial:,partial:доступность,partial:,different_unclear
+1786194978795,command_menu,38480.0,partial:,partial:,partial:,partial:доступность,partial:,different_unclear
+1786194978795,command_menu,38520.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,38560.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,38600.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,38640.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,38680.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,38720.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,38760.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,38800.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,38840.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,38880.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,38920.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,38960.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,39000.0,partial:,partial:,partial:,endpoint:доступность,endpoint:доступность,different_unclear
+1786194978795,command_menu,39720.0,partial:доступность,partial:,partial:доступность,partial:,partial:,different_unclear
+1786194978795,command_menu,39760.0,partial:доступность,partial:,partial:доступность,partial:,partial:,different_unclear
+1786194978795,command_menu,39800.0,partial:доступность,partial:,partial:доступность,partial:,partial:,different_unclear
+1786194978795,command_menu,39840.0,partial:доступность,partial:,partial:доступность,partial:,partial:,different_unclear
+1786194978795,command_menu,39880.0,partial:доступность,partial:,partial:доступность,partial:,partial:,different_unclear
+1786194978795,command_menu,39920.0,partial:доступность,partial:,partial:доступность,partial:,partial:,different_unclear
+1786194978795,command_menu,39960.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40000.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40040.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40080.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40120.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40160.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40200.0,endpoint:,endpoint:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40240.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40280.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40320.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40360.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40400.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40440.0,partial:,partial:,endpoint:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40480.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40520.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40560.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40600.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40640.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40680.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40720.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40760.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40800.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40840.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40880.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,40920.0,partial:,partial:,partial:,endpoint:доступность,endpoint:доступность,different_unclear
+1786194978795,command_menu,41880.0,partial:,partial:,partial:,partial:доступность,partial:вверх,different_unclear
+1786194978795,command_menu,41920.0,partial:,partial:,partial:,partial:доступность,partial:вверх,different_unclear
+1786194978795,command_menu,41960.0,partial:,partial:,partial:,partial:доступность,partial:вверх,different_unclear
+1786194978795,command_menu,42000.0,partial:,partial:,partial:,partial:доступность,partial:вверх,different_unclear
+1786194978795,command_menu,42040.0,partial:,partial:,partial:,partial:доступность,partial:вверх,different_unclear
+1786194978795,command_menu,42080.0,partial:,partial:,partial:,partial:доступность,partial:вверх,different_unclear
+1786194978795,command_menu,44760.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,44800.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,44840.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,44880.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,44920.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,44960.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,45000.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,45040.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,45080.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,45120.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,45160.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,45200.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,45240.0,endpoint:,endpoint:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,45480.0,partial:,partial:,endpoint:,partial:,partial:,different_unclear
+1786194978795,command_menu,45960.0,partial:,partial:,partial:,endpoint:,endpoint:вверх,different_unclear
+1786194978795,command_menu,48360.0,partial:,partial:,partial:,partial:,partial:доступность,different_unclear
+1786194978795,command_menu,48400.0,partial:,partial:,partial:,partial:,partial:доступность,different_unclear
+1786194978795,command_menu,48440.0,partial:,partial:,partial:,partial:,partial:доступность,different_unclear
+1786194978795,command_menu,48480.0,partial:,partial:,partial:,partial:,partial:доступность,different_unclear
+1786194978795,command_menu,48520.0,partial:,partial:,partial:,partial:,partial:доступность,different_unclear
+1786194978795,command_menu,48560.0,partial:,partial:,partial:,partial:,partial:доступность,different_unclear
+1786194978795,command_menu,48600.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,48640.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,48680.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,48720.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,48760.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,48800.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,48840.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,48880.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,48920.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,48960.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,49000.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,49040.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,49080.0,partial:,partial:,partial:,partial:вниз,partial:вниз,different_unclear
+1786194978795,command_menu,49120.0,partial:,partial:,partial:,partial:вниз,partial:вниз,different_unclear
+1786194978795,command_menu,49160.0,partial:,partial:,partial:,partial:вниз,partial:вниз,different_unclear
+1786194978795,command_menu,49200.0,partial:,partial:,partial:,partial:вниз,partial:вниз,different_unclear
+1786194978795,command_menu,49240.0,partial:,partial:,partial:,partial:вниз,partial:вниз,different_unclear
+1786194978795,command_menu,49280.0,partial:,partial:,partial:,partial:вниз,partial:вниз,different_unclear
+1786194978795,command_menu,49320.0,partial:,partial:,partial:,endpoint:вниз,endpoint:вниз,different_unclear
+1786194978795,command_menu,50280.0,endpoint:,endpoint:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,50520.0,partial:,partial:,endpoint:,partial:,partial:,different_unclear
+1786194978795,command_menu,51720.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,51760.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,51800.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,51840.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,51880.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,51920.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,54360.0,partial:,partial:,partial:,endpoint:вниз,endpoint:вниз,different_unclear
+1786194978795,command_menu,55320.0,endpoint:,endpoint:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,55560.0,partial:,partial:,endpoint:,partial:,partial:,different_unclear
+1786194978795,command_menu,58680.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,58720.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,58760.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,58800.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,58840.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,58880.0,partial:,partial:,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,58920.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,58960.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,59000.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,59040.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,59080.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,59120.0,partial:,partial:,partial:,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,59160.0,partial:,partial:,partial:,partial:,endpoint:вниз,different_unclear
+1786194978795,command_menu,59400.0,partial:,partial:,partial:,endpoint:вниз,partial:,different_unclear
+1786194978795,command_menu,60360.0,endpoint:,endpoint:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,60600.0,partial:,partial:,endpoint:,partial:,partial:,different_unclear
+1786194978795,command_menu,60840.0,partial:,partial:,partial:,partial:,partial:доступность,different_unclear
+1786194978795,command_menu,60880.0,partial:,partial:,partial:,partial:,partial:доступность,different_unclear
+1786194978795,command_menu,60920.0,partial:,partial:,partial:,partial:,partial:доступность,different_unclear
+1786194978795,command_menu,60960.0,partial:,partial:,partial:,partial:,partial:доступность,different_unclear
+1786194978795,command_menu,61000.0,partial:,partial:,partial:,partial:,partial:доступность,different_unclear
+1786194978795,command_menu,61040.0,partial:,partial:,partial:,partial:,partial:доступность,different_unclear
+1786194978795,command_menu,61080.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,61120.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,61160.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,61200.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,61240.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,61280.0,partial:,partial:доступность,partial:доступность,partial:доступность,partial:доступность,different_unclear
+1786194978795,command_menu,63960.0,partial:вверх,partial:печать,partial:печать,partial:печать,partial:печать,different_unclear
+1786194978795,command_menu,64000.0,partial:вверх,partial:печать,partial:печать,partial:печать,partial:печать,different_unclear
+1786194978795,command_menu,64040.0,partial:вверх,partial:печать,partial:печать,partial:печать,partial:печать,different_unclear
+1786194978795,command_menu,64080.0,partial:вверх,partial:печать,partial:печать,partial:печать,partial:печать,different_unclear
+1786194978795,command_menu,64120.0,partial:вверх,partial:печать,partial:печать,partial:печать,partial:печать,different_unclear
+1786194978795,command_menu,64160.0,partial:вверх,partial:печать,partial:печать,partial:печать,partial:печать,different_unclear
+1786194978795,command_menu,64200.0,partial:,partial:,partial:,partial:,endpoint:,different_unclear
+1786194978795,command_menu,64440.0,partial:,partial:,partial:,endpoint:,partial:,different_unclear
+1786194978795,command_menu,65400.0,endpoint:,endpoint:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,65640.0,partial:,partial:,endpoint:,partial:,partial:,different_unclear
+1786194978795,command_menu,69240.0,partial:,partial:,partial:,partial:,endpoint:,different_unclear
+1786194978795,command_menu,69480.0,partial:,partial:,partial:,endpoint:,partial:,different_unclear
+1786194978795,command_menu,70440.0,endpoint:,endpoint:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,70680.0,partial:,partial:,endpoint:,partial:,partial:,different_unclear
+1786194978795,command_menu,74280.0,partial:,partial:,partial:,partial:,endpoint:,different_unclear
+1786194978795,command_menu,74520.0,partial:,partial:,partial:,endpoint:,partial:,different_unclear
+1786194978795,command_menu,75480.0,endpoint:,endpoint:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,75720.0,partial:,partial:,endpoint:,partial:,partial:,different_unclear
+1786194978795,command_menu,79320.0,partial:,partial:,partial:,partial:,endpoint:,different_unclear
+1786194978795,command_menu,79560.0,partial:,partial:,partial:,endpoint:,partial:,different_unclear
+1786194978795,command_menu,80520.0,endpoint:,endpoint:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,80760.0,partial:,partial:,endpoint:,partial:,partial:,different_unclear
+1786194978795,command_menu,84360.0,partial:,partial:,partial:,partial:,endpoint:,different_unclear
+1786194978795,command_menu,84600.0,partial:,partial:,partial:,endpoint:,partial:,different_unclear
+1786194978795,command_menu,137400.0,partial:,partial:печать,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,137440.0,partial:,partial:печать,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,137480.0,partial:,partial:печать,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,137520.0,partial:,partial:печать,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,137560.0,partial:,partial:печать,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,137600.0,partial:,partial:печать,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,137640.0,partial:,partial:,partial:,partial:справка,partial:,different_unclear
+1786194978795,command_menu,137680.0,partial:,partial:,partial:,partial:справка,partial:,different_unclear
+1786194978795,command_menu,137720.0,partial:,partial:,partial:,partial:справка,partial:,different_unclear
+1786194978795,command_menu,137760.0,partial:,partial:,partial:,partial:справка,partial:,different_unclear
+1786194978795,command_menu,137800.0,partial:,partial:,partial:,partial:справка,partial:,different_unclear
+1786194978795,command_menu,137840.0,partial:,partial:,partial:,partial:справка,partial:,different_unclear
+1786194978795,command_menu,137880.0,partial:,partial:,partial:,partial:справка,partial:,different_unclear
+1786194978795,command_menu,137920.0,partial:,partial:,partial:,partial:справка,partial:,different_unclear
+1786194978795,command_menu,137960.0,partial:,partial:,partial:,partial:справка,partial:,different_unclear
+1786194978795,command_menu,138000.0,partial:,partial:,partial:,partial:справка,partial:,different_unclear
+1786194978795,command_menu,138040.0,partial:,partial:,partial:,partial:справка,partial:,different_unclear
+1786194978795,command_menu,138080.0,partial:,partial:,partial:,partial:справка,partial:,different_unclear
+1786194978795,command_menu,138120.0,partial:,partial:,partial:,endpoint:справка,partial:,different_unclear
+1786194978795,command_menu,140280.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194978795,command_menu,140320.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194978795,command_menu,140360.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194978795,command_menu,140400.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194978795,command_menu,140440.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194978795,command_menu,140480.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194978795,command_menu,141720.0,endpoint:,endpoint:,endpoint:,partial:,endpoint:справка,different_unclear
+1786194978795,command_menu,143160.0,partial:,partial:,partial:,endpoint:,partial:,different_unclear
+1786194978795,command_menu,146040.0,partial:,partial:,partial:[unk],partial:[unk],partial:[unk],different_unclear
+1786194978795,command_menu,146080.0,partial:,partial:,partial:[unk],partial:[unk],partial:[unk],different_unclear
+1786194978795,command_menu,146120.0,partial:,partial:,partial:[unk],partial:[unk],partial:[unk],different_unclear
+1786194978795,command_menu,146160.0,partial:,partial:,partial:[unk],partial:[unk],partial:[unk],different_unclear
+1786194978795,command_menu,146200.0,partial:,partial:,partial:[unk],partial:[unk],partial:[unk],different_unclear
+1786194978795,command_menu,146240.0,partial:,partial:,partial:[unk],partial:[unk],partial:[unk],different_unclear
+1786194978795,command_menu,146280.0,partial:,partial:,partial:[unk],partial:[unk],partial:[unk],different_unclear
+1786194978795,command_menu,146320.0,partial:,partial:,partial:[unk],partial:[unk],partial:[unk],different_unclear
+1786194978795,command_menu,146360.0,partial:,partial:,partial:[unk],partial:[unk],partial:[unk],different_unclear
+1786194978795,command_menu,146400.0,partial:,partial:,partial:[unk],partial:[unk],partial:[unk],different_unclear
+1786194978795,command_menu,146440.0,partial:,partial:,partial:[unk],partial:[unk],partial:[unk],different_unclear
+1786194978795,command_menu,146480.0,partial:,partial:,partial:[unk],partial:[unk],partial:[unk],different_unclear
+1786194978795,command_menu,146520.0,partial:,partial:,partial:[unk],partial:[unk],partial:[unk],different_unclear
+1786194978795,command_menu,146560.0,partial:,partial:,partial:[unk],partial:[unk],partial:[unk],different_unclear
+1786194978795,command_menu,146600.0,partial:,partial:,partial:[unk],partial:[unk],partial:[unk],different_unclear
+1786194978795,command_menu,146640.0,partial:,partial:,partial:[unk],partial:[unk],partial:[unk],different_unclear
+1786194978795,command_menu,146680.0,partial:,partial:,partial:[unk],partial:[unk],partial:[unk],different_unclear
+1786194978795,command_menu,146720.0,partial:,partial:,partial:[unk],partial:[unk],partial:[unk],different_unclear
+1786194978795,command_menu,146760.0,endpoint:,endpoint:,endpoint:[unk],partial:[unk],endpoint:[unk],different_unclear
+1786194978795,command_menu,146800.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,146840.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,146880.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,146920.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,146960.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147000.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147040.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147080.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147120.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147160.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147200.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147240.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147280.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147320.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147360.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147400.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147440.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147480.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147520.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147560.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147600.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147640.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147680.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147720.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147760.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147800.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147840.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147880.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147920.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,147960.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,148000.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,148040.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,148080.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,148120.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,148160.0,partial:,partial:,partial:,partial:[unk],partial:,different_unclear
+1786194978795,command_menu,148200.0,partial:,partial:,partial:,endpoint:[unk],partial:,different_unclear
+1786194978795,command_menu,149880.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,149920.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,149960.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,150000.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,150040.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,150080.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,150120.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,150160.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,150200.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,150240.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,150280.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,150320.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,150360.0,partial:,partial:справка,endpoint:справка,endpoint:справка,endpoint:справка,different_unclear
+1786194978795,command_menu,150400.0,partial:,partial:справка,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,150440.0,partial:,partial:справка,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,150480.0,partial:,partial:справка,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,150520.0,partial:,partial:справка,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,150560.0,partial:,partial:справка,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,150600.0,partial:,endpoint:справка,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,151800.0,endpoint:справка,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,command_menu,153000.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194978795,command_menu,153040.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194978795,command_menu,153080.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194978795,command_menu,153120.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194978795,command_menu,153160.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194978795,command_menu,153200.0,partial:,partial:настройки,partial:настройки,partial:настройки,partial:настройки,different_unclear
+1786194978795,command_menu,160920.0,partial:,partial:,partial:,partial:настройки,partial:настройки,different_unclear
+1786194978795,command_menu,160960.0,partial:,partial:,partial:,partial:настройки,partial:настройки,different_unclear
+1786194978795,command_menu,161000.0,partial:,partial:,partial:,partial:настройки,partial:настройки,different_unclear
+1786194978795,command_menu,161040.0,partial:,partial:,partial:,partial:настройки,partial:настройки,different_unclear
+1786194978795,command_menu,161080.0,partial:,partial:,partial:,partial:настройки,partial:настройки,different_unclear
+1786194978795,command_menu,161120.0,partial:,partial:,partial:,partial:настройки,partial:настройки,different_unclear
+1786194978795,command_menu,166680.0,partial:,partial:справка,partial:справка,partial:справка,partial:,different_unclear
+1786194978795,command_menu,166720.0,partial:,partial:справка,partial:справка,partial:справка,partial:,different_unclear
+1786194978795,command_menu,166760.0,partial:,partial:справка,partial:справка,partial:справка,partial:,different_unclear
+1786194978795,command_menu,166800.0,partial:,partial:справка,partial:справка,partial:справка,partial:,different_unclear
+1786194978795,command_menu,166840.0,partial:,partial:справка,partial:справка,partial:справка,partial:,different_unclear
+1786194978795,command_menu,166880.0,partial:,partial:справка,partial:справка,partial:справка,partial:,different_unclear
+1786194978795,command_menu,168600.0,partial:,partial:,partial:,partial:,partial:доступность,different_unclear
+1786194978795,command_menu,168640.0,partial:,partial:,partial:,partial:,partial:доступность,different_unclear
+1786194978795,command_menu,168680.0,partial:,partial:,partial:,partial:,partial:доступность,different_unclear
+1786194978795,command_menu,168720.0,partial:,partial:,partial:,partial:,partial:доступность,different_unclear
+1786194978795,command_menu,168760.0,partial:,partial:,partial:,partial:,partial:доступность,different_unclear
+1786194978795,command_menu,168800.0,partial:,partial:,partial:,partial:,partial:доступность,different_unclear
+1786194978795,command_menu,168840.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,168880.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,168920.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,168960.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,169000.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,command_menu,169040.0,partial:,partial:справка,partial:справка,partial:справка,partial:справка,different_unclear
+1786194978795,free_text,18120.0,partial:вниз,partial:вниз,partial:вниз,partial:мне из,partial:мне из,different_unclear
+1786194978795,free_text,18160.0,partial:вниз,partial:вниз,partial:вниз,partial:мне из,partial:мне из,different_unclear
+1786194978795,free_text,18200.0,partial:вниз,partial:вниз,partial:вниз,partial:мне из,partial:мне из,different_unclear
+1786194978795,free_text,18240.0,partial:вниз,partial:вниз,partial:вниз,partial:мне из,partial:мне из,different_unclear
+1786194978795,free_text,18280.0,partial:вниз,partial:вниз,partial:вниз,partial:мне из,partial:мне из,different_unclear
+1786194978795,free_text,18320.0,partial:вниз,partial:вниз,partial:вниз,partial:мне из,partial:мне из,different_unclear
+1786194978795,free_text,18360.0,partial:вниз,partial:вниз,partial:вниз,partial:мне из,partial:мне из,different_unclear
+1786194978795,free_text,18400.0,partial:вниз,partial:вниз,partial:вниз,partial:мне из,partial:мне из,different_unclear
+1786194978795,free_text,18440.0,partial:вниз,partial:вниз,partial:вниз,partial:мне из,partial:мне из,different_unclear
+1786194978795,free_text,18480.0,partial:вниз,partial:вниз,partial:вниз,partial:мне из,partial:мне из,different_unclear
+1786194978795,free_text,18520.0,partial:вниз,partial:вниз,partial:вниз,partial:мне из,partial:мне из,different_unclear
+1786194978795,free_text,18560.0,partial:вниз,partial:вниз,partial:вниз,partial:мне из,partial:мне из,different_unclear
+1786194978795,free_text,19080.0,partial:мне,partial:в ней,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,19120.0,partial:мне,partial:в ней,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,19160.0,partial:мне,partial:в ней,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,19200.0,partial:мне,partial:в ней,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,19240.0,partial:мне,partial:в ней,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,19280.0,partial:мне,partial:в ней,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,19800.0,endpoint:вниз,endpoint:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,19840.0,partial:,partial:,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,19880.0,partial:,partial:,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,19920.0,partial:,partial:,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,19960.0,partial:,partial:,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,20000.0,partial:,partial:,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,20040.0,partial:,partial:,endpoint:вниз,endpoint:вниз,endpoint:вниз,different_unclear
+1786194978795,free_text,20520.0,partial:в,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,20560.0,partial:в,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,20600.0,partial:в,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,20640.0,partial:в,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,20680.0,partial:в,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,20720.0,partial:в,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,21000.0,partial:в ней,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,21040.0,partial:в ней,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,21080.0,partial:в ней,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,21120.0,partial:в ней,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,21160.0,partial:в ней,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,21200.0,partial:в ней,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,21240.0,endpoint:вниз,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,21280.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,21320.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,21360.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,21400.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,21440.0,partial:,partial:вниз,partial:вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,21480.0,partial:,endpoint:вниз,endpoint:вниз,endpoint:вниз,endpoint:вниз,different_unclear
+1786194978795,free_text,22200.0,partial:верх,partial:верх,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,22240.0,partial:верх,partial:верх,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,22280.0,partial:верх,partial:верх,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,22320.0,partial:верх,partial:верх,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,22360.0,partial:верх,partial:верх,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,22400.0,partial:верх,partial:верх,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,23400.0,partial:веры,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,23440.0,partial:веры,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,23480.0,partial:веры,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,23520.0,partial:веры,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,23560.0,partial:веры,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,23600.0,partial:веры,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,23640.0,partial:веры,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,23680.0,partial:веры,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,23720.0,partial:веры,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,23760.0,partial:веры,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,23800.0,partial:веры,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,23840.0,partial:веры,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,23880.0,endpoint:веры,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,24840.0,partial:,partial:верно верно,partial:верно верно,partial:верно верно,partial:верно верно,different_unclear
+1786194978795,free_text,24880.0,partial:,partial:верно верно,partial:верно верно,partial:верно верно,partial:верно верно,different_unclear
+1786194978795,free_text,24920.0,partial:,partial:верно верно,partial:верно верно,partial:верно верно,partial:верно верно,different_unclear
+1786194978795,free_text,24960.0,partial:,partial:верно верно,partial:верно верно,partial:верно верно,partial:верно верно,different_unclear
+1786194978795,free_text,25000.0,partial:,partial:верно верно,partial:верно верно,partial:верно верно,partial:верно верно,different_unclear
+1786194978795,free_text,25040.0,partial:,partial:верно верно,partial:верно верно,partial:верно верно,partial:верно верно,different_unclear
+1786194978795,free_text,25080.0,partial:,partial:берут верх,partial:берут верх,partial:сбер,partial:сбер,different_unclear
+1786194978795,free_text,25120.0,partial:,partial:берут верх,partial:берут верх,partial:сбер,partial:сбер,different_unclear
+1786194978795,free_text,25160.0,partial:,partial:берут верх,partial:берут верх,partial:сбер,partial:сбер,different_unclear
+1786194978795,free_text,25200.0,partial:,partial:берут верх,partial:берут верх,partial:сбер,partial:сбер,different_unclear
+1786194978795,free_text,25240.0,partial:,partial:берут верх,partial:берут верх,partial:сбер,partial:сбер,different_unclear
+1786194978795,free_text,25280.0,partial:,partial:берут верх,partial:берут верх,partial:сбер,partial:сбер,different_unclear
+1786194978795,free_text,25320.0,partial:сбер,partial:берут верх,partial:берут верх,partial:сбер,partial:сбер,different_unclear
+1786194978795,free_text,25360.0,partial:сбер,partial:берут верх,partial:берут верх,partial:сбер,partial:сбер,different_unclear
+1786194978795,free_text,25400.0,partial:сбер,partial:берут верх,partial:берут верх,partial:сбер,partial:сбер,different_unclear
+1786194978795,free_text,25440.0,partial:сбер,partial:берут верх,partial:берут верх,partial:сбер,partial:сбер,different_unclear
+1786194978795,free_text,25480.0,partial:сбер,partial:берут верх,partial:берут верх,partial:сбер,partial:сбер,different_unclear
+1786194978795,free_text,25520.0,partial:сбер,partial:берут верх,partial:берут верх,partial:сбер,partial:сбер,different_unclear
+1786194978795,free_text,25560.0,endpoint:сбер,endpoint:берут верх,endpoint:берут верх,endpoint:сбер,endpoint:берут верх,different_unclear
+1786194978795,free_text,26760.0,partial:верх,partial:верх,partial:вер,partial:вер,partial:вверх,different_unclear
+1786194978795,free_text,26800.0,partial:верх,partial:верх,partial:вер,partial:вер,partial:вверх,different_unclear
+1786194978795,free_text,26840.0,partial:верх,partial:верх,partial:вер,partial:вер,partial:вверх,different_unclear
+1786194978795,free_text,26880.0,partial:верх,partial:верх,partial:вер,partial:вер,partial:вверх,different_unclear
+1786194978795,free_text,26920.0,partial:верх,partial:верх,partial:вер,partial:вер,partial:вверх,different_unclear
+1786194978795,free_text,26960.0,partial:верх,partial:верх,partial:вер,partial:вер,partial:вверх,different_unclear
+1786194978795,free_text,27000.0,partial:верх,partial:верх,partial:вер,partial:вер,partial:вверх,different_unclear
+1786194978795,free_text,27040.0,partial:верх,partial:верх,partial:вер,partial:вер,partial:вверх,different_unclear
+1786194978795,free_text,27080.0,partial:верх,partial:верх,partial:вер,partial:вер,partial:вверх,different_unclear
+1786194978795,free_text,27120.0,partial:верх,partial:верх,partial:вер,partial:вер,partial:вверх,different_unclear
+1786194978795,free_text,27160.0,partial:верх,partial:верх,partial:вер,partial:вер,partial:вверх,different_unclear
+1786194978795,free_text,27200.0,partial:верх,partial:верх,partial:вер,partial:вер,partial:вверх,different_unclear
+1786194978795,free_text,27240.0,endpoint:верх,endpoint:верх,partial:вер,endpoint:вверх,endpoint:вверх,different_unclear
+1786194978795,free_text,27280.0,partial:,partial:,partial:вер,partial:,partial:,different_unclear
+1786194978795,free_text,27320.0,partial:,partial:,partial:вер,partial:,partial:,different_unclear
+1786194978795,free_text,27360.0,partial:,partial:,partial:вер,partial:,partial:,different_unclear
+1786194978795,free_text,27400.0,partial:,partial:,partial:вер,partial:,partial:,different_unclear
+1786194978795,free_text,27440.0,partial:,partial:,partial:вер,partial:,partial:,different_unclear
+1786194978795,free_text,27480.0,partial:,partial:,partial:вер,partial:,partial:,different_unclear
+1786194978795,free_text,27520.0,partial:,partial:,partial:вер,partial:,partial:,different_unclear
+1786194978795,free_text,27560.0,partial:,partial:,partial:вер,partial:,partial:,different_unclear
+1786194978795,free_text,27600.0,partial:,partial:,partial:вер,partial:,partial:,different_unclear
+1786194978795,free_text,27640.0,partial:,partial:,partial:вер,partial:,partial:,different_unclear
+1786194978795,free_text,27680.0,partial:,partial:,partial:вер,partial:,partial:,different_unclear
+1786194978795,free_text,27720.0,partial:,partial:,partial:вверх вниз,partial:,partial:,different_unclear
+1786194978795,free_text,27760.0,partial:,partial:,partial:вверх вниз,partial:,partial:,different_unclear
+1786194978795,free_text,27800.0,partial:,partial:,partial:вверх вниз,partial:,partial:,different_unclear
+1786194978795,free_text,27840.0,partial:,partial:,partial:вверх вниз,partial:,partial:,different_unclear
+1786194978795,free_text,27880.0,partial:,partial:,partial:вверх вниз,partial:,partial:,different_unclear
+1786194978795,free_text,27920.0,partial:,partial:,partial:вверх вниз,partial:,partial:,different_unclear
+1786194978795,free_text,27960.0,partial:вниз,partial:вниз,partial:вверх вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,28000.0,partial:вниз,partial:вниз,partial:вверх вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,28040.0,partial:вниз,partial:вниз,partial:вверх вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,28080.0,partial:вниз,partial:вниз,partial:вверх вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,28120.0,partial:вниз,partial:вниз,partial:вверх вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,28160.0,partial:вниз,partial:вниз,partial:вверх вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,28200.0,partial:вниз,partial:вниз,partial:вверх вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,28240.0,partial:вниз,partial:вниз,partial:вверх вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,28280.0,partial:вниз,partial:вниз,partial:вверх вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,28320.0,partial:вниз,partial:вниз,partial:вверх вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,28360.0,partial:вниз,partial:вниз,partial:вверх вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,28400.0,partial:вниз,partial:вниз,partial:вверх вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,28440.0,partial:вниз,partial:вниз,partial:вверх вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,28480.0,partial:вниз,partial:вниз,partial:вверх вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,28520.0,partial:вниз,partial:вниз,partial:вверх вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,28560.0,partial:вниз,partial:вниз,partial:вверх вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,28600.0,partial:вниз,partial:вниз,partial:вверх вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,28640.0,partial:вниз,partial:вниз,partial:вверх вниз,partial:вниз,partial:вниз,different_unclear
+1786194978795,free_text,28680.0,endpoint:вниз,endpoint:вниз,endpoint:вверх вниз,endpoint:вниз,endpoint:вниз,different_unclear
+1786194978795,free_text,35880.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,35920.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,35960.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36000.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36040.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36080.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36120.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36160.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36200.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36240.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36280.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36320.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36360.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36400.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36440.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36480.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36520.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36560.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36600.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36640.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36680.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36720.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36760.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36800.0,partial:жёлтые,partial:жёлтые,partial:жёлтые я,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,36840.0,endpoint:жёлтые,endpoint:жёлтые,endpoint:жёлтые я,endpoint:жёлтые я,endpoint:жёлтые я,different_unclear
+1786194978795,free_text,38280.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,38320.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,38360.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,38400.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,38440.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,38480.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,42120.0,partial:золотые,partial:золотые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,42160.0,partial:золотые,partial:золотые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,42200.0,partial:золотые,partial:золотые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,42240.0,partial:золотые,partial:золотые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,42280.0,partial:золотые,partial:золотые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,42320.0,partial:золотые,partial:золотые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,42360.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:зол ты,different_unclear
+1786194978795,free_text,42400.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:зол ты,different_unclear
+1786194978795,free_text,42440.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:зол ты,different_unclear
+1786194978795,free_text,42480.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:зол ты,different_unclear
+1786194978795,free_text,42520.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:зол ты,different_unclear
+1786194978795,free_text,42560.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:зол ты,different_unclear
+1786194978795,free_text,42600.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,42640.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,42680.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,42720.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,42760.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,42800.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,42840.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,42880.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,42920.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,42960.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,43000.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,43040.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,43080.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,43120.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,43160.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,43200.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,43240.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,43280.0,partial:жёлтые,partial:жёлтые,partial:золотые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,43320.0,endpoint:жёлтые,endpoint:зол,endpoint:ты,endpoint:ты,endpoint:ты,different_unclear
+1786194978795,free_text,45240.0,partial:жёлтый,partial:жёлтые,partial:жёлтые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,45280.0,partial:жёлтый,partial:жёлтые,partial:жёлтые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,45320.0,partial:жёлтый,partial:жёлтые,partial:жёлтые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,45360.0,partial:жёлтый,partial:жёлтые,partial:жёлтые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,45400.0,partial:жёлтый,partial:жёлтые,partial:жёлтые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,45440.0,partial:жёлтый,partial:жёлтые,partial:жёлтые,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,48840.0,partial:жёлтые,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,48880.0,partial:жёлтые,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,48920.0,partial:жёлтые,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,48960.0,partial:жёлтые,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,49000.0,partial:жёлтые,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,49040.0,partial:жёлтые,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,58680.0,partial:,partial:,partial:,partial:,partial:джон,different_unclear
+1786194978795,free_text,58720.0,partial:,partial:,partial:,partial:,partial:джон,different_unclear
+1786194978795,free_text,58760.0,partial:,partial:,partial:,partial:,partial:джон,different_unclear
+1786194978795,free_text,58800.0,partial:,partial:,partial:,partial:,partial:джон,different_unclear
+1786194978795,free_text,58840.0,partial:,partial:,partial:,partial:,partial:джон,different_unclear
+1786194978795,free_text,58880.0,partial:,partial:,partial:,partial:,partial:джон,different_unclear
+1786194978795,free_text,58920.0,partial:жёлтый,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,58960.0,partial:жёлтый,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,59000.0,partial:жёлтый,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,59040.0,partial:жёлтый,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,59080.0,partial:жёлтый,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,59120.0,partial:жёлтый,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,59160.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,59200.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,59240.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,59280.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,59320.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,59360.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,59400.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,59440.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,59480.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,59520.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,59560.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,59600.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,59640.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,59680.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,59720.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,59760.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,59800.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,59840.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,59880.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,59920.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,59960.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,60000.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,60040.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,60080.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтые,partial:жёлтые,different_unclear
+1786194978795,free_text,60120.0,endpoint:жёлтый,endpoint:жёлтый,endpoint:жёлтый,endpoint:жёлтый,endpoint:жёлтые,different_unclear
+1786194978795,free_text,61080.0,partial:,partial:,partial:джон,partial:джон,partial:джон,different_unclear
+1786194978795,free_text,61120.0,partial:,partial:,partial:джон,partial:джон,partial:джон,different_unclear
+1786194978795,free_text,61160.0,partial:,partial:,partial:джон,partial:джон,partial:джон,different_unclear
+1786194978795,free_text,61200.0,partial:,partial:,partial:джон,partial:джон,partial:джон,different_unclear
+1786194978795,free_text,61240.0,partial:,partial:,partial:джон,partial:джон,partial:джон,different_unclear
+1786194978795,free_text,61280.0,partial:,partial:,partial:джон,partial:джон,partial:джон,different_unclear
+1786194978795,free_text,61320.0,partial:жёлтый,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,61360.0,partial:жёлтый,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,61400.0,partial:жёлтый,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,61440.0,partial:жёлтый,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,61480.0,partial:жёлтый,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,61520.0,partial:жёлтый,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,61560.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,61600.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,61640.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,61680.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,61720.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,61760.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,61800.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,61840.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,61880.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,61920.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,61960.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,62000.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,62040.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,62080.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,62120.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,62160.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,62200.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,62240.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,62280.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,62320.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,62360.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,62400.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,62440.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,62480.0,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:жёлтый,partial:джон ты,different_unclear
+1786194978795,free_text,62520.0,endpoint:жёлтый,endpoint:жёлтый,endpoint:жёлтый,endpoint:жёлтый,endpoint:джон ты,different_unclear
+1786194978795,free_text,71880.0,endpoint:мобильный,endpoint:мобильный,partial:мобильный,partial:мобильный,partial:мобильный,different_unclear
+1786194978795,free_text,71920.0,partial:,partial:,partial:мобильный,partial:мобильный,partial:мобильный,different_unclear
+1786194978795,free_text,71960.0,partial:,partial:,partial:мобильный,partial:мобильный,partial:мобильный,different_unclear
+1786194978795,free_text,72000.0,partial:,partial:,partial:мобильный,partial:мобильный,partial:мобильный,different_unclear
+1786194978795,free_text,72040.0,partial:,partial:,partial:мобильный,partial:мобильный,partial:мобильный,different_unclear
+1786194978795,free_text,72080.0,partial:,partial:,partial:мобильный,partial:мобильный,partial:мобильный,different_unclear
+1786194978795,free_text,72120.0,partial:,partial:,endpoint:мобильный,endpoint:мобильный,endpoint:мобильный,different_unclear
+1786194978795,free_text,88680.0,partial:,partial:,partial:,partial:,partial:да,different_unclear
+1786194978795,free_text,88720.0,partial:,partial:,partial:,partial:,partial:да,different_unclear
+1786194978795,free_text,88760.0,partial:,partial:,partial:,partial:,partial:да,different_unclear
+1786194978795,free_text,88800.0,partial:,partial:,partial:,partial:,partial:да,different_unclear
+1786194978795,free_text,88840.0,partial:,partial:,partial:,partial:,partial:да,different_unclear
+1786194978795,free_text,88880.0,partial:,partial:,partial:,partial:,partial:да,different_unclear
+1786194978795,free_text,94440.0,partial:,partial:,partial:да,partial:да,partial:да,different_unclear
+1786194978795,free_text,94480.0,partial:,partial:,partial:да,partial:да,partial:да,different_unclear
+1786194978795,free_text,94520.0,partial:,partial:,partial:да,partial:да,partial:да,different_unclear
+1786194978795,free_text,94560.0,partial:,partial:,partial:да,partial:да,partial:да,different_unclear
+1786194978795,free_text,94600.0,partial:,partial:,partial:да,partial:да,partial:да,different_unclear
+1786194978795,free_text,94640.0,partial:,partial:,partial:да,partial:да,partial:да,different_unclear
+1786194978795,free_text,98280.0,partial:доступность,partial:доступность,partial:,partial:доступность,partial:,different_unclear
+1786194978795,free_text,98320.0,partial:доступность,partial:доступность,partial:,partial:доступность,partial:,different_unclear
+1786194978795,free_text,98360.0,partial:доступность,partial:доступность,partial:,partial:доступность,partial:,different_unclear
+1786194978795,free_text,98400.0,partial:доступность,partial:доступность,partial:,partial:доступность,partial:,different_unclear
+1786194978795,free_text,98440.0,partial:доступность,partial:доступность,partial:,partial:доступность,partial:,different_unclear
+1786194978795,free_text,98480.0,partial:доступность,partial:доступность,partial:,partial:доступность,partial:,different_unclear
+1786194978795,free_text,137160.0,partial:сбер,partial:сбер,partial:сбер,partial:,partial:,different_unclear
+1786194978795,free_text,137200.0,partial:сбер,partial:сбер,partial:сбер,partial:,partial:,different_unclear
+1786194978795,free_text,137240.0,partial:сбер,partial:сбер,partial:сбер,partial:,partial:,different_unclear
+1786194978795,free_text,137280.0,partial:сбер,partial:сбер,partial:сбер,partial:,partial:,different_unclear
+1786194978795,free_text,137320.0,partial:сбер,partial:сбер,partial:сбер,partial:,partial:,different_unclear
+1786194978795,free_text,137360.0,partial:сбер,partial:сбер,partial:сбер,partial:,partial:,different_unclear
+1786194978795,free_text,140760.0,partial:молочную,partial:молочная,partial:молочная,partial:молочная,partial:молочная,different_unclear
+1786194978795,free_text,140800.0,partial:молочную,partial:молочная,partial:молочная,partial:молочная,partial:молочная,different_unclear
+1786194978795,free_text,140840.0,partial:молочную,partial:молочная,partial:молочная,partial:молочная,partial:молочная,different_unclear
+1786194978795,free_text,140880.0,partial:молочную,partial:молочная,partial:молочная,partial:молочная,partial:молочная,different_unclear
+1786194978795,free_text,140920.0,partial:молочную,partial:молочная,partial:молочная,partial:молочная,partial:молочная,different_unclear
+1786194978795,free_text,140960.0,partial:молочную,partial:молочная,partial:молочная,partial:молочная,partial:молочная,different_unclear
+1786194978795,free_text,153240.0,partial:коробка,partial:коробка,partial:коровка,partial:коровка,partial:коровка,different_unclear
+1786194978795,free_text,153280.0,partial:коробка,partial:коробка,partial:коровка,partial:коровка,partial:коровка,different_unclear
+1786194978795,free_text,153320.0,partial:коробка,partial:коробка,partial:коровка,partial:коровка,partial:коровка,different_unclear
+1786194978795,free_text,153360.0,partial:коробка,partial:коробка,partial:коровка,partial:коровка,partial:коровка,different_unclear
+1786194978795,free_text,153400.0,partial:коробка,partial:коробка,partial:коровка,partial:коровка,partial:коровка,different_unclear
+1786194978795,free_text,153440.0,partial:коробка,partial:коробка,partial:коровка,partial:коровка,partial:коровка,different_unclear
+1786194978795,free_text,153480.0,partial:коробка,partial:коробка,partial:коровка,partial:коровка,partial:коровка,different_unclear
+1786194978795,free_text,153520.0,partial:коробка,partial:коробка,partial:коровка,partial:коровка,partial:коровка,different_unclear
+1786194978795,free_text,153560.0,partial:коробка,partial:коробка,partial:коровка,partial:коровка,partial:коровка,different_unclear
+1786194978795,free_text,153600.0,partial:коробка,partial:коробка,partial:коровка,partial:коровка,partial:коровка,different_unclear
+1786194978795,free_text,153640.0,partial:коробка,partial:коробка,partial:коровка,partial:коровка,partial:коровка,different_unclear
+1786194978795,free_text,153680.0,partial:коробка,partial:коробка,partial:коровка,partial:коровка,partial:коровка,different_unclear
+1786194978795,free_text,153720.0,partial:коробка,partial:коробка,partial:коровка,partial:коровка,partial:коровка,different_unclear
+1786194978795,free_text,153760.0,partial:коробка,partial:коробка,partial:коровка,partial:коровка,partial:коровка,different_unclear
+1786194978795,free_text,153800.0,partial:коробка,partial:коробка,partial:коровка,partial:коровка,partial:коровка,different_unclear
+1786194978795,free_text,153840.0,partial:коробка,partial:коробка,partial:коровка,partial:коровка,partial:коровка,different_unclear
+1786194978795,free_text,153880.0,partial:коробка,partial:коробка,partial:коровка,partial:коровка,partial:коровка,different_unclear
+1786194978795,free_text,153920.0,partial:коробка,partial:коробка,partial:коровка,partial:коровка,partial:коровка,different_unclear
+1786194978795,free_text,153960.0,partial:коробка,partial:коробка,endpoint:коровка,endpoint:коровка,endpoint:коровка,different_unclear
+1786194978795,free_text,154000.0,partial:коробка,partial:коробка,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,154040.0,partial:коробка,partial:коробка,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,154080.0,partial:коробка,partial:коробка,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,154120.0,partial:коробка,partial:коробка,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,154160.0,partial:коробка,partial:коробка,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,154200.0,partial:коробка,partial:коробка,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,154240.0,partial:коробка,partial:коробка,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,154280.0,partial:коробка,partial:коробка,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,154320.0,partial:коробка,partial:коробка,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,154360.0,partial:коробка,partial:коробка,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,154400.0,partial:коробка,partial:коробка,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,154440.0,endpoint:коробка,endpoint:коробка,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,157320.0,endpoint:коробка,endpoint:коробка,endpoint:коробка,partial:коробка,partial:коробка,different_unclear
+1786194978795,free_text,157360.0,partial:,partial:,partial:,partial:коробка,partial:коробка,different_unclear
+1786194978795,free_text,157400.0,partial:,partial:,partial:,partial:коробка,partial:коробка,different_unclear
+1786194978795,free_text,157440.0,partial:,partial:,partial:,partial:коробка,partial:коробка,different_unclear
+1786194978795,free_text,157480.0,partial:,partial:,partial:,partial:коробка,partial:коробка,different_unclear
+1786194978795,free_text,157520.0,partial:,partial:,partial:,partial:коробка,partial:коробка,different_unclear
+1786194978795,free_text,157560.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,157600.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,157640.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,157680.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,157720.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,157760.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,157800.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,157840.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,157880.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,157920.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,157960.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,158000.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,158040.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,158080.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,158120.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,158160.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,158200.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,158240.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,158280.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,158320.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,158360.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,158400.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,158440.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,158480.0,partial:,partial:,partial:,partial:коробка а,partial:коробка а,different_unclear
+1786194978795,free_text,158520.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,158560.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,158600.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,158640.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,158680.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,158720.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,158760.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,158800.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,158840.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,158880.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,158920.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,158960.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,159000.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,159040.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,159080.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,159120.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,159160.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,159200.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,159240.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,159280.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,159320.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,159360.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,159400.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,159440.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,159480.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,159520.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,159560.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,159600.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,159640.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,159680.0,partial:коробка,partial:коробка,partial:коробка,partial:коробка а коробка,partial:коробка а коробка,different_unclear
+1786194978795,free_text,159720.0,endpoint:коробка,endpoint:коробка,endpoint:коробка,endpoint:коробка а коробка,endpoint:коробка а коробка,different_unclear
+1786194978795,free_text,161400.0,partial:ну,partial:ну,partial:ну,partial:ну,partial:но,different_unclear
+1786194978795,free_text,161440.0,partial:ну,partial:ну,partial:ну,partial:ну,partial:но,different_unclear
+1786194978795,free_text,161480.0,partial:ну,partial:ну,partial:ну,partial:ну,partial:но,different_unclear
+1786194978795,free_text,161520.0,partial:ну,partial:ну,partial:ну,partial:ну,partial:но,different_unclear
+1786194978795,free_text,161560.0,partial:ну,partial:ну,partial:ну,partial:ну,partial:но,different_unclear
+1786194978795,free_text,161600.0,partial:ну,partial:ну,partial:ну,partial:ну,partial:но,different_unclear
+1786194978795,free_text,161640.0,partial:ну,partial:ну,partial:ну,partial:ну,partial:но,different_unclear
+1786194978795,free_text,161680.0,partial:ну,partial:ну,partial:ну,partial:ну,partial:но,different_unclear
+1786194978795,free_text,161720.0,partial:ну,partial:ну,partial:ну,partial:ну,partial:но,different_unclear
+1786194978795,free_text,161760.0,partial:ну,partial:ну,partial:ну,partial:ну,partial:но,different_unclear
+1786194978795,free_text,161800.0,partial:ну,partial:ну,partial:ну,partial:ну,partial:но,different_unclear
+1786194978795,free_text,161840.0,partial:ну,partial:ну,partial:ну,partial:ну,partial:но,different_unclear
+1786194978795,free_text,161880.0,partial:ну,partial:но,partial:но,partial:но,partial:но,different_unclear
+1786194978795,free_text,161920.0,partial:ну,partial:но,partial:но,partial:но,partial:но,different_unclear
+1786194978795,free_text,161960.0,partial:ну,partial:но,partial:но,partial:но,partial:но,different_unclear
+1786194978795,free_text,162000.0,partial:ну,partial:но,partial:но,partial:но,partial:но,different_unclear
+1786194978795,free_text,162040.0,partial:ну,partial:но,partial:но,partial:но,partial:но,different_unclear
+1786194978795,free_text,162080.0,partial:ну,partial:но,partial:но,partial:но,partial:но,different_unclear
+1786194978795,free_text,162120.0,partial:ну коровка,partial:но коровка,partial:но коровка,partial:но коровка,partial:но коровка,different_unclear
+1786194978795,free_text,162160.0,partial:ну коровка,partial:но коровка,partial:но коровка,partial:но коровка,partial:но коровка,different_unclear
+1786194978795,free_text,162200.0,partial:ну коровка,partial:но коровка,partial:но коровка,partial:но коровка,partial:но коровка,different_unclear
+1786194978795,free_text,162240.0,partial:ну коровка,partial:но коровка,partial:но коровка,partial:но коровка,partial:но коровка,different_unclear
+1786194978795,free_text,162280.0,partial:ну коровка,partial:но коровка,partial:но коровка,partial:но коровка,partial:но коровка,different_unclear
+1786194978795,free_text,162320.0,partial:ну коровка,partial:но коровка,partial:но коровка,partial:но коровка,partial:но коровка,different_unclear
+1786194978795,free_text,162360.0,partial:ну коровка,partial:но коровка,partial:но коровка,partial:но коровка,partial:но коровка,different_unclear
+1786194978795,free_text,162400.0,partial:ну коровка,partial:но коровка,partial:но коровка,partial:но коровка,partial:но коровка,different_unclear
+1786194978795,free_text,162440.0,partial:ну коровка,partial:но коровка,partial:но коровка,partial:но коровка,partial:но коровка,different_unclear
+1786194978795,free_text,162480.0,partial:ну коровка,partial:но коровка,partial:но коровка,partial:но коровка,partial:но коровка,different_unclear
+1786194978795,free_text,162520.0,partial:ну коровка,partial:но коровка,partial:но коровка,partial:но коровка,partial:но коровка,different_unclear
+1786194978795,free_text,162560.0,partial:ну коровка,partial:но коровка,partial:но коровка,partial:но коровка,partial:но коровка,different_unclear
+1786194978795,free_text,162600.0,partial:ну коровка,partial:но коровка,partial:но коровка,partial:но коровка,partial:но коровка,different_unclear
+1786194978795,free_text,162640.0,partial:ну коровка,partial:но коровка,partial:но коровка,partial:но коровка,partial:но коровка,different_unclear
+1786194978795,free_text,162680.0,partial:ну коровка,partial:но коровка,partial:но коровка,partial:но коровка,partial:но коровка,different_unclear
+1786194978795,free_text,162720.0,partial:ну коровка,partial:но коровка,partial:но коровка,partial:но коровка,partial:но коровка,different_unclear
+1786194978795,free_text,162760.0,partial:ну коровка,partial:но коровка,partial:но коровка,partial:но коровка,partial:но коровка,different_unclear
+1786194978795,free_text,162800.0,partial:ну коровка,partial:но коровка,partial:но коровка,partial:но коровка,partial:но коровка,different_unclear
+1786194978795,free_text,162840.0,endpoint:ну коровка,endpoint:ну коровка,endpoint:ну коровка,endpoint:но коровка,endpoint:но коровка,different_unclear
+1786194978795,free_text,166680.0,partial:коровка,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,166720.0,partial:коровка,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,166760.0,partial:коровка,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,166800.0,partial:коровка,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,166840.0,partial:коровка,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,166880.0,partial:коровка,partial:,partial:,partial:,partial:,different_unclear
+1786194978795,free_text,168600.0,partial:,partial:,partial:а,partial:а,partial:а,different_unclear
+1786194978795,free_text,168640.0,partial:,partial:,partial:а,partial:а,partial:а,different_unclear
+1786194978795,free_text,168680.0,partial:,partial:,partial:а,partial:а,partial:а,different_unclear
+1786194978795,free_text,168720.0,partial:,partial:,partial:а,partial:а,partial:а,different_unclear
+1786194978795,free_text,168760.0,partial:,partial:,partial:а,partial:а,partial:а,different_unclear
+1786194978795,free_text,168800.0,partial:,partial:,partial:а,partial:а,partial:а,different_unclear

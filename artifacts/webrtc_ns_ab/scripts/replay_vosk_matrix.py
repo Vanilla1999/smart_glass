@@ -43,7 +43,7 @@ def load_audio(path: Path) -> bytes:
         return wav.readframes(wav.getnframes())
 
 
-def replay(vosk, model, path: Path, variant: str, mode: str, events) -> dict[str, object]:
+def replay(vosk, model, path: Path, variant: str, mode: str, events, chunk_bytes: int) -> dict[str, object]:
     grammar = json.dumps(MENU_GRAMMAR, ensure_ascii=False) if mode == "command_menu" else None
     recognizer = (
         vosk.KaldiRecognizer(model, SAMPLE_RATE, grammar)
@@ -57,7 +57,7 @@ def replay(vosk, model, path: Path, variant: str, mode: str, events) -> dict[str
     empty_final_count = 0
     first_partial_ms = None
 
-    for offset in range(0, len(audio), CHUNK_BYTES):
+    for offset in range(0, len(audio), chunk_bytes):
         timestamp_ms = offset * 1000 / (SAMPLE_RATE * 2)
         chunk = audio[offset : offset + CHUNK_BYTES]
         if recognizer.AcceptWaveform(chunk):
@@ -80,6 +80,7 @@ def replay(vosk, model, path: Path, variant: str, mode: str, events) -> dict[str
                     "file": path.name,
                     "variant": variant,
                     "mode": mode,
+                    "chunk_bytes": chunk_bytes,
                     "audio_timestamp_ms": timestamp_ms,
                     "event": event,
                     "result": result,
@@ -99,6 +100,7 @@ def replay(vosk, model, path: Path, variant: str, mode: str, events) -> dict[str
                 "file": path.name,
                 "variant": variant,
                 "mode": mode,
+                "chunk_bytes": chunk_bytes,
                 "audio_timestamp_ms": len(audio) * 1000 / (SAMPLE_RATE * 2),
                 "event": "final",
                 "result": result,
@@ -113,6 +115,7 @@ def replay(vosk, model, path: Path, variant: str, mode: str, events) -> dict[str
         "file": path.name,
         "variant": variant,
         "mode": mode,
+        "chunk_bytes": chunk_bytes,
         "duration_ms": len(audio) * 1000 / (SAMPLE_RATE * 2),
         "endpoint_count": endpoint_count,
         "nonempty_final_count": nonempty_final_count,
@@ -132,7 +135,15 @@ def main() -> None:
         type=Path,
         help="Optional directory containing the vosk Python package.",
     )
+    parser.add_argument(
+        "--chunk-bytes",
+        type=int,
+        default=CHUNK_BYTES,
+        help="PCM16 chunk size for replay; default is 1280 bytes (40 ms).",
+    )
     args = parser.parse_args()
+    if args.chunk_bytes <= 0 or args.chunk_bytes % 2:
+        raise ValueError("--chunk-bytes must be a positive even PCM16 byte count")
 
     if args.python_deps:
         sys.path.insert(0, str(args.python_deps))
@@ -151,7 +162,17 @@ def main() -> None:
                 if not source.is_file():
                     raise FileNotFoundError(source)
                 for mode in ("command_menu", "free_text"):
-                    rows.append(replay(vosk, model, source, variant, mode, events))
+                    rows.append(
+                        replay(
+                            vosk,
+                            model,
+                            source,
+                            variant,
+                            mode,
+                            events,
+                            args.chunk_bytes,
+                        )
+                    )
 
     summary_path = args.output_dir / "ns_recognition_summary.csv"
     with summary_path.open("w", newline="", encoding="utf-8") as handle:

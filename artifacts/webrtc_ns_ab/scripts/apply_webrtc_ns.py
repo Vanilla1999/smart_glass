@@ -72,9 +72,9 @@ def load_ap_factory() -> Callable[[int], object]:
     def create(level: int) -> object:
         # Only NS is enabled. AEC/AGC/VAD remain disabled.
         ap = AudioProcessingModule(
-            enable_aec=False,
+            aec_type=0,
             enable_ns=True,
-            enable_agc=False,
+            agc_type=0,
             enable_vad=False,
         )
         ap.set_stream_format(SAMPLE_RATE, CHANNELS)

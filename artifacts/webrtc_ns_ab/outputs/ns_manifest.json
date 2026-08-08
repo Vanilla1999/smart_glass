@@ -1,0 +1,42 @@
+{
+  "sample_rate": 16000,
+  "channels": 1,
+  "sample_width_bytes": 2,
+  "frame_samples": 160,
+  "frame_bytes": 320,
+  "aec": false,
+  "agc": false,
+  "vad": false,
+  "levels": {
+    "low": 0,
+    "moderate": 1,
+    "high": 2,
+    "very_high": 3
+  },
+  "files": [
+    {
+      "recording": "1786194763609",
+      "source": "/home/viadmin/Документы/voice_capture_2026-08-08/ssp_mono_1786194763609.wav",
+      "source_frames": 2899968,
+      "outputs": {
+        "baseline": "baseline_ssp_1786194763609.wav",
+        "low": "webrtc_ns_low_1786194763609.wav",
+        "moderate": "webrtc_ns_moderate_1786194763609.wav",
+        "high": "webrtc_ns_high_1786194763609.wav",
+        "very_high": "webrtc_ns_very_high_1786194763609.wav"
+      }
+    },
+    {
+      "recording": "1786194978795",
+      "source": "/home/viadmin/Документы/voice_capture_2026-08-08/ssp_mono_1786194978795.wav",
+      "source_frames": 2785280,
+      "outputs": {
+        "baseline": "baseline_ssp_1786194978795.wav",
+        "low": "webrtc_ns_low_1786194978795.wav",
+        "moderate": "webrtc_ns_moderate_1786194978795.wav",
+        "high": "webrtc_ns_high_1786194978795.wav",
+        "very_high": "webrtc_ns_very_high_1786194978795.wav"
+      }
+    }
+  ]
+}
