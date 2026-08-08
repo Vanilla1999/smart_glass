@@ -65,7 +65,26 @@ class NativePcmPacket {
 
 typedef NativePcmConsumer = FutureOr<bool> Function(NativePcmPacket packet);
 
-class NativeVoiceCapture {
+/// Boundary used by the Dart voice pipeline to receive native PCM packets.
+///
+/// Production uses [NativeVoiceCapture]. Tests can replay recorded packets
+/// without a UAC4 device while preserving the AudioStreamService contract.
+abstract interface class NativeVoiceCapturePort {
+  Future<Map<String, Object?>> getDiagnostics();
+  Future<bool> requestPermission();
+  Future<int> start({
+    required NativeVoiceOwner owner,
+    required NativePcmConsumer onPcm,
+    bool recordDiagnosticWav = false,
+    int? diagnosticCaptureTimestamp,
+  });
+  Future<void> stop({
+    required NativeVoiceOwner owner,
+    required int leaseId,
+  });
+}
+
+class NativeVoiceCapture implements NativeVoiceCapturePort {
   NativeVoiceCapture._() {
     _pcmChannel.setMessageHandler(_onPacket);
     _stateSubscription = _eventChannel.receiveBroadcastStream().listen(
@@ -118,6 +137,7 @@ class NativeVoiceCapture {
 
   bool isOwnedBy(NativeVoiceOwner owner) => _activeOwner == owner;
 
+  @override
   Future<Map<String, Object?>> getDiagnostics() async {
     final Map<Object?, Object?> result = await _methodChannel
             .invokeMapMethod<Object?, Object?>('getDiagnostics') ??
@@ -127,6 +147,7 @@ class NativeVoiceCapture {
     );
   }
 
+  @override
   Future<bool> requestPermission() async {
     final Map<Object?, Object?> capabilities = await _methodChannel
             .invokeMapMethod<Object?, Object?>('getCapabilities') ??
@@ -145,6 +166,7 @@ class NativeVoiceCapture {
         false;
   }
 
+  @override
   Future<int> start({
     required NativeVoiceOwner owner,
     required NativePcmConsumer onPcm,
@@ -228,6 +250,7 @@ class NativeVoiceCapture {
     return next;
   }
 
+  @override
   Future<void> stop({
     required NativeVoiceOwner owner,
     required int leaseId,

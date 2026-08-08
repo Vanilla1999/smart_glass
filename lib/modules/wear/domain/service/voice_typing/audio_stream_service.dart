@@ -19,13 +19,13 @@ class AudioStreamService {
 
   AudioStreamService({
     VoiceDeviceProfile? deviceProfile,
-    NativeVoiceCapture? nativeCapture,
+    NativeVoiceCapturePort? nativeCapture,
     this.recordContinuousWav = false,
   })  : _deviceProfile = deviceProfile ?? VoiceDeviceProfile.resolve(),
         _nativeCapture = nativeCapture ?? NativeVoiceCapture.instance;
 
   VoiceDeviceProfile _deviceProfile;
-  final NativeVoiceCapture _nativeCapture;
+  final NativeVoiceCapturePort _nativeCapture;
   final bool recordContinuousWav;
   final StreamController<double> _audioLevelController =
       StreamController<double>.broadcast();
