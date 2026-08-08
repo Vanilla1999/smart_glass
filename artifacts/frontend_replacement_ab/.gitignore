@@ -1,0 +1,7 @@
+/.venv/
+/model/
+/outputs/
+/labeling/clips/
+/labeling/manual_labels.json
+*.pyc
+__pycache__/
