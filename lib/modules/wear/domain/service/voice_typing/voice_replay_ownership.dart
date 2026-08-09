@@ -29,6 +29,7 @@ class VoiceReplayContext {
   const VoiceReplayContext({
     required this.captureEpoch,
     required this.segmentId,
+    this.speechTurnId = 0,
     required this.commandUtteranceId,
     required this.sourceScreen,
     required this.routeRevision,
@@ -39,6 +40,7 @@ class VoiceReplayContext {
 
   final int captureEpoch;
   final int segmentId;
+  final int speechTurnId;
   final int commandUtteranceId;
   final WearScreenId sourceScreen;
   final int routeRevision;
@@ -51,6 +53,7 @@ class VoiceReplayContext {
       other is VoiceReplayContext &&
       other.captureEpoch == captureEpoch &&
       other.segmentId == segmentId &&
+      other.speechTurnId == speechTurnId &&
       other.commandUtteranceId == commandUtteranceId &&
       other.sourceScreen == sourceScreen &&
       other.routeRevision == routeRevision &&
@@ -62,6 +65,7 @@ class VoiceReplayContext {
   int get hashCode => Object.hash(
         captureEpoch,
         segmentId,
+        speechTurnId,
         commandUtteranceId,
         sourceScreen,
         routeRevision,

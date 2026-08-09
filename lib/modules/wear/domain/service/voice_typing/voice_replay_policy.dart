@@ -15,6 +15,8 @@ class VoiceReplayPolicy {
     this.recoveryHeadroom = const Duration(milliseconds: 1250),
     this.maximumRecoveryBudget = const Duration(seconds: 5),
     this.commandYieldPollInterval = const Duration(milliseconds: 5),
+    this.operationTimeout = const Duration(seconds: 3),
+    this.recognizerRecoveryDelay = const Duration(milliseconds: 120),
     this.standaloneAmbiguousHintMaxAudio = const Duration(milliseconds: 1300),
     this.standaloneAmbiguousHintMaxContinuation =
         const Duration(milliseconds: 320),
@@ -25,6 +27,8 @@ class VoiceReplayPolicy {
   final Duration recoveryHeadroom;
   final Duration maximumRecoveryBudget;
   final Duration commandYieldPollInterval;
+  final Duration operationTimeout;
+  final Duration recognizerRecoveryDelay;
   final Duration standaloneAmbiguousHintMaxAudio;
   final Duration standaloneAmbiguousHintMaxContinuation;
 

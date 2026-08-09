@@ -209,6 +209,7 @@ class SpeechRecognitionService {
   int _latestActionableCommandUtteranceId = 0;
   int _admittedCommandUtteranceId = 1;
   int _latestAdmittedSegmentId = 0;
+  int _latestAdmittedSpeechTurnId = 0;
   final Map<int, int> _speechTurnByCommandUtterance = <int, int>{};
   ({
     int captureEpoch,
@@ -270,6 +271,7 @@ class SpeechRecognitionService {
   final BoundedPcmBuffer _utterancePcm = BoundedPcmBuffer(
     maxBytes: 80000, // 2.5 seconds of 16 kHz mono PCM16.
   );
+  Future<void> _freeTextRecognizerRecovery = Future<void>.value();
   Future<void> _freeTextRecognizerReady = Future<void>.value();
 
   vosk.Model? _model;
@@ -370,6 +372,7 @@ class SpeechRecognitionService {
   void _beginCaptureEpoch(int captureEpoch) {
     _speechSegmenter.begin(captureEpoch);
     _latestAdmittedSegmentId = 0;
+    _latestAdmittedSpeechTurnId = 0;
     _speechTurnByCommandUtterance.clear();
   }
 
@@ -1288,6 +1291,7 @@ class SpeechRecognitionService {
     bool admitted = false,
   }) {
     if (_commandRecognizer == null) return Future<void>.value();
+    _latestAdmittedSpeechTurnId = segment.speechTurnId;
     _speechTurnByCommandUtterance.putIfAbsent(
       commandUtteranceId,
       () => segment.speechTurnId,
@@ -2377,6 +2381,7 @@ class SpeechRecognitionService {
     return VoiceReplayContext(
       captureEpoch: captureEpoch,
       segmentId: segment.segmentId,
+      speechTurnId: segment.speechTurnId,
       commandUtteranceId: commandUtteranceId,
       sourceScreen: voiceContext.sourceScreen,
       routeRevision: voiceContext.routeRevision,
@@ -3069,7 +3074,7 @@ class SpeechRecognitionService {
       return true;
     }
     if (_replaysPreemptibleByNewSegment.contains(context) &&
-        _latestAdmittedSegmentId > context.segmentId) {
+        _latestAdmittedSpeechTurnId > context.speechTurnId) {
       _rejectReplay(
         context,
         VoiceReplayContextCancellation.newerSegmentStarted,
@@ -3179,7 +3184,7 @@ class SpeechRecognitionService {
   ) {
     final int remaining =
         _remainingReplayBudget(replayClock, replayBudget).inMilliseconds;
-    final int operationTimeout = _segmentCloseGuard.timeout.inMilliseconds;
+    final int operationTimeout = _replayPolicy.operationTimeout.inMilliseconds;
     final int bounded =
         remaining < operationTimeout ? remaining : operationTimeout;
     return Duration(milliseconds: bounded > 0 ? bounded : 0);
@@ -3189,42 +3194,73 @@ class SpeechRecognitionService {
     required VoiceRecognizer failedRecognizer,
     required Future<void>? pendingOperation,
     required int recognizerEpoch,
-  }) async {
+  }) {
     if (recognizerEpoch != _freeTextEpoch ||
         !identical(_freeTextRecognizer, failedRecognizer)) {
-      return;
+      return Future<void>.value();
     }
     _freeTextRecognizer = null;
-    final Future<void> safeToDispose = pendingOperation == null
-        ? Future<void>.value()
-        : pendingOperation.catchError((Object _, StackTrace __) {});
-    unawaited(safeToDispose.then((_) => failedRecognizer.dispose()).catchError(
+    final Future<void> recovery = _freeTextRecognizerRecovery
+        .catchError((Object _, StackTrace __) {})
+        .then((_) async {
+      final Future<void> safeToDispose = pendingOperation == null
+          ? Future<void>.value()
+          : pendingOperation.catchError((Object _, StackTrace __) {});
+      unawaited(
+          safeToDispose.then((_) => failedRecognizer.dispose()).catchError(
+        (Object error, StackTrace stackTrace) {
+          print(
+            '[VOICE_LIVE_FREE_TEXT] deferred recognizer cleanup failed: '
+            '$error\n$stackTrace',
+          );
+        },
+      ));
+      VoiceRecognizer? replacement;
+      Object? lastError;
+      StackTrace? lastStackTrace;
+      for (int attempt = 1; attempt <= 2; attempt++) {
+        if (recognizerEpoch != _freeTextEpoch || !_freeTextEnabled) return;
+        try {
+          replacement = await _createFreeTextRecognizer(
+            _replayPolicy.operationTimeout,
+          );
+          break;
+        } catch (error, stackTrace) {
+          lastError = error;
+          lastStackTrace = stackTrace;
+          print(
+            '[VOICE_FREE_TEXT] recognizer replacement attempt=$attempt failed: '
+            '$error\n$stackTrace',
+          );
+          if (attempt == 1) {
+            await Future<void>.delayed(
+              _replayPolicy.recognizerRecoveryDelay,
+            );
+          }
+        }
+      }
+      if (replacement == null) {
+        print(
+          '[VOICE_FREE_TEXT] recognizer recovery exhausted '
+          'error=$lastError\n$lastStackTrace',
+        );
+        return;
+      }
+      if (recognizerEpoch == _freeTextEpoch &&
+          _freeTextEnabled &&
+          _freeTextRecognizer == null) {
+        _freeTextRecognizer = replacement;
+      } else {
+        await replacement.dispose();
+      }
+    });
+    _freeTextRecognizerRecovery = recovery.catchError(
       (Object error, StackTrace stackTrace) {
         print(
-          '[VOICE_LIVE_FREE_TEXT] deferred recognizer cleanup failed: '
-          '$error\n$stackTrace',
-        );
+            '[VOICE_FREE_TEXT] serialized recovery failed: $error\n$stackTrace');
       },
-    ));
-    VoiceRecognizer? replacement;
-    try {
-      replacement = await _createFreeTextRecognizer(
-        _segmentCloseGuard.timeout,
-      );
-    } catch (error, stackTrace) {
-      print(
-        '[VOICE_FREE_TEXT] recognizer replacement failed: '
-        '$error\n$stackTrace',
-      );
-      return;
-    }
-    if (recognizerEpoch == _freeTextEpoch &&
-        _freeTextEnabled &&
-        _freeTextRecognizer == null) {
-      _freeTextRecognizer = replacement;
-    } else {
-      await replacement.dispose();
-    }
+    );
+    return recovery;
   }
 
   Future<VoiceRecognizer?> _createFreeTextRecognizerForReplay(
@@ -3232,6 +3268,8 @@ class SpeechRecognitionService {
     Duration timeout,
   ) async {
     if (recognizerEpoch != _freeTextEpoch || !_freeTextEnabled) return null;
+    await _freeTextRecognizerRecovery;
+    if (_freeTextRecognizer != null) return _freeTextRecognizer;
     final VoiceRecognizer replacement =
         await _createFreeTextRecognizer(timeout);
     if (recognizerEpoch == _freeTextEpoch &&

@@ -190,6 +190,7 @@ void main() {
     for (int index = 0; index < 25; index++) {
       endpoint = segmenter.add(_pcmFrame(33), 1);
     }
+    expect(segmenter.add(_pcmFrame(328), 1), isNull);
     final SpeechSegment second = segmenter.add(_pcmFrame(328), 1)!;
 
     expect(endpoint!.isEndpoint, isTrue);
@@ -227,8 +228,41 @@ void main() {
     final SpeechSegment first = segmenter.add(_pcmFrame(328), 1)!;
     segmenter.add(_pcmFrame(0), 1);
     segmenter.add(_pcmFrame(0), 1);
+    expect(segmenter.add(_pcmFrame(328), 1), isNull);
     final SpeechSegment next = segmenter.add(_pcmFrame(328), 1)!;
     expect(next.speechTurnId, isNot(first.speechTurnId));
+  });
+
+  test('one noisy frame after silence endpoint does not restart VAD', () {
+    final SpeechSegmenter segmenter = SpeechSegmenter(
+      sampleRate: 1000,
+      calibrationDuration: Duration.zero,
+      endpointSilence: const Duration(milliseconds: 40),
+      restartConfirmation: const Duration(milliseconds: 40),
+    );
+    segmenter.begin(1);
+    segmenter.add(_pcmFrame(328), 1);
+    segmenter.add(_pcmFrame(0), 1);
+    final SpeechSegment endpoint = segmenter.add(_pcmFrame(0), 1)!;
+
+    expect(endpoint.isEndpoint, isTrue);
+    expect(segmenter.add(_pcmFrame(328), 1), isNull);
+  });
+
+  test('confirmed speech after silence endpoint starts a new turn', () {
+    final SpeechSegmenter segmenter = SpeechSegmenter(
+      sampleRate: 1000,
+      calibrationDuration: Duration.zero,
+      endpointSilence: const Duration(milliseconds: 40),
+      restartConfirmation: const Duration(milliseconds: 40),
+    );
+    segmenter.begin(1);
+    final SpeechSegment first = segmenter.add(_pcmFrame(328), 1)!;
+    segmenter.add(_pcmFrame(0), 1);
+    segmenter.add(_pcmFrame(0), 1);
+    expect(segmenter.add(_pcmFrame(328), 1), isNull);
+    final SpeechSegment restarted = segmenter.add(_pcmFrame(328), 1)!;
+    expect(restarted.speechTurnId, isNot(first.speechTurnId));
   });
 }
 

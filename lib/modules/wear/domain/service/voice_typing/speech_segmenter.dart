@@ -55,6 +55,7 @@ class SpeechSegmenter {
     this.endpointSilence = const Duration(milliseconds: 500),
     this.maxSegmentDuration = const Duration(seconds: 4),
     this.maxDurationContinuation = const Duration(milliseconds: 200),
+    this.restartConfirmation = const Duration(milliseconds: 40),
     this.calibrationDuration = const Duration(milliseconds: 750),
     this.speechOnRms = 0.001,
     this.speechOffRms = 0.0007,
@@ -65,6 +66,7 @@ class SpeechSegmenter {
   final Duration endpointSilence;
   final Duration maxSegmentDuration;
   final Duration maxDurationContinuation;
+  final Duration restartConfirmation;
   final Duration calibrationDuration;
   double speechOnRms;
   double speechOffRms;
@@ -77,6 +79,8 @@ class SpeechSegmenter {
   int? _activeSpeechTurnId;
   int? _pendingContinuationSpeechTurnId;
   int _pendingContinuationSilentSamples = 0;
+  bool _confirmRestart = false;
+  int _restartSpeakingSamples = 0;
   int _silentSamples = 0;
   int _segmentSamples = 0;
   int _calibrationSamples = 0;
@@ -114,6 +118,8 @@ class SpeechSegmenter {
     _activeSpeechTurnId = null;
     _pendingContinuationSpeechTurnId = null;
     _pendingContinuationSilentSamples = 0;
+    _confirmRestart = false;
+    _restartSpeakingSamples = 0;
     _silentSamples = 0;
     _segmentSamples = 0;
     _calibrationSamples = 0;
@@ -172,6 +178,7 @@ class SpeechSegmenter {
     if (!speaking) {
       final int? segmentId = _activeSegmentId;
       if (segmentId == null) {
+        _restartSpeakingSamples = 0;
         if (_pendingContinuationSpeechTurnId != null) {
           _pendingContinuationSilentSamples += sampleCount;
           if (_pendingContinuationSilentSamples >=
@@ -199,10 +206,13 @@ class SpeechSegmenter {
         if (endpointReason == AcousticEndpointReason.maxDuration) {
           _pendingContinuationSpeechTurnId = speechTurnId;
           _pendingContinuationSilentSamples = 0;
+          _confirmRestart = false;
         } else {
           _pendingContinuationSpeechTurnId = null;
           _pendingContinuationSilentSamples = 0;
+          _confirmRestart = true;
         }
+        _restartSpeakingSamples = 0;
         _silentSamples = 0;
         _segmentSamples = 0;
       }
@@ -218,6 +228,14 @@ class SpeechSegmenter {
     }
 
     _silentSamples = 0;
+    if (_activeSegmentId == null && _confirmRestart) {
+      _restartSpeakingSamples += sampleCount;
+      if (_restartSpeakingSamples < _durationToSamples(restartConfirmation)) {
+        return null;
+      }
+      _confirmRestart = false;
+      _restartSpeakingSamples = 0;
+    }
     final bool started = _activeSegmentId == null;
     final int segmentId = _activeSegmentId ??= ++_nextSegmentId;
     final int speechTurnId = _activeSpeechTurnId ??=
@@ -251,6 +269,8 @@ class SpeechSegmenter {
       _activeSpeechTurnId = null;
       _pendingContinuationSpeechTurnId = null;
       _pendingContinuationSilentSamples = 0;
+      _confirmRestart = false;
+      _restartSpeakingSamples = 0;
       _silentSamples = 0;
       _segmentSamples = 0;
     }

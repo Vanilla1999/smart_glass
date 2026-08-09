@@ -249,6 +249,7 @@ void main() {
     await service.processAudioChunk(_pcmFrame(0));
     await switching;
     await service.processAudioChunk(newFrame);
+    await service.processAudioChunk(newFrame);
 
     expect(
         command.accepted, containsAllInOrder(<Uint8List>[oldFrame, newFrame]));
@@ -517,7 +518,7 @@ void main() {
     await service.setFreeTextEnabled(true);
 
     await service.processAudioChunk(_pcmFrame(1000));
-    await service.waitForProcessing().timeout(const Duration(seconds: 1));
+    await service.waitForProcessing().timeout(const Duration(seconds: 4));
 
     expect(freeText.finalCalls, 0);
     expect(
@@ -603,6 +604,7 @@ void main() {
     expect(service.commandUtteranceId, 2);
 
     await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(1000));
     await service.waitForProcessing();
 
     expect(actions, <WearVoiceCommand>[
@@ -671,6 +673,7 @@ void main() {
     expect(command.accepted, hasLength(3));
     resetBlock.complete();
     await Future.wait<void>(<Future<void>>[boundary, nextSegment]);
+    await service.processAudioChunk(_pcmFrame(1000));
     expect(command.accepted, hasLength(4));
     expect(service.commandUtteranceId, 2);
   });
@@ -704,6 +707,7 @@ void main() {
     await service.processAudioChunk(_pcmFrame(1000));
     await service.processAudioChunk(_pcmFrame(0));
     await service.processAudioChunk(_pcmFrame(0));
+    await service.processAudioChunk(_pcmFrame(1000));
     await service.processAudioChunk(_pcmFrame(1000));
 
     expect(failed.finalCalls, 1);
@@ -792,6 +796,7 @@ void main() {
     await service.processAudioChunk(_pcmFrame(1000));
     await service.processAudioChunk(_pcmFrame(0));
     await service.processAudioChunk(_pcmFrame(0));
+    await service.processAudioChunk(_pcmFrame(1000));
     await service.processAudioChunk(_pcmFrame(1000));
     await Future<void>.delayed(Duration.zero);
 
@@ -2418,6 +2423,7 @@ void main() {
         SpeechSegment(
           captureEpoch: 1,
           segmentId: 1,
+          speechTurnId: 1,
           lastChunkId: 1,
           isEndpoint: false,
           started: true,
@@ -2425,6 +2431,7 @@ void main() {
         SpeechSegment(
           captureEpoch: 1,
           segmentId: 2,
+          speechTurnId: 2,
           lastChunkId: 2,
           isEndpoint: false,
           started: true,
