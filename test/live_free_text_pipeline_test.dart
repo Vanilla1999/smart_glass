@@ -965,7 +965,7 @@ void main() {
 
     expect(service.routeRevision, routeRevision + 1);
     expect(operations, contains('grammar'));
-    expect(operations, isNot(contains('next-command-pcm')));
+    expect(operations, <String>['grammar']);
 
     blockedFinal.complete(_json(text: 'жёлтый'));
     await Future.wait<void>(<Future<void>>[
@@ -975,8 +975,7 @@ void main() {
     ]);
     await service.waitForProcessing();
 
-    expect(operations, contains('grammar'));
-    expect(operations, isNot(contains('next-command-pcm')));
+    expect(operations, <String>['grammar', 'next-command-pcm']);
     expect(service.sourceScreen, WearScreenId.help);
   });
 

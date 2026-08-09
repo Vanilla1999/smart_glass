@@ -117,7 +117,7 @@ class VoiceHintGenerator {
       } else {
         hints[item.id] = VoiceHint(
           itemId: item.id,
-          phrase: selected.normalized,
+          phrase: selected.grammarPhrase,
           ranges: <VoiceHintRange>[
             VoiceHintRange(
               start: selected.start,
@@ -161,6 +161,7 @@ class VoiceHintGenerator {
         .map((match) {
           final String value = match.group(0)!;
           return _LabelToken(
+            grammarPhrase: value.toLowerCase(),
             normalized: VoiceListMatcher.normalize(value),
             start: match.start,
             end: match.end,
@@ -175,11 +176,13 @@ class VoiceHintGenerator {
 
 class _LabelToken {
   const _LabelToken({
+    required this.grammarPhrase,
     required this.normalized,
     required this.start,
     required this.end,
   });
 
+  final String grammarPhrase;
   final String normalized;
   final int start;
   final int end;

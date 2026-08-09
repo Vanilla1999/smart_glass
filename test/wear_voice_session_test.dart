@@ -162,6 +162,42 @@ void main() {
     expect(speech.freeTextValues, <bool>[false]);
   });
 
+  test('concurrent identical configurations share one grammar switch',
+      () async {
+    final _ConfigurationSpeechRecognitionService speech =
+        _ConfigurationSpeechRecognitionService();
+    final WearVoiceSession session = WearVoiceSession(
+      speechRecognitionService: speech,
+      actionCatalog: VoiceActionCatalog(),
+    );
+
+    final Future<void> first =
+        session.configureForScreen(WearScreenId.printerSelect);
+    await speech.firstSwitchStarted.future;
+    final Future<void> second =
+        session.configureForScreen(WearScreenId.printerSelect, force: true);
+    speech.releaseFirstSwitch.complete();
+    await Future.wait(<Future<void>>[first, second]);
+
+    expect(speech.switchedScreens, <WearScreenId>[WearScreenId.printerSelect]);
+    expect(speech.freeTextValues, <bool>[true]);
+  });
+
+  test('forced configuration skips an already applied signature', () async {
+    final _ConfigurationSpeechRecognitionService speech =
+        _ConfigurationSpeechRecognitionService(blockFirstSwitch: false);
+    final WearVoiceSession session = WearVoiceSession(
+      speechRecognitionService: speech,
+      actionCatalog: VoiceActionCatalog(),
+    );
+
+    await session.configureForScreen(WearScreenId.printerSelect);
+    await session.configureForScreen(WearScreenId.printerSelect, force: true);
+
+    expect(speech.switchedScreens, <WearScreenId>[WearScreenId.printerSelect]);
+    expect(speech.freeTextValues, <bool>[true]);
+  });
+
   test('returning to a screen supersedes an unfinished configuration',
       () async {
     final _ConfigurationSpeechRecognitionService speech =

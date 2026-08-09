@@ -1649,8 +1649,6 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       expect(routerFlow.state.screen, WearScreenId.menu);
 
       speech.emitCommandPartial('вниз');
-      speech.emitCommandPartial('вниз');
-      await tester.pump(const Duration(milliseconds: 201));
       await tester.pumpAndSettle();
 
       expect(routerFlow.state.menuFocusedIndex, 1);
@@ -1660,6 +1658,58 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       await tester.pumpAndSettle();
 
       expect(routerFlow.state.menuFocusedIndex, 1);
+    });
+
+    testWearWidget('stable list timer is not restarted by equal partials',
+        (WidgetTester tester) async {
+      final _FakeSpeechRecognitionService speech =
+          _FakeSpeechRecognitionService(WearScreenId.availabilityInteraction);
+      final WearVoiceControlService voiceControl = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => WearScreenId.availabilityInteraction,
+        clock: () => 1000,
+      );
+      addTearDown(voiceControl.dispose);
+      addTearDown(speech.dispose);
+      final List<WearVoiceCommand> commands = <WearVoiceCommand>[];
+      final StreamSubscription<WearVoiceCommand> subscription =
+          voiceControl.commandStream.listen(commands.add);
+      addTearDown(subscription.cancel);
+
+      speech.emitCommandPartial('список');
+      await tester.pump(const Duration(milliseconds: 100));
+      speech.emitCommandPartial('список');
+      await tester.pump(const Duration(milliseconds: 201));
+
+      expect(commands, <WearVoiceCommand>[WearVoiceCommand.openList]);
+
+      speech.emitCommandResult('список');
+      await tester.pump();
+      expect(commands, <WearVoiceCommand>[WearVoiceCommand.openList]);
+    });
+
+    testWearWidget('new endpoint-only partial cancels stable list candidate',
+        (WidgetTester tester) async {
+      final _FakeSpeechRecognitionService speech =
+          _FakeSpeechRecognitionService(WearScreenId.availabilityInteraction);
+      final WearVoiceControlService voiceControl = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => WearScreenId.availabilityInteraction,
+        clock: () => 1000,
+      );
+      addTearDown(voiceControl.dispose);
+      addTearDown(speech.dispose);
+      final List<WearVoiceCommand> commands = <WearVoiceCommand>[];
+      final StreamSubscription<WearVoiceCommand> subscription =
+          voiceControl.commandStream.listen(commands.add);
+      addTearDown(subscription.cancel);
+
+      speech.emitCommandPartial('список', utteranceId: 2);
+      await tester.pump(const Duration(milliseconds: 100));
+      speech.emitCommandPartial('назад', utteranceId: 2);
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(commands, isEmpty);
     });
 
     testWearWidget('injected resume recovery receives lifecycle reason',

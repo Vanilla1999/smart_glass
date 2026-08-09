@@ -94,7 +94,7 @@ class WearPrinterSelectNotifier extends StateNotifier<WearPrinterSelectState> {
           phase: WearPrinterSelectPhase.idle,
           printers: const <WearPrinter>[
             WearPrinter(id: 'mock-white-1', name: 'MOCK Белый 1'),
-            WearPrinter(id: 'mock-yellow-1', name: 'MOCK Желтый 1'),
+            WearPrinter(id: 'mock-yellow-1', name: 'MOCK Жёлтый 1'),
             WearPrinter(id: 'mock-mobile-2', name: 'MOCK Мобильный 2'),
           ],
         );

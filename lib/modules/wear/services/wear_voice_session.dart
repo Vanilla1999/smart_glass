@@ -59,6 +59,10 @@ class WearVoiceSession {
   VoiceDeviceProfile? _requestedStartupProfile;
   WearScreenId? _configuredScreen;
   int _configurationGeneration = 0;
+  Future<void> _configurationOperation = Future<void>.value();
+  String? _appliedGrammarSignature;
+  String? _appliedConfigurationSignature;
+  String? _inFlightConfigurationSignature;
   String? _requestedProfileId;
   String? _fallbackReason;
   final VoiceCaptureRecoveryGate _zeroAudioRecovery =
@@ -156,7 +160,6 @@ class WearVoiceSession {
     final Future<void> next = (() async {
       if (generation != _configurationGeneration) return;
       if (!force && _configuredScreen == screen) return;
-      _configuredScreen = null;
       final VoiceActionCatalog catalog =
           _actionCatalog ?? WearDependencies.I.voiceActionCatalog;
       final bool freeText = _usesFreeTextRecognition(screen);
@@ -171,39 +174,68 @@ class WearVoiceSession {
       final List<String> grammar = <String>{
         ...catalog.grammarFor(screen),
         ...dynamicPhrases,
-      }.toList(growable: false);
-      print(
-        '[WearVoiceSession] configureForScreen screen=$screen '
-        'mode=${freeText ? 'freeText' : 'grammar'}',
-      );
-      try {
-        await _speech.switchCommandGrammar(
-          screen: screen,
-          grammar: grammar,
+      }.toList(growable: false)
+        ..sort();
+      final String grammarSignature =
+          '${screen.name}\u0000${grammar.join('\u0000')}';
+      final String configurationSignature =
+          '$grammarSignature\u0000freeText=$freeText';
+      final Future<void> previous = _configurationOperation;
+      final Future<void> grammarOperation = previous.then((_) async {
+        if (generation != _configurationGeneration) return;
+        _configuredScreen = null;
+        print(
+          '[WearVoiceSession] configureForScreen screen=$screen '
+          'mode=${freeText ? 'freeText' : 'grammar'}',
         );
-      } catch (_) {
-        if (generation != _configurationGeneration) rethrow;
-        if (_shouldListen) {
-          _emit(VoicePhase.reconnecting, reason: 'grammar_switch_retry');
-        }
-        await _delay(const Duration(milliseconds: 100));
-        try {
-          await _speech.switchCommandGrammar(
-            screen: screen,
-            grammar: grammar,
-          );
-        } catch (error) {
-          if (_shouldListen) {
-            _markUnavailable(
-              reason: 'grammar_switch_failed',
-              error: error,
+        if (_appliedGrammarSignature != grammarSignature) {
+          try {
+            await _speech.switchCommandGrammar(
+              screen: screen,
+              grammar: grammar,
             );
+            _appliedGrammarSignature = grammarSignature;
+          } catch (_) {
+            if (generation != _configurationGeneration) rethrow;
+            if (_shouldListen) {
+              _emit(VoicePhase.reconnecting, reason: 'grammar_switch_retry');
+            }
+            await _delay(const Duration(milliseconds: 100));
+            try {
+              await _speech.switchCommandGrammar(
+                screen: screen,
+                grammar: grammar,
+              );
+              _appliedGrammarSignature = grammarSignature;
+            } catch (error) {
+              if (_shouldListen) {
+                _markUnavailable(
+                  reason: 'grammar_switch_failed',
+                  error: error,
+                );
+              }
+              rethrow;
+            }
           }
-          rethrow;
         }
-      }
+      });
+      _configurationOperation = grammarOperation.catchError((Object _) {});
+      await grammarOperation;
       if (generation != _configurationGeneration) return;
-      await _speech.setFreeTextEnabled(freeText);
+      if (_appliedConfigurationSignature != configurationSignature ||
+          _inFlightConfigurationSignature != null &&
+              _inFlightConfigurationSignature != configurationSignature) {
+        _inFlightConfigurationSignature = configurationSignature;
+        await _speech.setFreeTextEnabled(freeText);
+        if (generation != _configurationGeneration) {
+          if (_inFlightConfigurationSignature == configurationSignature) {
+            _inFlightConfigurationSignature = null;
+          }
+          return;
+        }
+        _appliedConfigurationSignature = configurationSignature;
+        _inFlightConfigurationSignature = null;
+      }
       if (generation == _configurationGeneration) _configuredScreen = screen;
     })();
     unawaited(next.catchError(

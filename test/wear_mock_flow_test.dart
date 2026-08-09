@@ -70,7 +70,7 @@ void main() {
       notifier.state.printers.map((WearPrinter printer) => printer.name),
       containsAll(<String>[
         'MOCK Белый 1',
-        'MOCK Желтый 1',
+        'MOCK Жёлтый 1',
         'MOCK Мобильный 2',
       ]),
     );

@@ -111,7 +111,7 @@ class WearPrinterRuntime implements WearBackgroundRuntime {
       final List<AvailablePrinter> available = WearMockConfig.isEnabled
           ? <AvailablePrinter>[
               AvailablePrinter(number: 'mock-white-1', name: 'MOCK Белый 1'),
-              AvailablePrinter(number: 'mock-yellow-1', name: 'MOCK Желтый 1'),
+              AvailablePrinter(number: 'mock-yellow-1', name: 'MOCK Жёлтый 1'),
               AvailablePrinter(
                   number: 'mock-mobile-2', name: 'MOCK Мобильный 2'),
             ]

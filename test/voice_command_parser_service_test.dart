@@ -16,12 +16,18 @@ void main() {
       expect(grammar, isNot(contains('фото')));
     });
 
-    test('T01 only up and down use production partial activation', () {
+    test('T01 production partial activation is explicitly allowlisted', () {
       for (final VoiceActionEntry action in catalog.actions) {
         if (<WearVoiceCommand>{
           WearVoiceCommand.up,
           WearVoiceCommand.down,
         }.contains(action.command)) {
+          expect(
+            action.activationPolicy,
+            VoiceActivationPolicy.immediateExactPartial,
+            reason: '${action.command} must execute from an exact partial',
+          );
+        } else if (action.command == WearVoiceCommand.openList) {
           expect(
             action.activationPolicy,
             VoiceActivationPolicy.stableExactPartial,
@@ -34,8 +40,6 @@ void main() {
             reason: '${action.command} must wait for an endpoint',
           );
         }
-        expect(action.activationPolicy,
-            isNot(VoiceActivationPolicy.immediateExactPartial));
       }
     });
 

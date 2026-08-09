@@ -100,6 +100,17 @@ void main() {
     );
   });
 
+  test('preserves yo in the phrase passed to the Vosk grammar', () {
+    final VoiceHintSet hints = VoiceHintGenerator.generate(_snapshot(
+      <VoiceDynamicItem>[
+        const VoiceDynamicItem(id: 'yellow', label: 'Жёлтый принтер'),
+      ],
+    ));
+
+    expect(hints.hintsByItemId['yellow']?.phrase, 'жёлтый');
+    expect(hints.advertisedPhrases, <String>{'жёлтый'});
+  });
+
   test('renders the same leading hint for duplicate labels', () {
     final VoiceHintSet hints = VoiceHintGenerator.generate(_snapshot(
       <VoiceDynamicItem>[

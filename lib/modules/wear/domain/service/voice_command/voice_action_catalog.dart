@@ -249,6 +249,7 @@ class VoiceActionCatalog {
     const Set<WearVoiceCommand> partialActivationAllowlist = <WearVoiceCommand>{
       WearVoiceCommand.up,
       WearVoiceCommand.down,
+      WearVoiceCommand.openList,
     };
     const Set<String> unsafeGlobalAliases = <String>{
       'не',
@@ -310,11 +311,11 @@ class VoiceActionCatalog {
       .trim();
 
   static final List<VoiceActionEntry> _defaultActions = <VoiceActionEntry>[
-    _action(
-        WearVoiceCommand.up, 'вверх', VoiceActivationPolicy.stableExactPartial,
+    _action(WearVoiceCommand.up, 'вверх',
+        VoiceActivationPolicy.immediateExactPartial,
         screens: _selectableScreens, aliases: <String>{'вверх'}),
-    _action(
-        WearVoiceCommand.down, 'вниз', VoiceActivationPolicy.stableExactPartial,
+    _action(WearVoiceCommand.down, 'вниз',
+        VoiceActivationPolicy.immediateExactPartial,
         screens: _selectableScreens, aliases: <String>{'вниз'}),
     _action(
         WearVoiceCommand.select, 'выбрать', VoiceActivationPolicy.endpointOnly,
@@ -340,7 +341,7 @@ class VoiceActionCatalog {
         screens: <WearScreenId>{WearScreenId.menu},
         aliases: <String>{'настройки'}),
     _action(WearVoiceCommand.openList, 'список товаров',
-        VoiceActivationPolicy.endpointOnly,
+        VoiceActivationPolicy.stableExactPartial,
         screens: <WearScreenId>{WearScreenId.availabilityInteraction},
         phrases: <String>{'список', 'список товаров'},
         aliases: <String>{'список'}),

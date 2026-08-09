@@ -101,13 +101,14 @@ class WearVoiceControlService {
   final Map<String, int> _segmentStartedAt = <String, int>{};
   final Map<String, Timer> _stabilityTimers = <String, Timer>{};
   final Map<String, int> _latestPartialRevisions = <String, int>{};
+  final Map<String, String> _stableCandidateTexts = <String, String>{};
   final Map<String, _PreviewStabilityState> _previewStates =
       <String, _PreviewStabilityState>{};
   Timer? _recognitionPreviewTimeout;
   bool _recognitionDelayVisible = false;
   _RecognitionDelayContext? _recognitionDelayContext;
   static const Duration _stableCommandPartialDelay =
-      Duration(milliseconds: 200);
+      Duration(milliseconds: 300);
   static const Duration _stablePreviewDelay = Duration(milliseconds: 150);
   static const Duration _recognitionPreviewDuration = Duration(seconds: 3);
 
@@ -145,9 +146,7 @@ class WearVoiceControlService {
         result.dynamicItemId == null) {
       _cancelPendingPreview(result);
     }
-    if (outcome?.ignoredEndpointOnly ?? false) return;
     if (result.kind == RecognitionKind.partial) {
-      _stabilityTimers.remove(timerKey)?.cancel();
       _latestPartialRevisions[timerKey] = result.partialRevision;
       while (_latestPartialRevisions.length > 128) {
         _latestPartialRevisions.remove(_latestPartialRevisions.keys.first);
@@ -155,15 +154,29 @@ class WearVoiceControlService {
     } else {
       _cancelUtteranceStabilityTimers(result);
     }
-    if (outcome == null) return;
+    if (outcome == null) {
+      if (result.kind == RecognitionKind.partial) {
+        _cancelCommandStabilityTimer(timerKey);
+      }
+      return;
+    }
+    if (outcome.ignoredEndpointOnly) {
+      _cancelCommandStabilityTimer(timerKey);
+      return;
+    }
     if (outcome.stableCandidate
         case final SegmentedRecognitionResult candidate) {
       final String key = timerKey;
-      _stabilityTimers.remove(key)?.cancel();
-      final int expectedPartialRevision = candidate.partialRevision;
+      final String candidateText = VoiceActionCatalog.normalize(candidate.text);
+      if (_stableCandidateTexts[key] == candidateText &&
+          _stabilityTimers.containsKey(key)) {
+        return;
+      }
+      _cancelCommandStabilityTimer(key, clearPartialRevision: false);
+      _stableCandidateTexts[key] = candidateText;
       _stabilityTimers[key] = _timerFactory(_stableCommandPartialDelay, () {
         _stabilityTimers.remove(key);
-        if (_latestPartialRevisions[key] != expectedPartialRevision) return;
+        if (_stableCandidateTexts.remove(key) != candidateText) return;
         final RecognitionArbitration? stable = _arbiter.claimStable(candidate);
         if (stable?.command case final WearVoiceCommand command) {
           _emitCommand(
@@ -174,6 +187,9 @@ class WearVoiceControlService {
         }
       });
       return;
+    }
+    if (result.kind == RecognitionKind.partial) {
+      _cancelCommandStabilityTimer(timerKey);
     }
     if (outcome.command case final WearVoiceCommand command) {
       _clearRecognitionDelay(result: result);
@@ -511,10 +527,20 @@ class WearVoiceControlService {
     for (final String key in keys) {
       _stabilityTimers.remove(key)?.cancel();
       _latestPartialRevisions.remove(key);
+      _stableCandidateTexts.remove(key);
     }
     final String previewKey = _previewKey(result);
     _stabilityTimers.remove('preview:$previewKey')?.cancel();
     _previewStates.remove(previewKey);
+  }
+
+  void _cancelCommandStabilityTimer(
+    String key, {
+    bool clearPartialRevision = true,
+  }) {
+    _stabilityTimers.remove(key)?.cancel();
+    _stableCandidateTexts.remove(key);
+    if (clearPartialRevision) _latestPartialRevisions.remove(key);
   }
 
   void _onRecognitionError(Object error, StackTrace stackTrace) {
@@ -530,6 +556,7 @@ class WearVoiceControlService {
     }
     _stabilityTimers.clear();
     _latestPartialRevisions.clear();
+    _stableCandidateTexts.clear();
     _previewStates.clear();
     _feedbackEligibleUtterances.clear();
     _recognitionPreviewTimeout?.cancel();
