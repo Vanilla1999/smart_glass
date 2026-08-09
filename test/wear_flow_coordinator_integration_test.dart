@@ -757,11 +757,15 @@ void main() {
       final Future<WearVoiceCommandEvent> emitted =
           voiceControl.commandEventStream.first;
       speech.emitCommandPartial('вниз');
+      speech.emitCommandPartial('вниз');
       final WearVoiceCommandEvent event = await emitted;
 
       expect(event.command, WearVoiceCommand.down);
       expect(event.captureEpoch, 1);
       expect(event.commandUtteranceId, 1);
+      expect(event.speechTurnId, 1);
+      expect(event.decoderGeneration, 1);
+      expect(event.traceId, '1:1:1');
       expect(event.sourceScreen, WearScreenId.menu);
       expect(event.routeRevision, 1);
       expect(event.grammarRevision, 1);
@@ -995,6 +999,8 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
         recognizedAtMillis: 1,
         asrMillis: 1,
         captureEpoch: 1,
+        speechTurnId: 1,
+        decoderGeneration: 1,
         commandUtteranceId: 1,
         sourceScreen: WearScreenId.help,
         routeRevision:
@@ -1061,29 +1067,44 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
 
       phrases.add(WearVoicePhraseEvent(
         phrase: 'молоко',
+        traceId: '1:1:1',
         captureEpoch: 1,
+        speechTurnId: 1,
+        decoderGeneration: 1,
         commandUtteranceId: 1,
         sourceScreen: WearScreenId.menu,
         routeRevision: speech.routeRevision + 1,
         grammarRevision: speech.grammarRevision,
+        freeTextEpoch: speech.freeTextEpoch,
+        listRevision: 0,
       ));
       await tester.pumpAndSettle();
       phrases.add(WearVoicePhraseEvent(
         phrase: 'яблоко',
+        traceId: '1:2:2',
         captureEpoch: 1,
+        speechTurnId: 2,
+        decoderGeneration: 2,
         commandUtteranceId: 2,
         sourceScreen: WearScreenId.menu,
         routeRevision: speech.routeRevision,
         grammarRevision: speech.grammarRevision + 1,
+        freeTextEpoch: speech.freeTextEpoch,
+        listRevision: 0,
       ));
       await tester.pumpAndSettle();
       phrases.add(WearVoicePhraseEvent(
         phrase: 'кефир',
+        traceId: '1:3:3',
         captureEpoch: 1,
+        speechTurnId: 3,
+        decoderGeneration: 3,
         commandUtteranceId: 3,
         sourceScreen: WearScreenId.help,
         routeRevision: speech.routeRevision,
         grammarRevision: speech.grammarRevision,
+        freeTextEpoch: speech.freeTextEpoch,
+        listRevision: 0,
       ));
       await tester.pumpAndSettle();
 
@@ -1118,6 +1139,8 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
         recognizedAtMillis: 1,
         asrMillis: 1,
         captureEpoch: speech.captureEpoch,
+        speechTurnId: 991,
+        decoderGeneration: 991,
         commandUtteranceId: 991,
         sourceScreen: WearScreenId.menu,
         routeRevision: speech.routeRevision,
@@ -1161,6 +1184,8 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
         recognizedAtMillis: 1,
         asrMillis: 1,
         captureEpoch: speech.captureEpoch + 1,
+        speechTurnId: 992,
+        decoderGeneration: 992,
         commandUtteranceId: 992,
         sourceScreen: WearScreenId.menu,
         routeRevision: speech.routeRevision,
@@ -1623,6 +1648,8 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       expect(routerFlow.state.screen, WearScreenId.menu);
 
       speech.emitCommandPartial('вниз');
+      speech.emitCommandPartial('вниз');
+      await tester.pump(const Duration(milliseconds: 201));
       await tester.pumpAndSettle();
 
       expect(routerFlow.state.menuFocusedIndex, 1);
@@ -1992,6 +2019,8 @@ Future<void> _expectStaleRevisionDropped(
     recognizedAtMillis: 1,
     asrMillis: 1,
     captureEpoch: speech.captureEpoch + captureEpochDelta,
+    speechTurnId: 1,
+    decoderGeneration: 1,
     commandUtteranceId: 1,
     sourceScreen: WearScreenId.menu,
     routeRevision: speech.routeRevision + routeRevisionDelta,
@@ -2277,12 +2306,14 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
       _segmentStartedController.add(const SpeechSegmentStarted(
         captureEpoch: 1,
         segmentId: 1,
+        speechTurnId: 1,
         startChunkId: 1,
       ));
     }
     _segmentedResultsController.add(SegmentedRecognitionResult(
       captureEpoch: 1,
       segmentId: 1,
+      speechTurnId: 1,
       lane: lane,
       kind: kind,
       text: text,

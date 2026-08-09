@@ -55,6 +55,7 @@ class WearVoiceSession {
       StreamController<String?>.broadcast();
   int _pendingReconnects = 0;
   int? _handledNativeTerminationRevision;
+  int? _cleanupCompleteRevision;
   VoiceDeviceProfile? _requestedStartupProfile;
   WearScreenId? _configuredScreen;
   int _configurationGeneration = 0;
@@ -86,6 +87,11 @@ class WearVoiceSession {
   }
 
   void handleNativeVoiceState(NativeVoiceStateEvent event) {
+    if (event.state == NativeVoiceCaptureState.cleanupComplete &&
+        event.errorCode == 'PCM_TIMEOUT') {
+      _cleanupCompleteRevision = event.revision;
+      return;
+    }
     final bool fatalState = event.state == NativeVoiceCaptureState.error ||
         event.state == NativeVoiceCaptureState.unsupportedFirmware ||
         event.state == NativeVoiceCaptureState.terminalAbandoned ||
@@ -104,30 +110,37 @@ class WearVoiceSession {
       return;
     }
     if (_handledNativeTerminationRevision == event.revision) return;
-    _handledNativeTerminationRevision = event.revision;
     final String code = event.errorCode ?? 'NATIVE_CAPTURE_FAILED';
+    final bool cleanupReady =
+        event.state == NativeVoiceCaptureState.terminalAbandoned ||
+            code != 'PCM_TIMEOUT' ||
+            _cleanupCompleteRevision == event.revision;
+    if (!cleanupReady) return;
+    _handledNativeTerminationRevision = event.revision;
     print(
       '[VOICE_NATIVE_TERMINATION] code=$code revision=${event.revision} '
       'leaseId=${event.leaseId} details=${event.errorDetails}',
     );
-    final bool terminal = code == 'UNSUPPORTED_FIRMWARE' ||
-        code == 'ACTIVATION_FAILED' ||
-        code == 'ACTIVATION_TIMEOUT' ||
-        code == 'SSP_INIT_FAILED' ||
-        code == 'SSP_RELEASE_FAILED' ||
-        code == 'TERMINAL_ABANDONED' ||
-        code == 'PCM_ACK_TIMEOUT' ||
-        code == 'INVALID_SSP_OUTPUT' ||
-        code == 'SSP_PROCESS_FAILED' ||
-        code == 'PCM_CONSUMER_BACKPRESSURE' ||
-        code == 'PCM_CONSUMER_FAILED' ||
-        code == 'UAC4_INIT_TIMEOUT' ||
-        code == 'UAC4_START_TIMEOUT' ||
-        code == 'UAC4_STOP_FAILED' ||
-        code == 'UAC4_STOP_TIMEOUT' ||
-        code == 'UAC4_DEINIT_FAILED' ||
-        code == 'UAC4_DEINIT_TIMEOUT';
-    final bool retry = !terminal && !_nativeRecoveryRetryUsed;
+    final bool terminal =
+        event.state == NativeVoiceCaptureState.terminalAbandoned ||
+            code == 'UNSUPPORTED_FIRMWARE' ||
+            code == 'ACTIVATION_FAILED' ||
+            code == 'ACTIVATION_TIMEOUT' ||
+            code == 'SSP_INIT_FAILED' ||
+            code == 'SSP_RELEASE_FAILED' ||
+            code == 'TERMINAL_ABANDONED' ||
+            code == 'PCM_ACK_TIMEOUT' ||
+            code == 'INVALID_SSP_OUTPUT' ||
+            code == 'SSP_PROCESS_FAILED' ||
+            code == 'PCM_CONSUMER_BACKPRESSURE' ||
+            code == 'PCM_CONSUMER_FAILED' ||
+            code == 'UAC4_INIT_TIMEOUT' ||
+            code == 'UAC4_START_TIMEOUT' ||
+            code == 'UAC4_STOP_FAILED' ||
+            code == 'UAC4_STOP_TIMEOUT' ||
+            code == 'UAC4_DEINIT_FAILED' ||
+            code == 'UAC4_DEINIT_TIMEOUT';
+    final bool retry = cleanupReady && !terminal && !_nativeRecoveryRetryUsed;
     if (retry) _nativeRecoveryRetryUsed = true;
     _markUnavailable(
       reason: 'native_$code',

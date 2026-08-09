@@ -173,6 +173,62 @@ class PcmStreamingGate(private val requiredPackets: Int = 3) {
     fun reset() { acceptedPackets = 0 }
 }
 
+enum class CleanupOutcome { SUCCEEDED, TOLERATED, FAILED, SKIPPED }
+
+data class CaptureCleanupResult(
+    val rootCode: String,
+    val stop: CleanupOutcome,
+    val stopVendorResult: Int?,
+    val deinit: CleanupOutcome,
+    val unbind: CleanupOutcome,
+) {
+    val completed: Boolean
+        get() = stop != CleanupOutcome.FAILED &&
+            deinit != CleanupOutcome.FAILED &&
+            unbind != CleanupOutcome.FAILED
+
+    fun details(): String =
+        "root=$rootCode stop=${stop.name.lowercase()} stopVendorResult=$stopVendorResult " +
+            "deinit=${deinit.name.lowercase()} unbind=${unbind.name.lowercase()}"
+}
+
+object Uac4CleanupPolicy {
+    fun stopOutcome(rootCode: String, vendorResult: Int?): CleanupOutcome = when {
+        vendorResult == null -> CleanupOutcome.SKIPPED
+        vendorResult == 0 -> CleanupOutcome.SUCCEEDED
+        rootCode == "PCM_TIMEOUT" && vendorResult == -5 -> CleanupOutcome.TOLERATED
+        else -> CleanupOutcome.FAILED
+    }
+}
+
+class Uac4InitRecoveryPolicy(
+    private val maxRetries: Int = 2,
+    private val cooldownMillis: Long = 1_000L,
+) {
+    private var retries = 0
+    private var nextRetryAtMillis = 0L
+
+    fun retryDelayMillis(
+        rootCode: String?,
+        vendorResult: Int?,
+        nowMillis: Long,
+    ): Long? {
+        if (rootCode != "PCM_TIMEOUT" || vendorResult != -5 || retries >= maxRetries) return null
+        val delay = (nextRetryAtMillis - nowMillis).coerceAtLeast(0L)
+        retries++
+        nextRetryAtMillis = nowMillis + cooldownMillis * retries
+        return maxOf(delay, cooldownMillis * retries)
+    }
+
+    val exhausted: Boolean get() = retries >= maxRetries
+    val retryCount: Int get() = retries
+
+    fun reset() {
+        retries = 0
+        nextRetryAtMillis = 0L
+    }
+}
+
 object ProcessTerminalGate {
     private val terminalReason = AtomicReference<String?>(null)
 

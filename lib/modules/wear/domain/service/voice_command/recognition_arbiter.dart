@@ -54,6 +54,7 @@ class RecognitionArbiter {
   final int Function() _freeTextEpochProvider;
   final Set<String> _claimedUtterances = <String>{};
   final Map<String, String> _latestPartial = <String, String>{};
+  final Map<String, int> _matchingPartialObservations = <String, int>{};
   final Set<String> _loggedEndpointOnlyPartials = <String>{};
   int _currentCaptureEpoch = 0;
 
@@ -111,7 +112,11 @@ class RecognitionArbiter {
 
       final VoiceActionEntry? action =
           _catalog.resolvePartial(screen, normalized);
-      _latestPartial[key] = VoiceActionCatalog.normalize(result.text);
+      final String? previous = _latestPartial[key];
+      _latestPartial[key] = normalized;
+      _matchingPartialObservations[key] = previous == normalized
+          ? (_matchingPartialObservations[key] ?? 1) + 1
+          : 1;
       while (_latestPartial.length > 128) {
         _latestPartial.remove(_latestPartial.keys.first);
       }
@@ -141,7 +146,8 @@ class RecognitionArbiter {
     if (!_isCurrent(candidate)) return null;
     final String key = _key(candidate);
     if (_claimedUtterances.contains(key) ||
-        _latestPartial[key] != VoiceActionCatalog.normalize(candidate.text)) {
+        _latestPartial[key] != VoiceActionCatalog.normalize(candidate.text) ||
+        (_matchingPartialObservations[key] ?? 0) < 2) {
       return null;
     }
     final VoiceActionEntry? action = _catalog.resolvePartial(
@@ -166,6 +172,7 @@ class RecognitionArbiter {
   void resetRoute() {
     _claimedUtterances.clear();
     _latestPartial.clear();
+    _matchingPartialObservations.clear();
     _loggedEndpointOnlyPartials.clear();
   }
 
@@ -192,6 +199,7 @@ class RecognitionArbiter {
 
   void _claim(String key) {
     _latestPartial.remove(key);
+    _matchingPartialObservations.remove(key);
     _loggedEndpointOnlyPartials.removeWhere(
       (String logKey) => logKey.startsWith('$key:'),
     );

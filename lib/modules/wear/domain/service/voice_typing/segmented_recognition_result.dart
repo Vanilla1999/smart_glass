@@ -9,7 +9,7 @@ class SpeechSegmentStarted {
   const SpeechSegmentStarted({
     required this.captureEpoch,
     required this.segmentId,
-    this.speechTurnId = 0,
+    required this.speechTurnId,
     required this.startChunkId,
   });
 
@@ -48,6 +48,7 @@ class SegmentedRecognitionResult {
     required this.text,
     required this.lastChunkId,
     required this.parsedCommand,
+    required this.speechTurnId,
     this.commandUtteranceId = 0,
     this.routeRevision = 0,
     this.grammarRevision = 0,
@@ -68,6 +69,7 @@ class SegmentedRecognitionResult {
   final String text;
   final int lastChunkId;
   final WearVoiceCommand? parsedCommand;
+  final int speechTurnId;
   final int commandUtteranceId;
   final int routeRevision;
   final int grammarRevision;

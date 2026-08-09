@@ -190,4 +190,35 @@ class VoiceCapturePrimitivesTest {
         gate.reset()
         assertFalse(gate.isStreaming)
     }
+
+    @Test fun vendorMinusFiveIsToleratedOnlyForPcmTimeoutCleanup() {
+        assertEquals(CleanupOutcome.TOLERATED, Uac4CleanupPolicy.stopOutcome("PCM_TIMEOUT", -5))
+        assertEquals(CleanupOutcome.FAILED, Uac4CleanupPolicy.stopOutcome("USER_STOP", -5))
+        assertEquals(CleanupOutcome.FAILED, Uac4CleanupPolicy.stopOutcome("PCM_ACK_TIMEOUT", -5))
+    }
+
+    @Test fun cleanupDetailsPreserveRootAndEveryOutcome() {
+        val result = CaptureCleanupResult(
+            "PCM_TIMEOUT",
+            CleanupOutcome.TOLERATED,
+            -5,
+            CleanupOutcome.SUCCEEDED,
+            CleanupOutcome.SUCCEEDED,
+        )
+        assertTrue(result.completed)
+        assertEquals(
+            "root=PCM_TIMEOUT stop=tolerated stopVendorResult=-5 deinit=succeeded unbind=succeeded",
+            result.details(),
+        )
+    }
+
+    @Test fun initMinusFiveRecoveryIsCooledDownAndBounded() {
+        val policy = Uac4InitRecoveryPolicy(maxRetries = 2, cooldownMillis = 1_000)
+        assertNull(policy.retryDelayMillis(null, -5, 0))
+        assertNull(policy.retryDelayMillis("PCM_TIMEOUT", -4, 0))
+        assertEquals(1_000L, policy.retryDelayMillis("PCM_TIMEOUT", -5, 0))
+        assertEquals(2_000L, policy.retryDelayMillis("PCM_TIMEOUT", -5, 1_000))
+        assertNull(policy.retryDelayMillis("PCM_TIMEOUT", -5, 3_000))
+        assertTrue(policy.exhausted)
+    }
 }

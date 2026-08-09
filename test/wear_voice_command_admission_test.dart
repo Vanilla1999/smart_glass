@@ -155,6 +155,57 @@ void main() {
     expect(phraseCalls, 0);
   });
 
+  test('natural endpoints admit multiple utterances in one speech turn',
+      () async {
+    final WearVoiceEventAdmissionGate gate = WearVoiceEventAdmissionGate();
+    var calls = 0;
+
+    expect(
+      await gate.runCommand(
+        _commandEvent(commandUtteranceId: 7, speechTurnId: 1),
+        context: current,
+        action: () => calls++,
+      ),
+      WearVoiceAdmissionDecision.accepted,
+    );
+    expect(
+      await gate.runCommand(
+        _commandEvent(commandUtteranceId: 8, speechTurnId: 1),
+        context: current,
+        action: () => calls++,
+      ),
+      WearVoiceAdmissionDecision.accepted,
+    );
+    expect(calls, 2);
+  });
+
+  test('concurrent command and phrase race executes one action', () async {
+    final WearVoiceEventAdmissionGate gate = WearVoiceEventAdmissionGate();
+    final Completer<void> release = Completer<void>();
+    var commandCalls = 0;
+    var phraseCalls = 0;
+
+    final Future<WearVoiceAdmissionDecision> command = gate.runCommand(
+      _commandEvent(),
+      context: current,
+      action: () async {
+        commandCalls++;
+        await release.future;
+      },
+    );
+    await Future<void>.delayed(Duration.zero);
+    final WearVoiceAdmissionDecision phrase = await gate.runPhrase(
+      _phraseEvent(),
+      context: current,
+      action: () => phraseCalls++,
+    );
+    release.complete();
+
+    expect(await command, WearVoiceAdmissionDecision.accepted);
+    expect(phrase, WearVoiceAdmissionDecision.duplicate);
+    expect(commandCalls + phraseCalls, 1);
+  });
+
   test('failed application work can be retried', () async {
     final WearVoiceEventAdmissionGate gate = WearVoiceEventAdmissionGate();
     var attempts = 0;
@@ -199,7 +250,7 @@ void main() {
       );
     }
 
-    expect(gate.debugCompletedCount, 1);
+    expect(gate.debugCompletedCount, 2);
     expect(
       await gate.runCommand(
         _commandEvent(commandUtteranceId: 1),
@@ -242,6 +293,7 @@ WearVoiceCommandEvent _commandEvent({
   WearScreenId screen = WearScreenId.menu,
   int captureEpoch = 1,
   int commandUtteranceId = 7,
+  int? speechTurnId,
   int routeRevision = 2,
   int grammarRevision = 3,
 }) {
@@ -251,6 +303,8 @@ WearVoiceCommandEvent _commandEvent({
     recognizedAtMillis: 1,
     asrMillis: 1,
     captureEpoch: captureEpoch,
+    speechTurnId: speechTurnId ?? commandUtteranceId,
+    decoderGeneration: commandUtteranceId,
     commandUtteranceId: commandUtteranceId,
     sourceScreen: screen,
     routeRevision: routeRevision,
@@ -270,7 +324,10 @@ WearVoicePhraseEvent _phraseEvent({
 }) {
   return WearVoicePhraseEvent(
     phrase: phrase,
+    traceId: '$captureEpoch:$commandUtteranceId:$commandUtteranceId',
     captureEpoch: captureEpoch,
+    speechTurnId: commandUtteranceId,
+    decoderGeneration: commandUtteranceId,
     commandUtteranceId: commandUtteranceId,
     sourceScreen: screen,
     routeRevision: routeRevision,

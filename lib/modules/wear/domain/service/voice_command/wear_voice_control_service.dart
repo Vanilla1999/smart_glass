@@ -106,7 +106,9 @@ class WearVoiceControlService {
   Timer? _recognitionPreviewTimeout;
   bool _recognitionDelayVisible = false;
   _RecognitionDelayContext? _recognitionDelayContext;
-  static const Duration _stablePartialDelay = Duration(milliseconds: 150);
+  static const Duration _stableCommandPartialDelay =
+      Duration(milliseconds: 200);
+  static const Duration _stablePreviewDelay = Duration(milliseconds: 150);
   static const Duration _recognitionPreviewDuration = Duration(seconds: 3);
 
   Stream<WearVoiceCommand> get commandStream => _commandController.stream;
@@ -159,7 +161,7 @@ class WearVoiceControlService {
       final String key = timerKey;
       _stabilityTimers.remove(key)?.cancel();
       final int expectedPartialRevision = candidate.partialRevision;
-      _stabilityTimers[key] = _timerFactory(_stablePartialDelay, () {
+      _stabilityTimers[key] = _timerFactory(_stableCommandPartialDelay, () {
         _stabilityTimers.remove(key);
         if (_latestPartialRevisions[key] != expectedPartialRevision) return;
         final RecognitionArbitration? stable = _arbiter.claimStable(candidate);
@@ -233,10 +235,13 @@ class WearVoiceControlService {
               recognizedAtMillis);
       final WearVoiceCommandEvent event = WearVoiceCommandEvent(
         command: cmd,
-        traceId: '$segmentKey:$emitSeq',
+        traceId: '${result.captureEpoch}:${result.speechTurnId}:'
+            '${result.commandUtteranceId}',
         recognizedAtMillis: recognizedAtMillis,
         asrMillis: acousticSpeechToCommandMs,
         captureEpoch: result.captureEpoch,
+        speechTurnId: result.speechTurnId,
+        decoderGeneration: result.commandUtteranceId,
         commandUtteranceId: result.commandUtteranceId,
         sourceScreen: result.sourceScreen,
         routeRevision: result.routeRevision,
@@ -313,7 +318,11 @@ class WearVoiceControlService {
     if (!_phraseEventController.isClosed) {
       _phraseEventController.add(WearVoicePhraseEvent(
         phrase: trimmed,
+        traceId: '${result.captureEpoch}:${result.speechTurnId}:'
+            '${result.commandUtteranceId}',
         captureEpoch: result.captureEpoch,
+        speechTurnId: result.speechTurnId,
+        decoderGeneration: result.commandUtteranceId,
         commandUtteranceId: result.commandUtteranceId,
         sourceScreen: result.sourceScreen,
         routeRevision: result.routeRevision,
@@ -386,7 +395,7 @@ class WearVoiceControlService {
     final String timerKey = 'preview:$key';
     _stabilityTimers.remove(timerKey)?.cancel();
     final _PreviewStabilityState expectedState = state;
-    _stabilityTimers[timerKey] = _timerFactory(_stablePartialDelay, () {
+    _stabilityTimers[timerKey] = _timerFactory(_stablePreviewDelay, () {
       _stabilityTimers.remove(timerKey);
       if (!identical(_previewStates[key], expectedState) ||
           expectedState.emittedItemId != null ||

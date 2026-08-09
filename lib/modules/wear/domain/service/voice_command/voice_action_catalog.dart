@@ -310,11 +310,11 @@ class VoiceActionCatalog {
       .trim();
 
   static final List<VoiceActionEntry> _defaultActions = <VoiceActionEntry>[
-    _action(WearVoiceCommand.up, 'вверх',
-        VoiceActivationPolicy.immediateExactPartial,
+    _action(
+        WearVoiceCommand.up, 'вверх', VoiceActivationPolicy.stableExactPartial,
         screens: _selectableScreens, aliases: <String>{'вверх'}),
-    _action(WearVoiceCommand.down, 'вниз',
-        VoiceActivationPolicy.immediateExactPartial,
+    _action(
+        WearVoiceCommand.down, 'вниз', VoiceActivationPolicy.stableExactPartial,
         screens: _selectableScreens, aliases: <String>{'вниз'}),
     _action(
         WearVoiceCommand.select, 'выбрать', VoiceActivationPolicy.endpointOnly,

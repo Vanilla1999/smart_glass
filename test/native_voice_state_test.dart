@@ -18,6 +18,7 @@ void main() {
       'stopping': NativeVoiceCaptureState.stopping,
       'deinitializing': NativeVoiceCaptureState.deinitializing,
       'unbinding': NativeVoiceCaptureState.unbinding,
+      'cleanupComplete': NativeVoiceCaptureState.cleanupComplete,
       'idle': NativeVoiceCaptureState.idle,
       'error': NativeVoiceCaptureState.error,
       'terminalAbandoned': NativeVoiceCaptureState.terminalAbandoned,

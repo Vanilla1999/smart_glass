@@ -25,18 +25,82 @@ enum VoiceReplayContextCancellation {
   newerSegmentStarted,
 }
 
+class VoiceWorkIdentity {
+  const VoiceWorkIdentity({
+    required this.captureEpoch,
+    required this.speechTurnId,
+    required this.decoderGeneration,
+    required this.sourceScreen,
+    required this.routeRevision,
+    required this.grammarRevision,
+    required this.freeTextConfigurationRevision,
+    required this.listRevision,
+  });
+
+  final int captureEpoch;
+
+  final int speechTurnId;
+  final int decoderGeneration;
+  final WearScreenId sourceScreen;
+  final int routeRevision;
+  final int grammarRevision;
+  final int freeTextConfigurationRevision;
+  final int listRevision;
+
+  int get commandUtteranceId => decoderGeneration;
+  int get freeTextEpoch => freeTextConfigurationRevision;
+  String get traceId => '$captureEpoch:$speechTurnId:$decoderGeneration';
+
+  @override
+  bool operator ==(Object other) =>
+      other is VoiceWorkIdentity &&
+      other.captureEpoch == captureEpoch &&
+      other.speechTurnId == speechTurnId &&
+      other.decoderGeneration == decoderGeneration &&
+      other.sourceScreen == sourceScreen &&
+      other.routeRevision == routeRevision &&
+      other.grammarRevision == grammarRevision &&
+      other.freeTextConfigurationRevision == freeTextConfigurationRevision &&
+      other.listRevision == listRevision;
+
+  @override
+  int get hashCode => Object.hash(
+        captureEpoch,
+        speechTurnId,
+        decoderGeneration,
+        sourceScreen,
+        routeRevision,
+        grammarRevision,
+        freeTextConfigurationRevision,
+        listRevision,
+      );
+}
+
 class VoiceReplayContext {
   const VoiceReplayContext({
     required this.captureEpoch,
     required this.segmentId,
     required this.speechTurnId,
-    required this.commandUtteranceId,
+    required int commandUtteranceId,
     required this.sourceScreen,
     required this.routeRevision,
     required this.grammarRevision,
-    required this.freeTextEpoch,
+    required int freeTextEpoch,
     required this.listRevision,
-  });
+  })  : decoderGeneration = commandUtteranceId,
+        freeTextConfigurationRevision = freeTextEpoch;
+
+  VoiceReplayContext.withIdentity({
+    required VoiceWorkIdentity identity,
+    required this.segmentId,
+  })  : captureEpoch = identity.captureEpoch,
+        speechTurnId = identity.speechTurnId,
+        decoderGeneration = identity.decoderGeneration,
+        sourceScreen = identity.sourceScreen,
+        routeRevision = identity.routeRevision,
+        grammarRevision = identity.grammarRevision,
+        freeTextConfigurationRevision = identity.freeTextConfigurationRevision,
+        listRevision = identity.listRevision;
 
   final int captureEpoch;
 
@@ -44,41 +108,34 @@ class VoiceReplayContext {
   /// while the semantic speech turn and replay ownership stay unchanged.
   final int segmentId;
   final int speechTurnId;
-
-  /// Until decoderGeneration is introduced explicitly, commandUtteranceId is
-  /// the decoder-generation component of replay identity.
-  final int commandUtteranceId;
+  final int decoderGeneration;
   final WearScreenId sourceScreen;
   final int routeRevision;
   final int grammarRevision;
-  final int freeTextEpoch;
+  final int freeTextConfigurationRevision;
   final int listRevision;
 
-  String get traceId => '$captureEpoch:$speechTurnId:$commandUtteranceId';
+  VoiceWorkIdentity get identity => VoiceWorkIdentity(
+        captureEpoch: captureEpoch,
+        speechTurnId: speechTurnId,
+        decoderGeneration: decoderGeneration,
+        sourceScreen: sourceScreen,
+        routeRevision: routeRevision,
+        grammarRevision: grammarRevision,
+        freeTextConfigurationRevision: freeTextConfigurationRevision,
+        listRevision: listRevision,
+      );
+
+  int get commandUtteranceId => decoderGeneration;
+  int get freeTextEpoch => freeTextConfigurationRevision;
+  String get traceId => identity.traceId;
 
   @override
   bool operator ==(Object other) =>
-      other is VoiceReplayContext &&
-      other.captureEpoch == captureEpoch &&
-      other.speechTurnId == speechTurnId &&
-      other.commandUtteranceId == commandUtteranceId &&
-      other.sourceScreen == sourceScreen &&
-      other.routeRevision == routeRevision &&
-      other.grammarRevision == grammarRevision &&
-      other.freeTextEpoch == freeTextEpoch &&
-      other.listRevision == listRevision;
+      other is VoiceReplayContext && other.identity == identity;
 
   @override
-  int get hashCode => Object.hash(
-        captureEpoch,
-        speechTurnId,
-        commandUtteranceId,
-        sourceScreen,
-        routeRevision,
-        grammarRevision,
-        freeTextEpoch,
-        listRevision,
-      );
+  int get hashCode => identity.hashCode;
 
   @override
   String toString() => 'VoiceReplayContext('

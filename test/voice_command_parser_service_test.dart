@@ -24,8 +24,8 @@ void main() {
         }.contains(action.command)) {
           expect(
             action.activationPolicy,
-            VoiceActivationPolicy.immediateExactPartial,
-            reason: '${action.command} must remain immediate',
+            VoiceActivationPolicy.stableExactPartial,
+            reason: '${action.command} must require a stable exact partial',
           );
         } else {
           expect(
@@ -34,10 +34,8 @@ void main() {
             reason: '${action.command} must wait for an endpoint',
           );
         }
-        expect(
-          action.activationPolicy,
-          isNot(VoiceActivationPolicy.stableExactPartial),
-        );
+        expect(action.activationPolicy,
+            isNot(VoiceActivationPolicy.immediateExactPartial));
       }
     });
 

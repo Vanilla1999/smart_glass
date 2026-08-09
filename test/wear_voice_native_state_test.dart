@@ -99,6 +99,146 @@ void main() {
       await capture.dispose();
     }
   });
+
+  test('PCM timeout waits for matching cleanup completion and retries once',
+      () async {
+    final _NativeStateSource source = _NativeStateSource();
+    final _HealthySpeechRecognitionService speech =
+        _HealthySpeechRecognitionService();
+    final List<Duration> delays = <Duration>[];
+    final WearVoiceSession session = WearVoiceSession(
+      speechRecognitionService: speech,
+      nativeVoiceStateSource: source,
+      ensurePrepared: () async {},
+      nowMillis: () => 100,
+      delay: (_) async {},
+      scheduleRetry: (Duration delay, void Function() callback) {
+        delays.add(delay);
+        return _FakeTimer();
+      },
+    );
+    await session.start();
+    delays.clear();
+
+    session.handleNativeVoiceState(_nativeEvent(
+      NativeVoiceCaptureState.error,
+      revision: 4,
+      code: 'PCM_TIMEOUT',
+    ));
+    expect(delays, isEmpty);
+
+    session.handleNativeVoiceState(_nativeEvent(
+      NativeVoiceCaptureState.cleanupComplete,
+      revision: 5,
+      code: 'PCM_TIMEOUT',
+    ));
+    session.handleNativeVoiceState(_nativeEvent(
+      NativeVoiceCaptureState.cleanupComplete,
+      revision: 4,
+      code: 'PCM_TIMEOUT',
+    ));
+    session.handleNativeVoiceState(_nativeEvent(
+      NativeVoiceCaptureState.error,
+      revision: 4,
+      code: 'PCM_TIMEOUT',
+    ));
+
+    expect(delays, <Duration>[const Duration(seconds: 1)]);
+    expect(session.state.reason, 'native_PCM_TIMEOUT');
+    await session.stop();
+  });
+
+  test('native recovery dedupes a revision and remains exhausted afterward',
+      () async {
+    final _NativeStateSource source = _NativeStateSource();
+    final _HealthySpeechRecognitionService speech =
+        _HealthySpeechRecognitionService();
+    final List<Duration> delays = <Duration>[];
+    final WearVoiceSession session = WearVoiceSession(
+      speechRecognitionService: speech,
+      nativeVoiceStateSource: source,
+      ensurePrepared: () async {},
+      nowMillis: () => 100,
+      delay: (_) async {},
+      scheduleRetry: (Duration delay, void Function() callback) {
+        delays.add(delay);
+        return _FakeTimer();
+      },
+    );
+    await session.start();
+    delays.clear();
+
+    for (final int revision in <int>[7, 7, 8]) {
+      session.handleNativeVoiceState(_nativeEvent(
+        NativeVoiceCaptureState.cleanupComplete,
+        revision: revision,
+        code: 'PCM_TIMEOUT',
+      ));
+      session.handleNativeVoiceState(_nativeEvent(
+        NativeVoiceCaptureState.error,
+        revision: revision,
+        code: 'PCM_TIMEOUT',
+      ));
+    }
+
+    expect(delays, <Duration>[const Duration(seconds: 1)]);
+    await session.stop();
+  });
+
+  test('terminal PCM timeout does not wait for cleanup completion', () async {
+    final _NativeStateSource source = _NativeStateSource();
+    final _HealthySpeechRecognitionService speech =
+        _HealthySpeechRecognitionService();
+    final List<Duration> delays = <Duration>[];
+    final WearVoiceSession session = WearVoiceSession(
+      speechRecognitionService: speech,
+      nativeVoiceStateSource: source,
+      ensurePrepared: () async {},
+      nowMillis: () => 100,
+      delay: (_) async {},
+      scheduleRetry: (Duration delay, void Function() callback) {
+        delays.add(delay);
+        return _FakeTimer();
+      },
+    );
+    await session.start();
+    delays.clear();
+
+    session.handleNativeVoiceState(_nativeEvent(
+      NativeVoiceCaptureState.terminalAbandoned,
+      revision: 9,
+      code: 'PCM_TIMEOUT',
+    ));
+
+    expect(session.state.phase, VoicePhase.unavailable);
+    expect(session.state.reason, 'native_PCM_TIMEOUT');
+    expect(delays, isEmpty);
+    await session.stop();
+  });
+}
+
+NativeVoiceStateEvent _nativeEvent(
+  NativeVoiceCaptureState state, {
+  required int revision,
+  required String code,
+}) {
+  return NativeVoiceStateEvent(
+    state: state,
+    leaseId: 1,
+    owner: NativeVoiceOwner.wearRecognition,
+    revision: revision,
+    timestampMs: 100,
+    errorCode: code,
+  );
+}
+
+class _NativeStateSource implements NativeVoiceStateSource {
+  @override
+  bool isOwnedBy(NativeVoiceOwner owner) =>
+      owner == NativeVoiceOwner.wearRecognition;
+
+  @override
+  bool isRelevantStateEvent(NativeVoiceStateEvent event) => true;
 }
 
 class _HealthySpeechRecognitionService extends SpeechRecognitionService {

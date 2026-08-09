@@ -87,6 +87,7 @@ class VoiceReplayRunner {
           final SegmentedRecognitionResult event = SegmentedRecognitionResult(
             captureEpoch: captureEpoch,
             segmentId: segment.segmentId,
+            speechTurnId: segment.speechTurnId,
             lane: RecognitionLane.command,
             kind: recognition.kind,
             text: recognition.text,

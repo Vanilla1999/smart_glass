@@ -15,6 +15,31 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_re
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_segmenter.dart';
 
 void main() {
+  test('replay uses 2560-byte batches while command work is idle', () {
+    expect(
+      VoiceReplayBatchPolicy.nextBatchBytes(commandWorkPending: false),
+      2560,
+    );
+  });
+
+  test('replay downshifts before the next call when command work arrives', () {
+    final List<int> batches = <int>[
+      VoiceReplayBatchPolicy.nextBatchBytes(commandWorkPending: false),
+      VoiceReplayBatchPolicy.nextBatchBytes(commandWorkPending: true),
+    ];
+
+    expect(batches, <int>[2560, 640]);
+  });
+
+  test('replay preserves a final batch shorter than the selected size', () {
+    final int selected = VoiceReplayBatchPolicy.nextBatchLength(
+      remainingBytes: 320,
+      commandWorkPending: false,
+    );
+
+    expect(selected, 320);
+  });
+
   test('live free-text publishes a contextual partial before final', () async {
     final _FakeRecognizer command = _FakeRecognizer();
     final _FakeRecognizer freeText = _FakeRecognizer()
@@ -384,6 +409,7 @@ void main() {
       speechSegmenter: SpeechSegmenter(
         calibrationDuration: Duration.zero,
         endpointSilence: const Duration(milliseconds: 20),
+        restartConfirmation: const Duration(milliseconds: 20),
       ),
     );
     addTearDown(service.dispose);
@@ -511,6 +537,7 @@ void main() {
       speechSegmenter: SpeechSegmenter(
         calibrationDuration: Duration.zero,
         endpointSilence: const Duration(milliseconds: 20),
+        restartConfirmation: const Duration(milliseconds: 20),
       ),
     );
     addTearDown(service.dispose);
@@ -1025,8 +1052,11 @@ SpeechRecognitionService _service({
     freeTextPipelineMode: FreeTextPipelineMode.liveWithReplayFallback,
     commandBacklogLimitBytes: commandBacklogBytes,
     freeTextBacklogLimitBytes: backlogBytes,
-    speechSegmenter:
-        speechSegmenter ?? SpeechSegmenter(calibrationDuration: Duration.zero),
+    speechSegmenter: speechSegmenter ??
+        SpeechSegmenter(
+          calibrationDuration: Duration.zero,
+          restartConfirmation: const Duration(milliseconds: 20),
+        ),
     actionCatalog: actionCatalog,
     dynamicItemsProvider: (WearScreenId screen) => dynamicItems,
     voiceHintIndexCache: cache,

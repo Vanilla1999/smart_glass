@@ -2,6 +2,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_recognition_metrics.dart';
 
 void main() {
+  test('classifies typed drop reasons', () {
+    final VoiceRecognitionMetrics metrics = VoiceRecognitionMetrics();
+    metrics
+      ..recordDrop(VoiceDropReason.dynamicItemsChanged)
+      ..recordDrop(VoiceDropReason.dynamicItemsChanged)
+      ..recordDrop(VoiceDropReason.captureChanged);
+
+    expect(metrics.snapshot().dropsByReason, <VoiceDropReason, int>{
+      VoiceDropReason.dynamicItemsChanged: 2,
+      VoiceDropReason.captureChanged: 1,
+    });
+  });
+
   test('reports queue/audio percentiles, RTF and counters', () {
     final VoiceRecognitionMetrics metrics = VoiceRecognitionMetrics();
     for (int value = 1; value <= 100; value++) {

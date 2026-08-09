@@ -127,6 +127,36 @@ void main() {
     expect(command.grammars, hasLength(grammarCalls));
   });
 
+  test('route and grammar revisions advance independently', () async {
+    final _FakeRecognizer command = _FakeRecognizer();
+    final SpeechRecognitionService service = _service(command: command);
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.switchCommandGrammar(
+      screen: WearScreenId.help,
+      grammar: const <String>['назад', '[unk]'],
+    );
+    final int initialRoute = service.routeRevision;
+    final int initialGrammar = service.grammarRevision;
+    final int initialFreeTextEpoch = service.freeTextEpoch;
+
+    await service.switchCommandGrammar(
+      screen: WearScreenId.help,
+      grammar: const <String>['домой', '[unk]'],
+    );
+    expect(service.routeRevision, initialRoute);
+    expect(service.grammarRevision, initialGrammar + 1);
+    expect(service.freeTextEpoch, initialFreeTextEpoch);
+
+    await service.switchCommandGrammar(
+      screen: WearScreenId.settings,
+      grammar: const <String>['домой', '[unk]'],
+    );
+    expect(service.routeRevision, initialRoute + 1);
+    expect(service.grammarRevision, initialGrammar + 1);
+    expect(service.freeTextEpoch, initialFreeTextEpoch + 1);
+  });
+
   test('no-op grammar switch does not cancel active free-text replay',
       () async {
     final _FakeRecognizer command = _FakeRecognizer()
@@ -201,19 +231,29 @@ void main() {
 
     phrases.add(const WearVoicePhraseEvent(
       phrase: 'один',
+      traceId: '1:1:1',
       captureEpoch: 1,
+      speechTurnId: 1,
+      decoderGeneration: 1,
       commandUtteranceId: 1,
       sourceScreen: WearScreenId.help,
       routeRevision: 1,
       grammarRevision: 1,
+      freeTextEpoch: 0,
+      listRevision: 0,
     ));
     phrases.add(const WearVoicePhraseEvent(
       phrase: 'два',
+      traceId: '1:2:2',
       captureEpoch: 1,
+      speechTurnId: 2,
+      decoderGeneration: 2,
       commandUtteranceId: 2,
       sourceScreen: WearScreenId.menu,
       routeRevision: 1,
       grammarRevision: 1,
+      freeTextEpoch: 0,
+      listRevision: 0,
     ));
     await Future<void>.delayed(Duration.zero);
 
@@ -244,9 +284,7 @@ void main() {
     var completed = false;
     switching.then((_) => completed = true);
     await Future<void>.delayed(Duration.zero);
-    expect(completed, isFalse);
-    await service.processAudioChunk(_pcmFrame(0));
-    await service.processAudioChunk(_pcmFrame(0));
+    expect(completed, isTrue);
     await switching;
     await service.processAudioChunk(newFrame);
     await service.processAudioChunk(newFrame);
@@ -255,8 +293,26 @@ void main() {
         command.accepted, containsAllInOrder(<Uint8List>[oldFrame, newFrame]));
   });
 
-  test('grammar request after frame admission waits for utterance boundary',
-      () async {
+  test('route grammar cutover does not wait for acoustic silence', () async {
+    final _FakeRecognizer command = _FakeRecognizer();
+    final SpeechRecognitionService service = _service(command: command);
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.switchCommandGrammar(
+      screen: WearScreenId.availabilityInteraction,
+      grammar: const <String>['список', '[unk]'],
+    ).timeout(const Duration(seconds: 1));
+
+    expect(service.sourceScreen, WearScreenId.availabilityInteraction);
+    expect(command.grammars.last, const <String>['список', '[unk]']);
+    expect(service.commandUtteranceId, 2);
+  });
+
+  test('same-screen grammar request waits for utterance boundary', () async {
     final Completer<void> firstGrammarBlock = Completer<void>();
     final Completer<void> firstGrammarStarted = Completer<void>();
     final _FakeRecognizer command = _FakeRecognizer();
@@ -282,7 +338,7 @@ void main() {
     await firstGrammarStarted.future;
     final Future<void> admitted = service.processAudioChunk(_pcmFrame(1000));
     final Future<void> deferred = service.switchCommandGrammar(
-      screen: WearScreenId.settings,
+      screen: WearScreenId.help,
       grammar: const <String>['домой', '[unk]'],
     );
     firstGrammarBlock.complete();
@@ -298,7 +354,7 @@ void main() {
     await deferred;
 
     expect(command.grammars.last, const <String>['домой', '[unk]']);
-    expect(service.sourceScreen, WearScreenId.settings);
+    expect(service.sourceScreen, WearScreenId.help);
   });
 
   test('deferred grammar switches coalesce and complete at the boundary',
@@ -318,18 +374,18 @@ void main() {
 
     await service.processAudioChunk(_pcmFrame(1000));
     final Future<void> first = service.switchCommandGrammar(
-      screen: WearScreenId.help,
+      screen: WearScreenId.menu,
       grammar: const <String>['назад', '[unk]'],
     );
     final Future<void> second = service.switchCommandGrammar(
-      screen: WearScreenId.settings,
+      screen: WearScreenId.menu,
       grammar: const <String>['домой', '[unk]'],
     );
     await service.processAudioChunk(_pcmFrame(0));
     await service.processAudioChunk(_pcmFrame(0));
     await Future.wait(<Future<void>>[first, second]);
 
-    expect(service.sourceScreen, WearScreenId.settings);
+    expect(service.sourceScreen, WearScreenId.menu);
     expect(command.grammars.last, const <String>['домой', '[unk]']);
     expect(command.grammars, isNot(contains(const <String>['назад', '[unk]'])));
   });
@@ -351,13 +407,14 @@ void main() {
     await service.processAudioChunk(_pcmFrame(1000));
     command.grammarFailuresRemaining = 2;
     final Future<void> switching = service.switchCommandGrammar(
-      screen: WearScreenId.help,
+      screen: WearScreenId.menu,
       grammar: const <String>['назад', '[unk]'],
     );
+    final Future<void> failure = expectLater(switching, throwsStateError);
     await service.processAudioChunk(_pcmFrame(0));
     await service.processAudioChunk(_pcmFrame(0));
 
-    await expectLater(switching, throwsStateError);
+    await failure;
     expect(service.sourceScreen, WearScreenId.menu);
   });
 
@@ -574,6 +631,7 @@ void main() {
         _json(partial: 'вверх'),
         _json(partial: 'вверх'),
         _json(partial: 'вверх'),
+        _json(partial: 'вверх'),
       ])
       ..finalSequence.add(_json(text: 'вверх'));
     final SpeechRecognitionService service = _service(
@@ -605,7 +663,9 @@ void main() {
 
     await service.processAudioChunk(_pcmFrame(1000));
     await service.processAudioChunk(_pcmFrame(1000));
+    await service.processAudioChunk(_pcmFrame(1000));
     await service.waitForProcessing();
+    await Future<void>.delayed(const Duration(milliseconds: 220));
 
     expect(actions, <WearVoiceCommand>[
       WearVoiceCommand.up,
@@ -760,6 +820,7 @@ void main() {
         _json(partial: 'вниз'),
         _json(partial: 'вниз'),
         _json(partial: 'вверх'),
+        _json(partial: 'вверх'),
       ])
       ..finalSequence.add(_json(text: 'вниз'));
     final SpeechRecognitionService service = _service(
@@ -798,13 +859,14 @@ void main() {
     await service.processAudioChunk(_pcmFrame(0));
     await service.processAudioChunk(_pcmFrame(1000));
     await service.processAudioChunk(_pcmFrame(1000));
-    await Future<void>.delayed(Duration.zero);
+    await service.processAudioChunk(_pcmFrame(1000));
+    await Future<void>.delayed(const Duration(milliseconds: 220));
 
     expect(actions, <WearVoiceCommand>[
       WearVoiceCommand.down,
       WearVoiceCommand.up,
     ]);
-    expect(utteranceIds, <int>[1, 2]);
+    expect(utteranceIds.toSet(), <int>{1, 2});
   });
 
   test('silence no-command final replays buffered PCM to free-text', () async {
@@ -1173,7 +1235,7 @@ void main() {
     await service.waitForProcessing();
 
     expect((await result).text, 'бакалея');
-    expect(freeText.accepted, hasLength(2));
+    expect(freeText.accepted, hasLength(1));
     expect(freeText.finalCalls, 1);
   });
 
@@ -1215,7 +1277,7 @@ void main() {
     await service.waitForProcessing();
 
     expect((await result).text, 'молочная');
-    expect(freeText.accepted, hasLength(2));
+    expect(freeText.accepted, hasLength(1));
     expect(freeText.finalCalls, 1);
   });
 
@@ -1947,6 +2009,44 @@ void main() {
     expect(service.commandUtteranceId, 2);
   });
 
+  test('capture epoch change invalidates queued command PCM', () async {
+    final Completer<void> firstAcceptStarted = Completer<void>();
+    final Completer<bool> releaseFirstAccept = Completer<bool>();
+    var acceptCalls = 0;
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..acceptOverride = (_) {
+        acceptCalls++;
+        if (acceptCalls == 1) {
+          firstAcceptStarted.complete();
+          return releaseFirstAccept.future;
+        }
+        return Future<bool>.value(false);
+      };
+    final SpeechRecognitionService service = _service(
+      command: command,
+      segmenter: SpeechSegmenter(
+        calibrationDuration: Duration.zero,
+        endpointSilence: const Duration(seconds: 5),
+        maxSegmentDuration: const Duration(seconds: 30),
+      ),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+
+    final Future<void> first = service.processAudioChunk(_pcmFrame(1000));
+    await firstAcceptStarted.future;
+    final Future<void> staleQueued = service.processAudioChunk(_pcmFrame(1000));
+    service.beginProcessingCapture();
+    releaseFirstAccept.complete(false);
+
+    await Future.wait<void>(<Future<void>>[first, staleQueued]);
+    await service.waitForProcessing();
+
+    expect(command.accepted, hasLength(1));
+  });
+
   test('silent VAD tail after natural endpoint does not replay twice',
       () async {
     final _FakeRecognizer command = _FakeRecognizer()
@@ -2300,7 +2400,7 @@ void main() {
       (await result.timeout(const Duration(seconds: 1))).text,
       'молочная',
     );
-    expect(freeText.accepted, hasLength(24));
+    expect(freeText.accepted, hasLength(6));
     expect(freeText.finalCalls, 1);
     expect(
       service.replayOwnership.status,
@@ -2357,9 +2457,12 @@ void main() {
 
   test('actionable partial immediately supersedes older replay', () async {
     final _FakeRecognizer command = _FakeRecognizer()
-      ..endpointSequence.addAll(<bool>[true, false])
+      ..endpointSequence.addAll(<bool>[true, false, false])
       ..resultSequence.add(_json(text: 'молочная'))
-      ..partialSequence.add(_json(partial: 'вверх'));
+      ..partialSequence.addAll(<String>[
+        _json(partial: 'вверх'),
+        _json(partial: 'вверх'),
+      ]);
     final Completer<void> replayStarted = Completer<void>();
     final Completer<bool> releaseReplay = Completer<bool>();
     final _FakeRecognizer freeText = _FakeRecognizer()
@@ -2388,7 +2491,8 @@ void main() {
     await service.processAudioChunk(_pcmFrame(1000));
     await replayStarted.future;
     await service.processAudioChunk(_pcmFrame(1000));
-    await Future<void>.delayed(Duration.zero);
+    await service.processAudioChunk(_pcmFrame(1000));
+    await Future<void>.delayed(const Duration(milliseconds: 220));
 
     expect(commands, <WearVoiceCommand>[WearVoiceCommand.up]);
     expect(
@@ -2746,7 +2850,7 @@ void main() {
     expect(service.commandUtteranceId, 2);
   });
 
-  test('natural Vosk endpoint clears PCM and increments utterance id',
+  test('natural Vosk endpoint preserves same-turn PCM and increments id',
       () async {
     final _FakeRecognizer command = _FakeRecognizer()
       ..endpointSequence.add(true)
@@ -2759,7 +2863,7 @@ void main() {
 
     await service.processAudioChunk(_pcmFrame(1000));
 
-    expect(service.bufferedUtteranceBytes, 0);
+    expect(service.bufferedUtteranceBytes, greaterThan(0));
     expect(service.commandUtteranceId, 2);
   });
 

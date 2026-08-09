@@ -73,8 +73,7 @@ class WearVoiceApplicationDispatcher {
     }
 
     final WearVoiceAdmissionContext context = _context();
-    final WearVoiceAdmissionDecision decision =
-        await _admissionGate.runCommand(
+    final WearVoiceAdmissionDecision decision = await _admissionGate.runCommand(
       event,
       context: context,
       action: () => _performCommand(command, event: event),
@@ -97,21 +96,21 @@ class WearVoiceApplicationDispatcher {
     WearVoicePhraseEvent? event,
   }) async {
     if (event == null) {
-      await _performPhrase(phrase);
+      await _performPhrase(phrase, event: null);
       return WearVoiceAdmissionDecision.accepted;
     }
 
     final WearVoiceAdmissionContext context = _context();
-    final WearVoiceAdmissionDecision decision =
-        await _admissionGate.runPhrase(
+    final WearVoiceAdmissionDecision decision = await _admissionGate.runPhrase(
       event,
       context: context,
-      action: () => _performPhrase(phrase),
+      action: () => _performPhrase(phrase, event: event),
     );
     if (decision != WearVoiceAdmissionDecision.accepted) {
       _log(
         '[WearVoiceApplicationDispatcher] suppress ${decision.name} '
-        'voice phrase phrase="$phrase" sourceScreen=${event.sourceScreen} '
+        'voice phrase phrase="$phrase" traceId=${event.traceId} '
+        'sourceScreen=${event.sourceScreen} '
         'currentScreen=${context.screen} '
         'captureEpoch=${event.captureEpoch}/${context.captureEpoch} '
         'routeRevision=${event.routeRevision}/${context.routeRevision} '
@@ -124,7 +123,8 @@ class WearVoiceApplicationDispatcher {
   }
 
   Future<bool> dispatchPreview(WearVoicePreviewEvent event) async {
-    if (!_commandsEnabledProvider() || !_acceptsCommandsProvider()) return false;
+    if (!_commandsEnabledProvider() || !_acceptsCommandsProvider())
+      return false;
     final WearVoiceRevisionSnapshot revisions = _revisionSnapshotProvider();
     final screen = _flow.state.screen;
     final VoiceDynamicItemsSnapshot items = _flow.dynamicVoiceItemsFor(screen);
@@ -159,15 +159,13 @@ class WearVoiceApplicationDispatcher {
   Future<bool> dispatchDelay(WearVoiceDelayEvent event) async {
     final WearVoiceRevisionSnapshot revisions = _revisionSnapshotProvider();
     final screen = _flow.state.screen;
-    final int currentListRevision =
-        _flow.dynamicVoiceItemsFor(screen).revision;
+    final int currentListRevision = _flow.dynamicVoiceItemsFor(screen).revision;
     final bool contextCurrent = event.sourceScreen == screen &&
         event.captureEpoch == revisions.captureEpoch &&
         event.routeRevision == revisions.routeRevision &&
         event.grammarRevision == revisions.grammarRevision &&
         event.freeTextEpoch == revisions.freeTextEpoch &&
-        (event.listRevision == 0 ||
-            event.listRevision == currentListRevision);
+        (event.listRevision == 0 || event.listRevision == currentListRevision);
     final _VoiceDelayKey key = (
       captureEpoch: event.captureEpoch,
       segmentId: event.segmentId,
@@ -264,7 +262,10 @@ class WearVoiceApplicationDispatcher {
     );
   }
 
-  Future<void> _performPhrase(String phrase) async {
+  Future<void> _performPhrase(
+    String phrase, {
+    required WearVoicePhraseEvent? event,
+  }) async {
     if (!_commandsEnabledProvider()) {
       _log(
         '[WearVoiceApplicationDispatcher] suppress voice phrase: '
@@ -283,13 +284,15 @@ class WearVoiceApplicationDispatcher {
     final int startedAt = DateTime.now().millisecondsSinceEpoch;
     _log(
       '[WearVoiceApplicationDispatcher] voice phrase received '
-      'phrase="$phrase" screen=${_flow.state.screen} at=$startedAt',
+      'phrase="$phrase" traceId=${event?.traceId} '
+      'screen=${_flow.state.screen} at=$startedAt',
     );
     await _flow.handleVoicePhrase(phrase);
     final int finishedAt = DateTime.now().millisecondsSinceEpoch;
     _log(
       '[WearVoiceApplicationDispatcher] voice phrase handled '
-      'phrase="$phrase" screen=${_flow.state.screen} '
+      'phrase="$phrase" traceId=${event?.traceId} '
+      'screen=${_flow.state.screen} '
       'durationMs=${finishedAt - startedAt}',
     );
   }

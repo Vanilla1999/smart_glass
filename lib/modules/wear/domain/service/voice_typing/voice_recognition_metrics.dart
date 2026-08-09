@@ -28,6 +28,8 @@ class VoiceRecognitionMetricsSnapshot {
     required this.freeTextDroppedFrames,
     required this.replayAcceptLatency,
     required this.slowReplayAcceptCount,
+    this.replayNativeTimeouts = const <String, int>{},
+    this.dropsByReason = const <VoiceDropReason, int>{},
   });
 
   final VoiceMetricPercentiles commandQueueDelay;
@@ -46,6 +48,8 @@ class VoiceRecognitionMetricsSnapshot {
   final int freeTextDroppedFrames;
   final VoiceMetricPercentiles replayAcceptLatency;
   final int slowReplayAcceptCount;
+  final Map<String, int> replayNativeTimeouts;
+  final Map<VoiceDropReason, int> dropsByReason;
 }
 
 class VoiceRecognitionMetrics {
@@ -66,6 +70,8 @@ class VoiceRecognitionMetrics {
   int _dropped = 0;
   final List<int> _replayAcceptLatency = <int>[];
   int _slowReplayAccepts = 0;
+  final Map<String, int> _replayNativeTimeouts = <String, int>{};
+  final Map<VoiceDropReason, int> _dropsByReason = <VoiceDropReason, int>{};
 
   void recordCommandQueueDelay(int milliseconds) =>
       _record(_commandQueueDelay, milliseconds);
@@ -112,9 +118,21 @@ class VoiceRecognitionMetrics {
   void recordStale() => _stale++;
   void recordDroppedFrame() => _dropped++;
 
+  void recordDrop(VoiceDropReason reason) {
+    _dropsByReason.update(reason, (int count) => count + 1, ifAbsent: () => 1);
+  }
+
   void recordReplayAcceptLatency(int milliseconds) {
     _record(_replayAcceptLatency, milliseconds);
     if (milliseconds >= 150) _slowReplayAccepts++;
+  }
+
+  void recordReplayNativeTimeout(String stage) {
+    _replayNativeTimeouts.update(
+      stage,
+      (int count) => count + 1,
+      ifAbsent: () => 1,
+    );
   }
 
   VoiceRecognitionMetricsSnapshot snapshot() => VoiceRecognitionMetricsSnapshot(
@@ -137,6 +155,9 @@ class VoiceRecognitionMetrics {
         freeTextDroppedFrames: _dropped,
         replayAcceptLatency: _percentiles(_replayAcceptLatency),
         slowReplayAcceptCount: _slowReplayAccepts,
+        replayNativeTimeouts:
+            Map<String, int>.unmodifiable(_replayNativeTimeouts),
+        dropsByReason: Map<VoiceDropReason, int>.unmodifiable(_dropsByReason),
       );
 
   void _record(List<int> values, int value) {
@@ -156,4 +177,19 @@ class VoiceRecognitionMetrics {
 
     return VoiceMetricPercentiles(p50: at(50), p95: at(95), p99: at(99));
   }
+}
+
+enum VoiceDropReason {
+  captureChanged,
+  speechTurnChanged,
+  sessionStopped,
+  freeTextConfigurationChanged,
+  screenChanged,
+  routeChanged,
+  grammarChanged,
+  dynamicItemsChanged,
+  newerActionableUtterance,
+  liveLaneNotReady,
+  liveLaneBacklogExceeded,
+  staleRecognitionResult,
 }

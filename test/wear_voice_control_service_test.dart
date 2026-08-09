@@ -31,17 +31,15 @@ void main() {
 
     test('T12 partial and endpoint execute at most once', () {
       final RecognitionArbiter arbiter = RecognitionArbiter();
-
-      expect(
-        arbiter
-            .accept(_event(
-              text: 'вверх',
-              utteranceId: 1,
-              kind: RecognitionKind.partial,
-            ))
-            ?.command,
-        WearVoiceCommand.up,
+      final SegmentedRecognitionResult partial = _event(
+        text: 'вверх',
+        utteranceId: 1,
+        kind: RecognitionKind.partial,
       );
+
+      arbiter.accept(partial);
+      expect(arbiter.accept(partial)?.stableCandidate, partial);
+      expect(arbiter.claimStable(partial)?.command, WearVoiceCommand.up);
       expect(
         arbiter.accept(_event(text: 'вверх', utteranceId: 1)),
         isNull,
@@ -137,19 +135,18 @@ void main() {
       (text: 'вверх', command: WearVoiceCommand.up, id: 'T06'),
       (text: 'вниз', command: WearVoiceCommand.down, id: 'T07'),
     ]) {
-      test('${testCase.id} direction remains immediate and emits once', () {
+      test('${testCase.id} direction requires stable exact partial', () {
         final RecognitionArbiter arbiter = RecognitionArbiter();
-
-        expect(
-          arbiter
-              .accept(_event(
-                text: testCase.text,
-                utteranceId: 8,
-                kind: RecognitionKind.partial,
-              ))
-              ?.command,
-          testCase.command,
+        final SegmentedRecognitionResult partial = _event(
+          text: testCase.text,
+          utteranceId: 8,
+          kind: RecognitionKind.partial,
         );
+
+        expect(arbiter.accept(partial)?.stableCandidate, partial);
+        expect(arbiter.claimStable(partial), isNull);
+        expect(arbiter.accept(partial)?.stableCandidate, partial);
+        expect(arbiter.claimStable(partial)?.command, testCase.command);
         expect(
           arbiter.accept(_event(text: testCase.text, utteranceId: 8)),
           isNull,
@@ -248,7 +245,7 @@ void main() {
       }
     });
 
-    test('T10 production partials never create stable candidates', () {
+    test('T10 only whitelisted directions create stable candidates', () {
       final VoiceActionCatalog catalog = VoiceActionCatalog();
       for (final VoiceActionEntry action in catalog.actions) {
         for (final WearScreenId screen in action.screens) {
@@ -264,11 +261,12 @@ void main() {
               kind: RecognitionKind.partial,
               screen: screen,
             ));
-            expect(outcome?.stableCandidate, isNull);
             if (action.command == WearVoiceCommand.up ||
                 action.command == WearVoiceCommand.down) {
-              expect(outcome?.command, action.command);
+              expect(outcome?.stableCandidate, isNotNull);
+              expect(outcome?.command, isNull);
             } else {
+              expect(outcome?.stableCandidate, isNull);
               expect(outcome?.ignoredEndpointOnly, isTrue);
             }
           }
@@ -320,6 +318,13 @@ void main() {
         utteranceId: 7,
         kind: RecognitionKind.partial,
       ));
+      final SegmentedRecognitionResult stable = _event(
+        text: 'вверх',
+        utteranceId: 7,
+        kind: RecognitionKind.partial,
+      );
+      arbiter.accept(stable);
+      arbiter.claimStable(stable);
 
       expect(
         arbiter.accept(_event(text: 'вниз', utteranceId: 7)),
@@ -464,6 +469,7 @@ SegmentedRecognitionResult _event({
   return SegmentedRecognitionResult(
     captureEpoch: 1,
     segmentId: 1,
+    speechTurnId: utteranceId,
     lane: lane,
     kind: kind,
     text: text,

@@ -204,18 +204,147 @@ void main() {
       calibrationDuration: Duration.zero,
       maxSegmentDuration: const Duration(milliseconds: 40),
       maxDurationContinuation: const Duration(milliseconds: 200),
+      restartConfirmation: const Duration(milliseconds: 20),
     );
     segmenter.begin(1);
 
     final SpeechSegment first = segmenter.add(_pcmFrame(328), 1)!;
     final SpeechSegment rollover = segmenter.add(_pcmFrame(328), 1)!;
-    final SpeechSegment continued = segmenter.add(_pcmFrame(328), 1)!;
+    expect(segmenter.add(_pcmFrame(328), 1)!.started, isFalse);
+    final SpeechSegment continued = segmenter.add(_pcmFrame(656), 1)!;
 
     expect(rollover.isEndpoint, isTrue);
     expect(rollover.endpointReason, AcousticEndpointReason.maxDuration);
     expect(continued.started, isTrue);
     expect(continued.segmentId, isNot(first.segmentId));
     expect(continued.speechTurnId, first.speechTurnId);
+  });
+
+  test('continuation silence closes rollover turn at configured boundary', () {
+    final SpeechSegmenter segmenter = SpeechSegmenter(
+      sampleRate: 1000,
+      calibrationDuration: Duration.zero,
+      maxSegmentDuration: const Duration(milliseconds: 40),
+      maxDurationContinuation: const Duration(milliseconds: 40),
+      restartConfirmation: const Duration(milliseconds: 20),
+    );
+    segmenter.begin(1);
+    final SpeechSegment first = segmenter.add(_pcmFrame(328), 1)!;
+    expect(
+      segmenter.add(_pcmFrame(328), 1)!.endpointReason,
+      AcousticEndpointReason.maxDuration,
+    );
+
+    segmenter.add(_pcmFrame(0), 1);
+    final SpeechSegment silenceEndpoint = segmenter.add(_pcmFrame(0), 1)!;
+    expect(silenceEndpoint.endpointReason, AcousticEndpointReason.silence);
+    expect(silenceEndpoint.speechTurnId, first.speechTurnId);
+    expect(segmenter.state, VadState.idle);
+
+    final SpeechSegment next = segmenter.add(_pcmFrame(328), 1)!;
+    expect(next.speechTurnId, isNot(first.speechTurnId));
+  });
+
+  test('exposes deterministic calibration candidate and speech states', () {
+    final SpeechSegmenter segmenter = SpeechSegmenter(
+      sampleRate: 1000,
+      calibrationDuration: const Duration(milliseconds: 20),
+      onsetConfirmation: const Duration(milliseconds: 40),
+    );
+    segmenter.begin(1);
+    expect(segmenter.state, VadState.calibrating);
+    segmenter.decide(_pcmFrame(0), 1);
+    expect(segmenter.state, VadState.idle);
+    final VadFrameDecision candidate = segmenter.decide(_pcmFrame(328), 1);
+    expect(segmenter.state, VadState.candidateSpeech);
+    expect(candidate.retainFrame, isTrue);
+    final VadFrameDecision confirmed = segmenter.decide(_pcmFrame(328), 1);
+    expect(segmenter.state, VadState.speaking);
+    expect(confirmed.segment!.started, isTrue);
+    expect(confirmed.retainFrame, isFalse);
+  });
+
+  test('rejected onset candidate requests retained-frame reset', () {
+    final SpeechSegmenter segmenter = SpeechSegmenter(
+      sampleRate: 1000,
+      calibrationDuration: Duration.zero,
+      onsetConfirmation: const Duration(milliseconds: 40),
+    );
+    segmenter.begin(1);
+    expect(segmenter.decide(_pcmFrame(328), 1).retainFrame, isTrue);
+
+    final VadFrameDecision rejected = segmenter.decide(_pcmFrame(0), 1);
+
+    expect(rejected.segment, isNull);
+    expect(rejected.retainFrame, isFalse);
+    expect(rejected.resetRetainedFrames, isTrue);
+    expect(segmenter.state, VadState.idle);
+  });
+
+  test('local SNR spike is rejected without a confirming frame', () {
+    final SpeechSegmenter segmenter = SpeechSegmenter(
+      sampleRate: 1000,
+      calibrationDuration: Duration.zero,
+      onsetConfirmation: const Duration(milliseconds: 40),
+    );
+    segmenter.begin(1);
+    segmenter.decide(_pcmFrame(328), 1);
+
+    expect(segmenter.decide(_pcmFrame(20), 1).resetRetainedFrames, isTrue);
+    expect(segmenter.state, VadState.idle);
+  });
+
+  test('constant TV-like background does not repeatedly onset after rollover',
+      () {
+    final SpeechSegmenter segmenter = SpeechSegmenter(
+      sampleRate: 1000,
+      calibrationDuration: Duration.zero,
+      maxSegmentDuration: const Duration(milliseconds: 40),
+    );
+    segmenter.begin(1);
+    segmenter.add(_pcmFrame(328), 1);
+    final SpeechSegment rollover = segmenter.add(_pcmFrame(328), 1)!;
+    expect(rollover.endpointReason, AcousticEndpointReason.maxDuration);
+
+    for (int index = 0; index < 10; index++) {
+      expect(segmenter.add(_pcmFrame(328), 1)!.started, isFalse);
+    }
+    expect(segmenter.state, VadState.continuationAfterMaxDuration);
+  });
+
+  test('foreground rise after stable background creates an onset', () {
+    final SpeechSegmenter segmenter = SpeechSegmenter(
+      sampleRate: 1000,
+      calibrationDuration: Duration.zero,
+      speechOnRms: 0.002,
+    );
+    segmenter.begin(1);
+    for (int index = 0; index < 10; index++) {
+      expect(segmenter.add(_pcmFrame(50), 1), isNull);
+    }
+
+    final SpeechSegment? foreground = segmenter.add(_pcmFrame(328), 1);
+
+    expect(foreground, isNotNull);
+    expect(foreground!.speechTurnId, 1);
+  });
+
+  test('gradual foreground delta over adapted background creates onset', () {
+    final SpeechSegmenter segmenter = SpeechSegmenter(
+      sampleRate: 1000,
+      calibrationDuration: Duration.zero,
+      speechOnRms: 0.001,
+      minimumOnsetSnr: 10,
+      minimumOnsetRise: 10,
+    );
+    segmenter.begin(1);
+    for (int index = 0; index < 20; index++) {
+      segmenter.add(_pcmFrame(25), 1);
+    }
+
+    final SpeechSegment? foreground = segmenter.add(_pcmFrame(90), 1);
+
+    expect(foreground, isNotNull);
   });
 
   test('confirmed silence starts a new acoustic speech turn', () {

@@ -71,10 +71,16 @@ class WearVoiceEventAdmissionGate {
 
   final int completedCapacity;
   final Set<_WearVoiceActionKey> _inFlight = <_WearVoiceActionKey>{};
-  final LinkedHashMap<_WearVoiceContextKey, int> _highestCompletedUtterance =
-      LinkedHashMap<_WearVoiceContextKey, int>();
+  final Set<_WearVoiceUtteranceKey> _inFlightUtterances =
+      <_WearVoiceUtteranceKey>{};
+  final Set<_WearVoiceUtteranceKey> _claimedUtterances =
+      <_WearVoiceUtteranceKey>{};
+  final LinkedHashMap<_WearVoiceActionKey, bool> _completed =
+      LinkedHashMap<_WearVoiceActionKey, bool>();
+  final Map<_WearVoiceContextKey, int> _highestCompletedGeneration =
+      <_WearVoiceContextKey, int>{};
 
-  int get debugCompletedCount => _highestCompletedUtterance.length;
+  int get debugCompletedCount => _completed.length;
   int get debugInFlightCount => _inFlight.length;
 
   Future<WearVoiceAdmissionDecision> runCommand(
@@ -119,35 +125,41 @@ class WearVoiceEventAdmissionGate {
 
   void clear() {
     _inFlight.clear();
-    _highestCompletedUtterance.clear();
+    _inFlightUtterances.clear();
+    _claimedUtterances.clear();
+    _completed.clear();
+    _highestCompletedGeneration.clear();
   }
 
   Future<WearVoiceAdmissionDecision> _run(
     _WearVoiceActionKey key,
     FutureOr<void> Function() action,
   ) async {
-    final _WearVoiceContextKey context = key.context;
-    final int? highestCompleted = _highestCompletedUtterance[context];
-    if ((highestCompleted != null &&
-            key.commandUtteranceId <= highestCompleted) ||
-        !_inFlight.add(key)) {
+    final int? highest = _highestCompletedGeneration[key.context];
+    if ((highest != null && key.commandUtteranceId <= highest) ||
+        _completed.containsKey(key) ||
+        _claimedUtterances.contains(key.utterance) ||
+        !_inFlightUtterances.add(key.utterance)) {
       return WearVoiceAdmissionDecision.duplicate;
     }
+    _inFlight.add(key);
     try {
       await action();
-      final int? previous = _highestCompletedUtterance.remove(context);
-      while (_highestCompletedUtterance.length >= completedCapacity) {
-        _highestCompletedUtterance.remove(
-          _highestCompletedUtterance.keys.first,
-        );
+      while (_completed.length >= completedCapacity) {
+        final _WearVoiceActionKey oldest = _completed.keys.first;
+        _completed.remove(oldest);
+        _claimedUtterances.remove(oldest.utterance);
       }
-      _highestCompletedUtterance[context] = previous == null ||
-              key.commandUtteranceId > previous
-          ? key.commandUtteranceId
-          : previous;
+      _completed[key] = true;
+      _claimedUtterances.add(key.utterance);
+      final int previous = _highestCompletedGeneration[key.context] ?? 0;
+      if (key.commandUtteranceId > previous) {
+        _highestCompletedGeneration[key.context] = key.commandUtteranceId;
+      }
       return WearVoiceAdmissionDecision.accepted;
     } finally {
       _inFlight.remove(key);
+      _inFlightUtterances.remove(key.utterance);
     }
   }
 }
@@ -187,6 +199,8 @@ class _WearVoiceActionKey {
   const _WearVoiceActionKey({
     required this.captureEpoch,
     required this.commandUtteranceId,
+    required this.speechTurnId,
+    required this.commandType,
     required this.sourceScreen,
     required this.routeRevision,
     required this.grammarRevision,
@@ -196,6 +210,8 @@ class _WearVoiceActionKey {
     return _WearVoiceActionKey(
       captureEpoch: event.captureEpoch,
       commandUtteranceId: event.commandUtteranceId,
+      speechTurnId: event.speechTurnId,
+      commandType: event.command.name,
       sourceScreen: event.sourceScreen,
       routeRevision: event.routeRevision,
       grammarRevision: event.grammarRevision,
@@ -206,6 +222,8 @@ class _WearVoiceActionKey {
     return _WearVoiceActionKey(
       captureEpoch: event.captureEpoch,
       commandUtteranceId: event.commandUtteranceId,
+      speechTurnId: event.speechTurnId,
+      commandType: 'phrase',
       sourceScreen: event.sourceScreen,
       routeRevision: event.routeRevision,
       grammarRevision: event.grammarRevision,
@@ -221,6 +239,8 @@ class _WearVoiceActionKey {
 
   final int captureEpoch;
   final int commandUtteranceId;
+  final int speechTurnId;
+  final String commandType;
   final WearScreenId sourceScreen;
   final int routeRevision;
   final int grammarRevision;
@@ -230,6 +250,8 @@ class _WearVoiceActionKey {
     return other is _WearVoiceActionKey &&
         other.captureEpoch == captureEpoch &&
         other.commandUtteranceId == commandUtteranceId &&
+        other.speechTurnId == speechTurnId &&
+        other.commandType == commandType &&
         other.sourceScreen == sourceScreen &&
         other.routeRevision == routeRevision &&
         other.grammarRevision == grammarRevision;
@@ -239,6 +261,55 @@ class _WearVoiceActionKey {
   int get hashCode => Object.hash(
         captureEpoch,
         commandUtteranceId,
+        speechTurnId,
+        commandType,
+        sourceScreen,
+        routeRevision,
+        grammarRevision,
+      );
+
+  _WearVoiceUtteranceKey get utterance => _WearVoiceUtteranceKey(
+        captureEpoch: captureEpoch,
+        commandUtteranceId: commandUtteranceId,
+        speechTurnId: speechTurnId,
+        sourceScreen: sourceScreen,
+        routeRevision: routeRevision,
+        grammarRevision: grammarRevision,
+      );
+}
+
+class _WearVoiceUtteranceKey {
+  const _WearVoiceUtteranceKey({
+    required this.captureEpoch,
+    required this.commandUtteranceId,
+    required this.speechTurnId,
+    required this.sourceScreen,
+    required this.routeRevision,
+    required this.grammarRevision,
+  });
+
+  final int captureEpoch;
+  final int commandUtteranceId;
+  final int speechTurnId;
+  final WearScreenId sourceScreen;
+  final int routeRevision;
+  final int grammarRevision;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _WearVoiceUtteranceKey &&
+      other.captureEpoch == captureEpoch &&
+      other.commandUtteranceId == commandUtteranceId &&
+      other.speechTurnId == speechTurnId &&
+      other.sourceScreen == sourceScreen &&
+      other.routeRevision == routeRevision &&
+      other.grammarRevision == grammarRevision;
+
+  @override
+  int get hashCode => Object.hash(
+        captureEpoch,
+        commandUtteranceId,
+        speechTurnId,
         sourceScreen,
         routeRevision,
         grammarRevision,

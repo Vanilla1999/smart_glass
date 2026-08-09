@@ -153,4 +153,13 @@ void main() {
     expect(nextTurn, isNot(context));
     expect(nextTurn.traceId, '1:12:3');
   });
+
+  test('voice work identity exposes compatibility revisions', () {
+    expect(context.identity.decoderGeneration, 3);
+    expect(context.identity.commandUtteranceId, 3);
+    expect(context.identity.freeTextConfigurationRevision, 6);
+    expect(context.identity.freeTextEpoch, 6);
+    expect(context.decoderGeneration, 3);
+    expect(context.freeTextConfigurationRevision, 6);
+  });
 }

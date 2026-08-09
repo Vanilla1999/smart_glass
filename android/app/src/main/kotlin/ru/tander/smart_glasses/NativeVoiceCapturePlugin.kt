@@ -51,6 +51,10 @@ import ru.tander.smart_glasses.voice.ProcessTerminalGate
 import ru.tander.smart_glasses.voice.LateInitCleanupGate
 import ru.tander.smart_glasses.voice.PcmStreamingGate
 import ru.tander.smart_glasses.voice.RawLightDenoiser
+import ru.tander.smart_glasses.voice.CaptureCleanupResult
+import ru.tander.smart_glasses.voice.CleanupOutcome
+import ru.tander.smart_glasses.voice.Uac4CleanupPolicy
+import ru.tander.smart_glasses.voice.Uac4InitRecoveryPolicy
 
 private const val VOICE_CHANNEL = "ru.tander.smart_glasses/native_voice/control"
 private const val PCM_CHANNEL = "ru.tander.smart_glasses/native_voice/pcm"
@@ -225,6 +229,12 @@ private class NativeVoiceCaptureManager(
     private var binder: IBinder? = null
     private var deathRecipient: IBinder.DeathRecipient? = null
     private var rawDiagnosticWav: DiagnosticWavFile? = null
+    private var recoveryRootCode: String? = null
+    private val initRecovery = Uac4InitRecoveryPolicy()
+    private var cleanupInProgress = false
+    private var cleanupComplete = true
+    private var lastCleanupDetails: String? = null
+    private var terminatedCaptureRevision: Long? = null
 
     fun attach(
         id: Long,
@@ -338,6 +348,12 @@ private class NativeVoiceCaptureManager(
         "owner" to activeOwner,
         "leaseId" to activeLeaseId,
         "revision" to captureRevision,
+        "cleanupInProgress" to cleanupInProgress,
+        "cleanupComplete" to cleanupComplete,
+        "cleanupDetails" to lastCleanupDetails,
+        "recoveryRootCode" to recoveryRootCode,
+        "uac4InitRecoveryRetries" to initRecovery.retryCount,
+        "uac4InitRecoveryExhausted" to initRecovery.exhausted,
         "receivedPcmPackets" to pcmStreamingGate.acceptedPackets,
         "firstCallbackAgeMs" to firstCallbackAtMs?.let { SystemClock.elapsedRealtime() - it },
         "pendingPcm" to (delivery.pending != null),
@@ -382,7 +398,45 @@ private class NativeVoiceCaptureManager(
             }
             emitState("activating")
             prepareSsp()
-            if (!bound) {
+            ensureBound()
+            if (!initialized) {
+                while (!initialized) {
+                    val generation = callbackGate.next()
+                    uac4InitAttempted = true
+                    emitDiagnostic("uac4InitStarted")
+                    val result = runUac4Init(generation)
+                    emitDiagnostic("uac4InitResult", vendorResult = result)
+                    if (result == 0) {
+                        initialized = true
+                        initializedAtMs = SystemClock.elapsedRealtime()
+                        recoveryRootCode = null
+                        initRecovery.reset()
+                        emitState("initialized")
+                        break
+                    }
+                    val retryDelay = initRecovery.retryDelayMillis(
+                        recoveryRootCode,
+                        result,
+                        SystemClock.elapsedRealtime(),
+                    )
+                    if (retryDelay == null) {
+                        throw VoiceCaptureException("UAC4_INIT_FAILED", "Vendor result=$result")
+                    }
+                    emitDiagnostic("uac4InitRecovery", vendorResult = result)
+                    deinitAndUnbind(tolerateDeinitFailure = true)
+                    SystemClock.sleep(retryDelay)
+                    ensureBound()
+                }
+            }
+            return mapOf("prepared" to true)
+        } catch (error: VoiceCaptureException) {
+            if (!ProcessTerminalGate.isTerminal) rollbackPrepare()
+            throw error
+        }
+    }
+
+    private fun ensureBound() {
+        if (!bound) {
             val generation = bindGate.next()
             val latch = CountDownLatch(1)
             var connectedBinder: IBinder? = null
@@ -425,22 +479,6 @@ private class NativeVoiceCaptureManager(
             connected.linkToDeath(recipient, 0)
             bound = true
             emitState("bound")
-            }
-            if (!initialized) {
-                val generation = callbackGate.next()
-                uac4InitAttempted = true
-                emitDiagnostic("uac4InitStarted")
-                val result = runUac4Init(generation)
-                emitDiagnostic("uac4InitResult", vendorResult = result)
-                if (result != 0) throw VoiceCaptureException("UAC4_INIT_FAILED", "Vendor result=$result")
-                initialized = true
-                initializedAtMs = SystemClock.elapsedRealtime()
-                emitState("initialized")
-            }
-            return mapOf("prepared" to true)
-        } catch (error: VoiceCaptureException) {
-            if (!ProcessTerminalGate.isTerminal) rollbackPrepare()
-            throw error
         }
     }
 
@@ -774,11 +812,10 @@ private class NativeVoiceCaptureManager(
         }.also { worker.postDelayed(it, 15_000L) }
     }
 
-    private fun deinitAndUnbind() {
+    private fun deinitAndUnbind(tolerateDeinitFailure: Boolean = false) {
         var failure: VoiceCaptureException? = null
         if (initialized || uac4InitAttempted) {
             try { requireVendorSuccess("UAC4_DEINIT_FAILED", "UAC4_DEINIT_TIMEOUT", UAC4_DEINIT_TIMEOUT_SECONDS) { service?.deinitUac4() } } catch (error: VoiceCaptureException) { failure = error }
-            if (ProcessTerminalGate.isTerminal) throw failure!!
         }
         initialized = false
         initializedAtMs = null
@@ -798,7 +835,7 @@ private class NativeVoiceCaptureManager(
         }
         bound = false
         service = null
-        failure?.let { throw it }
+        if (!tolerateDeinitFailure) failure?.let { throw it }
     }
 
     private fun prepareSsp() {
@@ -870,6 +907,11 @@ private class NativeVoiceCaptureManager(
             BuildConfig.UAC4_UDID.isNotBlank()
 
     private fun terminateCapture(errorCode: String, errorDetails: String? = null) {
+        if (cleanupInProgress ||
+            (activeLeaseId == null && terminatedCaptureRevision == captureRevision)
+        ) return
+        cleanupInProgress = true
+        cleanupComplete = false
         val leaseId = activeLeaseId
         val owner = activeOwner
         if (errorDetails != null) {
@@ -885,26 +927,57 @@ private class NativeVoiceCaptureManager(
             invalidateDelivery()
             clearInput()
         }
-        if (ProcessTerminalGate.isTerminal) return
-        closeDiagnosticWav()
-        try {
-            if (leaseId != null) requireVendorSuccess("UAC4_STOP_FAILED", "UAC4_STOP_TIMEOUT", UAC4_STOP_TIMEOUT_SECONDS) { service?.stopUac4Mic() }
-        } catch (error: VoiceCaptureException) {
-            Log.e(VOICE_TAG, "stop after $errorCode failed", error)
-            if (ProcessTerminalGate.isTerminal) return
+        terminatedCaptureRevision = captureRevision
+        if (ProcessTerminalGate.isTerminal) {
+            cleanupInProgress = false
+            return
         }
-        try { deinitAndUnbind() } catch (error: VoiceCaptureException) {
+        closeDiagnosticWav()
+        var stopResult: Int? = null
+        var stopOutcome = CleanupOutcome.SKIPPED
+        var deinitOutcome = CleanupOutcome.SKIPPED
+        var unbindOutcome = CleanupOutcome.SKIPPED
+        try {
+            if (leaseId != null) {
+                stopResult = runVendor("UAC4_STOP_FAILED", "UAC4_STOP_TIMEOUT", UAC4_STOP_TIMEOUT_SECONDS) { service?.stopUac4Mic() }
+                stopOutcome = Uac4CleanupPolicy.stopOutcome(errorCode, stopResult)
+            }
+        } catch (error: VoiceCaptureException) {
+            stopOutcome = CleanupOutcome.FAILED
+            Log.e(VOICE_TAG, "stop after $errorCode failed", error)
+        }
+        try {
+            deinitAndUnbind()
+            deinitOutcome = CleanupOutcome.SUCCEEDED
+            unbindOutcome = CleanupOutcome.SUCCEEDED
+        } catch (error: VoiceCaptureException) {
+            deinitOutcome = CleanupOutcome.FAILED
+            unbindOutcome = if (bound) CleanupOutcome.FAILED else CleanupOutcome.SUCCEEDED
             Log.e(VOICE_TAG, "deinit after $errorCode failed", error)
         }
         try { releaseSsp() } catch (error: VoiceCaptureException) {
             Log.e(VOICE_TAG, "release after $errorCode failed", error)
-            emitState("terminalAbandoned", errorCode = "SSP_RELEASE_FAILED", leaseId = leaseId, owner = owner)
+            lastCleanupDetails = "root=$errorCode stop=${stopOutcome.name.lowercase()} " +
+                "stopVendorResult=$stopResult deinit=${deinitOutcome.name.lowercase()} " +
+                "unbind=${unbindOutcome.name.lowercase()} sspRelease=failed"
+            emitState("terminalAbandoned", errorCode = errorCode, errorDetails = lastCleanupDetails, leaseId = leaseId, owner = owner)
+            cleanupInProgress = false
             return
         }
+        val cleanup = CaptureCleanupResult(errorCode, stopOutcome, stopResult, deinitOutcome, unbindOutcome)
+        lastCleanupDetails = cleanup.details()
+        cleanupComplete = cleanup.completed
+        cleanupInProgress = false
+        if (!cleanup.completed) {
+            emitState("terminalAbandoned", errorCode = errorCode, errorDetails = cleanup.details(), leaseId = leaseId, owner = owner)
+            return
+        }
+        if (errorCode == "PCM_TIMEOUT") recoveryRootCode = errorCode
+        emitState("cleanupComplete", errorCode = errorCode, errorDetails = cleanup.details(), leaseId = leaseId, owner = owner)
         emitState(
             "error",
             errorCode = errorCode,
-            errorDetails = errorDetails,
+            errorDetails = listOfNotNull(errorDetails, cleanup.details()).joinToString("; "),
             leaseId = leaseId,
             owner = owner,
         )

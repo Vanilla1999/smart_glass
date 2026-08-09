@@ -18,6 +18,7 @@ void main() {
       const SegmentedRecognitionResult(
         captureEpoch: 1,
         segmentId: 1,
+        speechTurnId: 1,
         lane: RecognitionLane.freeText,
         kind: RecognitionKind.streamFinal,
         text: 'вниз',

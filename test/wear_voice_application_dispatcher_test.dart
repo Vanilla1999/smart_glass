@@ -385,6 +385,30 @@ void main() {
     );
     expect(attempts, 2);
   });
+
+  test('accepted phrase keeps canonical trace through business dispatch',
+      () async {
+    final List<String> logs = <String>[];
+    dispatcher = WearVoiceApplicationDispatcher(
+      flowController: flow,
+      revisionSnapshotProvider: () => revisions,
+      commandsEnabledProvider: () => enabled,
+      commandsEnabledSetter: (bool value) => enabled = value,
+      acceptsCommandsProvider: () => acceptsCommands,
+      log: logs.add,
+    );
+    final WearVoicePhraseEvent event = _phraseEvent(listRevision: 0);
+
+    expect(
+      await dispatcher.dispatchPhrase(event.phrase, event: event),
+      WearVoiceAdmissionDecision.accepted,
+    );
+
+    expect(
+      logs.where((String message) => message.contains(event.traceId)),
+      hasLength(2),
+    );
+  });
 }
 
 WearVoiceCommandEvent _commandEvent({
@@ -399,6 +423,8 @@ WearVoiceCommandEvent _commandEvent({
     recognizedAtMillis: 1,
     asrMillis: 1,
     captureEpoch: captureEpoch,
+    speechTurnId: commandUtteranceId,
+    decoderGeneration: commandUtteranceId,
     commandUtteranceId: commandUtteranceId,
     sourceScreen: screen,
     routeRevision: 2,
@@ -414,7 +440,10 @@ WearVoicePhraseEvent _phraseEvent({
 }) {
   return WearVoicePhraseEvent(
     phrase: phrase,
+    traceId: '1:$commandUtteranceId:$commandUtteranceId',
     captureEpoch: 1,
+    speechTurnId: commandUtteranceId,
+    decoderGeneration: commandUtteranceId,
     commandUtteranceId: commandUtteranceId,
     sourceScreen: screen,
     routeRevision: 2,
