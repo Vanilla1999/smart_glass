@@ -65,7 +65,10 @@ class RecognitionArbiter {
   }
 
   RecognitionArbitration? accept(SegmentedRecognitionResult result) {
-    if (!_isCurrent(result)) return null;
+    if (!_isCurrent(result)) {
+      _logStaleContext(result);
+      return null;
+    }
     final String key = _key(result);
     if (_claimedUtterances.contains(key)) return null;
     final WearScreenId screen = result.sourceScreen;
@@ -143,7 +146,10 @@ class RecognitionArbiter {
   }
 
   RecognitionArbitration? claimStable(SegmentedRecognitionResult candidate) {
-    if (!_isCurrent(candidate)) return null;
+    if (!_isCurrent(candidate)) {
+      _logStaleContext(candidate);
+      return null;
+    }
     final String key = _key(candidate);
     if (_claimedUtterances.contains(key) ||
         _latestPartial[key] != VoiceActionCatalog.normalize(candidate.text) ||
@@ -195,6 +201,22 @@ class RecognitionArbiter {
       resetRoute();
     }
     return true;
+  }
+
+  void _logStaleContext(SegmentedRecognitionResult result) {
+    print(
+      '[VOICE_ARBITER] rejected reason=stale_context '
+      'eventContext={captureEpoch:${result.captureEpoch},'
+      'screen:${result.sourceScreen.name},routeRevision:${result.routeRevision},'
+      'grammarRevision:${result.grammarRevision},'
+      'freeTextEpoch:${result.freeTextEpoch},'
+      'commandUtteranceId:${result.commandUtteranceId}} '
+      'currentContext={captureEpoch:$_currentCaptureEpoch,'
+      'screen:${_screenProvider().name},'
+      'routeRevision:${_routeRevisionProvider()},'
+      'grammarRevision:${_grammarRevisionProvider()},'
+      'freeTextEpoch:${_freeTextEpochProvider()}}',
+    );
   }
 
   void _claim(String key) {

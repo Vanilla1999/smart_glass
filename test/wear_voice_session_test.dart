@@ -162,6 +162,38 @@ void main() {
     expect(speech.freeTextValues, <bool>[false]);
   });
 
+  test('returning to a screen supersedes an unfinished configuration',
+      () async {
+    final _ConfigurationSpeechRecognitionService speech =
+        _ConfigurationSpeechRecognitionService(blockFirstSwitch: false);
+    final WearVoiceSession session = WearVoiceSession(
+      speechRecognitionService: speech,
+      actionCatalog: VoiceActionCatalog(),
+    );
+
+    await session.configureForScreen(WearScreenId.availabilityInteraction);
+    final Completer<void> freeTextStarted = Completer<void>();
+    final Completer<void> releaseFreeText = Completer<void>();
+    speech
+      ..freeTextEnableStarted = freeTextStarted
+      ..releaseFreeTextEnable = releaseFreeText;
+
+    final Future<void> group =
+        session.configureForScreen(WearScreenId.availabilityGroup);
+    await freeTextStarted.future;
+    final Future<void> interaction =
+        session.configureForScreen(WearScreenId.availabilityInteraction);
+    releaseFreeText.complete();
+    await Future.wait(<Future<void>>[group, interaction]);
+
+    expect(speech.switchedScreens, <WearScreenId>[
+      WearScreenId.availabilityInteraction,
+      WearScreenId.availabilityGroup,
+      WearScreenId.availabilityInteraction,
+    ]);
+    expect(speech.freeTextValues, <bool>[false, true, false]);
+  });
+
   test('failed grammar recovery marks an active session unavailable', () async {
     final _FailingStartSpeechRecognitionService speech =
         _FailingStartSpeechRecognitionService()
@@ -188,10 +220,15 @@ void main() {
 }
 
 class _ConfigurationSpeechRecognitionService extends SpeechRecognitionService {
+  _ConfigurationSpeechRecognitionService({this.blockFirstSwitch = true});
+
+  final bool blockFirstSwitch;
   final Completer<void> firstSwitchStarted = Completer<void>();
   final Completer<void> releaseFirstSwitch = Completer<void>();
   final List<WearScreenId> switchedScreens = <WearScreenId>[];
   final List<bool> freeTextValues = <bool>[];
+  Completer<void>? freeTextEnableStarted;
+  Completer<void>? releaseFreeTextEnable;
 
   @override
   Future<void> switchCommandGrammar({
@@ -199,7 +236,7 @@ class _ConfigurationSpeechRecognitionService extends SpeechRecognitionService {
     required List<String> grammar,
   }) async {
     switchedScreens.add(screen);
-    if (switchedScreens.length == 1) {
+    if (blockFirstSwitch && switchedScreens.length == 1) {
       firstSwitchStarted.complete();
       await releaseFirstSwitch.future;
     }
@@ -208,6 +245,11 @@ class _ConfigurationSpeechRecognitionService extends SpeechRecognitionService {
   @override
   Future<void> setFreeTextEnabled(bool enabled) async {
     freeTextValues.add(enabled);
+    if (enabled) {
+      final Completer<void>? started = freeTextEnableStarted;
+      if (started != null && !started.isCompleted) started.complete();
+      await releaseFreeTextEnable?.future;
+    }
   }
 }
 

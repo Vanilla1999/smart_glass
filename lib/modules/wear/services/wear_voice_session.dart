@@ -157,6 +157,7 @@ class WearVoiceSession {
     final Future<void> next = _configurationOperation.then((_) async {
       if (generation != _configurationGeneration) return;
       if (!force && _configuredScreen == screen) return;
+      _configuredScreen = null;
       final VoiceActionCatalog catalog =
           _actionCatalog ?? WearDependencies.I.voiceActionCatalog;
       final bool freeText = _usesFreeTextRecognition(screen);

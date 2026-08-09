@@ -441,7 +441,7 @@ class SpeechRecognitionService {
       }
       if (_sourceScreen != screen && _commandUtteranceStartedAtMillis != null) {
         final int interruptedUtteranceId = _commandUtteranceId;
-        _finalizeCommandUtterance(applyPendingGrammarSwitch: false);
+        _finalizeCommandUtterance();
         _admittedCommandUtteranceId = _commandUtteranceId;
         _naturalEndpointTail = null;
         print(
@@ -2067,7 +2067,7 @@ class SpeechRecognitionService {
       captureEpoch: captureEpoch,
       segment: segment,
     );
-    _finalizeCommandUtterance(applyPendingGrammarSwitch: false);
+    _finalizeCommandUtterance();
     if (liveFinalization != null) await liveFinalization;
     try {
       await _applyPendingGrammarSwitchNow();
@@ -4031,33 +4031,13 @@ class SpeechRecognitionService {
     );
   }
 
-  void _finalizeCommandUtterance({
-    bool clearPartial = true,
-    bool applyPendingGrammarSwitch = true,
-  }) {
+  void _finalizeCommandUtterance({bool clearPartial = true}) {
     if (clearPartial) _commandPartialText = '';
     _freeTextPartialText = '';
     _freeTextLiveBatchCount = 0;
     _commandUtteranceStartedAtMillis = null;
     _naturalCommandFinals.remove(_commandUtteranceId);
     _commandUtteranceId++;
-    if (!applyPendingGrammarSwitch) return;
-    final pending = _pendingGrammarSwitch;
-    _pendingGrammarSwitch = null;
-    if (pending != null) {
-      unawaited(switchCommandGrammar(
-        screen: pending.screen,
-        grammar: pending.grammar,
-      ).then((_) {
-        for (final Completer<void> waiter in pending.waiters) {
-          if (!waiter.isCompleted) waiter.complete();
-        }
-      }, onError: (Object error, StackTrace stackTrace) {
-        for (final Completer<void> waiter in pending.waiters) {
-          if (!waiter.isCompleted) waiter.completeError(error, stackTrace);
-        }
-      }));
-    }
   }
 
   Future<void> _applyPendingGrammarSwitchNow() async {
@@ -4232,6 +4212,7 @@ class SpeechRecognitionService {
     }
     if (_commandUtteranceId == expectedUtteranceId) {
       _finalizeCommandUtterance();
+      await _applyPendingGrammarSwitchNow();
     }
     print(
       '[VOICE_BOUNDARY] commandUtteranceId=$expectedUtteranceId '
