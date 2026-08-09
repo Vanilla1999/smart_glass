@@ -10,7 +10,7 @@ void main() {
         pcmBytes: 160000,
         purpose: VoiceReplayPurpose.refinement,
       ),
-      const Duration(seconds: 2),
+      const Duration(milliseconds: 1500),
     );
   });
 
@@ -86,33 +86,33 @@ void main() {
     expect(decision.reason, 'multi_word_command_final');
   });
 
-  test('short recovery keeps the existing four second floor', () {
+  test('short recovery applies headroom above the 2.5 second floor', () {
     expect(
       policy.budgetFor(
         pcmBytes: 40960,
         purpose: VoiceReplayPurpose.recovery,
       ),
-      const Duration(seconds: 4),
+      const Duration(milliseconds: 2530),
     );
   });
 
-  test('five seconds of audio keeps two seconds of recovery headroom', () {
+  test('five seconds of audio is bounded by the recovery ceiling', () {
     expect(
       policy.budgetFor(
         pcmBytes: 160000,
         purpose: VoiceReplayPurpose.recovery,
       ),
-      const Duration(seconds: 7),
+      const Duration(seconds: 5),
     );
   });
 
-  test('long recovery is bounded by the eight second ceiling', () {
+  test('long recovery is bounded by the five second ceiling', () {
     expect(
       policy.budgetFor(
         pcmBytes: 640000,
         purpose: VoiceReplayPurpose.recovery,
       ),
-      const Duration(seconds: 8),
+      const Duration(seconds: 5),
     );
   });
 
@@ -122,7 +122,7 @@ void main() {
         pcmBytes: 0,
         purpose: VoiceReplayPurpose.recovery,
       ),
-      const Duration(seconds: 4),
+      const Duration(milliseconds: 2500),
     );
   });
 }

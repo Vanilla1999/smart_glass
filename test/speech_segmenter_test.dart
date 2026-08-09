@@ -23,9 +23,12 @@ void main() {
         segmenter.add(Uint8List.fromList(<int>[200, 0]), 3)!;
 
     expect((first.captureEpoch, first.segmentId), (3, 1));
+    expect(first.speechTurnId, 1);
     expect((middle.captureEpoch, middle.segmentId), (3, 1));
+    expect(middle.speechTurnId, first.speechTurnId);
     expect(endpoint.isEndpoint, isTrue);
     expect((next.captureEpoch, next.segmentId), (3, 2));
+    expect(next.speechTurnId, 2);
   });
 
   test('new capture epoch discards old chunks and restarts segment numbering',
@@ -192,6 +195,40 @@ void main() {
     expect(endpoint!.isEndpoint, isTrue);
     expect(first.segmentId, 1);
     expect(second.segmentId, 2);
+  });
+
+  test('max-duration rollover preserves acoustic speech turn identity', () {
+    final SpeechSegmenter segmenter = SpeechSegmenter(
+      sampleRate: 1000,
+      calibrationDuration: Duration.zero,
+      maxSegmentDuration: const Duration(milliseconds: 40),
+      maxDurationContinuation: const Duration(milliseconds: 200),
+    );
+    segmenter.begin(1);
+
+    final SpeechSegment first = segmenter.add(_pcmFrame(328), 1)!;
+    final SpeechSegment rollover = segmenter.add(_pcmFrame(328), 1)!;
+    final SpeechSegment continued = segmenter.add(_pcmFrame(328), 1)!;
+
+    expect(rollover.isEndpoint, isTrue);
+    expect(rollover.endpointReason, AcousticEndpointReason.maxDuration);
+    expect(continued.started, isTrue);
+    expect(continued.segmentId, isNot(first.segmentId));
+    expect(continued.speechTurnId, first.speechTurnId);
+  });
+
+  test('confirmed silence starts a new acoustic speech turn', () {
+    final SpeechSegmenter segmenter = SpeechSegmenter(
+      sampleRate: 1000,
+      calibrationDuration: Duration.zero,
+      endpointSilence: const Duration(milliseconds: 40),
+    );
+    segmenter.begin(1);
+    final SpeechSegment first = segmenter.add(_pcmFrame(328), 1)!;
+    segmenter.add(_pcmFrame(0), 1);
+    segmenter.add(_pcmFrame(0), 1);
+    final SpeechSegment next = segmenter.add(_pcmFrame(328), 1)!;
+    expect(next.speechTurnId, isNot(first.speechTurnId));
   });
 }
 

@@ -1168,7 +1168,7 @@ void main() {
     await service.waitForProcessing();
 
     expect((await result).text, 'бакалея');
-    expect(freeText.accepted, hasLength(1));
+    expect(freeText.accepted, hasLength(2));
     expect(freeText.finalCalls, 1);
   });
 
@@ -1210,7 +1210,7 @@ void main() {
     await service.waitForProcessing();
 
     expect((await result).text, 'молочная');
-    expect(freeText.accepted, hasLength(1));
+    expect(freeText.accepted, hasLength(2));
     expect(freeText.finalCalls, 1);
   });
 
@@ -1938,7 +1938,7 @@ void main() {
     await Future.wait<void>(<Future<void>>[first, queuedTail]);
     await service.waitForProcessing();
 
-    expect(command.accepted, hasLength(1));
+    expect(command.accepted, hasLength(2));
     expect(service.commandUtteranceId, 2);
   });
 
@@ -2032,6 +2032,7 @@ void main() {
         SpeechSegment(
           captureEpoch: 1,
           segmentId: 1,
+          speechTurnId: 1,
           lastChunkId: 1,
           isEndpoint: false,
           started: true,
@@ -2039,6 +2040,7 @@ void main() {
         SpeechSegment(
           captureEpoch: 1,
           segmentId: 2,
+          speechTurnId: 2,
           lastChunkId: 2,
           isEndpoint: false,
           started: true,
@@ -2046,6 +2048,7 @@ void main() {
         SpeechSegment(
           captureEpoch: 1,
           segmentId: 2,
+          speechTurnId: 2,
           lastChunkId: 3,
           isEndpoint: false,
           started: false,
@@ -2292,7 +2295,7 @@ void main() {
       (await result.timeout(const Duration(seconds: 1))).text,
       'молочная',
     );
-    expect(freeText.accepted, hasLength(6));
+    expect(freeText.accepted, hasLength(24));
     expect(freeText.finalCalls, 1);
     expect(
       service.replayOwnership.status,

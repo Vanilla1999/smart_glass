@@ -9,11 +9,13 @@ class SpeechSegmentStarted {
   const SpeechSegmentStarted({
     required this.captureEpoch,
     required this.segmentId,
+    this.speechTurnId = 0,
     required this.startChunkId,
   });
 
   final int captureEpoch;
   final int segmentId;
+  final int speechTurnId;
   final int startChunkId;
 }
 

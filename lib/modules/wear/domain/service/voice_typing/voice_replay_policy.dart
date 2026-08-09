@@ -10,10 +10,10 @@ enum VoiceReplayPurpose {
 
 class VoiceReplayPolicy {
   const VoiceReplayPolicy({
-    this.refinementBudget = const Duration(seconds: 2),
-    this.minimumRecoveryBudget = const Duration(seconds: 4),
-    this.recoveryHeadroom = const Duration(seconds: 2),
-    this.maximumRecoveryBudget = const Duration(seconds: 8),
+    this.refinementBudget = const Duration(milliseconds: 1500),
+    this.minimumRecoveryBudget = const Duration(milliseconds: 2500),
+    this.recoveryHeadroom = const Duration(milliseconds: 1250),
+    this.maximumRecoveryBudget = const Duration(seconds: 5),
     this.commandYieldPollInterval = const Duration(milliseconds: 5),
     this.standaloneAmbiguousHintMaxAudio = const Duration(milliseconds: 1300),
     this.standaloneAmbiguousHintMaxContinuation =

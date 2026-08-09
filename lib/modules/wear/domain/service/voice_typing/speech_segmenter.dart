@@ -5,6 +5,7 @@ class SpeechSegment {
   const SpeechSegment({
     required this.captureEpoch,
     required this.segmentId,
+    this.speechTurnId = 0,
     required this.lastChunkId,
     required this.isEndpoint,
     required this.started,
@@ -13,6 +14,10 @@ class SpeechSegment {
 
   final int captureEpoch;
   final int segmentId;
+
+  /// Stable acoustic speech identity. Unlike [segmentId], this does not
+  /// change on a technical max-duration rollover.
+  final int speechTurnId;
   final int lastChunkId;
   final bool isEndpoint;
   final bool started;
@@ -49,6 +54,7 @@ class SpeechSegmenter {
     this.sampleRate = 16000,
     this.endpointSilence = const Duration(milliseconds: 500),
     this.maxSegmentDuration = const Duration(seconds: 4),
+    this.maxDurationContinuation = const Duration(milliseconds: 200),
     this.calibrationDuration = const Duration(milliseconds: 750),
     this.speechOnRms = 0.001,
     this.speechOffRms = 0.0007,
@@ -58,14 +64,19 @@ class SpeechSegmenter {
   final int sampleRate;
   final Duration endpointSilence;
   final Duration maxSegmentDuration;
+  final Duration maxDurationContinuation;
   final Duration calibrationDuration;
   double speechOnRms;
   double speechOffRms;
   final double initialNoiseFloorRms;
   int _epoch = 0;
   int _nextSegmentId = 0;
+  int _nextSpeechTurnId = 0;
   int _nextChunkId = 0;
   int? _activeSegmentId;
+  int? _activeSpeechTurnId;
+  int? _pendingContinuationSpeechTurnId;
+  int _pendingContinuationSilentSamples = 0;
   int _silentSamples = 0;
   int _segmentSamples = 0;
   int _calibrationSamples = 0;
@@ -97,8 +108,12 @@ class SpeechSegmenter {
   void begin(int captureEpoch) {
     _epoch = captureEpoch;
     _nextSegmentId = 0;
+    _nextSpeechTurnId = 0;
     _nextChunkId = 0;
     _activeSegmentId = null;
+    _activeSpeechTurnId = null;
+    _pendingContinuationSpeechTurnId = null;
+    _pendingContinuationSilentSamples = 0;
     _silentSamples = 0;
     _segmentSamples = 0;
     _calibrationSamples = 0;
@@ -156,7 +171,18 @@ class SpeechSegmenter {
     );
     if (!speaking) {
       final int? segmentId = _activeSegmentId;
-      if (segmentId == null) return null;
+      if (segmentId == null) {
+        if (_pendingContinuationSpeechTurnId != null) {
+          _pendingContinuationSilentSamples += sampleCount;
+          if (_pendingContinuationSilentSamples >=
+              _durationToSamples(maxDurationContinuation)) {
+            _pendingContinuationSpeechTurnId = null;
+            _pendingContinuationSilentSamples = 0;
+          }
+        }
+        return null;
+      }
+      final int speechTurnId = _activeSpeechTurnId!;
       _silentSamples += sampleCount;
       _segmentSamples += sampleCount;
       final bool endpoint =
@@ -169,12 +195,21 @@ class SpeechSegmenter {
           : null;
       if (endpoint) {
         _activeSegmentId = null;
+        _activeSpeechTurnId = null;
+        if (endpointReason == AcousticEndpointReason.maxDuration) {
+          _pendingContinuationSpeechTurnId = speechTurnId;
+          _pendingContinuationSilentSamples = 0;
+        } else {
+          _pendingContinuationSpeechTurnId = null;
+          _pendingContinuationSilentSamples = 0;
+        }
         _silentSamples = 0;
         _segmentSamples = 0;
       }
       return SpeechSegment(
         captureEpoch: _epoch,
         segmentId: segmentId,
+        speechTurnId: speechTurnId,
         lastChunkId: chunkId,
         isEndpoint: endpoint,
         started: false,
@@ -185,16 +220,24 @@ class SpeechSegmenter {
     _silentSamples = 0;
     final bool started = _activeSegmentId == null;
     final int segmentId = _activeSegmentId ??= ++_nextSegmentId;
+    final int speechTurnId = _activeSpeechTurnId ??=
+        _pendingContinuationSpeechTurnId ?? ++_nextSpeechTurnId;
+    _pendingContinuationSpeechTurnId = null;
+    _pendingContinuationSilentSamples = 0;
     _segmentSamples += sampleCount;
     final bool endpoint =
         _segmentSamples >= _durationToSamples(maxSegmentDuration);
     if (endpoint) {
       _activeSegmentId = null;
+      _activeSpeechTurnId = null;
+      _pendingContinuationSpeechTurnId = speechTurnId;
+      _pendingContinuationSilentSamples = 0;
       _segmentSamples = 0;
     }
     return SpeechSegment(
       captureEpoch: _epoch,
       segmentId: segmentId,
+      speechTurnId: speechTurnId,
       lastChunkId: chunkId,
       isEndpoint: endpoint,
       started: started,
@@ -205,6 +248,9 @@ class SpeechSegmenter {
   void end(int captureEpoch) {
     if (captureEpoch == _epoch) {
       _activeSegmentId = null;
+      _activeSpeechTurnId = null;
+      _pendingContinuationSpeechTurnId = null;
+      _pendingContinuationSilentSamples = 0;
       _silentSamples = 0;
       _segmentSamples = 0;
     }

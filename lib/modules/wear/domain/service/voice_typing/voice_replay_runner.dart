@@ -76,6 +76,7 @@ class VoiceReplayRunner {
           arbiter.startSegment(SpeechSegmentStarted(
             captureEpoch: captureEpoch,
             segmentId: segment.segmentId,
+            speechTurnId: segment.speechTurnId,
             startChunkId: segment.lastChunkId,
           ));
         }

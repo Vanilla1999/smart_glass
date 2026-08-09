@@ -209,6 +209,7 @@ class SpeechRecognitionService {
   int _latestActionableCommandUtteranceId = 0;
   int _admittedCommandUtteranceId = 1;
   int _latestAdmittedSegmentId = 0;
+  final Map<int, int> _speechTurnByCommandUtterance = <int, int>{};
   ({
     int captureEpoch,
     int segmentId,
@@ -267,7 +268,7 @@ class SpeechRecognitionService {
   int _replayFallbackCount = 0;
   int _conflictCount = 0;
   final BoundedPcmBuffer _utterancePcm = BoundedPcmBuffer(
-    maxBytes: 160000, // Five seconds of 16 kHz mono PCM16.
+    maxBytes: 80000, // 2.5 seconds of 16 kHz mono PCM16.
   );
   Future<void> _freeTextRecognizerReady = Future<void>.value();
 
@@ -369,6 +370,7 @@ class SpeechRecognitionService {
   void _beginCaptureEpoch(int captureEpoch) {
     _speechSegmenter.begin(captureEpoch);
     _latestAdmittedSegmentId = 0;
+    _speechTurnByCommandUtterance.clear();
   }
 
   Future<void> switchCommandGrammar({
@@ -1286,21 +1288,41 @@ class SpeechRecognitionService {
     bool admitted = false,
   }) {
     if (_commandRecognizer == null) return Future<void>.value();
+    _speechTurnByCommandUtterance.putIfAbsent(
+      commandUtteranceId,
+      () => segment.speechTurnId,
+    );
     _pendingCommandFrames++;
     final int queuedAt = DateTime.now().millisecondsSinceEpoch;
     final Future<void> next = _commandAudioProcessing.then((_) {
       if (_pendingCommandFrames > 0) _pendingCommandFrames--;
+      final bool decoderAdvancedInsideSameSpeechTurn =
+          commandUtteranceId != _commandUtteranceId &&
+              segment.speechTurnId ==
+                  _speechTurnByCommandUtterance[commandUtteranceId];
       if (!_captureEpoch.isCurrent(captureEpoch) ||
-          commandUtteranceId != _commandUtteranceId) {
-        if (commandUtteranceId != _commandUtteranceId) {
+          (commandUtteranceId != _commandUtteranceId &&
+              !decoderAdvancedInsideSameSpeechTurn)) {
+        if (commandUtteranceId != _commandUtteranceId &&
+            !decoderAdvancedInsideSameSpeechTurn) {
           print(
             '[VOICE_BOUNDARY] dropped stale queued command chunk '
             'captureEpoch=$captureEpoch segmentId=${segment.segmentId} '
+            'speechTurnId=${segment.speechTurnId} '
             'admittedUtteranceId=$commandUtteranceId '
             'currentUtteranceId=$_commandUtteranceId',
           );
         }
         return Future<void>.value();
+      }
+      if (decoderAdvancedInsideSameSpeechTurn) {
+        print(
+          '[VOICE_BOUNDARY] retained queued command chunk after natural endpoint '
+          'captureEpoch=$captureEpoch segmentId=${segment.segmentId} '
+          'speechTurnId=${segment.speechTurnId} '
+          'admittedUtteranceId=$commandUtteranceId '
+          'currentUtteranceId=$_commandUtteranceId',
+        );
       }
       final VoiceRecognizer? recognizer = _commandRecognizer;
       if (recognizer == null) return Future<void>.value();
@@ -2385,7 +2407,7 @@ class SpeechRecognitionService {
     if (_abortReplayIfInvalid(replayContext)) return;
     final Stopwatch replayClock = Stopwatch()..start();
     final int startedAt = DateTime.now().millisecondsSinceEpoch;
-    final int replayBatchCount = (bytes.lengthInBytes + 2559) ~/ 2560;
+    final int replayBatchCount = (bytes.lengthInBytes + 639) ~/ 640;
     final int replayAudioMs = _pcmDurationMillis(bytes.lengthInBytes);
     final VoiceReplayPurpose replayPurpose = commandFallback == null
         ? VoiceReplayPurpose.recovery
@@ -2552,7 +2574,9 @@ class SpeechRecognitionService {
         '${DateTime.now().millisecondsSinceEpoch - startedAt} '
         'remainingMs=${_remainingReplayBudget(replayClock, replayBudget).inMilliseconds}',
       );
-      const int replayBatchBytes = 2560; // 80 ms at 16 kHz mono PCM16.
+      // Keep one uninterruptible JNI operation to one 20 ms VAD frame.
+      // Command priority can only take effect between native calls.
+      const int replayBatchBytes = 640;
       final List<String> results = <String>[];
       for (int offset = 0;
           offset < bytes.lengthInBytes;
