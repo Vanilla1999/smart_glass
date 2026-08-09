@@ -66,14 +66,22 @@ class NativePcmPacket {
 typedef NativePcmConsumer = FutureOr<bool> Function(NativePcmPacket packet);
 
 class NativePcmPacketEndpoint {
+  NativePcmPacketEndpoint({
+    void Function(Object error, StackTrace stackTrace)? onConsumerError,
+  }) : _onConsumerError = onConsumerError;
+
   static const int accepted = 0;
   static const int staleLease = 1;
   static const int malformedPacket = 2;
   static const int invalidPacket = 3;
   static const int consumerRejected = 4;
+  static const int consumerFailure = 5;
 
+  final void Function(Object error, StackTrace stackTrace)? _onConsumerError;
   _NativePcmSession? _session;
   int _generation = 0;
+
+  int? get debugActiveRevision => _session?.revision;
 
   void beginSession({
     required int leaseId,
@@ -139,11 +147,12 @@ class NativePcmPacketEndpoint {
       session.lastSequence = sequence;
       session.lastTimestampNanos = pcm.elapsedRealtimeNanos;
       return acknowledgement(accepted, leaseId, sequence);
-    } catch (_) {
+    } catch (error, stackTrace) {
       if (identical(_session, session) && session.pendingSequence == sequence) {
         session.pendingSequence = null;
       }
-      return acknowledgement(consumerRejected, leaseId, sequence);
+      _onConsumerError?.call(error, stackTrace);
+      return acknowledgement(consumerFailure, leaseId, sequence);
     }
   }
 
@@ -186,6 +195,11 @@ class _NativePcmSession {
   }
 }
 
+abstract interface class NativeVoiceStateSource {
+  bool isOwnedBy(NativeVoiceOwner owner);
+  bool isRelevantStateEvent(NativeVoiceStateEvent event);
+}
+
 /// Boundary used by the Dart voice pipeline to receive native PCM packets.
 ///
 /// Production uses [NativeVoiceCapture]. Tests can replay recorded packets
@@ -205,7 +219,8 @@ abstract interface class NativeVoiceCapturePort {
   });
 }
 
-class NativeVoiceCapture implements NativeVoiceCapturePort {
+class NativeVoiceCapture
+    implements NativeVoiceCapturePort, NativeVoiceStateSource {
   NativeVoiceCapture._() {
     _pcmChannel.setMessageHandler(_onPacket);
     _stateSubscription = _eventChannel.receiveBroadcastStream().listen(
@@ -228,7 +243,14 @@ class NativeVoiceCapture implements NativeVoiceCapturePort {
   int? _activeLeaseId;
   int? _activeRevision;
   NativeVoiceOwner? _activeOwner;
-  final NativePcmPacketEndpoint _pcmEndpoint = NativePcmPacketEndpoint();
+  final NativePcmPacketEndpoint _pcmEndpoint = NativePcmPacketEndpoint(
+    onConsumerError: (Object error, StackTrace stackTrace) {
+      print(
+        '[NativeVoiceCapture] PCM consumer failed: '
+        '$error\n$stackTrace',
+      );
+    },
+  );
   int? _reconciledLeaseId;
   int? _reconciledRevision;
   int _operationGeneration = 0;
@@ -247,12 +269,14 @@ class NativeVoiceCapture implements NativeVoiceCapturePort {
       event.leaseId == _reconciledLeaseId &&
       event.revision == _reconciledRevision;
 
+  @override
   bool isRelevantStateEvent(NativeVoiceStateEvent event) {
     if (event.leaseId != null) return reconciledTermination(event);
     return _activeOwner != null &&
         (_activeRevision == null || event.revision >= _activeRevision!);
   }
 
+  @override
   bool isOwnedBy(NativeVoiceOwner owner) => _activeOwner == owner;
 
   @override

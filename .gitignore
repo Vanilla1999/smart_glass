@@ -51,3 +51,6 @@ app.*.map.json
 
 # FVM Version Cache
 .fvm/
+
+# Local voice regression recordings are copied here only for test builds.
+integration_test/fixtures/*.wav

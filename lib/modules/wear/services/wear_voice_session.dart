@@ -11,6 +11,7 @@ import 'package:smart_glasses/modules/wear/services/voice_state.dart';
 class WearVoiceSession {
   WearVoiceSession({
     SpeechRecognitionService? speechRecognitionService,
+    NativeVoiceStateSource? nativeVoiceStateSource,
     Future<void> Function()? ensurePrepared,
     int Function()? nowMillis,
     Future<void> Function(Duration duration)? delay,
@@ -18,6 +19,7 @@ class WearVoiceSession {
     VoiceActionCatalog? actionCatalog,
     List<String> Function(WearScreenId screen)? dynamicGrammarPhrases,
   })  : _speechRecognitionService = speechRecognitionService,
+        _nativeVoiceStateSource = nativeVoiceStateSource,
         _ensurePrepared = ensurePrepared,
         _nowMillis = nowMillis ?? (() => DateTime.now().millisecondsSinceEpoch),
         _delay = delay ?? Future<void>.delayed,
@@ -27,6 +29,7 @@ class WearVoiceSession {
 
   static final WearVoiceSession I = WearVoiceSession();
   final SpeechRecognitionService? _speechRecognitionService;
+  final NativeVoiceStateSource? _nativeVoiceStateSource;
   final Future<void> Function()? _ensurePrepared;
   final int Function() _nowMillis;
   final Future<void> Function(Duration duration) _delay;
@@ -63,6 +66,8 @@ class WearVoiceSession {
 
   SpeechRecognitionService get _speech =>
       _speechRecognitionService ?? WearDependencies.I.speechRecognitionService;
+  NativeVoiceStateSource get _nativeStateSource =>
+      _nativeVoiceStateSource ?? NativeVoiceCapture.instance;
   Future<void> _prepare() =>
       _ensurePrepared?.call() ?? WearDependencies.I.ensureVoiceTypingPrepared();
 
@@ -92,11 +97,10 @@ class WearVoiceSession {
       return;
     }
     if (event.leaseId == null &&
-        !NativeVoiceCapture.instance
-            .isOwnedBy(NativeVoiceOwner.wearRecognition)) {
+        !_nativeStateSource.isOwnedBy(NativeVoiceOwner.wearRecognition)) {
       return;
     }
-    if (!NativeVoiceCapture.instance.isRelevantStateEvent(event)) {
+    if (!_nativeStateSource.isRelevantStateEvent(event)) {
       return;
     }
     if (_handledNativeTerminationRevision == event.revision) return;
@@ -116,6 +120,7 @@ class WearVoiceSession {
         code == 'INVALID_SSP_OUTPUT' ||
         code == 'SSP_PROCESS_FAILED' ||
         code == 'PCM_CONSUMER_BACKPRESSURE' ||
+        code == 'PCM_CONSUMER_FAILED' ||
         code == 'UAC4_INIT_TIMEOUT' ||
         code == 'UAC4_START_TIMEOUT' ||
         code == 'UAC4_STOP_FAILED' ||

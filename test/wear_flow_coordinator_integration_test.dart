@@ -1090,6 +1090,87 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       expect(phraseCalls, 0);
     });
 
+    testWearWidget('typed duplicate command acts once through WearModuleApp',
+        (WidgetTester tester) async {
+      final StreamController<WearVoiceCommandEvent> commands =
+          StreamController<WearVoiceCommandEvent>.broadcast();
+      addTearDown(commands.close);
+      final WearFlowController flow = WearFlowController(
+        glassesOutput: _TestGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+
+      await tester.pumpWidget(WearModuleApp(
+        flowController: flow,
+        voiceCommandEventStream: commands.stream,
+        routes: _testRoutes,
+        initialLocation: WearMenuScreen.route,
+        onStartVoice: () async {},
+        onStopVoice: () async {},
+        onRestartVoice: (_) async {},
+      ));
+      await tester.pumpAndSettle();
+      final SpeechRecognitionService speech =
+          WearDependencies.I.speechRecognitionService;
+      final WearVoiceCommandEvent event = WearVoiceCommandEvent(
+        command: WearVoiceCommand.down,
+        traceId: 'duplicate-widget',
+        recognizedAtMillis: 1,
+        asrMillis: 1,
+        captureEpoch: speech.captureEpoch,
+        commandUtteranceId: 991,
+        sourceScreen: WearScreenId.menu,
+        routeRevision: speech.routeRevision,
+        grammarRevision: speech.grammarRevision,
+      );
+
+      commands
+        ..add(event)
+        ..add(event);
+      await tester.pumpAndSettle();
+
+      expect(flow.state.menuFocusedIndex, 1);
+    });
+
+    testWearWidget('stale typed microphone stop cannot pause current capture',
+        (WidgetTester tester) async {
+      final StreamController<WearVoiceCommandEvent> commands =
+          StreamController<WearVoiceCommandEvent>.broadcast();
+      addTearDown(commands.close);
+      final WearFlowController flow = WearFlowController(
+        glassesOutput: _TestGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+
+      await tester.pumpWidget(WearModuleApp(
+        flowController: flow,
+        voiceCommandEventStream: commands.stream,
+        routes: _testRoutes,
+        initialLocation: WearMenuScreen.route,
+        onStartVoice: () async {},
+        onStopVoice: () async {},
+        onRestartVoice: (_) async {},
+      ));
+      await tester.pumpAndSettle();
+      final SpeechRecognitionService speech =
+          WearDependencies.I.speechRecognitionService;
+
+      commands.add(WearVoiceCommandEvent(
+        command: WearVoiceCommand.stopMicrophone,
+        traceId: 'stale-stop-widget',
+        recognizedAtMillis: 1,
+        asrMillis: 1,
+        captureEpoch: speech.captureEpoch + 1,
+        commandUtteranceId: 992,
+        sourceScreen: WearScreenId.menu,
+        routeRevision: speech.routeRevision,
+        grammarRevision: speech.grammarRevision,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(WearStatusIconReporter.I.voiceCommandsEnabled.value, isTrue);
+    });
+
     testWearWidget(
         'microphone pause suppresses commands and phrases until resumed',
         (WidgetTester tester) async {

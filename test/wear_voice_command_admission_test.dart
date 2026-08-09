@@ -1,44 +1,281 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_admission.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_event.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_phrase_event.dart';
 
 void main() {
-  test('accepts only the current screen and recognition revisions', () {
-    final WearVoiceCommandEvent current = _event();
+  const WearVoiceAdmissionContext current = (
+    screen: WearScreenId.menu,
+    captureEpoch: 1,
+    routeRevision: 2,
+    grammarRevision: 3,
+    freeTextEpoch: 4,
+    listRevision: 5,
+  );
 
-    expect(_isCurrent(current), isTrue);
-    expect(_isCurrent(_event(screen: WearScreenId.help)), isFalse);
-    expect(_isCurrent(_event(captureEpoch: 2)), isFalse);
-    expect(_isCurrent(_event(routeRevision: 2)), isFalse);
-    expect(_isCurrent(_event(grammarRevision: 2)), isFalse);
+  test('rejects a non-positive completed-key capacity', () {
+    expect(
+      () => WearVoiceEventAdmissionGate(completedCapacity: 0),
+      throwsArgumentError,
+    );
+  });
+
+  test('accepts only the current command and phrase contexts', () {
+    expect(
+      isCurrentWearVoiceCommandEvent(
+        _commandEvent(),
+        screen: current.screen,
+        captureEpoch: current.captureEpoch,
+        routeRevision: current.routeRevision,
+        grammarRevision: current.grammarRevision,
+      ),
+      isTrue,
+    );
+    expect(
+      isCurrentWearVoicePhraseEvent(
+        _phraseEvent(),
+        screen: current.screen,
+        captureEpoch: current.captureEpoch,
+        routeRevision: current.routeRevision,
+        grammarRevision: current.grammarRevision,
+        freeTextEpoch: current.freeTextEpoch,
+        listRevision: current.listRevision,
+      ),
+      isTrue,
+    );
+    expect(
+      isCurrentWearVoicePhraseEvent(
+        _phraseEvent(listRevision: 6),
+        screen: current.screen,
+        captureEpoch: current.captureEpoch,
+        routeRevision: current.routeRevision,
+        grammarRevision: current.grammarRevision,
+        freeTextEpoch: current.freeTextEpoch,
+        listRevision: current.listRevision,
+      ),
+      isFalse,
+    );
+  });
+
+  test('stale events never invoke their action', () async {
+    final WearVoiceEventAdmissionGate gate = WearVoiceEventAdmissionGate();
+    var calls = 0;
+
+    final WearVoiceAdmissionDecision decision = await gate.runCommand(
+      _commandEvent(captureEpoch: 9),
+      context: current,
+      action: () => calls++,
+    );
+
+    expect(decision, WearVoiceAdmissionDecision.stale);
+    expect(calls, 0);
+    expect(gate.debugCompletedCount, 0);
+  });
+
+  test('a completed utterance is admitted exactly once', () async {
+    final WearVoiceEventAdmissionGate gate = WearVoiceEventAdmissionGate();
+    final WearVoiceCommandEvent event = _commandEvent();
+    var calls = 0;
+
+    expect(
+      await gate.runCommand(
+        event,
+        context: current,
+        action: () => calls++,
+      ),
+      WearVoiceAdmissionDecision.accepted,
+    );
+    expect(
+      await gate.runCommand(
+        event,
+        context: current,
+        action: () => calls++,
+      ),
+      WearVoiceAdmissionDecision.duplicate,
+    );
+    expect(calls, 1);
+  });
+
+  test('a concurrent delivery cannot overtake an in-flight action', () async {
+    final WearVoiceEventAdmissionGate gate = WearVoiceEventAdmissionGate();
+    final Completer<void> release = Completer<void>();
+    var calls = 0;
+
+    final Future<WearVoiceAdmissionDecision> first = gate.runCommand(
+      _commandEvent(),
+      context: current,
+      action: () async {
+        calls++;
+        await release.future;
+      },
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      await gate.runCommand(
+        _commandEvent(),
+        context: current,
+        action: () => calls++,
+      ),
+      WearVoiceAdmissionDecision.duplicate,
+    );
+    expect(gate.debugInFlightCount, 1);
+
+    release.complete();
+    expect(await first, WearVoiceAdmissionDecision.accepted);
+    expect(calls, 1);
+  });
+
+  test('command and free-text phrase share one business-action key', () async {
+    final WearVoiceEventAdmissionGate gate = WearVoiceEventAdmissionGate();
+    var commandCalls = 0;
+    var phraseCalls = 0;
+
+    expect(
+      await gate.runCommand(
+        _commandEvent(),
+        context: current,
+        action: () => commandCalls++,
+      ),
+      WearVoiceAdmissionDecision.accepted,
+    );
+    expect(
+      await gate.runPhrase(
+        _phraseEvent(),
+        context: current,
+        action: () => phraseCalls++,
+      ),
+      WearVoiceAdmissionDecision.duplicate,
+    );
+    expect(commandCalls, 1);
+    expect(phraseCalls, 0);
+  });
+
+  test('failed application work can be retried', () async {
+    final WearVoiceEventAdmissionGate gate = WearVoiceEventAdmissionGate();
+    var attempts = 0;
+
+    await expectLater(
+      gate.runCommand(
+        _commandEvent(),
+        context: current,
+        action: () {
+          attempts++;
+          throw StateError('failed');
+        },
+      ),
+      throwsStateError,
+    );
+    expect(gate.debugCompletedCount, 0);
+
+    expect(
+      await gate.runCommand(
+        _commandEvent(),
+        context: current,
+        action: () => attempts++,
+      ),
+      WearVoiceAdmissionDecision.accepted,
+    );
+    expect(attempts, 2);
+  });
+
+  test('one current context remembers every older utterance in bounded space',
+      () async {
+    final WearVoiceEventAdmissionGate gate =
+        WearVoiceEventAdmissionGate(completedCapacity: 2);
+
+    for (int utterance = 1; utterance <= 1000; utterance++) {
+      expect(
+        await gate.runCommand(
+          _commandEvent(commandUtteranceId: utterance),
+          context: current,
+          action: () {},
+        ),
+        WearVoiceAdmissionDecision.accepted,
+      );
+    }
+
+    expect(gate.debugCompletedCount, 1);
+    expect(
+      await gate.runCommand(
+        _commandEvent(commandUtteranceId: 1),
+        context: current,
+        action: () {},
+      ),
+      WearVoiceAdmissionDecision.duplicate,
+    );
+  });
+
+  test('completed recognition contexts remain bounded', () async {
+    final WearVoiceEventAdmissionGate gate =
+        WearVoiceEventAdmissionGate(completedCapacity: 2);
+
+    for (int revision = 1; revision <= 3; revision++) {
+      final WearVoiceAdmissionContext context = (
+        screen: WearScreenId.menu,
+        captureEpoch: 1,
+        routeRevision: revision,
+        grammarRevision: 3,
+        freeTextEpoch: 4,
+        listRevision: 5,
+      );
+      expect(
+        await gate.runCommand(
+          _commandEvent(routeRevision: revision),
+          context: context,
+          action: () {},
+        ),
+        WearVoiceAdmissionDecision.accepted,
+      );
+    }
+
+    expect(gate.debugCompletedCount, 2);
   });
 }
 
-bool _isCurrent(WearVoiceCommandEvent event) => isCurrentWearVoiceCommandEvent(
-      event,
-      screen: WearScreenId.menu,
-      captureEpoch: 1,
-      routeRevision: 1,
-      grammarRevision: 1,
-    );
-
-WearVoiceCommandEvent _event({
+WearVoiceCommandEvent _commandEvent({
+  WearVoiceCommand command = WearVoiceCommand.down,
   WearScreenId screen = WearScreenId.menu,
   int captureEpoch = 1,
-  int routeRevision = 1,
-  int grammarRevision = 1,
+  int commandUtteranceId = 7,
+  int routeRevision = 2,
+  int grammarRevision = 3,
 }) {
   return WearVoiceCommandEvent(
-    command: WearVoiceCommand.down,
-    traceId: 'trace',
+    command: command,
+    traceId: 'trace-$commandUtteranceId',
     recognizedAtMillis: 1,
     asrMillis: 1,
     captureEpoch: captureEpoch,
-    commandUtteranceId: 1,
+    commandUtteranceId: commandUtteranceId,
     sourceScreen: screen,
     routeRevision: routeRevision,
     grammarRevision: grammarRevision,
+  );
+}
+
+WearVoicePhraseEvent _phraseEvent({
+  String phrase = 'жёлтый',
+  WearScreenId screen = WearScreenId.menu,
+  int captureEpoch = 1,
+  int commandUtteranceId = 7,
+  int routeRevision = 2,
+  int grammarRevision = 3,
+  int freeTextEpoch = 4,
+  int listRevision = 5,
+}) {
+  return WearVoicePhraseEvent(
+    phrase: phrase,
+    captureEpoch: captureEpoch,
+    commandUtteranceId: commandUtteranceId,
+    sourceScreen: screen,
+    routeRevision: routeRevision,
+    grammarRevision: grammarRevision,
+    freeTextEpoch: freeTextEpoch,
+    listRevision: listRevision,
   );
 }

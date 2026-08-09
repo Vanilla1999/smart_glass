@@ -4,12 +4,14 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smart_glasses/core/voice/native_voice_capture.dart';
 import 'package:smart_glasses/modules/wear/application/ports/wear_glasses_output.dart';
 import 'package:smart_glasses/modules/wear/application/ports/wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_navigation_entry.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
+import 'package:smart_glasses/modules/wear/application/wear_voice_application_dispatcher.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_admission.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_control_service.dart';
@@ -52,22 +54,35 @@ void main() {
     );
     flow.setUiLifecycle(WearUiLifecycle.active);
     flow.enterScreen(WearScreenId.menu);
-    final StreamSubscription<WearVoiceCommandEvent> subscription =
-        control.commandEventStream.listen((event) async {
-      trace.add('command_emitted');
-      if (!isCurrentWearVoiceCommandEvent(
-        event,
-        screen: flow.state.screen,
+    var commandsEnabled = true;
+    final Completer<void> commandHandled = Completer<void>();
+    final WearVoiceApplicationDispatcher dispatcher =
+        WearVoiceApplicationDispatcher(
+      flowController: flow,
+      revisionSnapshotProvider: () => (
         captureEpoch: speech.captureEpoch,
         routeRevision: speech.routeRevision,
         grammarRevision: speech.grammarRevision,
-      )) {
-        trace.add('command_rejected');
-        return;
+        freeTextEpoch: speech.freeTextEpoch,
+        commandUtteranceId: speech.commandUtteranceId,
+        commandPartialRevision: speech.commandPartialRevision,
+        freeTextPartialRevision: speech.freeTextPartialRevision,
+      ),
+      commandsEnabledProvider: () => commandsEnabled,
+      commandsEnabledSetter: (bool value) => commandsEnabled = value,
+      acceptsCommandsProvider: () => true,
+      onCommandAccepted: (_) => trace.add('command_accepted'),
+      log: (_) {},
+    );
+    final StreamSubscription<WearVoiceCommandEvent> subscription =
+        control.commandEventStream.listen((event) async {
+      trace.add('command_emitted');
+      final WearVoiceAdmissionDecision decision =
+          await dispatcher.dispatchCommand(event.command, event: event);
+      if (decision == WearVoiceAdmissionDecision.accepted) {
+        trace.add('command_handled');
+        if (!commandHandled.isCompleted) commandHandled.complete();
       }
-      trace.add('command_accepted');
-      await flow.handleVoiceCommand(event.command);
-      trace.add('command_handled');
     });
 
     try {
@@ -81,11 +96,25 @@ void main() {
         (_) => _pcmPacket(12000),
       ));
       await speech.waitForProcessing();
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await commandHandled.future.timeout(const Duration(seconds: 2));
+      await speech.stopListening();
+      await speech.waitForProcessing();
+      await Future<void>.delayed(Duration.zero);
 
       expect(audio.chunksReceived, 12);
       expect(capture.acknowledgements, everyElement(isTrue));
-      expect(recognizer.accepted, hasLength(4));
+      expect(
+        capture.acknowledgementRecords,
+        List<ReplayPcmAcknowledgement>.generate(
+          12,
+          (int sequence) => (
+            status: NativePcmPacketEndpoint.accepted,
+            leaseId: 1,
+            sequence: sequence,
+          ),
+        ),
+      );
+      expect(recognizer.accepted, hasLength(5));
       expect(navigation.goToCalls,
           <WearScreenId>[WearScreenId.availabilityInteraction]);
       expect(trace, <String>[
@@ -102,6 +131,7 @@ void main() {
       await subscription.cancel();
       await control.dispose();
       await speech.dispose();
+      await capture.dispose();
     }
   });
 
@@ -142,7 +172,8 @@ void main() {
     }
   });
 
-  test('WAV replay reader splits PCM16 mono at 20 ms boundaries', () async {
+  test('WAV replay reader splits PCM16 mono into native 1024-byte packets',
+      () async {
     final Directory directory = await Directory.systemTemp.createTemp('voice');
     final File file = File('${directory.path}/fixture.wav');
     final Uint8List pcm = Uint8List(1984);

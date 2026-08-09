@@ -58,3 +58,4 @@ flutter:
     - assets/svg/wear/
     - assets/develop.env
     - assets/catalog/availability_catalog.json
+    - integration_test/fixtures/

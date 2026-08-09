@@ -48,14 +48,29 @@ class CaptureLeaseState {
 object PcmAckProtocol {
     const val BYTES = 24
     const val VERSION = 1
+    const val ACCEPTED = 0
+    const val STALE_LEASE = 1
+    const val MALFORMED_PACKET = 2
+    const val INVALID_PACKET = 3
+    const val CONSUMER_REJECTED = 4
+    const val CONSUMER_FAILURE = 5
+    private val VALID_STATUSES = ACCEPTED..CONSUMER_FAILURE
 
     fun decode(reply: ByteBuffer?): PcmAcknowledgement? {
         if (reply == null || reply.remaining() != BYTES) return null
         val view = reply.slice().order(ByteOrder.BIG_ENDIAN)
         if (view.int != VERSION) return null
         val status = view.int
-        if (status !in 0..4) return null
+        if (status !in VALID_STATUSES) return null
         return PcmAcknowledgement(status, view.long, view.long)
+    }
+
+    fun failureCode(status: Int): String? = when (status) {
+        ACCEPTED -> null
+        CONSUMER_REJECTED -> "RECOGNITION_BACKLOG"
+        CONSUMER_FAILURE -> "PCM_CONSUMER_FAILED"
+        STALE_LEASE, MALFORMED_PACKET, INVALID_PACKET -> "INVALID_PCM_FRAME"
+        else -> "PCM_ACK_PROTOCOL_ERROR"
     }
 }
 

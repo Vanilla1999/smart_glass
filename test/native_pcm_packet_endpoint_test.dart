@@ -194,6 +194,7 @@ void main() {
       ..endSession()
       ..beginSession(leaseId: 4, revision: 2, consumer: (_) => true)
       ..markStreaming();
+    expect(endpoint.debugActiveRevision, 2);
     oldAcknowledgement.complete(true);
 
     expect(_ack(await oldPacket).status, NativePcmPacketEndpoint.staleLease);
@@ -203,12 +204,15 @@ void main() {
     );
   });
 
-  test('consumer rejection and exception return backlog acknowledgement',
+  test('consumer rejection and exception have distinct acknowledgements',
       () async {
+    Object? observedError;
     final NativePcmPacketEndpoint rejected = NativePcmPacketEndpoint()
       ..beginSession(leaseId: 5, revision: 1, consumer: (_) => false)
       ..markStreaming();
-    final NativePcmPacketEndpoint failed = NativePcmPacketEndpoint()
+    final NativePcmPacketEndpoint failed = NativePcmPacketEndpoint(
+      onConsumerError: (Object error, StackTrace _) => observedError = error,
+    )
       ..beginSession(
         leaseId: 6,
         revision: 1,
@@ -222,8 +226,9 @@ void main() {
     );
     expect(
       _ack(await failed.handle(_validPacket(leaseId: 6, sequence: 0))).status,
-      NativePcmPacketEndpoint.consumerRejected,
+      NativePcmPacketEndpoint.consumerFailure,
     );
+    expect(observedError, isA<StateError>());
   });
 }
 

@@ -10,12 +10,45 @@ import org.junit.Test
 
 class VoiceCapturePrimitivesTest {
     @Test fun ackRequiresExactProtocolAndIdentityFields() {
-        val buffer = ByteBuffer.allocate(24).order(ByteOrder.BIG_ENDIAN)
-            .putInt(1).putInt(0).putLong(7).putLong(9).flip() as ByteBuffer
-        assertEquals(PcmAcknowledgement(0, 7, 9), PcmAckProtocol.decode(buffer))
+        val accepted = ByteBuffer.allocate(24).order(ByteOrder.BIG_ENDIAN)
+            .putInt(1).putInt(PcmAckProtocol.ACCEPTED)
+            .putLong(7).putLong(9).flip() as ByteBuffer
+        val failed = ByteBuffer.allocate(24).order(ByteOrder.BIG_ENDIAN)
+            .putInt(1).putInt(PcmAckProtocol.CONSUMER_FAILURE)
+            .putLong(7).putLong(10).flip() as ByteBuffer
+        val unknown = ByteBuffer.allocate(24).order(ByteOrder.BIG_ENDIAN)
+            .putInt(1).putInt(PcmAckProtocol.CONSUMER_FAILURE + 1)
+            .putLong(7).putLong(11).flip() as ByteBuffer
+
+        assertEquals(
+            PcmAcknowledgement(PcmAckProtocol.ACCEPTED, 7, 9),
+            PcmAckProtocol.decode(accepted),
+        )
+        assertEquals(
+            PcmAcknowledgement(PcmAckProtocol.CONSUMER_FAILURE, 7, 10),
+            PcmAckProtocol.decode(failed),
+        )
+        assertNull(PcmAckProtocol.decode(unknown))
         assertNull(PcmAckProtocol.decode(ByteBuffer.allocate(23)))
         assertNull(PcmAckProtocol.decode(ByteBuffer.allocate(24).order(ByteOrder.BIG_ENDIAN)
             .putInt(2).putInt(0).putLong(7).putLong(9).flip() as ByteBuffer))
+        assertNull(PcmAckProtocol.failureCode(PcmAckProtocol.ACCEPTED))
+        assertEquals(
+            "RECOGNITION_BACKLOG",
+            PcmAckProtocol.failureCode(PcmAckProtocol.CONSUMER_REJECTED),
+        )
+        assertEquals(
+            "PCM_CONSUMER_FAILED",
+            PcmAckProtocol.failureCode(PcmAckProtocol.CONSUMER_FAILURE),
+        )
+        assertEquals(
+            "INVALID_PCM_FRAME",
+            PcmAckProtocol.failureCode(PcmAckProtocol.INVALID_PACKET),
+        )
+        assertEquals(
+            "PCM_ACK_PROTOCOL_ERROR",
+            PcmAckProtocol.failureCode(PcmAckProtocol.CONSUMER_FAILURE + 1),
+        )
     }
 
     @Test fun completionMustMatchRevisionLeaseAndSequence() {

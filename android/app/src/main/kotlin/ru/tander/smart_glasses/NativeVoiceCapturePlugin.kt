@@ -667,10 +667,8 @@ private class NativeVoiceCaptureManager(
             delivery.settle(key)
             pendingDeliveryStartedAtMs = null
             cancelAckTimeout()
-            if (ack.status != 0) {
-                    terminateCapture(
-                        if (ack.status == 4) "RECOGNITION_BACKLOG" else "INVALID_PCM_FRAME",
-                    )
+            if (ack.status != PcmAckProtocol.ACCEPTED) {
+                terminateCapture(PcmAckProtocol.failureCode(ack.status)!!)
             } else {
                 if (pcmStreamingGate.acceptValidPacket()) emitState("streaming")
                 scheduleDrain(force = true)

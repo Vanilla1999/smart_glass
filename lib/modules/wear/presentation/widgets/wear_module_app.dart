@@ -10,15 +10,14 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart
 import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
+import 'package:smart_glasses/modules/wear/application/wear_voice_application_dispatcher.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
-import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_admission.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_phrase_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_preview_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_delay_event.dart';
-import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/navigation/wear_routes.dart';
@@ -28,12 +27,6 @@ import 'package:smart_glasses/modules/wear/services/voice_state.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
-
-typedef _VoiceDelayKey = ({
-  int captureEpoch,
-  int segmentId,
-  int commandUtteranceId,
-});
 
 class WearModuleApp extends StatefulWidget {
   const WearModuleApp({
@@ -80,6 +73,7 @@ class WearModuleApp extends StatefulWidget {
 class _WearModuleAppState extends State<WearModuleApp>
     with WidgetsBindingObserver {
   late final GoRouter _router;
+  late final WearVoiceApplicationDispatcher _voiceDispatcher;
   StreamSubscription<_VoiceCommandInput>? _voiceSub;
   StreamSubscription<_VoicePhraseInput>? _voicePhraseSub;
   StreamSubscription<WearVoicePreviewEvent>? _voicePreviewSub;
@@ -95,10 +89,6 @@ class _WearModuleAppState extends State<WearModuleApp>
   VoiceState _voiceState = const VoiceState.disabled();
   bool _voiceStartRequested = false;
   bool _voiceCommandsEnabled = true;
-  final Map<WearVoiceDelayKind, _VoiceDelayKey> _visibleVoiceDelayKeys =
-      <WearVoiceDelayKind, _VoiceDelayKey>{};
-  final Map<WearVoiceDelayKind, _VoiceDelayKey> _latestVoiceDelayKeys =
-      <WearVoiceDelayKind, _VoiceDelayKey>{};
   int? _voiceStartupToken;
   bool _restartVoiceAfterInterruption = false;
   bool _wasActuallyBackgrounded = false;
@@ -161,19 +151,6 @@ class _WearModuleAppState extends State<WearModuleApp>
     return WearDependencies.I.voiceControlService.delayEventStream;
   }
 
-  bool _isOlderVoiceDelayKey(
-    _VoiceDelayKey candidate,
-    _VoiceDelayKey latest,
-  ) {
-    if (candidate.captureEpoch != latest.captureEpoch) {
-      return candidate.captureEpoch < latest.captureEpoch;
-    }
-    if (candidate.segmentId != latest.segmentId) {
-      return candidate.segmentId < latest.segmentId;
-    }
-    return candidate.commandUtteranceId < latest.commandUtteranceId;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -189,6 +166,30 @@ class _WearModuleAppState extends State<WearModuleApp>
     );
     widget.onRouterReady?.call(_router);
     final flow = _flow;
+    _voiceDispatcher = WearVoiceApplicationDispatcher(
+      flowController: flow,
+      revisionSnapshotProvider: () {
+        final speech = WearDependencies.I.speechRecognitionService;
+        return (
+          captureEpoch: speech.captureEpoch,
+          routeRevision: speech.routeRevision,
+          grammarRevision: speech.grammarRevision,
+          freeTextEpoch: speech.freeTextEpoch,
+          commandUtteranceId: speech.commandUtteranceId,
+          commandPartialRevision: speech.commandPartialRevision,
+          freeTextPartialRevision: speech.freeTextPartialRevision,
+        );
+      },
+      commandsEnabledProvider: () => _voiceCommandsEnabled,
+      commandsEnabledSetter: _setVoiceCommandsEnabled,
+      acceptsCommandsProvider: () => _voiceState.acceptsCommands,
+      onCommandAccepted: WearStatusIconReporter.I.beginPerformanceTrace,
+      onPreviewUseful: widget.voicePreviewEventStream == null &&
+              widget.onStartVoice == null
+          ? WearDependencies.I.voiceControlService.markPreviewUseful
+          : null,
+      log: print,
+    );
     WearStatusIconReporter.I.setVoiceCommandsEnabled(_voiceCommandsEnabled);
     flow.setNavigationOutput(FlutterWearNavigationOutput(router: _router));
     flow.setRuntimeActive(true);
@@ -220,59 +221,13 @@ class _WearModuleAppState extends State<WearModuleApp>
       });
     }
     _voiceSub = _voiceCommands.listen(
-      (_VoiceCommandInput input) async {
-        final WearVoiceCommand command = input.command;
-        if (command == WearVoiceCommand.stopMicrophone) {
-          _setVoiceCommandsEnabled(false);
-          return;
-        }
-        if (command == WearVoiceCommand.startMicrophone) {
-          _setVoiceCommandsEnabled(true);
-          return;
-        }
-        if (!_voiceCommandsEnabled) {
-          print('[WearModuleApp] suppress voice command: microphone paused');
-          return;
-        }
-        if (!_voiceState.acceptsCommands) {
-          print(
-            '[WearModuleApp] suppress voice command during reconnect '
-            'command=$command',
-          );
-          return;
-        }
-        final int startedAt = DateTime.now().millisecondsSinceEpoch;
-        if (input.event case final WearVoiceCommandEvent event) {
-          final logicalScreen = flow.state.screen;
-          final speech = WearDependencies.I.speechRecognitionService;
-          if (!isCurrentWearVoiceCommandEvent(
-            event,
-            screen: logicalScreen,
-            captureEpoch: speech.captureEpoch,
-            routeRevision: speech.routeRevision,
-            grammarRevision: speech.grammarRevision,
-          )) {
-            print(
-              '[WearModuleApp] suppress stale voice command '
-              'command=$command sourceScreen=${event.sourceScreen} '
-              'logicalScreen=$logicalScreen routeRevision='
-              '${event.routeRevision}/${speech.routeRevision} '
-              'grammarRevision='
-              '${event.grammarRevision}/${speech.grammarRevision}',
-            );
-            return;
-          }
-          WearStatusIconReporter.I.beginPerformanceTrace(event);
-        }
-        print(
-          '[WearModuleApp] voice command received command=$command '
-          'screen=${flow.state.screen} at=$startedAt',
-        );
-        await flow.handleVoiceCommand(command);
-        final int finishedAt = DateTime.now().millisecondsSinceEpoch;
-        print(
-          '[WearModuleApp] voice command handled command=$command '
-          'screen=${flow.state.screen} durationMs=${finishedAt - startedAt}',
+      (_VoiceCommandInput input) {
+        _observeVoiceDispatch(
+          _voiceDispatcher.dispatchCommand(
+            input.command,
+            event: input.event,
+          ),
+          'command',
         );
       },
       onError: (Object error, StackTrace stackTrace) {
@@ -280,40 +235,13 @@ class _WearModuleAppState extends State<WearModuleApp>
       },
     );
     _voicePhraseSub = _voicePhrases.listen(
-      (_VoicePhraseInput input) async {
-        final String phrase = input.phrase;
-        if (!_voiceCommandsEnabled) {
-          print('[WearModuleApp] suppress voice phrase: microphone paused');
-          return;
-        }
-        if (!_voiceState.acceptsCommands) {
-          print('[WearModuleApp] suppress voice phrase during reconnect');
-          return;
-        }
-        if (input.event case final WearVoicePhraseEvent event) {
-          final logicalScreen = flow.state.screen;
-          final speech = WearDependencies.I.speechRecognitionService;
-          final VoiceDynamicItemsSnapshot items =
-              flow.dynamicVoiceItemsFor(logicalScreen);
-          if (event.sourceScreen != logicalScreen ||
-              event.captureEpoch != speech.captureEpoch ||
-              event.routeRevision != speech.routeRevision ||
-              event.grammarRevision != speech.grammarRevision ||
-              event.freeTextEpoch != speech.freeTextEpoch ||
-              event.listRevision != items.revision) {
-            return;
-          }
-        }
-        final int startedAt = DateTime.now().millisecondsSinceEpoch;
-        print(
-          '[WearModuleApp] voice phrase received phrase="$phrase" '
-          'screen=${flow.state.screen} at=$startedAt',
-        );
-        await flow.handleVoicePhrase(phrase);
-        final int finishedAt = DateTime.now().millisecondsSinceEpoch;
-        print(
-          '[WearModuleApp] voice phrase handled phrase="$phrase" '
-          'screen=${flow.state.screen} durationMs=${finishedAt - startedAt}',
+      (_VoicePhraseInput input) {
+        _observeVoiceDispatch(
+          _voiceDispatcher.dispatchPhrase(
+            input.phrase,
+            event: input.event,
+          ),
+          'phrase',
         );
       },
       onError: (Object error, StackTrace stackTrace) {
@@ -321,78 +249,20 @@ class _WearModuleAppState extends State<WearModuleApp>
       },
     );
     _voicePreviewSub = _voicePreviews.listen(
-      (WearVoicePreviewEvent event) async {
-        if (!_voiceCommandsEnabled || !_voiceState.acceptsCommands) return;
-        final logicalScreen = flow.state.screen;
-        final speech = WearDependencies.I.speechRecognitionService;
-        final VoiceDynamicItemsSnapshot items =
-            flow.dynamicVoiceItemsFor(logicalScreen);
-        if (event.sourceScreen != logicalScreen ||
-            event.captureEpoch != speech.captureEpoch ||
-            event.routeRevision != speech.routeRevision ||
-            event.grammarRevision != speech.grammarRevision ||
-            event.freeTextEpoch != speech.freeTextEpoch ||
-            event.commandUtteranceId != speech.commandUtteranceId ||
-            event.partialRevision !=
-                (event.isCommandLane
-                    ? speech.commandPartialRevision
-                    : speech.freeTextPartialRevision) ||
-            event.listRevision != items.revision) {
-          print('[WearModuleApp] suppress stale voice preview');
-          return;
-        }
-        VoiceDynamicItem? item;
-        for (final VoiceDynamicItem candidate in items.items) {
-          if (candidate.id == event.itemId) {
-            item = candidate;
-            break;
-          }
-        }
-        if (item == null) return;
-        final bool useful = await flow.handleVoicePartialPhrase(item.label);
-        if (useful &&
-            widget.voicePreviewEventStream == null &&
-            widget.onStartVoice == null) {
-          WearDependencies.I.voiceControlService.markPreviewUseful(event);
-        }
+      (WearVoicePreviewEvent event) {
+        _observeVoiceDispatch(
+          _voiceDispatcher.dispatchPreview(event),
+          'preview',
+        );
       },
       onError: (Object error, StackTrace stackTrace) {
         print('[WearModuleApp] voice preview stream error=$error\n$stackTrace');
       },
     );
-    _voiceDelaySub = _voiceDelays.listen((WearVoiceDelayEvent event) async {
-      final logicalScreen = flow.state.screen;
-      final speech = WearDependencies.I.speechRecognitionService;
-      final int currentListRevision =
-          flow.dynamicVoiceItemsFor(logicalScreen).revision;
-      final bool contextCurrent = event.sourceScreen == logicalScreen &&
-          event.captureEpoch == speech.captureEpoch &&
-          event.routeRevision == speech.routeRevision &&
-          event.grammarRevision == speech.grammarRevision &&
-          event.freeTextEpoch == speech.freeTextEpoch &&
-          (event.listRevision == 0 ||
-              event.listRevision == currentListRevision);
-      final _VoiceDelayKey key = (
-        captureEpoch: event.captureEpoch,
-        segmentId: event.segmentId,
-        commandUtteranceId: event.commandUtteranceId,
-      );
-      if (event.visible) {
-        if (!contextCurrent) return;
-        final _VoiceDelayKey? latest = _latestVoiceDelayKeys[event.kind];
-        if (latest != null && _isOlderVoiceDelayKey(key, latest)) return;
-        _latestVoiceDelayKeys[event.kind] = key;
-        _visibleVoiceDelayKeys[event.kind] = key;
-      } else {
-        if (_visibleVoiceDelayKeys[event.kind] != key) return;
-        _visibleVoiceDelayKeys.remove(event.kind);
-      }
-      await flow.setRecognitionDelayVisible(
-        event.sourceScreen,
-        event.visible,
-        event.previewText,
-        kind: event.kind,
-        statusText: event.statusText,
+    _voiceDelaySub = _voiceDelays.listen((WearVoiceDelayEvent event) {
+      _observeVoiceDispatch(
+        _voiceDispatcher.dispatchDelay(event),
+        'delay',
       );
     });
     _voiceReconnectingSub = widget.voiceReconnectingStream?.listen(
@@ -440,6 +310,7 @@ class _WearModuleAppState extends State<WearModuleApp>
       }
     });
     _clearedSub = WearSession.clearedStream.listen((_) {
+      _voiceDispatcher.resetAdmission();
       flow.setRuntimeActive(false);
       if (widget.flowController == null) {
         WearDependencies.I.barcodeDispatcher.stop();
@@ -462,6 +333,18 @@ class _WearModuleAppState extends State<WearModuleApp>
       }
       _startVoice('post-frame');
     });
+  }
+
+  void _observeVoiceDispatch<T>(Future<T> operation, String kind) {
+    unawaited(operation.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stackTrace) {
+        print(
+          '[WearModuleApp] voice $kind dispatch error='
+          '$error\n$stackTrace',
+        );
+      },
+    ));
   }
 
   Future<void> _handleAppMethodCall(MethodCall call) async {
