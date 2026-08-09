@@ -143,7 +143,7 @@ void main() {
 
     expect(rollover, context);
     expect(rollover.hashCode, context.hashCode);
-    expect(rollover.traceId, '1:11:3');
+    expect(rollover.traceId, '1:1:3');
 
     final VoiceReplayOwnership first = machine.begin(context);
     final VoiceReplayOwnership duplicate = machine.begin(rollover);
@@ -165,7 +165,7 @@ void main() {
     );
   });
 
-  test('new speech turn creates a distinct replay identity', () {
+  test('speech turn remains diagnostic outside replay identity', () {
     const VoiceReplayContext nextTurn = VoiceReplayContext(
       captureEpoch: 1,
       segmentId: 2,
@@ -178,8 +178,8 @@ void main() {
       listRevision: 7,
     );
 
-    expect(nextTurn, isNot(context));
-    expect(nextTurn.traceId, '1:12:3');
+    expect(nextTurn, context);
+    expect(nextTurn.traceId, '1:1:3');
   });
 
   test('voice work identity exposes compatibility revisions', () {

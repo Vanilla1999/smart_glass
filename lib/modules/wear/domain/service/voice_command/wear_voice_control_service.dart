@@ -240,6 +240,7 @@ class WearVoiceControlService {
         recognizedAtMillis: recognizedAtMillis,
         asrMillis: acousticSpeechToCommandMs,
         captureEpoch: result.captureEpoch,
+        recognitionContextId: result.recognitionContextId,
         speechTurnId: result.speechTurnId,
         decoderGeneration: result.commandUtteranceId,
         commandUtteranceId: result.commandUtteranceId,
@@ -321,6 +322,7 @@ class WearVoiceControlService {
         traceId: '${result.captureEpoch}:${result.speechTurnId}:'
             '${result.commandUtteranceId}',
         captureEpoch: result.captureEpoch,
+        recognitionContextId: result.recognitionContextId,
         speechTurnId: result.speechTurnId,
         decoderGeneration: result.commandUtteranceId,
         commandUtteranceId: result.commandUtteranceId,

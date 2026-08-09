@@ -11,6 +11,7 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voi
 
 typedef WearVoiceRevisionSnapshot = ({
   int captureEpoch,
+  int recognitionContextId,
   int routeRevision,
   int grammarRevision,
   int freeTextEpoch,
@@ -213,6 +214,7 @@ class WearVoiceApplicationDispatcher {
     return (
       screen: screen,
       captureEpoch: revisions.captureEpoch,
+      recognitionContextId: revisions.recognitionContextId,
       routeRevision: revisions.routeRevision,
       grammarRevision: revisions.grammarRevision,
       freeTextEpoch: revisions.freeTextEpoch,

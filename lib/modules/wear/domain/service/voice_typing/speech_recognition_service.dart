@@ -56,7 +56,7 @@ class VoiceRecognitionProcessingQueue {
 enum QueuedVoiceWorkDropReason {
   captureChanged,
   contextChanged,
-  newSpeechTurn,
+  decoderChanged,
 }
 
 class VoiceRecognitionSegmentCloseGuard {
@@ -234,6 +234,7 @@ class SpeechRecognitionService {
   bool _isSessionActive = false;
   bool _isListening = false;
   Future<void> _commandAudioProcessing = Future<void>.value();
+  int _pendingCommandFrames = 0;
   Future<void> _freeTextAudioProcessing = Future<void>.value();
   Future<void> _lifecycleOperation = Future<void>.value();
   int _freeTextEpoch = 0;
@@ -248,7 +249,6 @@ class SpeechRecognitionService {
     int segmentId,
     int commandUtteranceId
   })? _naturalEndpointTail;
-  int _pendingCommandFrames = 0;
   final List<Uint8List> _recognizerBatchFrames = <Uint8List>[];
   int? _recognizerBatchCaptureEpoch;
   int? _recognizerBatchUtteranceId;
@@ -260,11 +260,6 @@ class SpeechRecognitionService {
   int _commandPartialRevision = 0;
   int _freeTextPartialRevision = 0;
   final Map<String, String> _shadowPartialItemIds = <String, String>{};
-  ({
-    WearScreenId screen,
-    List<String> grammar,
-    List<Completer<void>> waiters,
-  })? _pendingGrammarSwitch;
   int? _commandUtteranceStartedAtMillis;
   int _routeRevision = 1;
   int _grammarRevision = 1;
@@ -399,9 +394,6 @@ class SpeechRecognitionService {
     _latestActionableCommandUtteranceId = 0;
     _admittedCommandUtteranceId = _commandUtteranceId;
     _pendingCommandFrames = 0;
-    _cancelPendingGrammarSwitch(
-      StateError('Grammar switch cancelled because capture restarted'),
-    );
     _clearPerCaptureState();
     _freeTextBacklog.reset();
   }
@@ -421,26 +413,12 @@ class SpeechRecognitionService {
     final List<String> normalized = List<String>.unmodifiable(
       grammar.map((item) => item.trim()).where((item) => item.isNotEmpty),
     );
-    final bool routeCutover = _sourceScreen != screen && !_usesLiveFreeText;
-    if (!routeCutover &&
-        (_commandUtteranceStartedAtMillis != null ||
-            _pendingCommandFrames > 0 ||
-            _recognizerBatchFrames.isNotEmpty)) {
-      final Completer<void> waiter = Completer<void>();
-      final pending = _pendingGrammarSwitch;
-      _pendingGrammarSwitch = (
-        screen: screen,
-        grammar: normalized,
-        waiters: <Completer<void>>[...?pending?.waiters, waiter],
-      );
-      print(
-        '[VOICE_GRAMMAR] deferred screen=$screen phrases=${normalized.length}',
-      );
-      return waiter.future;
-    }
-    if (routeCutover) _flushRecognizerBatch();
+    final bool contextCutover = (_sourceScreen != screen ||
+            !_sameGrammar(_commandGrammar, normalized)) &&
+        !_usesLiveFreeText;
+    if (contextCutover) _flushRecognizerBatch();
     final int targetContextId;
-    if (routeCutover) {
+    if (contextCutover) {
       targetContextId = ++_nextRecognitionContextId;
       _desiredRecognitionContextId = targetContextId;
       print(
@@ -450,13 +428,11 @@ class SpeechRecognitionService {
     } else {
       targetContextId = _recognitionContextId;
     }
-    final pending = routeCutover ? _pendingGrammarSwitch : null;
-    if (routeCutover) _pendingGrammarSwitch = null;
     final int startedAt = DateTime.now().millisecondsSinceEpoch;
     final Future<void> next = _commandAudioProcessing.then((_) async {
       if (_sourceScreen == screen &&
           _sameGrammar(_commandGrammar, normalized)) {
-        if (routeCutover) {
+        if (contextCutover) {
           _recognitionContextId = targetContextId;
           print(
             '[VOICE_CONTEXT] committed contextId=$targetContextId '
@@ -521,7 +497,7 @@ class SpeechRecognitionService {
       _commandGrammar = normalized;
       if (routeChanged) _routeRevision++;
       if (grammarChanged) _grammarRevision++;
-      if (routeCutover) _recognitionContextId = targetContextId;
+      if (contextCutover) _recognitionContextId = targetContextId;
       final int routeRevision = _routeRevision;
       final int grammarRevision = _grammarRevision;
       print(
@@ -529,24 +505,13 @@ class SpeechRecognitionService {
         'grammarRevision=$grammarRevision phrases=${normalized.length} '
         'switchMs=${DateTime.now().millisecondsSinceEpoch - startedAt}',
       );
-      if (routeCutover) {
+      if (contextCutover) {
         print(
           '[VOICE_CONTEXT] committed contextId=$targetContextId screen=$screen '
           'routeRevision=$routeRevision grammarRevision=$grammarRevision',
         );
       }
     });
-    if (pending != null) {
-      unawaited(next.then((_) {
-        for (final Completer<void> waiter in pending.waiters) {
-          if (!waiter.isCompleted) waiter.complete();
-        }
-      }, onError: (Object error, StackTrace stackTrace) {
-        for (final Completer<void> waiter in pending.waiters) {
-          if (!waiter.isCompleted) waiter.completeError(error, stackTrace);
-        }
-      }));
-    }
     _commandAudioProcessing = next.catchError((Object error, StackTrace stack) {
       if (_desiredRecognitionContextId == targetContextId) {
         _desiredRecognitionContextId = _recognitionContextId;
@@ -843,9 +808,6 @@ class SpeechRecognitionService {
     _commandUtteranceStartedAtMillis = null;
     _admittedCommandUtteranceId = _commandUtteranceId;
     _clearPerCaptureState();
-    _cancelPendingGrammarSwitch(
-      StateError('Grammar switch cancelled because recognition stopped'),
-    );
     _preRollFrames.clear();
     _clearRecognizerBatch();
     if (!processingFinished) {
@@ -1420,7 +1382,7 @@ class SpeechRecognitionService {
             VoiceDropReason.captureChanged,
           QueuedVoiceWorkDropReason.contextChanged =>
             VoiceDropReason.staleRecognitionResult,
-          QueuedVoiceWorkDropReason.newSpeechTurn =>
+          QueuedVoiceWorkDropReason.decoderChanged =>
             VoiceDropReason.speechTurnChanged,
         });
         print(
@@ -1433,32 +1395,6 @@ class SpeechRecognitionService {
         );
         return Future<void>.value();
       }
-      final bool decoderAdvancedInsideSameSpeechTurn =
-          identity.decoderGeneration != _commandUtteranceId;
-      final VoiceWorkIdentity effectiveIdentity =
-          decoderAdvancedInsideSameSpeechTurn
-              ? VoiceWorkIdentity(
-                  captureEpoch: identity.captureEpoch,
-                  recognitionContextId: identity.recognitionContextId,
-                  speechTurnId: identity.speechTurnId,
-                  decoderGeneration: _commandUtteranceId,
-                  sourceScreen: identity.sourceScreen,
-                  routeRevision: identity.routeRevision,
-                  grammarRevision: identity.grammarRevision,
-                  freeTextConfigurationRevision:
-                      identity.freeTextConfigurationRevision,
-                  listRevision: identity.listRevision,
-                )
-              : identity;
-      if (decoderAdvancedInsideSameSpeechTurn) {
-        print(
-          '[VOICE_BOUNDARY] retained queued command chunk after natural endpoint '
-          'captureEpoch=$captureEpoch segmentId=${segment.segmentId} '
-          'speechTurnId=${segment.speechTurnId} '
-          'admittedUtteranceId=$commandUtteranceId '
-          'currentUtteranceId=$_commandUtteranceId',
-        );
-      }
       final VoiceRecognizer? recognizer = _commandRecognizer;
       if (recognizer == null) return Future<void>.value();
       return _processRecognizerChunk(
@@ -1469,7 +1405,7 @@ class SpeechRecognitionService {
           epoch: null,
           captureEpoch: captureEpoch,
           segment: segment,
-          workIdentity: effectiveIdentity,
+          workIdentity: identity,
           pcmPhase: pcmPhase);
     }).whenComplete(() {
       if (admitted) _commandBacklog.complete(bytes.lengthInBytes);
@@ -1511,10 +1447,8 @@ class SpeechRecognitionService {
     if (identity.recognitionContextId != _recognitionContextId) {
       return QueuedVoiceWorkDropReason.contextChanged;
     }
-    if (identity.decoderGeneration < _commandUtteranceId &&
-        _speechTurnByCommandUtterance[identity.decoderGeneration] !=
-            identity.speechTurnId) {
-      return QueuedVoiceWorkDropReason.newSpeechTurn;
+    if (identity.decoderGeneration != _commandUtteranceId) {
+      return QueuedVoiceWorkDropReason.decoderChanged;
     }
     return null;
   }
@@ -2121,11 +2055,6 @@ class SpeechRecognitionService {
     );
     _finalizeCommandUtterance();
     if (liveFinalization != null) await liveFinalization;
-    try {
-      await _applyPendingGrammarSwitchNow();
-    } catch (error, stackTrace) {
-      print('[VOICE_GRAMMAR] boundary switch failed: $error\n$stackTrace');
-    }
   }
 
   Future<void> _enqueueLiveFreeTextFinalization(
@@ -3618,6 +3547,7 @@ class SpeechRecognitionService {
         captureEpoch: segment.captureEpoch,
         segmentId: segment.segmentId,
         speechTurnId: segment.speechTurnId,
+        recognitionContextId: context.recognitionContextId,
         lane: source == _RecognitionSource.command
             ? RecognitionLane.command
             : RecognitionLane.freeText,
@@ -4099,59 +4029,6 @@ class SpeechRecognitionService {
     _commandUtteranceId++;
   }
 
-  Future<void> _applyPendingGrammarSwitchNow() async {
-    final pending = _pendingGrammarSwitch;
-    _pendingGrammarSwitch = null;
-    if (pending == null) return;
-    try {
-      if (_sourceScreen != pending.screen ||
-          !_sameGrammar(_commandGrammar, pending.grammar)) {
-        VoiceRecognizer? recognizer = _commandRecognizer;
-        if (recognizer != null) {
-          try {
-            await _configureCommandRecognizer(recognizer, pending.grammar);
-          } catch (_) {
-            if (!identical(_commandRecognizer, recognizer)) rethrow;
-            _commandRecognizer = null;
-            recognizer = await _recoverCommandRecognizer(recognizer);
-            try {
-              await _configureCommandRecognizer(recognizer, pending.grammar);
-            } catch (_) {
-              if (identical(_commandRecognizer, recognizer)) {
-                _commandRecognizer = null;
-              }
-              rethrow;
-            }
-          }
-        }
-        final bool routeChanged = _sourceScreen != pending.screen;
-        final bool grammarChanged =
-            !_sameGrammar(_commandGrammar, pending.grammar);
-        if (routeChanged) _freeTextEpoch++;
-        _freeTextPartialText = '';
-        _sourceScreen = pending.screen;
-        _commandGrammar = pending.grammar;
-        if (routeChanged) _routeRevision++;
-        if (grammarChanged) _grammarRevision++;
-        final int routeRevision = _routeRevision;
-        final int grammarRevision = _grammarRevision;
-        print(
-          '[VOICE_GRAMMAR] screen=${pending.screen} '
-          'routeRevision=$routeRevision grammarRevision=$grammarRevision '
-          'phrases=${pending.grammar.length} switchOwner=utterance_boundary',
-        );
-      }
-      for (final Completer<void> waiter in pending.waiters) {
-        if (!waiter.isCompleted) waiter.complete();
-      }
-    } catch (error, stackTrace) {
-      for (final Completer<void> waiter in pending.waiters) {
-        if (!waiter.isCompleted) waiter.completeError(error, stackTrace);
-      }
-      rethrow;
-    }
-  }
-
   void _installFreeTextBoundary(int utteranceId) {
     if (!_usesLiveFreeText || _freeTextBoundaries.containsKey(utteranceId)) {
       return;
@@ -4197,15 +4074,6 @@ class SpeechRecognitionService {
     _invalidLiveFreeTextUtterances.remove(utteranceId);
     _loggedLiveFreeTextUtterances.remove(utteranceId);
     _liveFreeTextInvalidReasons.remove(utteranceId);
-  }
-
-  void _cancelPendingGrammarSwitch(Object error) {
-    final pending = _pendingGrammarSwitch;
-    _pendingGrammarSwitch = null;
-    if (pending == null) return;
-    for (final Completer<void> waiter in pending.waiters) {
-      if (!waiter.isCompleted) waiter.completeError(error);
-    }
   }
 
   void _logCommandOov(String text, WearScreenId screen) {
@@ -4271,7 +4139,6 @@ class SpeechRecognitionService {
     }
     if (_commandUtteranceId == expectedUtteranceId) {
       _finalizeCommandUtterance();
-      await _applyPendingGrammarSwitchNow();
     }
     print(
       '[VOICE_BOUNDARY] commandUtteranceId=$expectedUtteranceId '

@@ -8,6 +8,7 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voi
 typedef WearVoiceAdmissionContext = ({
   WearScreenId screen,
   int captureEpoch,
+  int recognitionContextId,
   int routeRevision,
   int grammarRevision,
   int freeTextEpoch,
@@ -24,11 +25,13 @@ bool isCurrentWearVoiceCommandEvent(
   WearVoiceCommandEvent event, {
   required WearScreenId screen,
   required int captureEpoch,
+  required int recognitionContextId,
   required int routeRevision,
   required int grammarRevision,
 }) {
   return event.sourceScreen == screen &&
       event.captureEpoch == captureEpoch &&
+      event.recognitionContextId == recognitionContextId &&
       event.routeRevision == routeRevision &&
       event.grammarRevision == grammarRevision;
 }
@@ -37,6 +40,7 @@ bool isCurrentWearVoicePhraseEvent(
   WearVoicePhraseEvent event, {
   required WearScreenId screen,
   required int captureEpoch,
+  required int recognitionContextId,
   required int routeRevision,
   required int grammarRevision,
   required int freeTextEpoch,
@@ -44,6 +48,7 @@ bool isCurrentWearVoicePhraseEvent(
 }) {
   return event.sourceScreen == screen &&
       event.captureEpoch == captureEpoch &&
+      event.recognitionContextId == recognitionContextId &&
       event.routeRevision == routeRevision &&
       event.grammarRevision == grammarRevision &&
       event.freeTextEpoch == freeTextEpoch &&
@@ -92,6 +97,7 @@ class WearVoiceEventAdmissionGate {
       event,
       screen: context.screen,
       captureEpoch: context.captureEpoch,
+      recognitionContextId: context.recognitionContextId,
       routeRevision: context.routeRevision,
       grammarRevision: context.grammarRevision,
     )) {
@@ -111,6 +117,7 @@ class WearVoiceEventAdmissionGate {
       event,
       screen: context.screen,
       captureEpoch: context.captureEpoch,
+      recognitionContextId: context.recognitionContextId,
       routeRevision: context.routeRevision,
       grammarRevision: context.grammarRevision,
       freeTextEpoch: context.freeTextEpoch,
@@ -167,12 +174,14 @@ class WearVoiceEventAdmissionGate {
 class _WearVoiceContextKey {
   const _WearVoiceContextKey({
     required this.captureEpoch,
+    required this.recognitionContextId,
     required this.sourceScreen,
     required this.routeRevision,
     required this.grammarRevision,
   });
 
   final int captureEpoch;
+  final int recognitionContextId;
   final WearScreenId sourceScreen;
   final int routeRevision;
   final int grammarRevision;
@@ -181,6 +190,7 @@ class _WearVoiceContextKey {
   bool operator ==(Object other) {
     return other is _WearVoiceContextKey &&
         other.captureEpoch == captureEpoch &&
+        other.recognitionContextId == recognitionContextId &&
         other.sourceScreen == sourceScreen &&
         other.routeRevision == routeRevision &&
         other.grammarRevision == grammarRevision;
@@ -189,6 +199,7 @@ class _WearVoiceContextKey {
   @override
   int get hashCode => Object.hash(
         captureEpoch,
+        recognitionContextId,
         sourceScreen,
         routeRevision,
         grammarRevision,
@@ -198,8 +209,8 @@ class _WearVoiceContextKey {
 class _WearVoiceActionKey {
   const _WearVoiceActionKey({
     required this.captureEpoch,
+    required this.recognitionContextId,
     required this.commandUtteranceId,
-    required this.speechTurnId,
     required this.commandType,
     required this.sourceScreen,
     required this.routeRevision,
@@ -209,8 +220,8 @@ class _WearVoiceActionKey {
   factory _WearVoiceActionKey.fromCommand(WearVoiceCommandEvent event) {
     return _WearVoiceActionKey(
       captureEpoch: event.captureEpoch,
+      recognitionContextId: event.recognitionContextId,
       commandUtteranceId: event.commandUtteranceId,
-      speechTurnId: event.speechTurnId,
       commandType: event.command.name,
       sourceScreen: event.sourceScreen,
       routeRevision: event.routeRevision,
@@ -221,8 +232,8 @@ class _WearVoiceActionKey {
   factory _WearVoiceActionKey.fromPhrase(WearVoicePhraseEvent event) {
     return _WearVoiceActionKey(
       captureEpoch: event.captureEpoch,
+      recognitionContextId: event.recognitionContextId,
       commandUtteranceId: event.commandUtteranceId,
-      speechTurnId: event.speechTurnId,
       commandType: 'phrase',
       sourceScreen: event.sourceScreen,
       routeRevision: event.routeRevision,
@@ -232,14 +243,15 @@ class _WearVoiceActionKey {
 
   _WearVoiceContextKey get context => _WearVoiceContextKey(
         captureEpoch: captureEpoch,
+        recognitionContextId: recognitionContextId,
         sourceScreen: sourceScreen,
         routeRevision: routeRevision,
         grammarRevision: grammarRevision,
       );
 
   final int captureEpoch;
+  final int recognitionContextId;
   final int commandUtteranceId;
-  final int speechTurnId;
   final String commandType;
   final WearScreenId sourceScreen;
   final int routeRevision;
@@ -249,8 +261,8 @@ class _WearVoiceActionKey {
   bool operator ==(Object other) {
     return other is _WearVoiceActionKey &&
         other.captureEpoch == captureEpoch &&
+        other.recognitionContextId == recognitionContextId &&
         other.commandUtteranceId == commandUtteranceId &&
-        other.speechTurnId == speechTurnId &&
         other.commandType == commandType &&
         other.sourceScreen == sourceScreen &&
         other.routeRevision == routeRevision &&
@@ -260,8 +272,8 @@ class _WearVoiceActionKey {
   @override
   int get hashCode => Object.hash(
         captureEpoch,
+        recognitionContextId,
         commandUtteranceId,
-        speechTurnId,
         commandType,
         sourceScreen,
         routeRevision,
@@ -270,8 +282,8 @@ class _WearVoiceActionKey {
 
   _WearVoiceUtteranceKey get utterance => _WearVoiceUtteranceKey(
         captureEpoch: captureEpoch,
+        recognitionContextId: recognitionContextId,
         commandUtteranceId: commandUtteranceId,
-        speechTurnId: speechTurnId,
         sourceScreen: sourceScreen,
         routeRevision: routeRevision,
         grammarRevision: grammarRevision,
@@ -281,16 +293,16 @@ class _WearVoiceActionKey {
 class _WearVoiceUtteranceKey {
   const _WearVoiceUtteranceKey({
     required this.captureEpoch,
+    required this.recognitionContextId,
     required this.commandUtteranceId,
-    required this.speechTurnId,
     required this.sourceScreen,
     required this.routeRevision,
     required this.grammarRevision,
   });
 
   final int captureEpoch;
+  final int recognitionContextId;
   final int commandUtteranceId;
-  final int speechTurnId;
   final WearScreenId sourceScreen;
   final int routeRevision;
   final int grammarRevision;
@@ -299,8 +311,8 @@ class _WearVoiceUtteranceKey {
   bool operator ==(Object other) =>
       other is _WearVoiceUtteranceKey &&
       other.captureEpoch == captureEpoch &&
+      other.recognitionContextId == recognitionContextId &&
       other.commandUtteranceId == commandUtteranceId &&
-      other.speechTurnId == speechTurnId &&
       other.sourceScreen == sourceScreen &&
       other.routeRevision == routeRevision &&
       other.grammarRevision == grammarRevision;
@@ -308,8 +320,8 @@ class _WearVoiceUtteranceKey {
   @override
   int get hashCode => Object.hash(
         captureEpoch,
+        recognitionContextId,
         commandUtteranceId,
-        speechTurnId,
         sourceScreen,
         routeRevision,
         grammarRevision,

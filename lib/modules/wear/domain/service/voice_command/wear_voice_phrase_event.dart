@@ -5,6 +5,7 @@ class WearVoicePhraseEvent {
     required this.phrase,
     required this.traceId,
     required this.captureEpoch,
+    this.recognitionContextId = 1,
     required this.speechTurnId,
     required this.decoderGeneration,
     required this.commandUtteranceId,
@@ -18,6 +19,7 @@ class WearVoicePhraseEvent {
   final String phrase;
   final String traceId;
   final int captureEpoch;
+  final int recognitionContextId;
   final int speechTurnId;
   final int decoderGeneration;
   final int commandUtteranceId;

@@ -2039,7 +2039,7 @@ void main() {
     expect(freeText.finalCalls, 1);
   });
 
-  test('queued command batch keeps its admission utterance identity', () async {
+  test('queued command batch is never relabeled after an endpoint', () async {
     final Completer<void> firstAcceptStarted = Completer<void>();
     final Completer<bool> releaseFirstAccept = Completer<bool>();
     var acceptCalls = 0;
@@ -2074,7 +2074,7 @@ void main() {
     await Future.wait<void>(<Future<void>>[first, queuedTail]);
     await service.waitForProcessing();
 
-    expect(command.accepted, hasLength(2));
+    expect(command.accepted, hasLength(1));
     expect(service.commandUtteranceId, 2);
   });
 

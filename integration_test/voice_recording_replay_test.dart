@@ -160,6 +160,7 @@ void main() {
       flowController: flow,
       revisionSnapshotProvider: () => (
         captureEpoch: speech.captureEpoch,
+        recognitionContextId: speech.recognitionContextId,
         routeRevision: speech.routeRevision,
         grammarRevision: speech.grammarRevision,
         freeTextEpoch: speech.freeTextEpoch,

@@ -8,6 +8,7 @@ class WearVoiceCommandEvent {
     required this.recognizedAtMillis,
     required this.asrMillis,
     required this.captureEpoch,
+    this.recognitionContextId = 1,
     required this.speechTurnId,
     required this.decoderGeneration,
     required this.commandUtteranceId,
@@ -21,6 +22,7 @@ class WearVoiceCommandEvent {
   final int recognizedAtMillis;
   final int asrMillis;
   final int captureEpoch;
+  final int recognitionContextId;
   final int speechTurnId;
   final int decoderGeneration;
   final int commandUtteranceId;

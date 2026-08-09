@@ -49,6 +49,7 @@ class SegmentedRecognitionResult {
     required this.lastChunkId,
     required this.parsedCommand,
     required this.speechTurnId,
+    this.recognitionContextId = 1,
     this.commandUtteranceId = 0,
     this.routeRevision = 0,
     this.grammarRevision = 0,
@@ -70,6 +71,7 @@ class SegmentedRecognitionResult {
   final int lastChunkId;
   final WearVoiceCommand? parsedCommand;
   final int speechTurnId;
+  final int recognitionContextId;
   final int commandUtteranceId;
   final int routeRevision;
   final int grammarRevision;

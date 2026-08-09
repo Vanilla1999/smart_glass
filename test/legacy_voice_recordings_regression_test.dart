@@ -111,6 +111,7 @@ void main() {
             recognizedAtMillis: labels[index].startMs,
             asrMillis: 0,
             captureEpoch: 1,
+            recognitionContextId: 1,
             speechTurnId: 1,
             decoderGeneration: utteranceId,
             commandUtteranceId: utteranceId,
@@ -121,6 +122,7 @@ void main() {
           context: (
             screen: WearScreenId.menu,
             captureEpoch: 1,
+            recognitionContextId: 1,
             routeRevision: 1,
             grammarRevision: 1,
             freeTextEpoch: 1,

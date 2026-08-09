@@ -52,14 +52,14 @@ class VoiceWorkIdentity {
 
   int get commandUtteranceId => decoderGeneration;
   int get freeTextEpoch => freeTextConfigurationRevision;
-  String get traceId => '$captureEpoch:$speechTurnId:$decoderGeneration';
+  String get traceId =>
+      '$captureEpoch:$recognitionContextId:$decoderGeneration';
 
   @override
   bool operator ==(Object other) =>
       other is VoiceWorkIdentity &&
       other.captureEpoch == captureEpoch &&
       other.recognitionContextId == recognitionContextId &&
-      other.speechTurnId == speechTurnId &&
       other.decoderGeneration == decoderGeneration &&
       other.sourceScreen == sourceScreen &&
       other.routeRevision == routeRevision &&
@@ -71,7 +71,6 @@ class VoiceWorkIdentity {
   int get hashCode => Object.hash(
         captureEpoch,
         recognitionContextId,
-        speechTurnId,
         decoderGeneration,
         sourceScreen,
         routeRevision,

@@ -126,7 +126,9 @@ class WearFlowController {
       <WearScreenId, WearScreenActionHandler>{};
   final Map<WearScreenId, WearGlassesPayload> _screenPayloads =
       <WearScreenId, WearGlassesPayload>{};
-  final List<WearVoiceCommand> _commandQueue = <WearVoiceCommand>[];
+  final List<({WearVoiceCommand command, WearScreenId? expectedScreen})>
+      _commandQueue =
+      <({WearVoiceCommand command, WearScreenId? expectedScreen})>[];
   final WearFlashlightToggle _flashlightToggle;
   final WearPhotoCapture? _photoCapture;
   bool _isProcessingCommand = false;
@@ -507,7 +509,7 @@ class WearFlowController {
 
   Future<void> handleVoiceCommand(WearVoiceCommand command) async {
     if (!_runtimeActive) return;
-    _commandQueue.add(command);
+    _commandQueue.add((command: command, expectedScreen: _state.screen));
     if (!_isProcessingCommand) {
       await _drainCommandQueue();
     }
@@ -515,7 +517,7 @@ class WearFlowController {
 
   Future<void> handleControllerCommand(WearVoiceCommand command) async {
     if (!_runtimeActive) return;
-    _commandQueue.add(command);
+    _commandQueue.add((command: command, expectedScreen: null));
     if (!_isProcessingCommand) {
       await _drainCommandQueue();
     }
@@ -691,10 +693,20 @@ class WearFlowController {
   Future<void> _drainCommandQueue() async {
     _isProcessingCommand = true;
     while (_commandQueue.isNotEmpty) {
-      final WearVoiceCommand command = _commandQueue.removeAt(0);
+      final item = _commandQueue.removeAt(0);
+      final WearVoiceCommand command = item.command;
       try {
         await _runtimeReset.catchError((Object _) {});
         if (!_runtimeActive) continue;
+        if (item.expectedScreen != null &&
+            item.expectedScreen != _state.screen) {
+          print(
+            '[WearFlowController] dropped stale queued voice command '
+            'command=$command expectedScreen=${item.expectedScreen} '
+            'currentScreen=${_state.screen}',
+          );
+          continue;
+        }
         print('[WearFlowController] command=$command state=$_state');
         final WearBackgroundRuntime? runtime = _backgroundRuntime;
         if (_uiLifecycle == WearUiLifecycle.inactive &&

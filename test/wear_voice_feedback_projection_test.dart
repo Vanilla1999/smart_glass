@@ -30,6 +30,7 @@ void main() {
       flowController: flow,
       revisionSnapshotProvider: () => (
         captureEpoch: 1,
+        recognitionContextId: 1,
         routeRevision: 1,
         grammarRevision: 1,
         freeTextEpoch: 1,

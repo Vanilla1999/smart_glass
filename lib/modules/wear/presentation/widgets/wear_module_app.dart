@@ -172,6 +172,7 @@ class _WearModuleAppState extends State<WearModuleApp>
         final speech = WearDependencies.I.speechRecognitionService;
         return (
           captureEpoch: speech.captureEpoch,
+          recognitionContextId: speech.recognitionContextId,
           routeRevision: speech.routeRevision,
           grammarRevision: speech.grammarRevision,
           freeTextEpoch: speech.freeTextEpoch,
@@ -184,10 +185,10 @@ class _WearModuleAppState extends State<WearModuleApp>
       commandsEnabledSetter: _setVoiceCommandsEnabled,
       acceptsCommandsProvider: () => _voiceState.acceptsCommands,
       onCommandAccepted: WearStatusIconReporter.I.beginPerformanceTrace,
-      onPreviewUseful: widget.voicePreviewEventStream == null &&
-              widget.onStartVoice == null
-          ? WearDependencies.I.voiceControlService.markPreviewUseful
-          : null,
+      onPreviewUseful:
+          widget.voicePreviewEventStream == null && widget.onStartVoice == null
+              ? WearDependencies.I.voiceControlService.markPreviewUseful
+              : null,
       log: print,
     );
     WearStatusIconReporter.I.setVoiceCommandsEnabled(_voiceCommandsEnabled);

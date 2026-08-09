@@ -11,6 +11,7 @@ void main() {
   const WearVoiceAdmissionContext current = (
     screen: WearScreenId.menu,
     captureEpoch: 1,
+    recognitionContextId: 1,
     routeRevision: 2,
     grammarRevision: 3,
     freeTextEpoch: 4,
@@ -30,6 +31,7 @@ void main() {
         _commandEvent(),
         screen: current.screen,
         captureEpoch: current.captureEpoch,
+        recognitionContextId: current.recognitionContextId,
         routeRevision: current.routeRevision,
         grammarRevision: current.grammarRevision,
       ),
@@ -40,6 +42,7 @@ void main() {
         _phraseEvent(),
         screen: current.screen,
         captureEpoch: current.captureEpoch,
+        recognitionContextId: current.recognitionContextId,
         routeRevision: current.routeRevision,
         grammarRevision: current.grammarRevision,
         freeTextEpoch: current.freeTextEpoch,
@@ -52,6 +55,7 @@ void main() {
         _phraseEvent(listRevision: 6),
         screen: current.screen,
         captureEpoch: current.captureEpoch,
+        recognitionContextId: current.recognitionContextId,
         routeRevision: current.routeRevision,
         grammarRevision: current.grammarRevision,
         freeTextEpoch: current.freeTextEpoch,
@@ -179,6 +183,29 @@ void main() {
     expect(calls, 2);
   });
 
+  test('speech turn does not change exactly-once ownership', () async {
+    final WearVoiceEventAdmissionGate gate = WearVoiceEventAdmissionGate();
+    var calls = 0;
+
+    expect(
+      await gate.runCommand(
+        _commandEvent(commandUtteranceId: 7, speechTurnId: 1),
+        context: current,
+        action: () => calls++,
+      ),
+      WearVoiceAdmissionDecision.accepted,
+    );
+    expect(
+      await gate.runCommand(
+        _commandEvent(commandUtteranceId: 7, speechTurnId: 2),
+        context: current,
+        action: () => calls++,
+      ),
+      WearVoiceAdmissionDecision.duplicate,
+    );
+    expect(calls, 1);
+  });
+
   test('concurrent command and phrase race executes one action', () async {
     final WearVoiceEventAdmissionGate gate = WearVoiceEventAdmissionGate();
     final Completer<void> release = Completer<void>();
@@ -269,6 +296,7 @@ void main() {
       final WearVoiceAdmissionContext context = (
         screen: WearScreenId.menu,
         captureEpoch: 1,
+        recognitionContextId: 1,
         routeRevision: revision,
         grammarRevision: 3,
         freeTextEpoch: 4,

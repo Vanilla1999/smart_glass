@@ -417,6 +417,7 @@ void main() {
           event,
           screen: tracedFlow.state.screen,
           captureEpoch: speech.captureEpoch,
+          recognitionContextId: speech.recognitionContextId,
           routeRevision: speech.routeRevision,
           grammarRevision: speech.grammarRevision,
         )) {

@@ -37,6 +37,7 @@ void main() {
       ..enterScreen(WearScreenId.menu);
     revisions = (
       captureEpoch: 1,
+      recognitionContextId: 1,
       routeRevision: 2,
       grammarRevision: 3,
       freeTextEpoch: 4,

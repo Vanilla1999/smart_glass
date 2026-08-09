@@ -1234,6 +1234,24 @@ void main() {
       expect(navigation.goToCalls.last, WearScreenId.homeConfirm);
     });
 
+    test('queued voice command is dropped after the first changes screen',
+        () async {
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.menu);
+
+      final Future<void> select =
+          controller.handleVoiceCommand(WearVoiceCommand.select);
+      final Future<void> stale =
+          controller.handleVoiceCommand(WearVoiceCommand.home);
+      await Future.wait<void>(<Future<void>>[select, stale]);
+
+      expect(controller.state.screen, WearScreenId.printerSelect);
+    });
+
     test('menu down does not await a blocking glasses render', () async {
       final _BlockingGlassesOutput glasses = _BlockingGlassesOutput();
       final WearFlowController controller = WearFlowController(

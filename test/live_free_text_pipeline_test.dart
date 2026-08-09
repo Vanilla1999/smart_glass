@@ -925,8 +925,7 @@ void main() {
     expect(finals.single.isLiveFreeText, isFalse);
   });
 
-  test('deferred grammar commits after live decision before next command PCM',
-      () async {
+  test('context commits without waiting for a blocked live decision', () async {
     final Completer<String> blockedFinal = Completer<String>();
     final Completer<void> finalStarted = Completer<void>();
     final List<String> operations = <String>[];
@@ -964,8 +963,8 @@ void main() {
     final Future<void> next = service.processAudioChunk(_pcmFrame(2000));
     await Future<void>.delayed(Duration.zero);
 
-    expect(service.routeRevision, routeRevision);
-    expect(operations, isNot(contains('grammar')));
+    expect(service.routeRevision, routeRevision + 1);
+    expect(operations, contains('grammar'));
     expect(operations, isNot(contains('next-command-pcm')));
 
     blockedFinal.complete(_json(text: 'жёлтый'));
@@ -976,8 +975,8 @@ void main() {
     ]);
     await service.waitForProcessing();
 
-    expect(operations,
-        containsAllInOrder(<String>['grammar', 'next-command-pcm']));
+    expect(operations, contains('grammar'));
+    expect(operations, isNot(contains('next-command-pcm')));
     expect(service.sourceScreen, WearScreenId.help);
   });
 
