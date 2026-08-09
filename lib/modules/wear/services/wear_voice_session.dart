@@ -59,7 +59,6 @@ class WearVoiceSession {
   VoiceDeviceProfile? _requestedStartupProfile;
   WearScreenId? _configuredScreen;
   int _configurationGeneration = 0;
-  Future<void> _configurationOperation = Future<void>.value();
   String? _requestedProfileId;
   String? _fallbackReason;
   final VoiceCaptureRecoveryGate _zeroAudioRecovery =
@@ -154,7 +153,7 @@ class WearVoiceSession {
     bool force = false,
   }) {
     final int generation = ++_configurationGeneration;
-    final Future<void> next = _configurationOperation.then((_) async {
+    final Future<void> next = (() async {
       if (generation != _configurationGeneration) return;
       if (!force && _configuredScreen == screen) return;
       _configuredScreen = null;
@@ -206,13 +205,13 @@ class WearVoiceSession {
       if (generation != _configurationGeneration) return;
       await _speech.setFreeTextEnabled(freeText);
       if (generation == _configurationGeneration) _configuredScreen = screen;
-    });
-    _configurationOperation = next.catchError(
+    })();
+    unawaited(next.catchError(
       (Object error, StackTrace stackTrace) {
         print('[WearVoiceSession] screen configuration failed: '
             '$error\n$stackTrace');
       },
-    );
+    ));
     return next;
   }
 

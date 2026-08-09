@@ -183,6 +183,8 @@ void main() {
     await freeTextStarted.future;
     final Future<void> interaction =
         session.configureForScreen(WearScreenId.availabilityInteraction);
+    await Future<void>.delayed(Duration.zero);
+    expect(speech.switchedScreens.last, WearScreenId.availabilityInteraction);
     releaseFreeText.complete();
     await Future.wait(<Future<void>>[group, interaction]);
 
