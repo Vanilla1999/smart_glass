@@ -2100,6 +2100,9 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   int get captureEpoch => 1;
 
   @override
+  int get recognitionContextId => 1;
+
+  @override
   int get currentDynamicItemsRevision => 0;
 
   @override

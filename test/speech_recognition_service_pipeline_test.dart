@@ -312,6 +312,75 @@ void main() {
     expect(service.commandUtteranceId, 2);
   });
 
+  test('PCM arriving during a route switch waits for its context barrier',
+      () async {
+    final Completer<void> grammarStarted = Completer<void>();
+    final Completer<void> releaseGrammar = Completer<void>();
+    final _FakeRecognizer command = _FakeRecognizer();
+    final SpeechRecognitionService service = _service(command: command);
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    final int initialContextId = service.recognitionContextId;
+
+    final Uint8List oldFrame = _pcmFrame(1000);
+    final Uint8List newFrame = _pcmFrame(2000);
+    await service.processAudioChunk(oldFrame);
+    command
+      ..grammarStarted = grammarStarted
+      ..grammarBlock = releaseGrammar;
+    final Future<void> switching = service.switchCommandGrammar(
+      screen: WearScreenId.availabilityInteraction,
+      grammar: const <String>['список', '[unk]'],
+    );
+    await grammarStarted.future;
+    final Future<void> processing = service.processAudioChunk(newFrame);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(command.accepted, isNot(contains(newFrame)));
+
+    releaseGrammar.complete();
+    await Future.wait(<Future<void>>[switching, processing]);
+
+    expect(service.recognitionContextId, initialContextId + 1);
+    expect(
+        command.accepted, containsAllInOrder(<Uint8List>[oldFrame, newFrame]));
+  });
+
+  test('capture restart cancels an uncommitted route context', () async {
+    final Completer<void> grammarStarted = Completer<void>();
+    final Completer<void> releaseGrammar = Completer<void>();
+    final _FakeRecognizer command = _FakeRecognizer();
+    final SpeechRecognitionService service = _service(command: command);
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    final int initialContextId = service.recognitionContextId;
+
+    command
+      ..grammarStarted = grammarStarted
+      ..grammarBlock = releaseGrammar;
+    final Future<void> switching = service.switchCommandGrammar(
+      screen: WearScreenId.availabilityInteraction,
+      grammar: const <String>['список', '[unk]'],
+    );
+    await grammarStarted.future;
+    service.beginProcessingCapture();
+    releaseGrammar.complete();
+
+    await expectLater(switching, throwsStateError);
+    expect(service.sourceScreen, WearScreenId.menu);
+    expect(service.recognitionContextId, initialContextId);
+
+    await service.switchCommandGrammar(
+      screen: WearScreenId.help,
+      grammar: const <String>['назад', '[unk]'],
+    );
+    expect(service.recognitionContextId, initialContextId + 2);
+  });
+
   test('same-screen grammar request waits for utterance boundary', () async {
     final Completer<void> firstGrammarBlock = Completer<void>();
     final Completer<void> firstGrammarStarted = Completer<void>();

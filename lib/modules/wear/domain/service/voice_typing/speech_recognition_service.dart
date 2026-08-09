@@ -53,7 +53,11 @@ class VoiceRecognitionProcessingQueue {
   }
 }
 
-enum QueuedVoiceWorkDropReason { captureChanged, newSpeechTurn }
+enum QueuedVoiceWorkDropReason {
+  captureChanged,
+  contextChanged,
+  newSpeechTurn,
+}
 
 class VoiceRecognitionSegmentCloseGuard {
   const VoiceRecognitionSegmentCloseGuard({
@@ -264,6 +268,9 @@ class SpeechRecognitionService {
   int? _commandUtteranceStartedAtMillis;
   int _routeRevision = 1;
   int _grammarRevision = 1;
+  int _recognitionContextId = 1;
+  int _desiredRecognitionContextId = 1;
+  int _nextRecognitionContextId = 1;
   WearScreenId _sourceScreen = WearScreenId.menu;
   final VoiceRecognitionCaptureEpoch _captureEpoch =
       VoiceRecognitionCaptureEpoch();
@@ -341,6 +348,7 @@ class SpeechRecognitionService {
   int get freeTextEpoch => _freeTextEpoch;
   int get captureEpoch => _captureEpoch.current;
   int get grammarRevision => _grammarRevision;
+  int get recognitionContextId => _recognitionContextId;
   WearScreenId get sourceScreen => _sourceScreen;
   int get commandUtteranceId => _commandUtteranceId;
   int get freeTextPartialRevision => _freeTextPartialRevision;
@@ -431,12 +439,30 @@ class SpeechRecognitionService {
       return waiter.future;
     }
     if (routeCutover) _flushRecognizerBatch();
+    final int targetContextId;
+    if (routeCutover) {
+      targetContextId = ++_nextRecognitionContextId;
+      _desiredRecognitionContextId = targetContextId;
+      print(
+        '[VOICE_CONTEXT] requested contextId=$targetContextId screen=$screen '
+        'phrases=${normalized.length}',
+      );
+    } else {
+      targetContextId = _recognitionContextId;
+    }
     final pending = routeCutover ? _pendingGrammarSwitch : null;
     if (routeCutover) _pendingGrammarSwitch = null;
     final int startedAt = DateTime.now().millisecondsSinceEpoch;
     final Future<void> next = _commandAudioProcessing.then((_) async {
       if (_sourceScreen == screen &&
           _sameGrammar(_commandGrammar, normalized)) {
+        if (routeCutover) {
+          _recognitionContextId = targetContextId;
+          print(
+            '[VOICE_CONTEXT] committed contextId=$targetContextId '
+            'screen=$screen noOp=true',
+          );
+        }
         return;
       }
       if (_sourceScreen != screen && _commandUtteranceStartedAtMillis != null) {
@@ -472,6 +498,9 @@ class SpeechRecognitionService {
         }
       }
       if (_captureEpoch.current != expectedCaptureEpoch) {
+        if (_desiredRecognitionContextId == targetContextId) {
+          _desiredRecognitionContextId = _recognitionContextId;
+        }
         if (recognizer != null && identical(_commandRecognizer, recognizer)) {
           _commandRecognizer = null;
           try {
@@ -492,6 +521,7 @@ class SpeechRecognitionService {
       _commandGrammar = normalized;
       if (routeChanged) _routeRevision++;
       if (grammarChanged) _grammarRevision++;
+      if (routeCutover) _recognitionContextId = targetContextId;
       final int routeRevision = _routeRevision;
       final int grammarRevision = _grammarRevision;
       print(
@@ -499,6 +529,12 @@ class SpeechRecognitionService {
         'grammarRevision=$grammarRevision phrases=${normalized.length} '
         'switchMs=${DateTime.now().millisecondsSinceEpoch - startedAt}',
       );
+      if (routeCutover) {
+        print(
+          '[VOICE_CONTEXT] committed contextId=$targetContextId screen=$screen '
+          'routeRevision=$routeRevision grammarRevision=$grammarRevision',
+        );
+      }
     });
     if (pending != null) {
       unawaited(next.then((_) {
@@ -512,6 +548,9 @@ class SpeechRecognitionService {
       }));
     }
     _commandAudioProcessing = next.catchError((Object error, StackTrace stack) {
+      if (_desiredRecognitionContextId == targetContextId) {
+        _desiredRecognitionContextId = _recognitionContextId;
+      }
       print('[VOICE_GRAMMAR] switch failed: $error\n$stack');
     });
     return next;
@@ -924,7 +963,9 @@ class SpeechRecognitionService {
     if (vadDecision.resetRetainedFrames) _preRollFrames.clear();
     if (segment == null) {
       if (!vadDecision.retainFrame) return true;
-      _preRollFrames.add(_PcmFrame(boostedBytes));
+      _preRollFrames.add(
+        _PcmFrame(boostedBytes, _desiredRecognitionContextId),
+      );
       if (_preRollFrames.length > _preRollFrameCount) {
         _preRollFrames.removeAt(0);
       }
@@ -936,6 +977,10 @@ class SpeechRecognitionService {
       _logVadEvent('VAD_START', segment);
       _emitSegmentStarted(segment);
       for (final _PcmFrame frame in _preRollFrames) {
+        if (frame.recognitionContextId != _desiredRecognitionContextId) {
+          _voiceMetrics.recordDrop(VoiceDropReason.staleRecognitionResult);
+          continue;
+        }
         if (!_enqueueSegmentFrame(
           frame.boosted,
           captureEpoch,
@@ -1373,6 +1418,8 @@ class SpeechRecognitionService {
         _voiceMetrics.recordDrop(switch (dropReason) {
           QueuedVoiceWorkDropReason.captureChanged =>
             VoiceDropReason.captureChanged,
+          QueuedVoiceWorkDropReason.contextChanged =>
+            VoiceDropReason.staleRecognitionResult,
           QueuedVoiceWorkDropReason.newSpeechTurn =>
             VoiceDropReason.speechTurnChanged,
         });
@@ -1392,6 +1439,7 @@ class SpeechRecognitionService {
           decoderAdvancedInsideSameSpeechTurn
               ? VoiceWorkIdentity(
                   captureEpoch: identity.captureEpoch,
+                  recognitionContextId: identity.recognitionContextId,
                   speechTurnId: identity.speechTurnId,
                   decoderGeneration: _commandUtteranceId,
                   sourceScreen: identity.sourceScreen,
@@ -1443,6 +1491,7 @@ class SpeechRecognitionService {
         _dynamicItemsProvider(_sourceScreen);
     return VoiceWorkIdentity(
       captureEpoch: captureEpoch,
+      recognitionContextId: _desiredRecognitionContextId,
       speechTurnId: speechTurnId,
       decoderGeneration: decoderGeneration,
       sourceScreen: _sourceScreen,
@@ -1458,6 +1507,9 @@ class SpeechRecognitionService {
   ) {
     if (!_captureEpoch.isCurrent(identity.captureEpoch)) {
       return QueuedVoiceWorkDropReason.captureChanged;
+    }
+    if (identity.recognitionContextId != _recognitionContextId) {
+      return QueuedVoiceWorkDropReason.contextChanged;
     }
     if (identity.decoderGeneration < _commandUtteranceId &&
         _speechTurnByCommandUtterance[identity.decoderGeneration] !=
@@ -2565,6 +2617,7 @@ class SpeechRecognitionService {
     return VoiceReplayContext.withIdentity(
       identity: VoiceWorkIdentity(
         captureEpoch: captureEpoch,
+        recognitionContextId: voiceContext.recognitionContextId,
         speechTurnId: segment.speechTurnId,
         decoderGeneration: commandUtteranceId,
         sourceScreen: voiceContext.sourceScreen,
@@ -3294,6 +3347,9 @@ class SpeechRecognitionService {
     if (!_captureEpoch.isCurrent(context.captureEpoch)) {
       return VoiceReplayContextCancellation.captureChanged;
     }
+    if (context.recognitionContextId != _recognitionContextId) {
+      return VoiceReplayContextCancellation.recognitionContextChanged;
+    }
     if (!_freeTextEnabled || context.freeTextEpoch != _freeTextEpoch) {
       return VoiceReplayContextCancellation.freeTextChanged;
     }
@@ -3322,6 +3378,8 @@ class SpeechRecognitionService {
         VoiceDropReason.sessionStopped,
       VoiceReplayContextCancellation.captureChanged =>
         VoiceDropReason.captureChanged,
+      VoiceReplayContextCancellation.recognitionContextChanged =>
+        VoiceDropReason.staleRecognitionResult,
       VoiceReplayContextCancellation.freeTextChanged =>
         VoiceDropReason.freeTextConfigurationChanged,
       VoiceReplayContextCancellation.screenChanged =>
@@ -3480,6 +3538,7 @@ class SpeechRecognitionService {
   _VoiceResultContext _currentResultContext(int utteranceId) {
     return _VoiceResultContext(
       commandUtteranceId: utteranceId,
+      recognitionContextId: _recognitionContextId,
       routeRevision: _routeRevision,
       grammarRevision: _grammarRevision,
       freeTextEpoch: _freeTextEpoch,
@@ -4855,6 +4914,7 @@ class _ReplayResolution {
 class _VoiceResultContext {
   const _VoiceResultContext({
     required this.commandUtteranceId,
+    required this.recognitionContextId,
     required this.routeRevision,
     required this.grammarRevision,
     required this.freeTextEpoch,
@@ -4864,6 +4924,7 @@ class _VoiceResultContext {
   });
 
   final int commandUtteranceId;
+  final int recognitionContextId;
   final int routeRevision;
   final int grammarRevision;
   final int freeTextEpoch;
@@ -4873,6 +4934,7 @@ class _VoiceResultContext {
 
   _VoiceResultContext withListRevision(int revision) => _VoiceResultContext(
         commandUtteranceId: commandUtteranceId,
+        recognitionContextId: recognitionContextId,
         routeRevision: routeRevision,
         grammarRevision: grammarRevision,
         freeTextEpoch: freeTextEpoch,
@@ -4916,9 +4978,10 @@ enum _RecognitionSource {
 }
 
 class _PcmFrame {
-  const _PcmFrame(this.boosted);
+  const _PcmFrame(this.boosted, this.recognitionContextId);
 
   final Uint8List boosted;
+  final int recognitionContextId;
 }
 
 class _RecognitionMetrics {

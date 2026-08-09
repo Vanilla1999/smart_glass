@@ -15,6 +15,34 @@ void main() {
     listRevision: 7,
   );
 
+  test('work identity keeps recognition context ownership immutable', () {
+    const VoiceWorkIdentity first = VoiceWorkIdentity(
+      captureEpoch: 1,
+      recognitionContextId: 2,
+      speechTurnId: 3,
+      decoderGeneration: 4,
+      sourceScreen: WearScreenId.menu,
+      routeRevision: 1,
+      grammarRevision: 1,
+      freeTextConfigurationRevision: 0,
+      listRevision: 0,
+    );
+    const VoiceWorkIdentity nextContext = VoiceWorkIdentity(
+      captureEpoch: 1,
+      recognitionContextId: 3,
+      speechTurnId: 3,
+      decoderGeneration: 4,
+      sourceScreen: WearScreenId.menu,
+      routeRevision: 1,
+      grammarRevision: 1,
+      freeTextConfigurationRevision: 0,
+      listRevision: 0,
+    );
+
+    expect(first, isNot(nextContext));
+    expect(first.recognitionContextId, 2);
+  });
+
   test('publishes pending then one terminal ownership transition', () async {
     final VoiceReplayOwnershipStateMachine machine =
         VoiceReplayOwnershipStateMachine();

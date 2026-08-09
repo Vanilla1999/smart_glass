@@ -17,6 +17,7 @@ enum VoiceReplayOwnershipStatus {
 enum VoiceReplayContextCancellation {
   sessionStopped,
   captureChanged,
+  recognitionContextChanged,
   freeTextChanged,
   screenChanged,
   routeChanged,
@@ -28,6 +29,7 @@ enum VoiceReplayContextCancellation {
 class VoiceWorkIdentity {
   const VoiceWorkIdentity({
     required this.captureEpoch,
+    this.recognitionContextId = 1,
     required this.speechTurnId,
     required this.decoderGeneration,
     required this.sourceScreen,
@@ -38,6 +40,7 @@ class VoiceWorkIdentity {
   });
 
   final int captureEpoch;
+  final int recognitionContextId;
 
   final int speechTurnId;
   final int decoderGeneration;
@@ -55,6 +58,7 @@ class VoiceWorkIdentity {
   bool operator ==(Object other) =>
       other is VoiceWorkIdentity &&
       other.captureEpoch == captureEpoch &&
+      other.recognitionContextId == recognitionContextId &&
       other.speechTurnId == speechTurnId &&
       other.decoderGeneration == decoderGeneration &&
       other.sourceScreen == sourceScreen &&
@@ -66,6 +70,7 @@ class VoiceWorkIdentity {
   @override
   int get hashCode => Object.hash(
         captureEpoch,
+        recognitionContextId,
         speechTurnId,
         decoderGeneration,
         sourceScreen,
@@ -79,6 +84,7 @@ class VoiceWorkIdentity {
 class VoiceReplayContext {
   const VoiceReplayContext({
     required this.captureEpoch,
+    this.recognitionContextId = 1,
     required this.segmentId,
     required this.speechTurnId,
     required int commandUtteranceId,
@@ -94,6 +100,7 @@ class VoiceReplayContext {
     required VoiceWorkIdentity identity,
     required this.segmentId,
   })  : captureEpoch = identity.captureEpoch,
+        recognitionContextId = identity.recognitionContextId,
         speechTurnId = identity.speechTurnId,
         decoderGeneration = identity.decoderGeneration,
         sourceScreen = identity.sourceScreen,
@@ -103,6 +110,7 @@ class VoiceReplayContext {
         listRevision = identity.listRevision;
 
   final int captureEpoch;
+  final int recognitionContextId;
 
   /// Diagnostic VAD segment only. Max-duration rollover can change this value
   /// while the semantic speech turn and replay ownership stay unchanged.
@@ -117,6 +125,7 @@ class VoiceReplayContext {
 
   VoiceWorkIdentity get identity => VoiceWorkIdentity(
         captureEpoch: captureEpoch,
+        recognitionContextId: recognitionContextId,
         speechTurnId: speechTurnId,
         decoderGeneration: decoderGeneration,
         sourceScreen: sourceScreen,
@@ -140,6 +149,7 @@ class VoiceReplayContext {
   @override
   String toString() => 'VoiceReplayContext('
       'traceId=$traceId, segmentId=$segmentId, '
+      'contextId=$recognitionContextId, '
       'screen=${sourceScreen.name}, routeRevision=$routeRevision, '
       'grammarRevision=$grammarRevision, freeTextEpoch=$freeTextEpoch, '
       'listRevision=$listRevision)';
