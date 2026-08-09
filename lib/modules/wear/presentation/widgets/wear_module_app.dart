@@ -13,6 +13,7 @@ import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_admission.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_phrase_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_preview_event.dart';
@@ -244,10 +245,13 @@ class _WearModuleAppState extends State<WearModuleApp>
         if (input.event case final WearVoiceCommandEvent event) {
           final logicalScreen = flow.state.screen;
           final speech = WearDependencies.I.speechRecognitionService;
-          if (event.sourceScreen != logicalScreen ||
-              event.captureEpoch != speech.captureEpoch ||
-              event.routeRevision != speech.routeRevision ||
-              event.grammarRevision != speech.grammarRevision) {
+          if (!isCurrentWearVoiceCommandEvent(
+            event,
+            screen: logicalScreen,
+            captureEpoch: speech.captureEpoch,
+            routeRevision: speech.routeRevision,
+            grammarRevision: speech.grammarRevision,
+          )) {
             print(
               '[WearModuleApp] suppress stale voice command '
               'command=$command sourceScreen=${event.sourceScreen} '

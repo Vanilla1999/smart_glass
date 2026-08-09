@@ -30,6 +30,7 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_admission.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_phrase_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_preview_event.dart';
@@ -392,6 +393,61 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(flowController.state.screen, WearScreenId.availabilityDirectScan);
+    });
+
+    test('recognized command passes stale admission and acts exactly once',
+        () async {
+      final List<String> trace = <String>[];
+      final _TraceNavigationOutput tracedNavigation =
+          _TraceNavigationOutput(trace);
+      final WearFlowController tracedFlow = WearFlowController(
+        glassesOutput: _TestGlassesOutput(),
+        navigationOutput: tracedNavigation,
+      );
+      final _FakeSpeechRecognitionService speech =
+          _FakeSpeechRecognitionService(WearScreenId.menu);
+      final WearVoiceControlService voiceControl = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => tracedFlow.state.screen,
+      );
+      final StreamSubscription<WearVoiceCommandEvent> subscription =
+          voiceControl.commandEventStream.listen((event) async {
+        trace.add('recognized:${event.command.name}');
+        if (!isCurrentWearVoiceCommandEvent(
+          event,
+          screen: tracedFlow.state.screen,
+          captureEpoch: speech.captureEpoch,
+          routeRevision: speech.routeRevision,
+          grammarRevision: speech.grammarRevision,
+        )) {
+          trace.add('rejected:${event.command.name}');
+          return;
+        }
+        trace.add('accepted:${event.command.name}');
+        await tracedFlow.handleVoiceCommand(event.command);
+        trace.add('handled:${event.command.name}');
+      });
+      addTearDown(subscription.cancel);
+      addTearDown(voiceControl.dispose);
+      addTearDown(speech.dispose);
+
+      tracedFlow.setUiLifecycle(WearUiLifecycle.active);
+      tracedFlow.enterScreen(WearScreenId.menu);
+      await Future<void>.delayed(Duration.zero);
+
+      speech.emitCommandResult('доступность');
+      speech.emitCommandResult('доступность');
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(tracedNavigation.goToCalls,
+          <WearScreenId>[WearScreenId.availabilityInteraction]);
+      expect(trace, <String>[
+        'recognized:openAvailability',
+        'accepted:openAvailability',
+        'navigate:availabilityInteraction',
+        'handled:openAvailability',
+      ]);
     });
 
     test('accessibility partial retains no state past old stable delay',
@@ -1787,6 +1843,18 @@ class _FakeNavigationOutput implements WearNavigationOutput {
   Future<void> synchronize(List<WearNavigationEntry> history) async {}
 }
 
+class _TraceNavigationOutput extends _FakeNavigationOutput {
+  _TraceNavigationOutput(this.trace);
+
+  final List<String> trace;
+
+  @override
+  Future<void> goTo(WearScreenId screen, {Object? extra}) async {
+    trace.add('navigate:${screen.name}');
+    await super.goTo(screen, extra: extra);
+  }
+}
+
 class _PresetPrinterSelectNotifier extends WearPrinterSelectNotifier {
   _PresetPrinterSelectNotifier() : super(useCase: _NeverPrintersUseCase()) {
     state = const WearPrinterSelectState(
@@ -1919,7 +1987,7 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   int get freeTextEpoch => 0;
 
   @override
-  int get captureEpoch => 0;
+  int get captureEpoch => 1;
 
   @override
   int get currentDynamicItemsRevision => 0;

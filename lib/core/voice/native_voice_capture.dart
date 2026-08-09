@@ -65,6 +65,127 @@ class NativePcmPacket {
 
 typedef NativePcmConsumer = FutureOr<bool> Function(NativePcmPacket packet);
 
+class NativePcmPacketEndpoint {
+  static const int accepted = 0;
+  static const int staleLease = 1;
+  static const int malformedPacket = 2;
+  static const int invalidPacket = 3;
+  static const int consumerRejected = 4;
+
+  _NativePcmSession? _session;
+  int _generation = 0;
+
+  void beginSession({
+    required int leaseId,
+    required int revision,
+    required NativePcmConsumer consumer,
+  }) {
+    _session = _NativePcmSession(
+      generation: ++_generation,
+      leaseId: leaseId,
+      revision: revision,
+      consumer: consumer,
+    );
+  }
+
+  void markStreaming() {
+    final _NativePcmSession? session = _session;
+    if (session != null) session.isStreaming = true;
+  }
+
+  void endSession() {
+    _generation++;
+    _session = null;
+  }
+
+  Future<ByteData> handle(ByteData? packet) async {
+    if (packet == null || packet.lengthInBytes < 40) {
+      return acknowledgement(malformedPacket, 0, 0);
+    }
+    final ByteData header = ByteData.sublistView(packet, 0, 40);
+    if (header.getUint32(0, Endian.big) != 2 ||
+        header.getUint32(4, Endian.big) != 40) {
+      return acknowledgement(malformedPacket, 0, 0);
+    }
+    final int leaseId = header.getInt64(8, Endian.big);
+    final int sequence = header.getInt64(16, Endian.big);
+    final _NativePcmSession? session = _session;
+    if (session == null || leaseId != session.leaseId) {
+      return acknowledgement(staleLease, leaseId, sequence);
+    }
+    final NativePcmPacket pcm = NativePcmPacket(
+      leaseId: leaseId,
+      sequence: sequence,
+      elapsedRealtimeNanos: header.getInt64(24, Endian.big),
+      capturedAtEpochMicros: header.getInt64(32, Endian.big),
+      bytes: Uint8List.fromList(packet.buffer.asUint8List(
+        packet.offsetInBytes + 40,
+        packet.lengthInBytes - 40,
+      )),
+    );
+    if (!session.canAccept(pcm)) {
+      return acknowledgement(invalidPacket, leaseId, sequence);
+    }
+    session.pendingSequence = sequence;
+    try {
+      final bool admitted = await session.consumer(pcm);
+      if (!identical(_session, session) || session.generation != _generation) {
+        return acknowledgement(staleLease, leaseId, sequence);
+      }
+      session.pendingSequence = null;
+      if (!admitted) {
+        return acknowledgement(consumerRejected, leaseId, sequence);
+      }
+      session.lastSequence = sequence;
+      session.lastTimestampNanos = pcm.elapsedRealtimeNanos;
+      return acknowledgement(accepted, leaseId, sequence);
+    } catch (_) {
+      if (identical(_session, session) && session.pendingSequence == sequence) {
+        session.pendingSequence = null;
+      }
+      return acknowledgement(consumerRejected, leaseId, sequence);
+    }
+  }
+
+  static ByteData acknowledgement(int status, int leaseId, int sequence) {
+    return ByteData(24)
+      ..setUint32(0, 1, Endian.big)
+      ..setUint32(4, status, Endian.big)
+      ..setInt64(8, leaseId, Endian.big)
+      ..setInt64(16, sequence, Endian.big);
+  }
+}
+
+class _NativePcmSession {
+  _NativePcmSession({
+    required this.generation,
+    required this.leaseId,
+    required this.revision,
+    required this.consumer,
+  });
+
+  final int generation;
+  final int leaseId;
+  final int revision;
+  final NativePcmConsumer consumer;
+  bool isStreaming = false;
+  int? pendingSequence;
+  int? lastSequence;
+  int? lastTimestampNanos;
+
+  bool canAccept(NativePcmPacket packet) {
+    return isStreaming &&
+        pendingSequence == null &&
+        packet.bytes.isNotEmpty &&
+        packet.bytes.lengthInBytes.isEven &&
+        packet.sequence == (lastSequence == null ? 0 : lastSequence! + 1) &&
+        packet.elapsedRealtimeNanos > 0 &&
+        packet.capturedAtEpochMicros > 0 &&
+        (lastTimestampNanos == null ||
+            packet.elapsedRealtimeNanos > lastTimestampNanos!);
+  }
+}
+
 /// Boundary used by the Dart voice pipeline to receive native PCM packets.
 ///
 /// Production uses [NativeVoiceCapture]. Tests can replay recorded packets
@@ -104,13 +225,10 @@ class NativeVoiceCapture implements NativeVoiceCapturePort {
   static const EventChannel _eventChannel =
       EventChannel('ru.tander.smart_glasses/native_voice/events');
 
-  NativePcmConsumer? _onPcm;
   int? _activeLeaseId;
   int? _activeRevision;
   NativeVoiceOwner? _activeOwner;
-  int? _lastSequence;
-  int? _lastTimestampNanos;
-  bool _isStreaming = false;
+  final NativePcmPacketEndpoint _pcmEndpoint = NativePcmPacketEndpoint();
   int? _reconciledLeaseId;
   int? _reconciledRevision;
   int _operationGeneration = 0;
@@ -186,7 +304,6 @@ class NativeVoiceCapture implements NativeVoiceCapturePort {
       if (_activeLeaseId != null) {
         throw StateError('Native voice capture is already active.');
       }
-      _onPcm = onPcm;
       _activeOwner = owner;
       try {
         await _methodChannel.invokeMethod<void>('prepare');
@@ -210,8 +327,11 @@ class NativeVoiceCapture implements NativeVoiceCapturePort {
         }
         _activeLeaseId = leaseId;
         _activeRevision = revision;
-        _lastSequence = null;
-        _lastTimestampNanos = null;
+        _pcmEndpoint.beginSession(
+          leaseId: leaseId,
+          revision: revision,
+          consumer: onPcm,
+        );
         try {
           await _methodChannel.invokeMethod<void>(
             'confirmStart',
@@ -228,7 +348,7 @@ class NativeVoiceCapture implements NativeVoiceCapturePort {
           }
           rethrow;
         }
-        _isStreaming = true;
+        _pcmEndpoint.markStreaming();
         if (generation != _operationGeneration) {
           await _stopNative(owner, leaseId);
           _clearCapture(leaseId: leaseId, revision: revision);
@@ -277,66 +397,7 @@ class NativeVoiceCapture implements NativeVoiceCapturePort {
     });
   }
 
-  Future<ByteData> _onPacket(ByteData? packet) async {
-    if (packet == null || packet.lengthInBytes < 40) {
-      return _acknowledgement(2, 0, 0);
-    }
-    final ByteData header = ByteData.sublistView(packet, 0, 40);
-    if (header.getUint32(0, Endian.big) != 2 ||
-        header.getUint32(4, Endian.big) != 40) {
-      return _acknowledgement(2, 0, 0);
-    }
-    final int leaseId = header.getInt64(8, Endian.big);
-    final int sequence = header.getInt64(16, Endian.big);
-    if (leaseId != _activeLeaseId) {
-      return _acknowledgement(1, leaseId, sequence);
-    }
-    final int timestampNanos = header.getInt64(24, Endian.big);
-    final int capturedAtEpochMicros = header.getInt64(32, Endian.big);
-    final Uint8List bytes = packet.buffer.asUint8List(
-      packet.offsetInBytes + 40,
-      packet.lengthInBytes - 40,
-    );
-    if (bytes.isEmpty ||
-        bytes.lengthInBytes.isOdd ||
-        sequence < 0 ||
-        timestampNanos <= 0 ||
-        capturedAtEpochMicros <= 0 ||
-        (_lastSequence != null && sequence != _lastSequence! + 1) ||
-        (_lastTimestampNanos != null &&
-            timestampNanos <= _lastTimestampNanos!) ||
-        _activeRevision == null ||
-        !_isStreaming ||
-        _onPcm == null) {
-      return _acknowledgement(3, leaseId, sequence);
-    }
-    final NativePcmPacket pcm = NativePcmPacket(
-      leaseId: leaseId,
-      sequence: sequence,
-      elapsedRealtimeNanos: timestampNanos,
-      capturedAtEpochMicros: capturedAtEpochMicros,
-      bytes: Uint8List.fromList(bytes),
-    );
-    try {
-      final bool accepted = await _onPcm!(pcm);
-      if (accepted && leaseId == _activeLeaseId) {
-        _lastSequence = sequence;
-        _lastTimestampNanos = timestampNanos;
-      }
-      return _acknowledgement(accepted ? 0 : 4, leaseId, sequence);
-    } catch (_) {
-      return _acknowledgement(4, leaseId, sequence);
-    }
-  }
-
-  ByteData _acknowledgement(int status, int leaseId, int sequence) {
-    final ByteData acknowledgement = ByteData(24)
-      ..setUint32(0, 1, Endian.big)
-      ..setUint32(4, status, Endian.big)
-      ..setInt64(8, leaseId, Endian.big)
-      ..setInt64(16, sequence, Endian.big);
-    return acknowledgement;
-  }
+  Future<ByteData> _onPacket(ByteData? packet) => _pcmEndpoint.handle(packet);
 
   static NativeVoiceStateEvent decodeStateEvent(Map<Object?, Object?> event) {
     final String stateName = event['state'] as String? ?? '';
@@ -398,7 +459,7 @@ class NativeVoiceCapture implements NativeVoiceCapturePort {
       _clearCapture(leaseId: event.leaseId);
     } else if (matchesCapture &&
         event.state == NativeVoiceCaptureState.streaming) {
-      _isStreaming = true;
+      _pcmEndpoint.markStreaming();
     }
     if (!_stateController.isClosed) _stateController.add(event);
   }
@@ -425,13 +486,10 @@ class NativeVoiceCapture implements NativeVoiceCapturePort {
   void _clearCapture({int? leaseId, int? revision}) {
     if (leaseId != null && leaseId != _activeLeaseId) return;
     if (revision != null && revision != _activeRevision) return;
-    _onPcm = null;
     _activeLeaseId = null;
     _activeRevision = null;
     _activeOwner = null;
-    _lastSequence = null;
-    _lastTimestampNanos = null;
-    _isStreaming = false;
+    _pcmEndpoint.endSession();
   }
 
   Future<T> _serialize<T>(Future<T> Function() operation) {
