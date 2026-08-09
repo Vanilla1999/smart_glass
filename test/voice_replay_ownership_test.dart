@@ -6,6 +6,7 @@ void main() {
   const VoiceReplayContext context = VoiceReplayContext(
     captureEpoch: 1,
     segmentId: 2,
+    speechTurnId: 11,
     commandUtteranceId: 3,
     sourceScreen: WearScreenId.availabilityGroup,
     routeRevision: 4,
@@ -61,6 +62,7 @@ void main() {
     const VoiceReplayContext next = VoiceReplayContext(
       captureEpoch: 1,
       segmentId: 3,
+      speechTurnId: 12,
       commandUtteranceId: 4,
       sourceScreen: WearScreenId.availabilityProduct,
       routeRevision: 5,
@@ -90,5 +92,65 @@ void main() {
       () => machine.resolve(context, VoiceReplayOwnershipStatus.timedOut),
       throwsStateError,
     );
+  });
+
+  test('technical segment rollover keeps one semantic replay owner', () async {
+    final VoiceReplayOwnershipStateMachine machine =
+        VoiceReplayOwnershipStateMachine();
+    addTearDown(machine.dispose);
+    final List<VoiceReplayOwnership> transitions = <VoiceReplayOwnership>[];
+    machine.transitions.listen(transitions.add);
+
+    const VoiceReplayContext rollover = VoiceReplayContext(
+      captureEpoch: 1,
+      segmentId: 99,
+      speechTurnId: 11,
+      commandUtteranceId: 3,
+      sourceScreen: WearScreenId.availabilityGroup,
+      routeRevision: 4,
+      grammarRevision: 5,
+      freeTextEpoch: 6,
+      listRevision: 7,
+    );
+
+    expect(rollover, context);
+    expect(rollover.hashCode, context.hashCode);
+    expect(rollover.traceId, '1:11:3');
+
+    final VoiceReplayOwnership first = machine.begin(context);
+    final VoiceReplayOwnership duplicate = machine.begin(rollover);
+    final VoiceReplayOwnership resolved = machine.resolve(
+      rollover,
+      VoiceReplayOwnershipStatus.resolvedEmpty,
+    );
+
+    expect(duplicate, same(first));
+    expect(resolved.context, context);
+    expect(machine.stateFor(context), same(resolved));
+    expect(machine.stateFor(rollover), same(resolved));
+    expect(
+      transitions.map((state) => state.status),
+      <VoiceReplayOwnershipStatus>[
+        VoiceReplayOwnershipStatus.pending,
+        VoiceReplayOwnershipStatus.resolvedEmpty,
+      ],
+    );
+  });
+
+  test('new speech turn creates a distinct replay identity', () {
+    const VoiceReplayContext nextTurn = VoiceReplayContext(
+      captureEpoch: 1,
+      segmentId: 2,
+      speechTurnId: 12,
+      commandUtteranceId: 3,
+      sourceScreen: WearScreenId.availabilityGroup,
+      routeRevision: 4,
+      grammarRevision: 5,
+      freeTextEpoch: 6,
+      listRevision: 7,
+    );
+
+    expect(nextTurn, isNot(context));
+    expect(nextTurn.traceId, '1:12:3');
   });
 }

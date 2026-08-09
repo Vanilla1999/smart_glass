@@ -29,7 +29,7 @@ class VoiceReplayContext {
   const VoiceReplayContext({
     required this.captureEpoch,
     required this.segmentId,
-    this.speechTurnId = 0,
+    required this.speechTurnId,
     required this.commandUtteranceId,
     required this.sourceScreen,
     required this.routeRevision,
@@ -39,8 +39,14 @@ class VoiceReplayContext {
   });
 
   final int captureEpoch;
+
+  /// Diagnostic VAD segment only. Max-duration rollover can change this value
+  /// while the semantic speech turn and replay ownership stay unchanged.
   final int segmentId;
   final int speechTurnId;
+
+  /// Until decoderGeneration is introduced explicitly, commandUtteranceId is
+  /// the decoder-generation component of replay identity.
   final int commandUtteranceId;
   final WearScreenId sourceScreen;
   final int routeRevision;
@@ -48,11 +54,12 @@ class VoiceReplayContext {
   final int freeTextEpoch;
   final int listRevision;
 
+  String get traceId => '$captureEpoch:$speechTurnId:$commandUtteranceId';
+
   @override
   bool operator ==(Object other) =>
       other is VoiceReplayContext &&
       other.captureEpoch == captureEpoch &&
-      other.segmentId == segmentId &&
       other.speechTurnId == speechTurnId &&
       other.commandUtteranceId == commandUtteranceId &&
       other.sourceScreen == sourceScreen &&
@@ -64,7 +71,6 @@ class VoiceReplayContext {
   @override
   int get hashCode => Object.hash(
         captureEpoch,
-        segmentId,
         speechTurnId,
         commandUtteranceId,
         sourceScreen,
@@ -73,6 +79,13 @@ class VoiceReplayContext {
         freeTextEpoch,
         listRevision,
       );
+
+  @override
+  String toString() => 'VoiceReplayContext('
+      'traceId=$traceId, segmentId=$segmentId, '
+      'screen=${sourceScreen.name}, routeRevision=$routeRevision, '
+      'grammarRevision=$grammarRevision, freeTextEpoch=$freeTextEpoch, '
+      'listRevision=$listRevision)';
 }
 
 class VoiceReplayOwnership {
@@ -113,6 +126,12 @@ class VoiceReplayOwnershipStateMachine {
   Stream<VoiceReplayOwnership> get transitions => _transitions.stream;
 
   VoiceReplayOwnership begin(VoiceReplayContext context) {
+    final VoiceReplayOwnership? existing = _states[context];
+    if (existing != null) {
+      // A technical VAD rollover may present the same semantic replay with a
+      // different diagnostic segmentId. Do not reopen or duplicate ownership.
+      return existing;
+    }
     final VoiceReplayOwnership state = VoiceReplayOwnership(
       status: VoiceReplayOwnershipStatus.pending,
       context: context,
@@ -140,7 +159,9 @@ class VoiceReplayOwnershipStateMachine {
     if (previous.isTerminal) return previous;
     final VoiceReplayOwnership state = VoiceReplayOwnership(
       status: status,
-      context: context,
+      // Preserve the context used by begin(), including the first diagnostic
+      // segmentId, even if resolve() arrived through a rollover-equivalent key.
+      context: previous.context ?? context,
       cancellation: cancellation,
       supersededByUtteranceId: supersededByUtteranceId,
       failure: failure,

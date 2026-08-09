@@ -220,6 +220,7 @@ VoiceReplayContext _context({
   return VoiceReplayContext(
     captureEpoch: 1,
     segmentId: segmentId,
+    speechTurnId: segmentId,
     commandUtteranceId: commandUtteranceId,
     sourceScreen: WearScreenId.availabilityProduct,
     routeRevision: 2,

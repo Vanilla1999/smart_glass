@@ -54,6 +54,7 @@ void main() {
     const VoiceReplayContext context = VoiceReplayContext(
       captureEpoch: 1,
       segmentId: 8,
+      speechTurnId: 8,
       commandUtteranceId: 9,
       sourceScreen: WearScreenId.menu,
       routeRevision: 1,
