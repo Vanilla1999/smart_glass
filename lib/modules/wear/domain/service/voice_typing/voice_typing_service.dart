@@ -78,8 +78,33 @@ class VoiceTypingService {
         'Сначала подготовьте модель вызовом prepare() перед стартом сессии.',
       );
     }
-    if (!_speechRecognitionService.isListening) {
+    final bool startedHere = !_speechRecognitionService.isListening;
+    if (startedHere) {
       await _speechRecognitionService.startListening();
+    }
+    try {
+      await _waitForVadCalibration();
+    } catch (_) {
+      if (startedHere) await _speechRecognitionService.stopListening();
+      rethrow;
+    }
+  }
+
+  Future<void> _waitForVadCalibration() async {
+    final Stopwatch timeout = Stopwatch()..start();
+    final Duration limit =
+        _speechRecognitionService.deviceProfile.recoveryCaptureTimeout;
+    while (!_speechRecognitionService.isVadCalibrated) {
+      if (!_speechRecognitionService.isListening ||
+          !_speechRecognitionService.isCaptureRunning) {
+        throw StateError('Захват аудио остановлен до калибровки микрофона.');
+      }
+      if (timeout.elapsed >= limit) {
+        throw StateError(
+          'Микрофон не завершил калибровку за ${limit.inMilliseconds} мс.',
+        );
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
     }
   }
 

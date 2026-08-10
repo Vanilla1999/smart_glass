@@ -5,6 +5,15 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_co
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 
 void main() {
+  test('availability check grammar includes finish command', () {
+    final VoiceActionCatalog catalog = VoiceActionCatalog();
+
+    expect(
+      catalog.grammarFor(WearScreenId.availabilityCheck),
+      contains('завершить'),
+    );
+  });
+
   group('screen-scoped voice grammar', () {
     final VoiceActionCatalog catalog = VoiceActionCatalog();
 

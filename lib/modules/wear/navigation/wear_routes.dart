@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:go_router/go_router.dart';
+import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_flow_state.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_group.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
@@ -165,11 +166,18 @@ class WearRoute {
         GoRoute(
           path: WearAvailabilityCheckScreen.route,
           builder: (BuildContext context, GoRouterState state) {
-            final WearAvailabilityProduct? product =
-                state.extra is WearAvailabilityProduct
-                    ? state.extra! as WearAvailabilityProduct
+            final WearAvailabilityFlowState? flow =
+                state.extra is WearAvailabilityFlowState
+                    ? state.extra! as WearAvailabilityFlowState
                     : null;
-            return WearAvailabilityCheckScreen(product: product);
+            final WearAvailabilityProduct? product = flow?.selectedProduct ??
+                (state.extra is WearAvailabilityProduct
+                    ? state.extra! as WearAvailabilityProduct
+                    : null);
+            return WearAvailabilityCheckScreen(
+              product: product,
+              initialFlow: flow,
+            );
           },
         ),
         GoRoute(

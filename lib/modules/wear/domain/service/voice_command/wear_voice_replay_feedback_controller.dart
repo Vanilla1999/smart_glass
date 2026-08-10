@@ -40,6 +40,7 @@ class WearVoiceReplayFeedbackController {
   void accept(
     VoiceReplayOwnership ownership, {
     bool meaningfulEvidence = false,
+    bool processingAlreadyVisible = false,
   }) {
     final VoiceReplayContext? context = ownership.context;
     if (context == null) {
@@ -54,7 +55,7 @@ class WearVoiceReplayFeedbackController {
         _clearActive();
         return;
       case VoiceReplayOwnershipStatus.pending:
-        _begin(context);
+        _begin(context, processingAlreadyVisible: processingAlreadyVisible);
         return;
       case VoiceReplayOwnershipStatus.resolvedAsCommand:
       case VoiceReplayOwnershipStatus.resolvedAsDynamicPhrase:
@@ -101,10 +102,17 @@ class WearVoiceReplayFeedbackController {
     _visibleContext = null;
   }
 
-  void _begin(VoiceReplayContext context) {
+  void _begin(
+    VoiceReplayContext context, {
+    required bool processingAlreadyVisible,
+  }) {
     if (_pendingContext == context) return;
     _clearActive();
     _pendingContext = context;
+    if (processingAlreadyVisible) {
+      _visibleContext = context;
+      return;
+    }
     final int generation = ++_generation;
     _recognizingTimer = _timerFactory(recognizingDelay, () {
       if (generation != _generation || _pendingContext != context) return;

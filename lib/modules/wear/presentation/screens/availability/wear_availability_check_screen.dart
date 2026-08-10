@@ -28,11 +28,13 @@ class WearAvailabilityCheckScreen extends ConsumerStatefulWidget {
   const WearAvailabilityCheckScreen({
     super.key,
     required this.product,
+    this.initialFlow,
   });
 
   static const String route = '/wear_availability_check';
 
   final WearAvailabilityProduct? product;
+  final WearAvailabilityFlowState? initialFlow;
 
   @override
   ConsumerState<WearAvailabilityCheckScreen> createState() =>
@@ -48,9 +50,16 @@ class _WearAvailabilityCheckScreenState
   @override
   void initState() {
     super.initState();
+    final WearAvailabilityProduct? product = widget.product;
+    final WearAvailabilityFlowState? initialFlow = widget.initialFlow;
+    if (product != null && initialFlow != null) {
+      ref
+          .read(wearAvailabilityCheckNotifierProvider(product).notifier)
+          .restoreFlow(initialFlow);
+    }
     WearDependencies.I.wearFlowController.enterScreen(
       WearScreenId.availabilityCheck,
-      extra: widget.product,
+      extra: initialFlow ?? product,
     );
     WearDependencies.I.wearFlowController.registerScreenActions(
       WearScreenId.availabilityCheck,
@@ -63,6 +72,7 @@ class _WearAvailabilityCheckScreenState
         onManualInput: _onVoiceManualInput,
         onPrint: _onVoicePrint,
         onPhoto: _onVoicePhoto,
+        onFinish: _onVoiceFinish,
         onBackToList: _onVoiceBackToList,
         onBarcode: (String barcode) {
           final WearAvailabilityProduct? product = widget.product;
@@ -282,6 +292,18 @@ class _WearAvailabilityCheckScreenState
     if (state.isLoading) return;
     if (state.flow.step == WearAvailabilityFlowStep.photoCapture) {
       ref.read(provider.notifier).capturePhoto();
+    }
+  }
+
+  void _onVoiceFinish() {
+    final WearAvailabilityProduct? product = widget.product;
+    if (product == null) return;
+    final provider = wearAvailabilityCheckNotifierProvider(product);
+    final WearAvailabilityCheckState state = ref.read(provider);
+    if (state.isLoading) return;
+    if (state.flow.step == WearAvailabilityFlowStep.readyToComplete ||
+        state.flow.step == WearAvailabilityFlowStep.manualInventoryRequired) {
+      ref.read(provider.notifier).complete();
     }
   }
 

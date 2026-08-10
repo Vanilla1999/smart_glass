@@ -20,7 +20,7 @@ class WearAvailabilityDirectScanState {
     required this.message,
     required this.loadingText,
     required this.loadingIcon,
-    this.navProduct,
+    this.navFlow,
     this.duplicateProducts = const <WearAvailabilityProduct>[],
   });
 
@@ -37,7 +37,7 @@ class WearAvailabilityDirectScanState {
   final String message;
   final String loadingText;
   final String loadingIcon;
-  final WearAvailabilityProduct? navProduct;
+  final WearAvailabilityFlowState? navFlow;
   final List<WearAvailabilityProduct> duplicateProducts;
 
   bool get isLoading => phase == WearAvailabilityDirectScanPhase.loading;
@@ -47,7 +47,7 @@ class WearAvailabilityDirectScanState {
     String? message,
     String? loadingText,
     String? loadingIcon,
-    WearAvailabilityProduct? navProduct,
+    WearAvailabilityFlowState? navFlow,
     List<WearAvailabilityProduct>? duplicateProducts,
     bool clearNavigation = false,
     bool clearDuplicates = false,
@@ -57,7 +57,7 @@ class WearAvailabilityDirectScanState {
       message: message ?? this.message,
       loadingText: loadingText ?? this.loadingText,
       loadingIcon: loadingIcon ?? this.loadingIcon,
-      navProduct: clearNavigation ? null : navProduct ?? this.navProduct,
+      navFlow: clearNavigation ? null : navFlow ?? this.navFlow,
       duplicateProducts: clearDuplicates
           ? const <WearAvailabilityProduct>[]
           : duplicateProducts ?? this.duplicateProducts,
@@ -104,7 +104,7 @@ class WearAvailabilityDirectScanNotifier
         state = state.copyWith(
           phase: WearAvailabilityDirectScanPhase.idle,
           message: 'Товар найден',
-          navProduct: product,
+          navFlow: flow,
           clearDuplicates: true,
         );
         return;
@@ -141,6 +141,20 @@ class WearAvailabilityDirectScanNotifier
 
   void consumeNavigation() {
     state = state.copyWith(clearNavigation: true);
+  }
+
+  void selectDuplicate(WearAvailabilityProduct product) {
+    final String? barcode = _lastAcceptedBarcode;
+    if (barcode == null) return;
+    state = state.copyWith(
+      navFlow: _flowUseCase.selectScannedProduct(
+        state: const WearAvailabilityFlowState(
+          step: WearAvailabilityFlowStep.productSelection,
+        ),
+        product: product,
+        barcode: barcode,
+      ),
+    );
   }
 
   String _asUiMessage(Object error) {

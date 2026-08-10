@@ -178,6 +178,9 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
       }
       if (!_isCurrent(generation, requestRevision: requestRevision)) return;
       if (screen == WearScreenId.availabilityCheck &&
+          extra is WearAvailabilityFlowState) {
+        _flow = extra;
+      } else if (screen == WearScreenId.availabilityCheck &&
           extra is WearAvailabilityProduct &&
           _flow?.selectedProduct?.id != extra.id) {
         _flow = _flowUseCase.selectProduct(
@@ -470,9 +473,19 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
       return;
     }
     if (value is WearAvailabilityProduct) {
-      _flow = _flowUseCase.selectProduct(state: flow, product: value);
+      final bool directDuplicate = _isDuplicateSelection;
+      _flow = directDuplicate && flow.lastBarcode != null
+          ? _flowUseCase.selectScannedProduct(
+              state: flow,
+              product: value,
+              barcode: flow.lastBarcode!,
+            )
+          : _flowUseCase.selectProduct(state: flow, product: value);
       _publish();
-      await _navigate(WearScreenId.availabilityCheck, extra: value);
+      await _navigate(
+        WearScreenId.availabilityCheck,
+        extra: directDuplicate ? _flow : value,
+      );
     }
   }
 

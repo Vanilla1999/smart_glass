@@ -51,6 +51,20 @@ class WearAvailabilityFlowUseCase {
     );
   }
 
+  WearAvailabilityFlowState selectScannedProduct({
+    required WearAvailabilityFlowState state,
+    required WearAvailabilityProduct product,
+    required String barcode,
+  }) {
+    return selectProduct(state: state, product: product).copyWith(
+      check: WearAvailabilityProductCheck(
+        product: product,
+        productScanned: product.matchesProductBarcode(barcode),
+      ),
+      lastBarcode: barcode,
+    );
+  }
+
   Future<WearAvailabilityFlowState> findProductByBarcode(
     WearAvailabilityFlowState state, {
     required String barcode,
@@ -73,10 +87,11 @@ class WearAvailabilityFlowUseCase {
         message: 'Найдено несколько позиций',
       );
     }
-    return selectProduct(
+    return selectScannedProduct(
       state: state,
       product: foundProducts.single,
-    ).copyWith(lastBarcode: barcode);
+      barcode: barcode,
+    );
   }
 
   WearAvailabilityFlowState answerProductAvailable(
@@ -92,10 +107,10 @@ class WearAvailabilityFlowUseCase {
       );
     }
 
-    if (check.product.unpackaged) {
+    if (check.product.unpackaged || check.productScanned) {
       return _nextRequiredStep(
         state,
-        check.copyWith(productScanned: true),
+        check.product.unpackaged ? check.copyWith(productScanned: true) : check,
       );
     }
 

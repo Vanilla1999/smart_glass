@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_typing/audio_stream_service.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_control_service.dart';
@@ -14,6 +15,8 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_se
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_typing_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_replay_policy.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_replay_ownership.dart';
+
+import 'support/replay_voice_capture.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -258,6 +261,45 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     expect(results, <String>['2']);
+  });
+
+  test('VoiceTypingService waits for VAD calibration before listening',
+      () async {
+    final ReplayVoiceCapture capture = ReplayVoiceCapture();
+    final AudioStreamService audio = AudioStreamService(nativeCapture: capture);
+    final _FakeRecognizer command = _FakeRecognizer();
+    final SpeechRecognitionService service = SpeechRecognitionService(
+      audioStreamService: audio,
+      commandGrammar: const <String>['вверх', '[unk]'],
+      recognizerFactory: (RecognitionLane lane, List<String> grammar) async =>
+          command,
+    );
+    final VoiceTypingService typing = VoiceTypingService(
+      audioStreamService: audio,
+      speechRecognitionService: service,
+    );
+    addTearDown(typing.dispose);
+    addTearDown(service.dispose);
+    await typing.prepare();
+
+    var started = false;
+    final Future<void> starting = typing.startSession().then((_) {
+      started = true;
+    });
+    while (!capture.isCapturing) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    await Future<void>.delayed(Duration.zero);
+
+    expect(started, isFalse);
+
+    for (int index = 0; index < 38; index++) {
+      await capture.emit(_pcmFrame(33));
+    }
+    await starting.timeout(const Duration(seconds: 1));
+
+    expect(service.isVadCalibrated, isTrue);
+    expect(started, isTrue);
   });
 
   test('grammar cutover never replays audio accepted by old grammar', () async {

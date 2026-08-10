@@ -331,12 +331,21 @@ class WearVoiceControlService {
           );
     final bool meaningfulEvidence = utteranceKey != null &&
         _feedbackEligibleUtterances.contains(utteranceKey);
-    if (ownership.status == VoiceReplayOwnershipStatus.pending) {
-      _clearRecognitionDelay();
+    final bool ownsRecognitionDelay = context != null &&
+        _recognitionDelayContext?.matchesReplay(context) == true;
+    final bool transferVisibleProcessing =
+        ownership.status == VoiceReplayOwnershipStatus.pending &&
+            ownsRecognitionDelay &&
+            _recognitionDelayVisible &&
+            _recognitionDelayKind == WearVoiceDelayKind.processing;
+    if (ownership.status == VoiceReplayOwnershipStatus.pending &&
+        ownsRecognitionDelay) {
+      _clearRecognitionDelay(emitHidden: !transferVisibleProcessing);
     }
     _replayFeedbackController.accept(
       ownership,
       meaningfulEvidence: meaningfulEvidence,
+      processingAlreadyVisible: transferVisibleProcessing,
     );
     if (ownership.isTerminal && utteranceKey != null) {
       _feedbackEligibleUtterances.remove(utteranceKey);
@@ -509,6 +518,7 @@ class WearVoiceControlService {
   void _clearRecognitionDelay({
     SegmentedRecognitionResult? result,
     SpeechSegmentEnded? ended,
+    bool emitHidden = true,
   }) {
     final _RecognitionDelayContext? context = _recognitionDelayContext;
     if (context != null &&
@@ -524,7 +534,7 @@ class WearVoiceControlService {
     _recognitionPreviewTimeout = null;
     if (_recognitionDelayVisible) {
       _recognitionDelayVisible = false;
-      if (context != null) {
+      if (emitHidden && context != null) {
         _emitDelay(
           visible: false,
           context: context,
@@ -682,4 +692,13 @@ class _RecognitionDelayContext {
   final int routeRevision;
   final int grammarRevision;
   final int freeTextEpoch;
+
+  bool matchesReplay(VoiceReplayContext context) =>
+      captureEpoch == context.captureEpoch &&
+      segmentId == context.segmentId &&
+      commandUtteranceId == context.commandUtteranceId &&
+      sourceScreen == context.sourceScreen &&
+      routeRevision == context.routeRevision &&
+      grammarRevision == context.grammarRevision &&
+      freeTextEpoch == context.freeTextEpoch;
 }

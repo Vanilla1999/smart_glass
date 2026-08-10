@@ -134,6 +134,9 @@ class VoiceScreenCapabilities {
       WearVoiceCommand.flashlight,
       WearVoiceCommand.takePhoto,
     },
+    WearScreenId.availabilityCheck: <WearVoiceCommand>{
+      WearVoiceCommand.finish,
+    },
     WearScreenId.scanIdle: <WearVoiceCommand>{
       WearVoiceCommand.back,
       WearVoiceCommand.home,
@@ -416,7 +419,10 @@ class VoiceActionCatalog {
         screens: <WearScreenId>{WearScreenId.continueScan}),
     _action(WearVoiceCommand.finish, 'завершить',
         VoiceActivationPolicy.endpointOnly,
-        screens: <WearScreenId>{WearScreenId.continueScan}),
+        screens: <WearScreenId>{
+          WearScreenId.continueScan,
+          WearScreenId.availabilityCheck,
+        }),
     _action(
         WearVoiceCommand.save, 'сохранить', VoiceActivationPolicy.endpointOnly,
         screens: <WearScreenId>{WearScreenId.dbSettings},

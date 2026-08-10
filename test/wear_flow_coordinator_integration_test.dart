@@ -723,6 +723,59 @@ void main() {
       expect(delays, isEmpty);
     });
 
+    test('older replay cannot adopt a newer utterance processing status',
+        () async {
+      final _ManualTimerScheduler timers = _ManualTimerScheduler();
+      final _FakeSpeechRecognitionService speech =
+          _FakeSpeechRecognitionService();
+      final WearVoiceControlService voiceControl = WearVoiceControlService(
+        speechRecognitionService: speech,
+        screenProvider: () => WearScreenId.menu,
+        timerFactory: timers.schedule,
+      );
+      addTearDown(voiceControl.dispose);
+      addTearDown(speech.dispose);
+      final List<WearVoiceDelayEvent> delays = <WearVoiceDelayEvent>[];
+      voiceControl.delayEventStream.listen(delays.add);
+
+      speech
+        ..currentCommandUtteranceId = 2
+        ..startSegment(segmentId: 2, speechTurnId: 2);
+      await Future<void>.delayed(Duration.zero);
+      timers.elapse(const Duration(milliseconds: 350));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(delays.single.visible, isTrue);
+      expect(delays.single.segmentId, 2);
+      expect(delays.single.commandUtteranceId, 2);
+
+      speech.emitReplayOwnership(const VoiceReplayOwnership(
+        status: VoiceReplayOwnershipStatus.pending,
+        context: VoiceReplayContext(
+          captureEpoch: 1,
+          segmentId: 1,
+          speechTurnId: 1,
+          commandUtteranceId: 1,
+          sourceScreen: WearScreenId.menu,
+          routeRevision: 1,
+          grammarRevision: 1,
+          freeTextEpoch: 0,
+          listRevision: 0,
+        ),
+      ));
+      speech.emitCommandResult(
+        'вверх',
+        utteranceId: 2,
+        segmentId: 2,
+        speechTurnId: 2,
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(delays.last.visible, isFalse);
+      expect(delays.last.segmentId, 2);
+      expect(delays.last.commandUtteranceId, 2);
+    });
+
     test('control-service partial revision state remains bounded', () async {
       final _FakeSpeechRecognitionService speech =
           _FakeSpeechRecognitionService();
@@ -2133,6 +2186,7 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   @override
   WearScreenId sourceScreen;
   int currentRouteRevision = 1;
+  int currentCommandUtteranceId = 1;
 
   @override
   FreeTextPipelineMode get freeTextPipelineMode =>
@@ -2161,7 +2215,7 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
 
   @override
   Stream<VoiceReplayOwnership> get replayOwnershipStream =>
-      const Stream<VoiceReplayOwnership>.empty();
+      _replayOwnershipController.stream;
 
   @override
   VoiceRecognitionMetricsSnapshot get metricsSnapshot =>
@@ -2201,6 +2255,8 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
       StreamController<SpeechSegmentEnded>.broadcast();
   final StreamController<SpeechSegmentStarted> _segmentStartedController =
       StreamController<SpeechSegmentStarted>.broadcast();
+  final StreamController<VoiceReplayOwnership> _replayOwnershipController =
+      StreamController<VoiceReplayOwnership>.broadcast(sync: true);
   bool _segmentStarted = false;
   int _partialRevision = 0;
 
@@ -2282,7 +2338,7 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
   int get routeRevision => currentRouteRevision;
 
   @override
-  int get commandUtteranceId => 1;
+  int get commandUtteranceId => currentCommandUtteranceId;
 
   @override
   int get freeTextPartialRevision => _partialRevision;
@@ -2318,12 +2374,33 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
     );
   }
 
-  void emitCommandResult(String text, {int utteranceId = 1}) {
+  void emitCommandResult(
+    String text, {
+    int utteranceId = 1,
+    int segmentId = 1,
+    int speechTurnId = 1,
+  }) {
     _emitSegmented(
       text,
       RecognitionKind.endpointResult,
       utteranceId: utteranceId,
+      segmentId: segmentId,
+      speechTurnId: speechTurnId,
     );
+  }
+
+  void startSegment({required int segmentId, required int speechTurnId}) {
+    _segmentStarted = true;
+    _segmentStartedController.add(SpeechSegmentStarted(
+      captureEpoch: 1,
+      segmentId: segmentId,
+      speechTurnId: speechTurnId,
+      startChunkId: 1,
+    ));
+  }
+
+  void emitReplayOwnership(VoiceReplayOwnership ownership) {
+    _replayOwnershipController.add(ownership);
   }
 
   void emitFreeTextPartial(
@@ -2352,6 +2429,8 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
     String text,
     RecognitionKind kind, {
     int utteranceId = 1,
+    int segmentId = 1,
+    int speechTurnId = 1,
     RecognitionLane lane = RecognitionLane.command,
     String? dynamicItemId,
   }) {
@@ -2366,8 +2445,8 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
     }
     _segmentedResultsController.add(SegmentedRecognitionResult(
       captureEpoch: 1,
-      segmentId: 1,
-      speechTurnId: 1,
+      segmentId: segmentId,
+      speechTurnId: speechTurnId,
       lane: lane,
       kind: kind,
       text: text,
@@ -2422,5 +2501,6 @@ class _FakeSpeechRecognitionService implements SpeechRecognitionService {
     await _segmentedResultsController.close();
     await _segmentStartedController.close();
     await _segmentEndedController.close();
+    await _replayOwnershipController.close();
   }
 }

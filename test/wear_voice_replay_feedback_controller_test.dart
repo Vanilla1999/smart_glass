@@ -118,6 +118,38 @@ void main() {
       controller.dispose();
     });
 
+    test('adopts an already visible processing status without showing it again',
+        () {
+      final _ManualTimerFactory timers = _ManualTimerFactory();
+      final List<WearVoiceDelayEvent> events = <WearVoiceDelayEvent>[];
+      final WearVoiceReplayFeedbackController controller =
+          WearVoiceReplayFeedbackController(
+        onEvent: events.add,
+        timerFactory: timers.call,
+      );
+      final VoiceReplayContext context = _context(segmentId: 5);
+
+      controller.accept(
+        _ownership(VoiceReplayOwnershipStatus.pending, context),
+        processingAlreadyVisible: true,
+      );
+      timers.fireAll();
+
+      expect(events, isEmpty);
+
+      controller.accept(_ownership(
+        VoiceReplayOwnershipStatus.resolvedEmpty,
+        context,
+      ));
+
+      expect(events.single.visible, isTrue);
+      expect(
+        events.single.statusText,
+        WearVoiceReplayFeedbackController.notRecognizedText,
+      );
+      controller.dispose();
+    });
+
     test('empty long replay shows failure and then restores content', () {
       final _ManualTimerFactory timers = _ManualTimerFactory();
       final List<WearVoiceDelayEvent> events = <WearVoiceDelayEvent>[];

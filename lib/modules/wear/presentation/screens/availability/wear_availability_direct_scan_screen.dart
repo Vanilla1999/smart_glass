@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
+import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_flow_state.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
@@ -86,13 +87,12 @@ class _WearAvailabilityDirectScanScreenState
         WearAvailabilityDirectScanState next,
       ) {
         _sendGlassesState(next);
-        if (previous?.navProduct != next.navProduct &&
-            next.navProduct != null) {
-          final WearAvailabilityProduct product = next.navProduct!;
+        if (previous?.navFlow != next.navFlow && next.navFlow != null) {
+          final WearAvailabilityFlowState flow = next.navFlow!;
           ref
               .read(wearAvailabilityDirectScanProvider.notifier)
               .consumeNavigation();
-          _openCheck(product);
+          _openCheck(flow);
         }
       },
     );
@@ -122,7 +122,9 @@ class _WearAvailabilityDirectScanScreenState
                           fast: true,
                         );
                       },
-                      onSelect: _openCheck,
+                      onSelect: (WearAvailabilityProduct product) => ref
+                          .read(wearAvailabilityDirectScanProvider.notifier)
+                          .selectDuplicate(product),
                     ),
             ),
           ),
@@ -150,9 +152,9 @@ class _WearAvailabilityDirectScanScreenState
         .handleBarcode(code.trim());
   }
 
-  Future<void> _openCheck(WearAvailabilityProduct product) async {
+  Future<void> _openCheck(WearAvailabilityFlowState flow) async {
     if (!mounted) return;
-    await context.push(WearAvailabilityCheckScreen.route, extra: product);
+    await context.push(WearAvailabilityCheckScreen.route, extra: flow);
   }
 
   void _onVoiceUp() {
@@ -188,7 +190,9 @@ class _WearAvailabilityDirectScanScreenState
       return;
     }
     final int productIndex = _focusedIndex.clamp(0, products.length - 1);
-    _openCheck(products[productIndex]);
+    ref
+        .read(wearAvailabilityDirectScanProvider.notifier)
+        .selectDuplicate(products[productIndex]);
   }
 
   VoiceDynamicItemsSnapshot _dynamicVoiceItems() {
@@ -258,7 +262,9 @@ class _WearAvailabilityDirectScanScreenState
     );
     if (index < 0) return;
     _focusedIndex = index;
-    await _openCheck(products[index]);
+    ref
+        .read(wearAvailabilityDirectScanProvider.notifier)
+        .selectDuplicate(products[index]);
   }
 
   void _scrollToFocused() {
