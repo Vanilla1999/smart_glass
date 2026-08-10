@@ -65,4 +65,27 @@ void main() {
     first.complete();
     await queue.waitUntilIdle();
   });
+
+  test('drops an immediate duplicate scan but accepts a later rescan',
+      () async {
+    DateTime now = DateTime(2026, 8, 10);
+    final List<String> calls = <String>[];
+    final WearBarcodeSerialQueue queue = WearBarcodeSerialQueue(
+      clock: () => now,
+      handleBarcode: (String payload) async {
+        calls.add(payload);
+        return true;
+      },
+    );
+
+    expect(queue.add('9000000001'), isTrue);
+    expect(queue.add('9000000001'), isFalse);
+    await queue.waitUntilIdle();
+    expect(calls, <String>['9000000001']);
+
+    now = now.add(const Duration(milliseconds: 300));
+    expect(queue.add('9000000001'), isTrue);
+    await queue.waitUntilIdle();
+    expect(calls, <String>['9000000001', '9000000001']);
+  });
 }

@@ -253,8 +253,11 @@ class WearDependencies {
   // -------------------------
   // На следующий этап (принтеры/печать)
   // -------------------------
-  GetAvailablePrintersUseCase getAvailablePrintersUseCase() =>
+  late final GetAvailablePrintersUseCase _getAvailablePrintersUseCase =
       GetAvailablePrintersUseCase(bdto);
+
+  GetAvailablePrintersUseCase getAvailablePrintersUseCase() =>
+      _getAvailablePrintersUseCase;
 
   GetBarcodeInfoUseCase getBarcodeInfoUseCase() => GetBarcodeInfoUseCase(bdto);
 

@@ -228,7 +228,7 @@ class WearScanRuntime implements WearBackgroundRuntime {
       }
       unawaited(
         _navigate(
-          isError ? WearScreenId.scanIdle : WearScreenId.continueScan,
+          WearScreenId.scanIdle,
           replaceCurrent: true,
         ).catchError((Object _, StackTrace __) {}),
       );

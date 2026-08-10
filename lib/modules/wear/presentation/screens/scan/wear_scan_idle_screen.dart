@@ -13,7 +13,6 @@ import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_voi
 import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_input_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/cubit/wear_scan_cubit.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_product_select_screen.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/continue_scan/wear_continue_scan_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
@@ -275,12 +274,8 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen>
       'mounted=$mounted',
     );
     if (isPrintSuccess && mounted) {
-      final bool? shouldContinue =
-          await context.push<bool>(WearContinueScanScreen.route);
-      if (shouldContinue == true && mounted) {
-        ref.read(_provider.notifier).allowRepeatLastBarcode();
-        WearStatusIconReporter.I.sendFast(WearGlassesPayload.scanWaiting());
-      }
+      ref.read(_provider.notifier).allowRepeatLastBarcode();
+      WearStatusIconReporter.I.sendFast(WearGlassesPayload.scanWaiting());
     }
   }
 

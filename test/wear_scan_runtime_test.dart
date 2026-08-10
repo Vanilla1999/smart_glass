@@ -149,4 +149,35 @@ void main() {
 
     expect(navigation, <WearScreenId>[WearScreenId.status]);
   });
+
+  test('successful print returns directly to scanning after status', () async {
+    WearScreenId currentScreen = WearScreenId.scanIdle;
+    final List<WearScreenId> navigation = <WearScreenId>[];
+    final WearScanRuntime runtime = WearScanRuntime(
+      lookupBarcode: (_) async => <BarcodeProductInfo>[
+        BarcodeProductInfo(id: 10, name: 'Товар', articleRest: 4),
+      ],
+      printProduct: (_) async => 'white',
+      currentScreen: () => currentScreen,
+      statusDuration: const Duration(milliseconds: 10),
+      navigate: (
+        WearScreenId screen, {
+        Object? extra,
+        bool replaceCurrent = false,
+      }) async {
+        currentScreen = screen;
+        navigation.add(screen);
+      },
+    );
+    addTearDown(runtime.dispose);
+
+    await runtime.enterScreen(WearScreenId.scanIdle);
+    await runtime.handleBarcode(WearScreenId.scanIdle, '4600000000005');
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+
+    expect(
+      navigation,
+      <WearScreenId>[WearScreenId.status, WearScreenId.scanIdle],
+    );
+  });
 }
