@@ -2368,9 +2368,9 @@ class SpeechRecognitionService {
       (VoiceDynamicItem item) => item.label,
       aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
     );
-    bool isExactHint = _containsNormalizedPhrase(
-            hintSet.advertisedPhrases, normalizedFreeText) &&
-        match.type == VoiceListMatchType.unique;
+    bool isExactHint =
+        hintSet.normalizedAdvertisedPhrases.contains(normalizedFreeText) &&
+            match.type == VoiceListMatchType.unique;
     final int matchMs = dynamicStopwatch.elapsedMilliseconds;
     if (items.items.length >= 100 || snapshotMs + hintMs + matchMs >= 20) {
       print(
@@ -2416,8 +2416,7 @@ class SpeechRecognitionService {
           context.sourceScreen,
           currentItems,
         ).hints;
-        isExactHint = _containsNormalizedPhrase(
-          currentHints.advertisedPhrases,
+        isExactHint = currentHints.normalizedAdvertisedPhrases.contains(
           normalizedFreeText,
         );
       }
@@ -3618,7 +3617,7 @@ class SpeechRecognitionService {
     final int hintMs = dynamicStopwatch.elapsedMilliseconds;
     dynamicStopwatch.reset();
     final bool shouldMatch = source == _RecognitionSource.freeText ||
-        _containsNormalizedPhrase(hints!.advertisedPhrases, normalized);
+        hints!.normalizedAdvertisedPhrases.contains(normalized);
     final VoiceListMatch<VoiceDynamicItem> match = shouldMatch
         ? VoiceListMatcher.match(
             text,
@@ -3638,7 +3637,7 @@ class SpeechRecognitionService {
     }
     String? dynamicItemId;
     if (source == _RecognitionSource.command) {
-      if (_containsNormalizedPhrase(hints!.advertisedPhrases, normalized) &&
+      if (hints!.normalizedAdvertisedPhrases.contains(normalized) &&
           match.type == VoiceListMatchType.unique) {
         dynamicItemId = match.item!.id;
       }
@@ -3720,10 +3719,7 @@ class SpeechRecognitionService {
         _voiceHintsFor(context.sourceScreen, items);
     if (!hintLookup.isReady ||
         hintLookup.hints.revision != items.revision ||
-        !_containsNormalizedPhrase(
-          hintLookup.hints.advertisedPhrases,
-          normalized,
-        )) {
+        !hintLookup.hints.normalizedAdvertisedPhrases.contains(normalized)) {
       return null;
     }
 
@@ -3802,10 +3798,7 @@ class SpeechRecognitionService {
         _voiceHintsFor(context.sourceScreen, items);
     if (!hintLookup.isReady ||
         hintLookup.hints.revision != items.revision ||
-        !_containsNormalizedPhrase(
-          hintLookup.hints.advertisedPhrases,
-          normalized,
-        )) {
+        !hintLookup.hints.normalizedAdvertisedPhrases.contains(normalized)) {
       return null;
     }
 
@@ -4093,12 +4086,6 @@ class SpeechRecognitionService {
     }
     // ignore: avoid_print
     print('[VOICE_GRAMMAR_OOV] screen=${screen.name} text="$normalized"');
-  }
-
-  bool _containsNormalizedPhrase(Iterable<String> phrases, String normalized) {
-    return phrases.any(
-      (String phrase) => VoiceListMatcher.normalize(phrase) == normalized,
-    );
   }
 
   bool _sameGrammar(List<String> first, List<String> second) {

@@ -28,16 +28,19 @@ class VoiceHintValidationIssue {
 }
 
 class VoiceHintSet {
-  const VoiceHintSet({
+  VoiceHintSet({
     required this.revision,
     required this.hintsByItemId,
     required this.advertisedPhrases,
     required this.issues,
-  });
+  }) : normalizedAdvertisedPhrases = Set<String>.unmodifiable(
+          advertisedPhrases.map(VoiceListMatcher.normalize),
+        );
 
   final int revision;
   final Map<String, VoiceHint> hintsByItemId;
   final Set<String> advertisedPhrases;
+  final Set<String> normalizedAdvertisedPhrases;
   final List<VoiceHintValidationIssue> issues;
 }
 

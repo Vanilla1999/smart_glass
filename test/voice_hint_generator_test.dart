@@ -109,6 +109,7 @@ void main() {
 
     expect(hints.hintsByItemId['yellow']?.phrase, 'жёлтый');
     expect(hints.advertisedPhrases, <String>{'жёлтый'});
+    expect(hints.normalizedAdvertisedPhrases, <String>{'желтый'});
   });
 
   test('renders the same leading hint for duplicate labels', () {
