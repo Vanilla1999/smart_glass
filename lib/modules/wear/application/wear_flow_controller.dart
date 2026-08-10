@@ -1421,7 +1421,8 @@ class WearFlowController {
         }
         return;
       case WearScreenId.availabilityGroup:
-        if (_state.screen != WearScreenId.availabilityProduct) {
+        if (_state.screen != WearScreenId.availabilityProduct &&
+            _state.screen != WearScreenId.availabilityGroup) {
           _screenPayloads.remove(screen);
         }
         return;

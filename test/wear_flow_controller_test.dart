@@ -1542,6 +1542,10 @@ void main() {
       );
 
       controller.enterScreen(WearScreenId.availabilityGroup);
+      controller.observeRoute(
+        WearScreenId.availabilityGroup,
+        canPop: true,
+      );
       await Future<void>.delayed(Duration.zero);
 
       expect(glasses.payloads.last, groupsPayload);

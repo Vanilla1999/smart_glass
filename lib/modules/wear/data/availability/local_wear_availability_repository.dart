@@ -153,9 +153,7 @@ class LocalWearAvailabilityRepository implements WearAvailabilityRepository {
   }
 
   @override
-  Future<void> completeProduct(int productId) async {
-    _completedProductIds.add(productId);
-  }
+  Future<void> completeProduct(int productId) async {}
 
   @override
   Future<void> resetCompletedProducts() async {

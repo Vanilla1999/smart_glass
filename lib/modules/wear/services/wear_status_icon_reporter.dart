@@ -408,6 +408,9 @@ class WearStatusIconReporter {
     final Future<void> next = _projectionOperation.then((_) async {
       if (!_isCurrentOperation(lifecycleGeneration, payloadGeneration)) return;
       try {
+        if (_isCurrentScreen(WearScreenId.printCodeInput)) {
+          return;
+        }
         final WearGlassesPayload outgoing = performanceTrace == null
             ? payload
             : payload.copyWithPerformanceTrace(
