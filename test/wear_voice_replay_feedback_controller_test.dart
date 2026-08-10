@@ -149,7 +149,7 @@ void main() {
       controller.dispose();
     });
 
-    test('new speech immediately clears processing from an older segment', () {
+    test('new acoustic segment keeps replay until its terminal result', () {
       final _ManualTimerFactory timers = _ManualTimerFactory();
       final List<WearVoiceDelayEvent> events = <WearVoiceDelayEvent>[];
       final WearVoiceReplayFeedbackController controller =
@@ -166,7 +166,20 @@ void main() {
       timers.fire(const Duration(milliseconds: 180));
       controller.onSegmentStarted(1, 5);
 
-      expect(events.last.visible, isFalse);
+      expect(controller.hasPendingReplay, isTrue);
+      expect(events.last.visible, isTrue);
+
+      controller.accept(
+        _ownership(VoiceReplayOwnershipStatus.timedOut, context),
+        meaningfulEvidence: true,
+      );
+
+      expect(controller.hasPendingReplay, isFalse);
+      expect(events.last.visible, isTrue);
+      expect(
+        events.last.statusText,
+        WearVoiceReplayFeedbackController.notRecognizedText,
+      );
       controller.dispose();
     });
 

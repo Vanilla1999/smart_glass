@@ -107,7 +107,9 @@ void main() {
     final SpeechRecognitionService speech = SpeechRecognitionService(
       audioStreamService: audio,
       commandGrammar: grammar,
-      speechSegmenter: SpeechSegmenter(calibrationDuration: Duration.zero),
+      speechSegmenter: _caseName == 'continuous'
+          ? SpeechSegmenter()
+          : SpeechSegmenter(calibrationDuration: Duration.zero),
       dynamicItemsProvider: (WearScreenId candidate) =>
           candidate == WearScreenId.printerSelect
               ? printerItems

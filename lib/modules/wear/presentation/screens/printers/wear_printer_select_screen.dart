@@ -571,7 +571,17 @@ class _WearPrinterSelectScreenState
       );
       return;
     }
-    _sendGlassesState(ref.read(wearPrinterSelectNotifierProvider));
+    final WearPrinterSelectState current =
+        ref.read(wearPrinterSelectNotifierProvider);
+    if (current.whitePrinter != null ||
+        current.yellowPrinter != null ||
+        current.step != WearPrinterSelectStep.white) {
+      // Returning from scanning starts a new printer pair. Keeping the
+      // completed pair makes the visible list and voice hints disagree.
+      ref.read(wearPrinterSelectNotifierProvider.notifier).resetSelection();
+    } else {
+      _sendGlassesState(current);
+    }
   }
 
   void _sendGlassesState(WearPrinterSelectState state, {bool fast = false}) {

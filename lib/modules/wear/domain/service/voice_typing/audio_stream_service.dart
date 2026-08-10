@@ -54,6 +54,9 @@ class AudioStreamService {
   int? _continuousWavTimestamp;
   int _continuousWavPcmBytes = 0;
   int _continuousWavBytesSinceHeaderUpdate = 0;
+  Process? _flutterLogProcess;
+  IOSink? _flutterLogSink;
+  StreamSubscription<List<int>>? _flutterLogSubscription;
   Future<void> _lifecycleOperation = Future<void>.value();
   Future<void>? _pendingStart;
   int _lifecycleGeneration = 0;
@@ -394,6 +397,7 @@ class AudioStreamService {
     await _continuousWavFile!.flush();
     print(
         '[AudioStreamService] continuous WAV recording path=$_continuousWavPath');
+    await _beginFlutterLogRecording(directory, timestamp);
   }
 
   Future<void> _writeContinuousWav(Uint8List bytes) async {
@@ -421,6 +425,41 @@ class AudioStreamService {
     await file.flush();
     await file.close();
     _continuousWavFile = null;
+    await _closeFlutterLogRecording();
+  }
+
+  Future<void> _beginFlutterLogRecording(
+    Directory directory,
+    int timestamp,
+  ) async {
+    try {
+      final String path = '${directory.path}/flutter_$timestamp.log';
+      final IOSink sink = File(path).openWrite();
+      final Process process = await Process.start(
+        'logcat',
+        <String>['-v', 'time', 'flutter:V', '*:S'],
+      );
+      _flutterLogSink = sink;
+      _flutterLogProcess = process;
+      _flutterLogSubscription = process.stdout.listen(sink.add);
+      unawaited(process.stderr.drain<void>());
+      print('[AudioStreamService] Flutter log recording path=$path');
+    } catch (error, stackTrace) {
+      print('[AudioStreamService] Flutter log recording failed: '
+          '$error\n$stackTrace');
+    }
+  }
+
+  Future<void> _closeFlutterLogRecording() async {
+    final Process? process = _flutterLogProcess;
+    _flutterLogProcess = null;
+    process?.kill();
+    if (process != null) await process.exitCode;
+    await _flutterLogSubscription?.cancel();
+    _flutterLogSubscription = null;
+    await _flutterLogSink?.flush();
+    await _flutterLogSink?.close();
+    _flutterLogSink = null;
   }
 
   Uint8List _wavHeader(int pcmBytes) {

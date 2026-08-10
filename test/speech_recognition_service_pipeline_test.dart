@@ -312,6 +312,32 @@ void main() {
     expect(service.commandUtteranceId, 2);
   });
 
+  test('same-screen grammar cutover closes an open command utterance',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer();
+    final SpeechRecognitionService service = _service(command: command);
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.switchCommandGrammar(
+      screen: WearScreenId.printerSelect,
+      grammar: const <String>['назад', '[unk]'],
+    );
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.processAudioChunk(_pcmFrame(1000));
+    final int utteranceId = service.commandUtteranceId;
+    final int grammarRevision = service.grammarRevision;
+
+    await service.switchCommandGrammar(
+      screen: WearScreenId.printerSelect,
+      grammar: const <String>['назад', 'жёлтый', '[unk]'],
+    );
+
+    expect(service.commandUtteranceId, utteranceId + 1);
+    expect(service.grammarRevision, grammarRevision + 1);
+    expect(command.grammars.last, const <String>['назад', 'жёлтый', '[unk]']);
+  });
+
   test('PCM arriving during a route switch waits for its context barrier',
       () async {
     final Completer<void> grammarStarted = Completer<void>();
@@ -1074,6 +1100,112 @@ void main() {
     expect(resolved.grammarRevision, service.grammarRevision);
     expect(resolved.recognitionContextId, service.recognitionContextId);
     expect(freeText.accepted, isEmpty);
+  });
+
+  test('advertised dynamic hint survives list revision drift for same item id',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.addAll(<bool>[false, true])
+      ..partialSequence.add(_json(partial: 'жёлтый'))
+      ..resultSequence.add(_json(text: 'жёлтый'));
+    final _FakeRecognizer freeText = _FakeRecognizer();
+    var items = const VoiceDynamicItemsSnapshot(
+      revision: 7,
+      items: <VoiceDynamicItem>[
+        VoiceDynamicItem(id: 'mock-yellow-1', label: 'MOCK Жёлтый 1'),
+      ],
+    );
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+      dynamicItemsProvider: (_) => items,
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.switchCommandGrammar(
+      screen: WearScreenId.printerSelect,
+      grammar: const <String>['назад', 'жёлтый', '[unk]'],
+    );
+    await service.prepareVoiceHints(WearScreenId.printerSelect);
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final Future<SegmentedRecognitionResult> result =
+        service.segmentedResultsStream.firstWhere(
+      (event) =>
+          event.kind == RecognitionKind.streamFinal &&
+          event.dynamicItemId == 'mock-yellow-1',
+    );
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    items = const VoiceDynamicItemsSnapshot(
+      revision: 8,
+      items: <VoiceDynamicItem>[
+        VoiceDynamicItem(id: 'mock-yellow-1', label: 'MOCK Жёлтый 1'),
+      ],
+    );
+    await service.processAudioChunk(_pcmFrame(1000));
+
+    final SegmentedRecognitionResult resolved =
+        await result.timeout(const Duration(seconds: 1));
+    expect(resolved.text, 'жёлтый');
+    expect(resolved.dynamicItemId, 'mock-yellow-1');
+    expect(resolved.listRevision, 8);
+    expect(freeText.accepted, isEmpty);
+  });
+
+  test('advertised dynamic hint rejects replacement item with same phrase',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.addAll(<bool>[false, true])
+      ..partialSequence.add(_json(partial: 'жёлтый'))
+      ..resultSequence.add(_json(text: 'жёлтый'));
+    final _FakeRecognizer freeText = _FakeRecognizer();
+    var items = const VoiceDynamicItemsSnapshot(
+      revision: 7,
+      items: <VoiceDynamicItem>[
+        VoiceDynamicItem(id: 'mock-yellow-1', label: 'MOCK Жёлтый 1'),
+      ],
+    );
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+      dynamicItemsProvider: (_) => items,
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.switchCommandGrammar(
+      screen: WearScreenId.printerSelect,
+      grammar: const <String>['назад', 'жёлтый', '[unk]'],
+    );
+    await service.prepareVoiceHints(WearScreenId.printerSelect);
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+    final List<SegmentedRecognitionResult> results =
+        <SegmentedRecognitionResult>[];
+    final StreamSubscription<SegmentedRecognitionResult> subscription =
+        service.segmentedResultsStream.listen(results.add);
+    addTearDown(subscription.cancel);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    items = const VoiceDynamicItemsSnapshot(
+      revision: 8,
+      items: <VoiceDynamicItem>[
+        VoiceDynamicItem(id: 'mock-yellow-2', label: 'MOCK Жёлтый 1'),
+      ],
+    );
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing();
+
+    expect(
+      results.where((event) => event.dynamicItemId == 'mock-yellow-2'),
+      isEmpty,
+    );
+    expect(
+      service.replayOwnership.cancellation,
+      VoiceReplayContextCancellation.dynamicItemsChanged,
+    );
   });
 
   test('exact dynamic final rejects a replaced same-screen item', () async {

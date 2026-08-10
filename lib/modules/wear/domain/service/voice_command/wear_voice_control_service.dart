@@ -293,6 +293,7 @@ class WearVoiceControlService {
     _segmentStartedAt['${started.captureEpoch}:${started.segmentId}'] =
         _clock();
     _clearRecognitionDelay();
+    if (_replayFeedbackController.hasPendingReplay) return;
     final _RecognitionDelayContext context = _RecognitionDelayContext(
       captureEpoch: started.captureEpoch,
       segmentId: started.segmentId,

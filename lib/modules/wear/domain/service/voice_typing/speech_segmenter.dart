@@ -404,14 +404,16 @@ class SpeechSegmenter {
   }
 
   void _calibrate(double rms, int sampleCount) {
+    if (rms <= _zeroRms) return;
+
     _calibrationSamples += sampleCount;
-    if (rms > _zeroRms) _calibrationRms.add(rms);
+    _calibrationRms.add(rms);
     if (_calibrationSamples < _durationToSamples(calibrationDuration)) return;
     final List<double> sorted = List<double>.of(_calibrationRms)..sort();
-    _calibrationP10Rms = sorted.isEmpty ? 0 : _percentile(sorted, 0.1);
-    _calibrationP50Rms = sorted.isEmpty ? 0 : _percentile(sorted, 0.5);
-    _calibrationP90Rms = sorted.isEmpty ? 0 : _percentile(sorted, 0.9);
-    final double p20 = sorted.isEmpty ? 0 : _percentile(sorted, 0.2);
+    _calibrationP10Rms = _percentile(sorted, 0.1);
+    _calibrationP50Rms = _percentile(sorted, 0.5);
+    _calibrationP90Rms = _percentile(sorted, 0.9);
+    final double p20 = _percentile(sorted, 0.2);
     _noiseFloorRms = math.max(initialNoiseFloorRms, p20);
     _localBackgroundRms = _noiseFloorRms;
     _isCalibrated = true;

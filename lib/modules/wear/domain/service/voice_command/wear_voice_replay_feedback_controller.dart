@@ -35,6 +35,8 @@ class WearVoiceReplayFeedbackController {
   VoiceReplayContext? _visibleContext;
   int _generation = 0;
 
+  bool get hasPendingReplay => _pendingContext != null;
+
   void accept(
     VoiceReplayOwnership ownership, {
     bool meaningfulEvidence = false,
@@ -84,12 +86,9 @@ class WearVoiceReplayFeedbackController {
     }
   }
 
-  void onSegmentStarted(int captureEpoch, int segmentId) {
-    final VoiceReplayContext? active = _pendingContext ?? _visibleContext;
-    if (active == null) return;
-    final bool isNewer = captureEpoch > active.captureEpoch ||
-        (captureEpoch == active.captureEpoch && segmentId > active.segmentId);
-    if (isNewer) _clearActive();
+  void onSegmentStarted(int _captureEpoch, int _segmentId) {
+    // Acoustic VAD segments do not own replay feedback. A replay remains
+    // visible until its terminal status or until a newer replay replaces it.
   }
 
   void dispose() {

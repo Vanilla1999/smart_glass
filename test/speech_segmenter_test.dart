@@ -111,7 +111,7 @@ void main() {
     expect(endpoint!.isEndpoint, isTrue);
   });
 
-  test('exact-zero startup completes calibration without lowering floor', () {
+  test('exact-zero startup does not complete calibration', () {
     final SpeechSegmenter segmenter = SpeechSegmenter();
     segmenter.begin(1);
 
@@ -119,8 +119,26 @@ void main() {
       expect(segmenter.add(_pcmFrame(0), 1), isNull);
     }
 
+    expect(segmenter.isCalibrated, isFalse);
+  });
+
+  test('calibrates from non-zero audio after exact-zero startup', () {
+    final SpeechSegmenter segmenter = SpeechSegmenter();
+    segmenter.begin(1);
+
+    for (int index = 0; index < 600; index++) {
+      segmenter.add(_pcmFrame(0), 1);
+    }
+
+    expect(segmenter.isCalibrated, isFalse);
+
+    for (int index = 0; index < 600; index++) {
+      segmenter.add(_pcmFrame(200), 1);
+    }
+
     expect(segmenter.isCalibrated, isTrue);
-    expect(segmenter.lastDiagnostics.noiseFloorRms, 0.0002);
+    expect(segmenter.lastDiagnostics.noiseFloorRms, greaterThan(0.0002));
+    expect(segmenter.lastDiagnostics.calibrationP50Rms, greaterThan(0));
   });
 
   test('calibrates from 750 ms of non-zero background', () {
@@ -253,7 +271,7 @@ void main() {
     );
     segmenter.begin(1);
     expect(segmenter.state, VadState.calibrating);
-    segmenter.decide(_pcmFrame(0), 1);
+    segmenter.decide(_pcmFrame(33), 1);
     expect(segmenter.state, VadState.idle);
     final VadFrameDecision candidate = segmenter.decide(_pcmFrame(328), 1);
     expect(segmenter.state, VadState.candidateSpeech);

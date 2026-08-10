@@ -441,7 +441,7 @@ class SpeechRecognitionService {
         }
         return;
       }
-      if (_sourceScreen != screen && _commandUtteranceStartedAtMillis != null) {
+      if (contextCutover && _commandUtteranceStartedAtMillis != null) {
         final int interruptedUtteranceId = _commandUtteranceId;
         _finalizeCommandUtterance();
         _admittedCommandUtteranceId = _commandUtteranceId;
