@@ -255,6 +255,29 @@ void main() {
     expect(session.state.reason, 'grammar_switch_failed');
     expect(speech.grammarSwitchCalls, 2);
   });
+
+  test('successful grammar retry restores an active session to ready',
+      () async {
+    final _FailingStartSpeechRecognitionService speech =
+        _FailingStartSpeechRecognitionService()
+          ..startCalls = 1
+          ..grammarSwitchFailuresRemaining = 1;
+    final WearVoiceSession session = WearVoiceSession(
+      speechRecognitionService: speech,
+      ensurePrepared: () async {},
+      delay: (_) async {},
+      actionCatalog: VoiceActionCatalog(),
+      scheduleRetry: (_, __) => _FakeTimer(),
+    );
+    await session.start();
+
+    await session.configureForScreen(WearScreenId.help);
+
+    expect(session.state.phase, VoicePhase.ready);
+    expect(session.state.reason, 'grammar_switch_recovered');
+    expect(session.state.acceptsCommands, isTrue);
+    expect(speech.grammarSwitchCalls, 2);
+  });
 }
 
 class _ConfigurationSpeechRecognitionService extends SpeechRecognitionService {
@@ -297,6 +320,7 @@ class _FailingStartSpeechRecognitionService extends SpeechRecognitionService {
   int startCalls = 0;
   int grammarSwitchCalls = 0;
   bool failGrammarSwitch = false;
+  int grammarSwitchFailuresRemaining = 0;
 
   @override
   bool get isListening => _listening;
@@ -368,6 +392,10 @@ class _FailingStartSpeechRecognitionService extends SpeechRecognitionService {
     required List<String> grammar,
   }) async {
     grammarSwitchCalls++;
+    if (grammarSwitchFailuresRemaining > 0) {
+      grammarSwitchFailuresRemaining--;
+      throw StateError('grammar switch failed');
+    }
     if (failGrammarSwitch) throw StateError('grammar switch failed');
   }
 }

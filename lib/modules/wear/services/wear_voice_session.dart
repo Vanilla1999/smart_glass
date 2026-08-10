@@ -236,7 +236,18 @@ class WearVoiceSession {
         _appliedConfigurationSignature = configurationSignature;
         _inFlightConfigurationSignature = null;
       }
-      if (generation == _configurationGeneration) _configuredScreen = screen;
+      if (generation == _configurationGeneration) {
+        _configuredScreen = screen;
+        if (_shouldListen &&
+            _state.phase == VoicePhase.reconnecting &&
+            _state.reason == 'grammar_switch_retry') {
+          _emit(
+            VoicePhase.ready,
+            reason: 'grammar_switch_recovered',
+            resetAttempt: true,
+          );
+        }
+      }
     })();
     unawaited(next.catchError(
       (Object error, StackTrace stackTrace) {

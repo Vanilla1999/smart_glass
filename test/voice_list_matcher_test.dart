@@ -30,6 +30,22 @@ void main() {
       expect(match.matches, <String>['Чудо творожок', 'Чудо сок']);
     });
 
+    test('keeps the two Hot Key products ambiguous', () {
+      const List<String> products = <String>[
+        'ГОРЯЧИЙ КЛЮЧ №2000 Мин вод газ1,5лпл/бут(Горячеключевской):6',
+        'ГОРЯЧИЙ КЛЮЧ №2000 Вода минер стол газ 1л пл/бут(Горячеключ)',
+      ];
+
+      final VoiceListMatch<String> match = VoiceListMatcher.match(
+        'горячий ключ',
+        products,
+        (String item) => item,
+      );
+
+      expect(match.type, VoiceListMatchType.ambiguous);
+      expect(match.matches, products);
+    });
+
     test('returns none when item is not found', () {
       final VoiceListMatch<String> match = VoiceListMatcher.match(
         'кефир',

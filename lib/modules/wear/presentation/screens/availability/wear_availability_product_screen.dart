@@ -300,11 +300,11 @@ class _WearAvailabilityProductScreenState
     switch (match.type) {
       case VoiceListMatchType.none:
         WearStatusIconReporter.I.showTransientStatusText(
-          WearScreenId.availabilityProduct, 'Ничего не найдено');
+            WearScreenId.availabilityProduct, 'Товара нет');
         break;
       case VoiceListMatchType.ambiguous:
         WearStatusIconReporter.I.showTransientStatusText(
-          WearScreenId.availabilityProduct, 'Назовите точнее');
+            WearScreenId.availabilityProduct, 'Назовите точнее');
         break;
       case VoiceListMatchType.unique:
         _selectProduct(group, products, match.item!);

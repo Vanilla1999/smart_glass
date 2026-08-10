@@ -302,32 +302,6 @@ void main() {
       );
     });
 
-    test('returning from home confirmation restores printer payload', () async {
-      final _FakeGlassesOutput glasses = _FakeGlassesOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: glasses,
-        navigationOutput: _FakeNavigationOutput(),
-      );
-      const WearGlassesPayload printerPayload = WearGlassesPayload(
-        screenType: WearGlassesScreenType.printer,
-        phase: WearGlassesPhase.idle,
-        title: 'Выбор принтера',
-        items: <String>['Белый 1', 'Жёлтый 1'],
-      );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.printerSelect);
-      controller.rememberScreenPayload(
-        WearScreenId.printerSelect,
-        printerPayload,
-      );
-
-      await controller.handleVoiceCommand(WearVoiceCommand.home);
-      controller.enterScreen(WearScreenId.printerSelect);
-      await Future<void>.delayed(Duration.zero);
-
-      expect(glasses.payloads.last, printerPayload);
-    });
-
     test('routes free phrase to current screen handler', () async {
       String? handledPhrase;
       final WearFlowController controller = WearFlowController(
@@ -707,7 +681,7 @@ void main() {
       expect(controller.state.navigationHistory, hasLength(1));
     });
 
-    test('home while inactive stores pending confirm navigation', () async {
+    test('home while inactive stores pending menu navigation', () async {
       final _FakeNavigationOutput navigation = _FakeNavigationOutput();
       final WearFlowController controller = WearFlowController(
         glassesOutput: _FakeGlassesOutput(),
@@ -720,13 +694,13 @@ void main() {
 
       expect(
         controller.state.pendingNavigation?.screen,
-        WearScreenId.homeConfirm,
+        WearScreenId.menu,
       );
-      expect(controller.state.screen, WearScreenId.homeConfirm);
+      expect(controller.state.screen, WearScreenId.menu);
       expect(navigation.homeCalls, 0);
     });
 
-    test('home on home confirm confirms navigation to menu', () async {
+    test('home navigates directly to menu', () async {
       final _FakeNavigationOutput navigation = _FakeNavigationOutput();
       final WearFlowController controller = WearFlowController(
         glassesOutput: _FakeGlassesOutput(),
@@ -736,48 +710,9 @@ void main() {
       controller.setUiLifecycle(WearUiLifecycle.active);
       controller.enterScreen(WearScreenId.printerSelect);
       await controller.handleVoiceCommand(WearVoiceCommand.home);
-      await controller.handleVoiceCommand(WearVoiceCommand.home);
-
-      expect(controller.state.screen, WearScreenId.menu);
-      expect(navigation.goToCalls, <WearScreenId>[WearScreenId.homeConfirm]);
-      expect(navigation.replaceCalls, <WearScreenId>[WearScreenId.menu]);
-    });
-
-    test('home confirm selects home with replace navigation', () async {
-      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: navigation,
-      );
-
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.printerSelect);
-      await controller.handleVoiceCommand(WearVoiceCommand.home);
-      await controller.handleVoiceCommand(WearVoiceCommand.select);
 
       expect(controller.state.screen, WearScreenId.menu);
       expect(navigation.replaceCalls, <WearScreenId>[WearScreenId.menu]);
-    });
-
-    test('home confirm cancel while inactive restores return screen', () async {
-      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: navigation,
-      );
-
-      controller.setUiLifecycle(WearUiLifecycle.inactive);
-      controller.enterScreen(WearScreenId.printerSelect);
-      await controller.handleVoiceCommand(WearVoiceCommand.home);
-      await controller.handleVoiceCommand(WearVoiceCommand.down);
-      await controller.handleVoiceCommand(WearVoiceCommand.select);
-
-      expect(controller.state.screen, WearScreenId.printerSelect);
-      expect(
-        controller.state.pendingNavigation?.screen,
-        WearScreenId.printerSelect,
-      );
-      expect(navigation.backCalls, 0);
     });
 
     test('mixed up/down/select sequence reaches correct final state', () async {
@@ -1230,8 +1165,8 @@ void main() {
       controller.handleVoiceCommand(WearVoiceCommand.home);
       await Future<void>.delayed(Duration.zero);
 
-      expect(controller.state.screen, WearScreenId.homeConfirm);
-      expect(navigation.goToCalls.last, WearScreenId.homeConfirm);
+      expect(controller.state.screen, WearScreenId.menu);
+      expect(navigation.replaceCalls.last, WearScreenId.menu);
     });
 
     test('queued voice command is dropped after the first changes screen',
@@ -1735,6 +1670,44 @@ void main() {
         '1',
         '2',
       ]);
+    });
+
+    test('opens clarification for the two Hot Key products', () async {
+      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: navigation,
+      );
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.availabilityProduct);
+      controller.registerScreenActions(
+        WearScreenId.availabilityProduct,
+        WearScreenActionHandler(
+          dynamicVoiceItems: () => const VoiceDynamicItemsSnapshot(
+            revision: 1,
+            items: <VoiceDynamicItem>[
+              VoiceDynamicItem(
+                id: '1000135250',
+                label: 'ГОРЯЧИЙ КЛЮЧ №2000 Мин вод газ1,5л',
+              ),
+              VoiceDynamicItem(
+                id: '1000460470',
+                label: 'ГОРЯЧИЙ КЛЮЧ №2000 Вода минер стол газ 1л',
+              ),
+            ],
+          ),
+        ),
+      );
+
+      await controller.handleVoicePhrase('горячий ключ');
+
+      expect(controller.state.screen, WearScreenId.voiceClarification);
+      final VoiceClarificationArgs args =
+          navigation.goToExtras.single! as VoiceClarificationArgs;
+      expect(
+        args.matches.map((VoiceDynamicItem item) => item.id),
+        <String>['1000135250', '1000460470'],
+      );
     });
 
     test('clarification selection returns and invokes source item by id',

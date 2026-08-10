@@ -396,7 +396,14 @@ class _WearModuleAppState extends State<WearModuleApp>
       if (widget.onStartVoice == null) {
         WearDependencies.I.actualScreenStore.confirm(screenId);
       }
-      _configureVoiceForScreen(screenId);
+      if (screenId == flow.state.screen) {
+        _configureVoiceForScreen(screenId);
+      } else {
+        print(
+          '[VOICE-ROUTE] skip stale route configuration '
+          'routeScreen=$screenId logicalScreen=${flow.state.screen}',
+        );
+      }
     }
     final pendingNavigation = flow.state.pendingNavigation;
     if (screenId != null &&

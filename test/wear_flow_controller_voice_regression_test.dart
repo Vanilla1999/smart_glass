@@ -72,7 +72,8 @@ void main() {
       expect(controller.state.focusedIndex, 1);
     });
 
-    test('mounting the same clarification preserves background focus', () async {
+    test('mounting the same clarification preserves background focus',
+        () async {
       final WearFlowController controller = _controller();
       final VoiceClarificationArgs args = _clarificationArgs();
       controller.setUiLifecycle(WearUiLifecycle.inactive);
@@ -86,53 +87,16 @@ void main() {
       expect(controller.state.focusedIndex, 2);
     });
 
-    test('home and yes confirm while UI is inactive', () async {
-      for (final WearVoiceCommand command in <WearVoiceCommand>[
-        WearVoiceCommand.home,
-        WearVoiceCommand.yes,
-      ]) {
-        final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-        final WearFlowController controller = _controller(navigation);
-        controller.setUiLifecycle(WearUiLifecycle.inactive);
-        controller.enterScreen(WearScreenId.printerSelect);
-        await controller.handleVoiceCommand(WearVoiceCommand.home);
+    test('home goes directly to menu while UI is inactive', () async {
+      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
+      final WearFlowController controller = _controller(navigation);
+      controller.setUiLifecycle(WearUiLifecycle.inactive);
+      controller.enterScreen(WearScreenId.printerSelect);
 
-        await controller.handleVoiceCommand(command);
+      await controller.handleVoiceCommand(WearVoiceCommand.home);
 
-        expect(controller.state.screen, WearScreenId.menu, reason: '$command');
-        expect(
-          controller.state.pendingNavigation?.replaceCurrent,
-          isTrue,
-          reason: '$command',
-        );
-      }
-    });
-
-    test('cancel and no restore the previous screen while UI is inactive',
-        () async {
-      for (final WearVoiceCommand command in <WearVoiceCommand>[
-        WearVoiceCommand.cancel,
-        WearVoiceCommand.no,
-      ]) {
-        final WearFlowController controller = _controller();
-        controller.setUiLifecycle(WearUiLifecycle.inactive);
-        controller.enterScreen(WearScreenId.printerSelect, extra: 'printer');
-        await controller.handleVoiceCommand(WearVoiceCommand.home);
-
-        await controller.handleVoiceCommand(command);
-
-        expect(
-          controller.state.screen,
-          WearScreenId.printerSelect,
-          reason: '$command',
-        );
-        expect(
-          controller.state.pendingNavigation?.popCurrent,
-          isTrue,
-          reason: '$command',
-        );
-        expect(controller.state.navigationHistory.last.extra, 'printer');
-      }
+      expect(controller.state.screen, WearScreenId.menu);
+      expect(controller.state.pendingNavigation?.replaceCurrent, isTrue);
     });
   });
 }

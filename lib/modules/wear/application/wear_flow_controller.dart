@@ -999,16 +999,10 @@ class WearFlowController {
   }
 
   Future<void> _handleHome() async {
-    if (_state.screen == WearScreenId.homeConfirm) {
-      await _confirmHome();
-      return;
-    }
-    final WearScreenId returnScreen = _state.screen;
     if (_uiLifecycle == WearUiLifecycle.active) {
       await _invokeScreenAction(_state.screen, (handler) => handler.onHome);
     }
-    _setState(_state.copyWith(homeConfirmReturnScreen: returnScreen));
-    await _navigateTo(WearScreenId.homeConfirm);
+    await _navigateTo(WearScreenId.menu, replaceCurrent: true);
   }
 
   Future<void> _handleFinish() async {
