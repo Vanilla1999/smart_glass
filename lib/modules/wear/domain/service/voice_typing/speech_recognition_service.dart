@@ -3721,36 +3721,13 @@ class SpeechRecognitionService {
       return null;
     }
 
-    final VoiceDynamicItemsSnapshot currentItems =
-        _dynamicItemsProvider(context.sourceScreen);
-    if (currentItems.items.isEmpty) {
-      return null;
-    }
-
-    final ({VoiceHintSet hints, bool isReady}) hintLookup =
-        _voiceHintsFor(context.sourceScreen, currentItems);
-    if (!hintLookup.isReady ||
-        hintLookup.hints.revision != currentItems.revision ||
-        !hintLookup.hints.normalizedAdvertisedPhrases.contains(normalized)) {
-      return null;
-    }
-
-    final List<String> hintedItemIds = hintLookup.hints.hintsByItemId.entries
-        .where(
-          (MapEntry<String, VoiceHint> entry) =>
-              VoiceListMatcher.normalize(entry.value.phrase) == normalized,
-        )
-        .map((MapEntry<String, VoiceHint> entry) => entry.key)
-        .toList(growable: false);
-    if (hintedItemIds.length != 1) return null;
-
     final VoiceHintSet? capturedHints = context.dynamicHints;
     if (capturedHints == null ||
         capturedHints.revision != context.listRevision ||
         !capturedHints.normalizedAdvertisedPhrases.contains(normalized)) {
       return null;
     }
-    final List<String> capturedHintedItemIds =
+    final List<String> capturedItemIds =
         capturedHints.hintsByItemId.entries
             .where(
               (MapEntry<String, VoiceHint> entry) =>
@@ -3758,10 +3735,17 @@ class SpeechRecognitionService {
             )
             .map((MapEntry<String, VoiceHint> entry) => entry.key)
             .toList(growable: false);
-    if (capturedHintedItemIds.length != 1 ||
-        capturedHintedItemIds.single != hintedItemIds.single) {
-      return null;
-    }
+    if (capturedItemIds.length != 1) return null;
+    final String capturedItemId = capturedItemIds.single;
+
+    // A list revision can change while the user is speaking. Do not wait for
+    // a freshly generated hint index: the captured hint already tells us what
+    // the grammar phrase meant when recognition started. Revalidate that
+    // stable item id directly against the current list instead.
+    final VoiceDynamicItemsSnapshot currentItems =
+        _dynamicItemsProvider(context.sourceScreen);
+    if (currentItems.items.isEmpty) return null;
+
     final VoiceListMatch<VoiceDynamicItem> exactMatch =
         VoiceListMatcher.matchExactPhrase(
       text,
@@ -3786,7 +3770,7 @@ class SpeechRecognitionService {
     final bool strongMultiWordExact = normalized.contains(' ');
     if (exactMatch.type != VoiceListMatchType.unique ||
         item == null ||
-        item.id != hintedItemIds.single ||
+        item.id != capturedItemId ||
         !runtimeConfirms && !strongMultiWordExact) {
       return null;
     }

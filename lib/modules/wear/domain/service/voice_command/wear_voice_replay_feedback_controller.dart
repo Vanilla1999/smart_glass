@@ -57,8 +57,20 @@ class WearVoiceReplayFeedbackController {
       case VoiceReplayOwnershipStatus.resolvedAsCommand:
       case VoiceReplayOwnershipStatus.resolvedAsDynamicPhrase:
       case VoiceReplayOwnershipStatus.supersededByActionableUtterance:
-      case VoiceReplayOwnershipStatus.cancelledByContextChange:
         _finish(context, showFailure: false);
+        return;
+      case VoiceReplayOwnershipStatus.cancelledByContextChange:
+        final bool userVisibleFailure = meaningfulEvidence &&
+            ownership.cancellation ==
+                VoiceReplayContextCancellation.dynamicItemsChanged;
+        _finish(
+          context,
+          showFailure: userVisibleFailure,
+          // Context drift can cancel before the 180 ms processing badge was
+          // visible. If Vosk already heard a real phrase, still tell the user
+          // that this attempt did not result in an action.
+          showFastFailure: userVisibleFailure,
+        );
         return;
       case VoiceReplayOwnershipStatus.resolvedEmpty:
       case VoiceReplayOwnershipStatus.timedOut:

@@ -103,6 +103,8 @@ class WearVoiceApplicationDispatcher {
     }
 
     final WearVoiceAdmissionContext context = _context();
+    final String? dynamicItemId = event.dynamicItemId;
+    final bool allowListRevisionDrift = dynamicItemId != null;
     if (!isCurrentWearVoicePhraseEvent(
       event,
       screen: context.screen,
@@ -112,10 +114,10 @@ class WearVoiceApplicationDispatcher {
       grammarRevision: context.grammarRevision,
       freeTextEpoch: context.freeTextEpoch,
       listRevision: context.listRevision,
+      allowListRevisionDrift: allowListRevisionDrift,
     )) {
       return WearVoiceAdmissionDecision.stale;
     }
-    final String? dynamicItemId = event.dynamicItemId;
     if (dynamicItemId != null) {
       final VoiceDynamicItemsSnapshot items =
           _flow.dynamicVoiceItemsFor(context.screen);
@@ -149,6 +151,7 @@ class WearVoiceApplicationDispatcher {
       event,
       context: context,
       action: () => _performPhrase(phrase, event: event),
+      allowListRevisionDrift: allowListRevisionDrift,
     );
     if (decision != WearVoiceAdmissionDecision.accepted) {
       _log(

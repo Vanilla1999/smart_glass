@@ -45,6 +45,7 @@ bool isCurrentWearVoicePhraseEvent(
   required int grammarRevision,
   required int freeTextEpoch,
   required int listRevision,
+  bool allowListRevisionDrift = false,
 }) {
   return event.sourceScreen == screen &&
       event.captureEpoch == captureEpoch &&
@@ -52,7 +53,7 @@ bool isCurrentWearVoicePhraseEvent(
       event.routeRevision == routeRevision &&
       event.grammarRevision == grammarRevision &&
       event.freeTextEpoch == freeTextEpoch &&
-      event.listRevision == listRevision;
+      (allowListRevisionDrift || event.listRevision == listRevision);
 }
 
 /// Final admission boundary immediately before a voice event is allowed to
@@ -112,6 +113,7 @@ class WearVoiceEventAdmissionGate {
     WearVoicePhraseEvent event, {
     required WearVoiceAdmissionContext context,
     required FutureOr<void> Function() action,
+    bool allowListRevisionDrift = false,
   }) {
     if (!isCurrentWearVoicePhraseEvent(
       event,
@@ -122,6 +124,7 @@ class WearVoiceEventAdmissionGate {
       grammarRevision: context.grammarRevision,
       freeTextEpoch: context.freeTextEpoch,
       listRevision: context.listRevision,
+      allowListRevisionDrift: allowListRevisionDrift,
     )) {
       return Future<WearVoiceAdmissionDecision>.value(
         WearVoiceAdmissionDecision.stale,

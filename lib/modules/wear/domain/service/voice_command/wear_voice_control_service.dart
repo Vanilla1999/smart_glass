@@ -106,11 +106,17 @@ class WearVoiceControlService {
       <String, _PreviewStabilityState>{};
   Timer? _recognitionPreviewTimeout;
   bool _recognitionDelayVisible = false;
+  WearVoiceDelayKind _recognitionDelayKind = WearVoiceDelayKind.preview;
   _RecognitionDelayContext? _recognitionDelayContext;
   static const Duration _stableCommandPartialDelay =
       Duration(milliseconds: 300);
   static const Duration _stablePreviewDelay = Duration(milliseconds: 150);
   static const Duration _recognitionPreviewDuration = Duration(seconds: 3);
+  static const Duration _recognizingFeedbackDelay =
+      Duration(milliseconds: 350);
+  static const Duration _failureFeedbackGrace = Duration(milliseconds: 400);
+  static const Duration _failureFeedbackDuration =
+      Duration(milliseconds: 1400);
 
   Stream<WearVoiceCommand> get commandStream => _commandController.stream;
   Stream<WearVoiceCommandEvent> get commandEventStream =>
@@ -225,7 +231,7 @@ class WearVoiceControlService {
         _emitPhrase(phrase);
       }
     } finally {
-      _clearRecognitionDelay(ended: ended);
+      _finishRecognitionDelay(ended);
       _segmentStartedAt.remove('${ended.captureEpoch}:${ended.segmentId}');
     }
   }
@@ -239,6 +245,7 @@ class WearVoiceControlService {
       final int emitSeq = ++_emittedCommandSeq;
       final int recognizedAtMillis = _clock();
       if (result == null) return;
+      _clearRecognitionDelay(result: result);
       _speechRecognitionService.markActionableCommandUtterance(
         result.commandUtteranceId,
       );
@@ -289,12 +296,28 @@ class WearVoiceControlService {
     final _RecognitionDelayContext context = _RecognitionDelayContext(
       captureEpoch: started.captureEpoch,
       segmentId: started.segmentId,
+      commandUtteranceId: _speechRecognitionService.commandUtteranceId,
       sourceScreen: _speechRecognitionService.sourceScreen,
       routeRevision: _speechRecognitionService.routeRevision,
       grammarRevision: _speechRecognitionService.grammarRevision,
       freeTextEpoch: _speechRecognitionService.freeTextEpoch,
     );
     _recognitionDelayContext = context;
+    _recognitionDelayKind = WearVoiceDelayKind.processing;
+    _recognitionPreviewTimeout = _timerFactory(
+      _recognizingFeedbackDelay,
+      () {
+        if (!identical(_recognitionDelayContext, context)) return;
+        _recognitionPreviewTimeout = null;
+        _recognitionDelayVisible = true;
+        _emitDelay(
+          visible: true,
+          context: context,
+          kind: WearVoiceDelayKind.processing,
+          statusText: WearVoiceReplayFeedbackController.recognizingText,
+        );
+      },
+    );
   }
 
   void _onReplayOwnership(VoiceReplayOwnership ownership) {
@@ -327,6 +350,7 @@ class WearVoiceControlService {
     if (trimmed.isEmpty || _phraseController.isClosed) {
       return;
     }
+    _clearRecognitionDelay(result: result);
     print(
       '[WearVoiceControlService] emitting phrase: "$trimmed" '
       'hasListener=${_phraseController.hasListener}',
@@ -443,6 +467,44 @@ class WearVoiceControlService {
       '${result.routeRevision}:${result.grammarRevision}:'
       '${result.freeTextEpoch}:${result.sourceScreen.name}';
 
+  void _finishRecognitionDelay(SpeechSegmentEnded ended) {
+    final _RecognitionDelayContext? context = _recognitionDelayContext;
+    if (context == null ||
+        context.captureEpoch != ended.captureEpoch ||
+        context.segmentId != ended.segmentId) {
+      return;
+    }
+    if (!_recognitionDelayVisible ||
+        _recognitionDelayKind != WearVoiceDelayKind.processing) {
+      _clearRecognitionDelay(ended: ended);
+      return;
+    }
+
+    // VAD can roll into the next acoustic segment while Vosk still owns the
+    // same utterance. Keep "Распознаю..." briefly; a new segment cancels this
+    // failure transition before it becomes visible.
+    _recognitionPreviewTimeout?.cancel();
+    _recognitionPreviewTimeout = _timerFactory(
+      _failureFeedbackGrace,
+      () {
+        if (!identical(_recognitionDelayContext, context) ||
+            _recognitionDelayKind != WearVoiceDelayKind.processing) {
+          return;
+        }
+        _emitDelay(
+          visible: true,
+          context: context,
+          kind: WearVoiceDelayKind.processing,
+          statusText: WearVoiceReplayFeedbackController.notRecognizedText,
+        );
+        _recognitionPreviewTimeout = _timerFactory(
+          _failureFeedbackDuration,
+          _clearRecognitionDelay,
+        );
+      },
+    );
+  }
+
   void _clearRecognitionDelay({
     SegmentedRecognitionResult? result,
     SpeechSegmentEnded? ended,
@@ -461,9 +523,16 @@ class WearVoiceControlService {
     _recognitionPreviewTimeout = null;
     if (_recognitionDelayVisible) {
       _recognitionDelayVisible = false;
-      if (context != null) _emitDelay(visible: false, context: context);
+      if (context != null) {
+        _emitDelay(
+          visible: false,
+          context: context,
+          kind: _recognitionDelayKind,
+        );
+      }
     }
     _recognitionDelayContext = null;
+    _recognitionDelayKind = WearVoiceDelayKind.preview;
   }
 
   void markPreviewUseful(WearVoicePreviewEvent event) {
@@ -478,8 +547,14 @@ class WearVoiceControlService {
       return;
     }
     if (_recognitionDelayVisible) return;
+    _recognitionDelayKind = WearVoiceDelayKind.preview;
     _recognitionDelayVisible = true;
-    _emitDelay(visible: true, context: context, previewText: event.text);
+    _emitDelay(
+      visible: true,
+      context: context,
+      kind: WearVoiceDelayKind.preview,
+      previewText: event.text,
+    );
     _recognitionPreviewTimeout = _timerFactory(
       _recognitionPreviewDuration,
       () => _clearRecognitionDelay(),
@@ -489,18 +564,23 @@ class WearVoiceControlService {
   void _emitDelay({
     required bool visible,
     required _RecognitionDelayContext context,
+    required WearVoiceDelayKind kind,
     String? previewText,
+    String? statusText,
   }) {
     _publishDelayEvent(
       WearVoiceDelayEvent(
         visible: visible,
         captureEpoch: context.captureEpoch,
         segmentId: context.segmentId,
+        commandUtteranceId: context.commandUtteranceId,
         sourceScreen: context.sourceScreen,
         routeRevision: context.routeRevision,
         grammarRevision: context.grammarRevision,
         freeTextEpoch: context.freeTextEpoch,
+        kind: kind,
         previewText: previewText,
+        statusText: statusText,
       ),
     );
   }
@@ -587,6 +667,7 @@ class _RecognitionDelayContext {
   const _RecognitionDelayContext({
     required this.captureEpoch,
     required this.segmentId,
+    required this.commandUtteranceId,
     required this.sourceScreen,
     required this.routeRevision,
     required this.grammarRevision,
@@ -595,6 +676,7 @@ class _RecognitionDelayContext {
 
   final int captureEpoch;
   final int segmentId;
+  final int commandUtteranceId;
   final WearScreenId sourceScreen;
   final int routeRevision;
   final int grammarRevision;
