@@ -14,6 +14,7 @@ class WearVoicePhraseEvent {
     required this.grammarRevision,
     required this.freeTextEpoch,
     required this.listRevision,
+    this.dynamicItemId,
   });
 
   final String phrase;
@@ -28,4 +29,5 @@ class WearVoicePhraseEvent {
   final int grammarRevision;
   final int freeTextEpoch;
   final int listRevision;
+  final String? dynamicItemId;
 }

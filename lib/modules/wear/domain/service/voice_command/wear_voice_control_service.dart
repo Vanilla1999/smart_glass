@@ -347,6 +347,7 @@ class WearVoiceControlService {
         grammarRevision: result.grammarRevision,
         freeTextEpoch: result.freeTextEpoch,
         listRevision: result.listRevision,
+        dynamicItemId: result.dynamicItemId,
       ));
     }
   }

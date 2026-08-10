@@ -189,7 +189,6 @@ class WearFlowController {
     _backgroundRuntimeSub = runtime.updates.listen(
       (WearBackgroundScreenUpdate update) {
         rememberScreenPayload(update.screen, update.payload);
-        _screenActionsController.add(update.screen);
         if (_state.screen == update.screen) {
           unawaited(_renderGlasses());
         }
@@ -602,6 +601,18 @@ class WearFlowController {
     if (_uiLifecycle == WearUiLifecycle.active) {
       await _invokeScreenPhrase(_state.screen, trimmed);
     }
+  }
+
+  Future<bool> handleVoiceDynamicItem(String itemId) async {
+    if (!_runtimeActive) return false;
+    final WearScreenId screen = _state.screen;
+    final VoiceDynamicItemsSnapshot items = dynamicVoiceItemsFor(screen);
+    for (final VoiceDynamicItem item in items.items) {
+      if (item.id == itemId) {
+        return _invokeExactDynamicItem(screen, item);
+      }
+    }
+    return false;
   }
 
   void setVoiceClarificationFocusedIndex(int index, int itemCount) {

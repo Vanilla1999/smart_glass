@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_admission.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_event.dart';
@@ -102,6 +103,48 @@ class WearVoiceApplicationDispatcher {
     }
 
     final WearVoiceAdmissionContext context = _context();
+    if (!isCurrentWearVoicePhraseEvent(
+      event,
+      screen: context.screen,
+      captureEpoch: context.captureEpoch,
+      recognitionContextId: context.recognitionContextId,
+      routeRevision: context.routeRevision,
+      grammarRevision: context.grammarRevision,
+      freeTextEpoch: context.freeTextEpoch,
+      listRevision: context.listRevision,
+    )) {
+      return WearVoiceAdmissionDecision.stale;
+    }
+    final String? dynamicItemId = event.dynamicItemId;
+    if (dynamicItemId != null) {
+      final VoiceDynamicItemsSnapshot items =
+          _flow.dynamicVoiceItemsFor(context.screen);
+      final VoiceListMatch<VoiceDynamicItem> exactMatch =
+          VoiceListMatcher.matchExactPhrase(
+        phrase,
+        items.items,
+        (VoiceDynamicItem item) => item.label,
+        aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
+      );
+      final VoiceListMatch<VoiceDynamicItem> match =
+          exactMatch.type == VoiceListMatchType.unique
+              ? exactMatch
+              : VoiceListMatcher.match(
+                  phrase,
+                  items.items,
+                  (VoiceDynamicItem item) => item.label,
+                  aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
+                );
+      final bool sameUniqueItem = match.type == VoiceListMatchType.unique &&
+          match.item?.id == dynamicItemId;
+      if (!sameUniqueItem) {
+        _log(
+          '[WearVoiceApplicationDispatcher] suppress stale dynamic voice '
+          'phrase phrase="$phrase" itemId=$dynamicItemId',
+        );
+        return WearVoiceAdmissionDecision.stale;
+      }
+    }
     final WearVoiceAdmissionDecision decision = await _admissionGate.runPhrase(
       event,
       context: context,
@@ -289,7 +332,12 @@ class WearVoiceApplicationDispatcher {
       'phrase="$phrase" traceId=${event?.traceId} '
       'screen=${_flow.state.screen} at=$startedAt',
     );
-    await _flow.handleVoicePhrase(phrase);
+    final String? dynamicItemId = event?.dynamicItemId;
+    if (dynamicItemId != null) {
+      await _flow.handleVoiceDynamicItem(dynamicItemId);
+    } else {
+      await _flow.handleVoicePhrase(phrase);
+    }
     final int finishedAt = DateTime.now().millisecondsSinceEpoch;
     _log(
       '[WearVoiceApplicationDispatcher] voice phrase handled '

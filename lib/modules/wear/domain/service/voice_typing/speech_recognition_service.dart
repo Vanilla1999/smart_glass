@@ -1817,6 +1817,9 @@ class SpeechRecognitionService {
         epoch: epoch,
         captureEpoch: captureEpoch,
         segment: segment,
+        resultContext: source == _RecognitionSource.command
+            ? _utteranceContexts[_commandUtteranceId]
+            : null,
       );
     }
     if (_canProcess(source, epoch, captureEpoch)) {
@@ -1874,16 +1877,20 @@ class SpeechRecognitionService {
     final bool commandContextCurrent =
         _canProcess(_RecognitionSource.command, null, captureEpoch) &&
             _commandUtteranceId == commandUtteranceId;
-    final VoiceDynamicItem? exactDynamicItem = commandContextCurrent &&
-            _freeTextEnabled &&
-            replay.isNotEmpty &&
-            !commandFound
-        ? _matchExactDynamicCommandFinal(
-            resultText,
-            resultContext,
-            commandTrace,
-          )
-        : null;
+    final _ExactDynamicCommandMatch? exactDynamicMatch =
+        commandContextCurrent &&
+                _freeTextEnabled &&
+                replay.isNotEmpty &&
+                !commandFound
+            ? _matchExactDynamicCommandFinal(
+                resultText,
+                resultContext,
+                commandTrace,
+              )
+            : null;
+    final VoiceDynamicItem? exactDynamicItem = exactDynamicMatch?.item;
+    final _VoiceResultContext effectiveResultContext =
+        exactDynamicMatch?.context ?? resultContext;
     final _StableDynamicCommandHypothesis? commandFallback =
         exactDynamicItem == null &&
                 commandContextCurrent &&
@@ -1950,12 +1957,12 @@ class SpeechRecognitionService {
         kind: RecognitionKind.streamFinal,
         segment: segment,
         commandUtteranceId: commandUtteranceId,
-        resultContext: resultContext,
+        resultContext: effectiveResultContext,
         dynamicItemId: exactDynamicItem.id,
       );
       print(
         '[VOICE_EXACT_FINAL_FAST_PATH] accepted '
-        'screen=${resultContext.sourceScreen.name} '
+        'screen=${effectiveResultContext.sourceScreen.name} '
         'utteranceId=$commandUtteranceId itemId=${exactDynamicItem.id} '
         'text="${VoiceListMatcher.normalize(resultText)}" '
         'speechToDecisionMs=$speechToDecisionMs '
@@ -1966,7 +1973,7 @@ class SpeechRecognitionService {
         trace: commandTrace,
         captureEpoch: captureEpoch,
         segment: segment,
-        context: resultContext,
+        context: effectiveResultContext,
         selectedText: resultText,
         reason: commandTrace.lastMeaningfulPartial.isEmpty
             ? 'exact_final_without_partial'
@@ -2052,8 +2059,10 @@ class SpeechRecognitionService {
       epoch: null,
       captureEpoch: captureEpoch,
       segment: segment,
+      resultContext: resultContext,
     );
     _finalizeCommandUtterance();
+    _utteranceContexts.remove(commandUtteranceId);
     if (liveFinalization != null) await liveFinalization;
   }
 
@@ -3466,6 +3475,10 @@ class SpeechRecognitionService {
   }
 
   _VoiceResultContext _currentResultContext(int utteranceId) {
+    final VoiceDynamicItemsSnapshot items =
+        _dynamicItemsProvider(_sourceScreen);
+    final ({VoiceHintSet hints, bool isReady}) hintLookup =
+        _voiceHintsFor(_sourceScreen, items);
     return _VoiceResultContext(
       commandUtteranceId: utteranceId,
       recognitionContextId: _recognitionContextId,
@@ -3474,7 +3487,8 @@ class SpeechRecognitionService {
       freeTextEpoch: _freeTextEpoch,
       sourceScreen: _sourceScreen,
       startedAtMillis: _commandUtteranceStartedAtMillis,
-      listRevision: _dynamicItemsProvider(_sourceScreen).revision,
+      listRevision: items.revision,
+      dynamicHints: hintLookup.isReady ? hintLookup.hints : null,
     );
   }
 
@@ -3679,7 +3693,7 @@ class SpeechRecognitionService {
     );
   }
 
-  VoiceDynamicItem? _matchExactDynamicCommandFinal(
+  _ExactDynamicCommandMatch? _matchExactDynamicCommandFinal(
     String text,
     _VoiceResultContext context,
     _CommandHypothesisSnapshot commandTrace,
@@ -3698,9 +3712,7 @@ class SpeechRecognitionService {
 
     if (context.commandUtteranceId != _commandUtteranceId ||
         context.sourceScreen != _sourceScreen ||
-        context.routeRevision != _routeRevision ||
-        context.grammarRevision != _grammarRevision ||
-        context.freeTextEpoch != _freeTextEpoch) {
+        context.routeRevision != _routeRevision) {
       return null;
     }
     if (!_commandGrammar.any(
@@ -3709,16 +3721,16 @@ class SpeechRecognitionService {
       return null;
     }
 
-    final VoiceDynamicItemsSnapshot items =
+    final VoiceDynamicItemsSnapshot currentItems =
         _dynamicItemsProvider(context.sourceScreen);
-    if (items.items.isEmpty || items.revision != context.listRevision) {
+    if (currentItems.items.isEmpty) {
       return null;
     }
 
     final ({VoiceHintSet hints, bool isReady}) hintLookup =
-        _voiceHintsFor(context.sourceScreen, items);
+        _voiceHintsFor(context.sourceScreen, currentItems);
     if (!hintLookup.isReady ||
-        hintLookup.hints.revision != items.revision ||
+        hintLookup.hints.revision != currentItems.revision ||
         !hintLookup.hints.normalizedAdvertisedPhrases.contains(normalized)) {
       return null;
     }
@@ -3732,17 +3744,35 @@ class SpeechRecognitionService {
         .toList(growable: false);
     if (hintedItemIds.length != 1) return null;
 
+    final VoiceHintSet? capturedHints = context.dynamicHints;
+    if (capturedHints == null ||
+        capturedHints.revision != context.listRevision ||
+        !capturedHints.normalizedAdvertisedPhrases.contains(normalized)) {
+      return null;
+    }
+    final List<String> capturedHintedItemIds =
+        capturedHints.hintsByItemId.entries
+            .where(
+              (MapEntry<String, VoiceHint> entry) =>
+                  VoiceListMatcher.normalize(entry.value.phrase) == normalized,
+            )
+            .map((MapEntry<String, VoiceHint> entry) => entry.key)
+            .toList(growable: false);
+    if (capturedHintedItemIds.length != 1 ||
+        capturedHintedItemIds.single != hintedItemIds.single) {
+      return null;
+    }
     final VoiceListMatch<VoiceDynamicItem> exactMatch =
         VoiceListMatcher.matchExactPhrase(
       text,
-      items.items,
+      currentItems.items,
       (VoiceDynamicItem item) => item.label,
       aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
     );
     final VoiceListMatch<VoiceDynamicItem> runtimeMatch =
         VoiceListMatcher.match(
       text,
-      items.items,
+      currentItems.items,
       (VoiceDynamicItem item) => item.label,
       aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
     );
@@ -3760,7 +3790,10 @@ class SpeechRecognitionService {
         !runtimeConfirms && !strongMultiWordExact) {
       return null;
     }
-    return item;
+    return _ExactDynamicCommandMatch(
+      item: item,
+      context: _currentResultContext(context.commandUtteranceId),
+    );
   }
 
   _StableDynamicCommandHypothesis? _matchAmbiguousAdvertisedCommandFinal(
@@ -4763,6 +4796,16 @@ class _StableDynamicCommandHypothesis {
   int get matchCount => itemIds.length;
 }
 
+class _ExactDynamicCommandMatch {
+  const _ExactDynamicCommandMatch({
+    required this.item,
+    required this.context,
+  });
+
+  final VoiceDynamicItem item;
+  final _VoiceResultContext context;
+}
+
 class _ReplayResolution {
   const _ReplayResolution({
     required this.text,
@@ -4789,6 +4832,7 @@ class _VoiceResultContext {
     required this.sourceScreen,
     required this.startedAtMillis,
     required this.listRevision,
+    required this.dynamicHints,
   });
 
   final int commandUtteranceId;
@@ -4799,6 +4843,7 @@ class _VoiceResultContext {
   final WearScreenId sourceScreen;
   final int? startedAtMillis;
   final int listRevision;
+  final VoiceHintSet? dynamicHints;
 
   _VoiceResultContext withListRevision(int revision) => _VoiceResultContext(
         commandUtteranceId: commandUtteranceId,
@@ -4809,6 +4854,7 @@ class _VoiceResultContext {
         sourceScreen: sourceScreen,
         startedAtMillis: startedAtMillis,
         listRevision: revision,
+        dynamicHints: dynamicHints,
       );
 }
 

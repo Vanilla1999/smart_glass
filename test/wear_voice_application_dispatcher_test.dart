@@ -206,6 +206,36 @@ void main() {
     expect(selections, isEmpty);
   });
 
+  test('current list cannot execute a mismatched dynamic item id', () async {
+    const VoiceDynamicItemsSnapshot items = VoiceDynamicItemsSnapshot(
+      revision: 10,
+      items: <VoiceDynamicItem>[
+        VoiceDynamicItem(id: 'yellow-v2', label: 'Жёлтый'),
+      ],
+    );
+    final List<String> selections = <String>[];
+    flow
+      ..enterScreen(WearScreenId.printerSelect)
+      ..registerScreenActions(
+        WearScreenId.printerSelect,
+        WearScreenActionHandler(
+          dynamicVoiceItems: () => items,
+          onDynamicItem: selections.add,
+        ),
+      );
+    final WearVoicePhraseEvent event = _phraseEvent(
+      screen: WearScreenId.printerSelect,
+      listRevision: items.revision,
+      dynamicItemId: 'yellow-v1',
+    );
+
+    expect(
+      await dispatcher.dispatchPhrase(event.phrase, event: event),
+      WearVoiceAdmissionDecision.stale,
+    );
+    expect(selections, isEmpty);
+  });
+
   test('current dynamic preview uses production partial dispatch once',
       () async {
     const VoiceDynamicItemsSnapshot items = VoiceDynamicItemsSnapshot(
@@ -438,6 +468,7 @@ WearVoicePhraseEvent _phraseEvent({
   WearScreenId screen = WearScreenId.menu,
   int commandUtteranceId = 7,
   int listRevision = 0,
+  String? dynamicItemId,
 }) {
   return WearVoicePhraseEvent(
     phrase: phrase,
@@ -451,6 +482,7 @@ WearVoicePhraseEvent _phraseEvent({
     grammarRevision: 3,
     freeTextEpoch: 4,
     listRevision: listRevision,
+    dynamicItemId: dynamicItemId,
   );
 }
 
