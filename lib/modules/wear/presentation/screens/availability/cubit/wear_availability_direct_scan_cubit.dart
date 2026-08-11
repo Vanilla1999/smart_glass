@@ -74,6 +74,15 @@ class WearAvailabilityDirectScanNotifier
   final WearAvailabilityFlowUseCase _flowUseCase;
   String? _lastAcceptedBarcode;
 
+  void restoreFlow(WearAvailabilityFlowState flow) {
+    state = state.copyWith(
+      phase: WearAvailabilityDirectScanPhase.idle,
+      message: flow.message,
+      duplicateProducts: flow.duplicateProducts,
+      clearNavigation: true,
+    );
+  }
+
   Future<void> handleBarcode(String barcode) async {
     if (state.isLoading) return;
     final String trimmed = barcode.trim();

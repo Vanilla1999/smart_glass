@@ -25,6 +25,7 @@ typedef WearFlowPhraseAction = FutureOr<void> Function(String phrase);
 typedef WearFlowDynamicItemAction = FutureOr<void> Function(String itemId);
 typedef WearFlowPartialPhraseAction = FutureOr<bool> Function(String phrase);
 typedef WearFlowBarcodeAction = FutureOr<void> Function(String barcode);
+typedef WearBarcodeEnabled = bool Function();
 typedef WearDynamicVoiceItems = VoiceDynamicItemsSnapshot Function();
 typedef WearPresentationState = Object? Function();
 typedef WearPresentationStateRestore = FutureOr<void> Function(Object state);
@@ -59,6 +60,8 @@ class WearScreenActionHandler {
     this.onDynamicItem,
     this.onPartialPhrase,
     this.onBarcode,
+    this.barcodeEnabled,
+    this.onVisible,
     this.dynamicVoiceItems,
     this.presentationState,
     this.restorePresentationState,
@@ -90,6 +93,8 @@ class WearScreenActionHandler {
   final WearFlowDynamicItemAction? onDynamicItem;
   final WearFlowPartialPhraseAction? onPartialPhrase;
   final WearFlowBarcodeAction? onBarcode;
+  final WearBarcodeEnabled? barcodeEnabled;
+  final WearFlowAction? onVisible;
   final WearDynamicVoiceItems? dynamicVoiceItems;
   final WearPresentationState? presentationState;
   final WearPresentationStateRestore? restorePresentationState;
@@ -158,6 +163,16 @@ class WearFlowController {
   Stream<WearScreenId> get screenActionsChanged =>
       _screenActionsController.stream;
 
+  bool get currentScreenAcceptsBarcode {
+    if (!_runtimeActive) return false;
+    if (_uiLifecycle == WearUiLifecycle.inactive) {
+      return _backgroundRuntime?.acceptsBarcode(_state.screen) ?? false;
+    }
+    final WearScreenActionHandler? handler = _screenActions[_state.screen];
+    return handler?.onBarcode != null &&
+        (handler?.barcodeEnabled?.call() ?? true);
+  }
+
   VoiceDynamicItemsSnapshot dynamicVoiceItemsFor(WearScreenId screen) {
     final WearBackgroundRuntime? runtime = _backgroundRuntime;
     if (_uiLifecycle == WearUiLifecycle.inactive &&
@@ -198,8 +213,10 @@ class WearFlowController {
     _backgroundRuntime = runtime;
     _backgroundRuntimeSub = runtime.updates.listen(
       (WearBackgroundScreenUpdate update) {
+        if (_uiLifecycle != WearUiLifecycle.inactive) return;
         rememberScreenPayload(update.screen, update.payload);
         if (_state.screen == update.screen) {
+          _screenActionsController.add(update.screen);
           unawaited(_renderGlasses());
         }
       },
@@ -286,6 +303,20 @@ class WearFlowController {
     }
   }
 
+  void resetSessionState() {
+    _clearRecognitionFeedback();
+    _commandQueue.clear();
+    _inactiveNavigationCount = 0;
+    _deliveredNavigationRequestId = null;
+    _setState(WearFlowState.initial());
+    final WearBackgroundRuntime? runtime = _backgroundRuntime;
+    if (runtime != null) {
+      _runtimeReset = _runtimeReset
+          .catchError((Object _) {})
+          .then<void>((_) => runtime.reset());
+    }
+  }
+
   void enterScreen(WearScreenId screen, {Object? extra}) {
     _clearContextPayload(screen, extra);
     final List<WearNavigationEntry> history = _confirmedHistory(screen, extra);
@@ -314,7 +345,12 @@ class WearFlowController {
         navigationHistory: history,
       ),
     );
-    unawaited(_renderGlasses());
+    final WearFlowAction? onVisible = _screenActions[screen]?.onVisible;
+    if (onVisible != null) {
+      unawaited(Future<void>.sync(onVisible));
+    } else {
+      unawaited(_renderGlasses());
+    }
     unawaited(_enterBackgroundScreen(screen, extra: extra));
   }
 
@@ -331,6 +367,12 @@ class WearFlowController {
     _screenActionsController.add(screen);
     print('[WearFlowController] register actions screen=$screen');
     return registration;
+  }
+
+  void refreshScreenActions(WearScreenId screen) {
+    if (_screenActions.containsKey(screen)) {
+      _screenActionsController.add(screen);
+    }
   }
 
   void unregisterScreenActions(WearScreenActionRegistration registration) {
@@ -567,7 +609,7 @@ class WearFlowController {
     if (_uiLifecycle == WearUiLifecycle.active) {
       final WearFlowBarcodeAction? action =
           _screenActions[_state.screen]?.onBarcode;
-      if (action == null) return false;
+      if (action == null || !currentScreenAcceptsBarcode) return false;
       await action(barcode);
       return true;
     }

@@ -26,10 +26,12 @@ class WearAvailabilityRuntimeState {
   const WearAvailabilityRuntimeState({
     required this.flow,
     required this.focusedIndex,
+    this.busy = false,
   });
 
   final WearAvailabilityFlowState flow;
   final int focusedIndex;
+  final bool busy;
 }
 
 class WearAvailabilityRuntime implements WearBackgroundRuntime {
@@ -67,6 +69,7 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
   WearAvailabilityFlowStep? _lastBarcodeStep;
   int _generation = 0;
   int _requestRevision = 0;
+  bool _presentationStateRestorable = true;
   Future<void>? _enterOperation;
   WearScreenId? _enteringScreen;
   Object? _enteringExtra;
@@ -76,6 +79,18 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
 
   @override
   bool handles(WearScreenId screen) => _screens.contains(screen);
+
+  @override
+  bool acceptsBarcode(WearScreenId screen) {
+    if (_loading) return false;
+    if (screen == WearScreenId.availabilityDirectScan) {
+      return _flow?.duplicateProducts.isEmpty ?? true;
+    }
+    if (screen != WearScreenId.availabilityCheck) return false;
+    final WearAvailabilityFlowStep? step = _flow?.step;
+    return step == WearAvailabilityFlowStep.productScan ||
+        step == WearAvailabilityFlowStep.priceTagScan;
+  }
 
   @override
   bool supportsCommand(WearScreenId screen, WearVoiceCommand command) {
@@ -532,7 +547,8 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     _screen = screen;
     _flow = state.flow;
     _focusedIndex = state.focusedIndex;
-    _loading = false;
+    _loading = state.busy;
+    _presentationStateRestorable = !state.busy;
     _error = null;
     _publish();
   }
@@ -540,7 +556,9 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
   @override
   Object? presentationStateFor(WearScreenId screen) {
     final WearAvailabilityFlowState? flow = _flow;
-    if (!handles(screen) || flow == null) return null;
+    if (!handles(screen) || flow == null || !_presentationStateRestorable) {
+      return null;
+    }
     return WearAvailabilityRuntimeState(
       flow: flow,
       focusedIndex: _focusedIndex,
@@ -642,6 +660,7 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     _screen = WearScreenId.availabilityGroup;
     _focusedIndex = 0;
     _loading = false;
+    _presentationStateRestorable = true;
     _error = null;
     _lastBarcode = null;
     _lastBarcodeStep = null;

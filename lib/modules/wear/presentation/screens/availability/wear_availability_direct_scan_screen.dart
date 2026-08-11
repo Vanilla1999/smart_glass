@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_availability_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_flow_state.dart';
@@ -59,6 +60,30 @@ class _WearAvailabilityDirectScanScreenState
         onBarcode: (String barcode) => ref
             .read(wearAvailabilityDirectScanProvider.notifier)
             .handleBarcode(barcode),
+        barcodeEnabled: () {
+          final WearAvailabilityDirectScanState state =
+              ref.read(wearAvailabilityDirectScanProvider);
+          return !state.isLoading && state.duplicateProducts.isEmpty;
+        },
+        presentationState: () {
+          final WearAvailabilityDirectScanState state =
+              ref.read(wearAvailabilityDirectScanProvider);
+          return WearAvailabilityRuntimeState(
+            flow: WearAvailabilityFlowState(
+              step: WearAvailabilityFlowStep.productSelection,
+              duplicateProducts: state.duplicateProducts,
+              message: state.message,
+            ),
+            focusedIndex: _focusedIndex,
+            busy: state.isLoading,
+          );
+        },
+        restorePresentationState: (Object snapshot) {
+          if (snapshot is! WearAvailabilityRuntimeState) return;
+          ref
+              .read(wearAvailabilityDirectScanProvider.notifier)
+              .restoreFlow(snapshot.flow);
+        },
       ),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -87,6 +112,11 @@ class _WearAvailabilityDirectScanScreenState
         WearAvailabilityDirectScanState? previous,
         WearAvailabilityDirectScanState next,
       ) {
+        if (previous?.phase != next.phase ||
+            previous?.duplicateProducts != next.duplicateProducts) {
+          WearDependencies.I.wearFlowController
+              .refreshScreenActions(WearScreenId.availabilityDirectScan);
+        }
         _sendGlassesState(next);
         if (previous?.navFlow != next.navFlow && next.navFlow != null) {
           final WearAvailabilityFlowState flow = next.navFlow!;

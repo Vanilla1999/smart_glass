@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
@@ -29,9 +31,23 @@ class WearMainScreen extends ConsumerStatefulWidget {
 }
 
 class _WearMainScreenState extends ConsumerState<WearMainScreen> {
+  late final WearScreenActionRegistration _screenActionsRegistration;
+
   @override
   void initState() {
     super.initState();
+    final WearFlowController flow = WearDependencies.I.wearFlowController;
+    flow.enterScreen(WearScreenId.main);
+    _screenActionsRegistration = flow.registerScreenActions(
+      WearScreenId.main,
+      WearScreenActionHandler(
+        onBarcode: (String barcode) =>
+            ref.read(wearAuthNotifierProvider.notifier).handleBarcode(barcode),
+        barcodeEnabled: () =>
+            !WearSession.isAuthorized &&
+            !ref.read(wearAuthNotifierProvider).isLoading,
+      ),
+    );
     WearStatusIconReporter.I.start();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (WearSession.isAuthorized) {
@@ -44,6 +60,8 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
 
   @override
   void dispose() {
+    WearDependencies.I.wearFlowController
+        .unregisterScreenActions(_screenActionsRegistration);
     super.dispose();
   }
 
@@ -54,6 +72,10 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
   Widget build(BuildContext context) {
     ref.listen<WearAuthState>(wearAuthNotifierProvider,
         (WearAuthState? previous, WearAuthState next) {
+      if (previous?.phase != next.phase) {
+        WearDependencies.I.wearFlowController
+            .refreshScreenActions(WearScreenId.main);
+      }
       if (previous?.phase != next.phase &&
           next.phase == WearAuthPhase.loading) {
         WearStatusIconReporter.I.send(WearGlassesPayload.authLoading());

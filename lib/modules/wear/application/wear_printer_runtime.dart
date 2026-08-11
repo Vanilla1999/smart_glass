@@ -67,6 +67,9 @@ class WearPrinterRuntime implements WearBackgroundRuntime {
   bool handles(WearScreenId screen) => screen == WearScreenId.printerSelect;
 
   @override
+  bool acceptsBarcode(WearScreenId screen) => false;
+
+  @override
   bool supportsCommand(WearScreenId screen, WearVoiceCommand command) {
     return handles(screen) &&
         <WearVoiceCommand>{

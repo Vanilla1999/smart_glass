@@ -63,6 +63,10 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
     private var flutterPluginBinding: FlutterPlugin.FlutterPluginBinding? = null
     private var componentActivity: ComponentActivity? = null
     private var viCameraScanner: ViCameraScanner? = null
+    private val barcodeCallback: (String) -> Unit = { barcode ->
+        Log.d("barcode", barcode)
+        sendBroadcast(barcode, "")
+    }
     private val pluginJob = SupervisorJob()
     private val scannerLifecycleMutex = Mutex()
     private val lifecycleScope: LifecycleCoroutineScope?
@@ -112,6 +116,7 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
             launch {
                 scannerLifecycleMutex.withLock {
                     WakeUpHelper().disableTurnOffDeviseOnScanButton()
+                    ViScanner.removeBarcodeCallBack(barcodeCallback)
                     ViScanner.release()
                     wearPrepared = false
                 }
@@ -177,6 +182,36 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
                     } catch (e: Exception) {
                         Log.e("FlashlightTrace", "Plugin getFlashlightState FAILED", e)
                         result.error("0", e.message, null)
+                    }
+                }
+            }
+
+            "changeScanSound" -> {
+                val sound = call.argument<Int>("sound")
+                if (sound == null || sound !in 0..6) {
+                    result.error("INVALID_SCAN_SOUND", "Scan sound must be between 0 and 6", null)
+                    return
+                }
+                launch {
+                    try {
+                        val glasses = ViScanner.getAdditionalMovfastGlass()
+                            ?: throw UnsupportedOperationException(
+                                "Scan sound selection is supported only on Movfast glasses"
+                            )
+                        glasses.changeScanSound(sound)
+                        result.success(null)
+                    } catch (e: UnsupportedOperationException) {
+                        result.error(
+                            "UNSUPPORTED_SCAN_SOUND",
+                            e.message ?: "Scan sound selection requires service version 5",
+                            null,
+                        )
+                    } catch (e: Exception) {
+                        result.error(
+                            "CHANGE_SCAN_SOUND_FAILED",
+                            e.message ?: "Failed to change scan sound",
+                            null,
+                        )
                     }
                 }
             }
@@ -322,18 +357,22 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
                                         }
                                     }
                                 }
-                                ViScanner.init(activity!!, registry = componentActivity!!.activityResultRegistry)
-                                if (!ViScanner.isInitScanner()) {
-                                    ViScanner.initScanner()
-                                }
-                                ViScanner.prepare()
-                                wearPrepared = true
-                                viBluetooth = ViScanner.getViBluetoothScannerApi()
-                                ViScanner.registerBarcodeCallBack {
-                                    Log.d("barcode", it)
-                                    sendBroadcast(it, "")
+                                val initialized = ViScanner.init(
+                                    activity!!,
+                                    registry = componentActivity!!.activityResultRegistry,
+                                )
+                                if (!initialized) {
+                                    throw IllegalStateException("ViScanner initialization failed")
                                 }
                             }
+                            if (!ViScanner.isInitScanner() && !ViScanner.initScanner()) {
+                                throw IllegalStateException("Scanner initialization failed")
+                            }
+                            ViScanner.prepare()
+                            wearPrepared = true
+                            viBluetooth = ViScanner.getViBluetoothScannerApi()
+                            ViScanner.removeBarcodeCallBack(barcodeCallback)
+                            ViScanner.registerBarcodeCallBack(barcodeCallback)
                             ViScanner.setDisabledScannerListener {
                                 Log.d("viScanner", "Disabledddd")
                                 eventSinkScannerDisabled?.success(true)
@@ -449,6 +488,7 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
                 launch {
                     try {
                         scannerLifecycleMutex.withLock {
+                            ViScanner.removeBarcodeCallBack(barcodeCallback)
                             ViScanner.release()
                             wearPrepared = false
                         }
@@ -541,6 +581,7 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
     }
 
     override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
+        ViScanner.removeBarcodeCallBack(barcodeCallback)
         channel.setMethodCallHandler(null)
         eventChannel!!.setStreamHandler(null)
         eventScannerDisabled!!.setStreamHandler(null)

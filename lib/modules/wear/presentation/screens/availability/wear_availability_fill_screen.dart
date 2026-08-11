@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:multi_scanner/multi_scanner.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
@@ -24,9 +23,8 @@ class WearAvailabilityFillScreen extends StatefulWidget {
       _WearAvailabilityFillScreenState();
 }
 
-class _WearAvailabilityFillScreenState extends State<WearAvailabilityFillScreen>
-    implements MultiScannerDelegate {
-  final MultiScanner _scanner = MultiScanner.last();
+class _WearAvailabilityFillScreenState
+    extends State<WearAvailabilityFillScreen> {
   late final WearScreenActionRegistration _screenActionsRegistration;
 
   bool _isLoading = false;
@@ -37,7 +35,6 @@ class _WearAvailabilityFillScreenState extends State<WearAvailabilityFillScreen>
   @override
   void initState() {
     super.initState();
-    _scanner.addDelegate(this);
     WearDependencies.I.wearFlowController.enterScreen(
       WearScreenId.availabilityFill,
     );
@@ -49,6 +46,8 @@ class _WearAvailabilityFillScreenState extends State<WearAvailabilityFillScreen>
         onDown: _reset,
         onManualInput: _manualInput,
         onClear: _reset,
+        onBarcode: _addBarcode,
+        barcodeEnabled: () => !_isLoading,
       ),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -60,19 +59,7 @@ class _WearAvailabilityFillScreenState extends State<WearAvailabilityFillScreen>
   void dispose() {
     WearDependencies.I.wearFlowController
         .unregisterScreenActions(_screenActionsRegistration);
-    _scanner.removeDelegate(this);
     super.dispose();
-  }
-
-  @override
-  bool? onScanEvent(String payload) {
-    _addBarcode(payload);
-    return true;
-  }
-
-  @override
-  bool? onErrorScan(Exception error) {
-    return false;
   }
 
   @override
@@ -150,6 +137,7 @@ class _WearAvailabilityFillScreenState extends State<WearAvailabilityFillScreen>
       _lastBarcode = normalized;
       _message = 'Получаем товар...';
     });
+    _refreshBarcodeAdmission();
     _sendGlassesState();
 
     try {
@@ -164,6 +152,7 @@ class _WearAvailabilityFillScreenState extends State<WearAvailabilityFillScreen>
             ? 'Добавлено: ${products.first.name}'
             : 'Добавлено позиций: ${products.length}';
       });
+      _refreshBarcodeAdmission();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -171,8 +160,14 @@ class _WearAvailabilityFillScreenState extends State<WearAvailabilityFillScreen>
         _lastBarcode = null;
         _message = _asUiMessage(error);
       });
+      _refreshBarcodeAdmission();
     }
     _sendGlassesState();
+  }
+
+  void _refreshBarcodeAdmission() {
+    WearDependencies.I.wearFlowController
+        .refreshScreenActions(WearScreenId.availabilityFill);
   }
 
   Future<void> _reset() async {

@@ -12,44 +12,44 @@ import 'package:multi_scanner/src/platform/multi_scanner_platform_interface.dart
 class MethodChannelMultiScanner extends MultiScannerPlatform {
   /// EventChannel для получния баркода из native
   @visibleForTesting
-  EventChannel eventChannel =
-      const EventChannel('tander/multi_scanner_plugin/event_barcode');
+  EventChannel eventChannel = const EventChannel(
+    'tander/multi_scanner_plugin/event_barcode',
+  );
   @visibleForTesting
   EventChannel eventSinkServiceConnections = const EventChannel(
-      'tander/multi_scanner_plugin/eventSinkServiceConnections');
+    'tander/multi_scanner_plugin/eventSinkServiceConnections',
+  );
   @visibleForTesting
-  EventChannel eventScannerDisabled =
-      const EventChannel('tander/multi_scanner_plugin/event_scanner_disabled');
+  EventChannel eventScannerDisabled = const EventChannel(
+    'tander/multi_scanner_plugin/event_scanner_disabled',
+  );
 
   /// MethodChannel использующийся для получения доступа к функциям SDK
   @visibleForTesting
-  MethodChannel methodChannel =
-      const MethodChannel('tander/multi_scanner_plugin/channel');
+  MethodChannel methodChannel = const MethodChannel(
+    'tander/multi_scanner_plugin/channel',
+  );
 
   /// Регистрируем получение баркода через SDK сканеров.
   @override
   Future<void> registerListenerScan(
-      Set<GlobalMultiScannerDelegate> listDelegate) async {
-    eventChannel.receiveBroadcastStream().listen(
-      (data) {
-        debugPrint('Barcode: $data');
-        var barcode = _Barcode.fromJson(jsonDecode(data));
-        for (var d in listDelegate) {
-          d.onEvent(barcode.barcode);
-        }
-      },
-    );
+    Set<GlobalMultiScannerDelegate> listDelegate,
+  ) async {
+    eventChannel.receiveBroadcastStream().listen((data) {
+      debugPrint('Barcode: $data');
+      var barcode = _Barcode.fromJson(jsonDecode(data));
+      for (var d in listDelegate) {
+        d.onEvent(barcode.barcode);
+      }
+    });
   }
 
   /// Если flag = false выключается фонарик.
   @override
   Future<void> switchHoneywellLight(bool flag) async {
-    methodChannel.invokeMethod(
-      'switchHoneywellLight',
-      <String, bool>{
-        'flag': flag,
-      },
-    );
+    methodChannel.invokeMethod('switchHoneywellLight', <String, bool>{
+      'flag': flag,
+    });
   }
 
   /// Возвращает true, когда фонарик включен.
@@ -63,15 +63,14 @@ class MethodChannelMultiScanner extends MultiScannerPlatform {
     const String tag = '[FlashlightTrace]';
     print('$tag MethodChannel setFlashlight($state) invoke begin');
     try {
-      await methodChannel.invokeMethod(
-        'setFlashlight',
-        <String, int>{
-          'state': state,
-        },
-      );
+      await methodChannel.invokeMethod('setFlashlight', <String, int>{
+        'state': state,
+      });
       print('$tag MethodChannel setFlashlight($state) invoke success');
     } catch (e, st) {
-      print('$tag MethodChannel setFlashlight($state) FAILED error=$e stack=$st');
+      print(
+        '$tag MethodChannel setFlashlight($state) FAILED error=$e stack=$st',
+      );
       rethrow;
     }
   }
@@ -82,12 +81,21 @@ class MethodChannelMultiScanner extends MultiScannerPlatform {
     print('$tag MethodChannel getFlashlightState invoke begin');
     try {
       final result = await methodChannel.invokeMethod('getFlashlightState');
-      print('$tag MethodChannel getFlashlightState invoke success result=$result');
+      print(
+        '$tag MethodChannel getFlashlightState invoke success result=$result',
+      );
       return result;
     } catch (e, st) {
       print('$tag MethodChannel getFlashlightState FAILED error=$e stack=$st');
       rethrow;
     }
+  }
+
+  @override
+  Future<void> changeScanSound(int sound) {
+    return methodChannel.invokeMethod<void>('changeScanSound', <String, int>{
+      'sound': sound,
+    });
   }
 
   @override
@@ -106,28 +114,23 @@ class MethodChannelMultiScanner extends MultiScannerPlatform {
 
   @override
   Future<void> deletePhoto(String uri) {
-    return methodChannel.invokeMethod<void>(
-      'deletePhoto',
-      <String, String>{
-        'uri': uri,
-      },
-    );
+    return methodChannel.invokeMethod<void>('deletePhoto', <String, String>{
+      'uri': uri,
+    });
   }
 
   @override
   Future<void> changeRhkHoneywell(bool flag) {
-    return methodChannel.invokeMethod(
-      'changeRhkHoneywell',
-      <String, bool>{
-        'flag': flag,
-      },
-    );
+    return methodChannel.invokeMethod('changeRhkHoneywell', <String, bool>{
+      'flag': flag,
+    });
   }
 
   @override
   Future<void> initUserScannerSettings(BarcodeSettingsConfig settings) async {
-    return methodChannel.invokeMethod(
-        'setUserScanSettings', {'settings': settings.toJson().toString()});
+    return methodChannel.invokeMethod('setUserScanSettings', {
+      'settings': settings.toJson().toString(),
+    });
   }
 
   @override
@@ -238,11 +241,13 @@ class MethodChannelMultiScanner extends MultiScannerPlatform {
 
   List<BTDevice> _methodCallToBTDevice(MethodCall methodCall) {
     try {
-      var listBTDevices =
-          _BTDevices.fromJson(jsonDecode(methodCall.arguments)).btDevices;
+      var listBTDevices = _BTDevices.fromJson(
+        jsonDecode(methodCall.arguments),
+      ).btDevices;
       if (listBTDevices.isNotEmpty) {
         return List<BTDevice>.from(
-            listBTDevices.map((model) => BTDevice.fromJson(model)));
+          listBTDevices.map((model) => BTDevice.fromJson(model)),
+        );
       } else {
         return List.empty();
       }
@@ -253,12 +258,13 @@ class MethodChannelMultiScanner extends MultiScannerPlatform {
 
   List<BattaryState> _battaryStateMap(MethodCall methodCall) {
     try {
-      var listBTDevices =
-          _BattaryStateList.fromJson(jsonDecode(methodCall.arguments))
-              .battaryState;
+      var listBTDevices = _BattaryStateList.fromJson(
+        jsonDecode(methodCall.arguments),
+      ).battaryState;
       if (listBTDevices.isNotEmpty) {
         return List<BattaryState>.from(
-            listBTDevices.map((model) => BattaryState.fromJson(model)));
+          listBTDevices.map((model) => BattaryState.fromJson(model)),
+        );
       } else {
         return List.empty();
       }
@@ -341,35 +347,26 @@ class MethodChannelMultiScanner extends MultiScannerPlatform {
 
   @override
   Future<void> createBond(String deviceName, String deviceMacAdress) async {
-    methodChannel.invokeMethod(
-      'createBond',
-      <String, String>{
-        'deviceName': deviceName,
-        'macAdress': deviceMacAdress,
-      },
-    );
+    methodChannel.invokeMethod('createBond', <String, String>{
+      'deviceName': deviceName,
+      'macAdress': deviceMacAdress,
+    });
   }
 
   @override
   Future<void> removeBound(String deviceName, String deviceMacAdress) async {
-    await methodChannel.invokeMethod(
-      'removeBound',
-      <String, String>{
-        'deviceName': deviceName,
-        'macAdress': deviceMacAdress,
-      },
-    );
+    await methodChannel.invokeMethod('removeBound', <String, String>{
+      'deviceName': deviceName,
+      'macAdress': deviceMacAdress,
+    });
   }
 
   @override
   Future<void> connect(String deviceName, String deviceMacAdress) async {
-    methodChannel.invokeMethod(
-      'connectToBT',
-      <String, String>{
-        'deviceName': deviceName,
-        'macAdress': deviceMacAdress,
-      },
-    );
+    methodChannel.invokeMethod('connectToBT', <String, String>{
+      'deviceName': deviceName,
+      'macAdress': deviceMacAdress,
+    });
   }
 
   @override
@@ -387,33 +384,25 @@ class MethodChannelMultiScanner extends MultiScannerPlatform {
 
   @override
   Future<bool> isNeedBT() async {
-    final result = await methodChannel.invokeMethod<bool>(
-      'isNeedBT',
-    );
+    final result = await methodChannel.invokeMethod<bool>('isNeedBT');
     return result as bool;
   }
 
   @override
   Future<bool> isNotNeedCamera() async {
-    final result = await methodChannel.invokeMethod<bool>(
-      'isNotNeedCamera',
-    );
+    final result = await methodChannel.invokeMethod<bool>('isNotNeedCamera');
     return result as bool;
   }
 
   @override
   Future<bool> isPCH() async {
-    final result = await methodChannel.invokeMethod<bool>(
-      'isPCH',
-    );
+    final result = await methodChannel.invokeMethod<bool>('isPCH');
     return result as bool;
   }
 
   @override
   Future<bool> isServiceConnectedState() async {
-    final result = await methodChannel.invokeMethod<bool>(
-      'isServiceConnected',
-    );
+    final result = await methodChannel.invokeMethod<bool>('isServiceConnected');
     return result as bool;
   }
 
@@ -455,7 +444,7 @@ class _BattaryStateList {
   _BattaryStateList({required this.battaryState});
 
   _BattaryStateList.fromJson(Map<String, dynamic> json)
-      : battaryState = json['states'];
+    : battaryState = json['states'];
 }
 
 class _Barcode {
@@ -465,6 +454,6 @@ class _Barcode {
   final String barcode;
 
   _Barcode.fromJson(Map<String, dynamic> json)
-      : tsd = json['tsd'],
-        barcode = json['barcode'];
+    : tsd = json['tsd'],
+      barcode = json['barcode'];
 }

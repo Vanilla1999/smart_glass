@@ -5,43 +5,25 @@ import 'package:multi_scanner/multi_scanner.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 
 typedef WearBarcodeHandler = Future<bool> Function(String payload);
-typedef WearBarcodeClock = DateTime Function();
-
 class WearBarcodeSerialQueue {
   WearBarcodeSerialQueue({
     required WearBarcodeHandler handleBarcode,
     this.maxPending = 32,
-    this.duplicateWindow = const Duration(milliseconds: 300),
-    WearBarcodeClock? clock,
   })  : assert(maxPending > 0),
-        _handleBarcode = handleBarcode,
-        _clock = clock ?? DateTime.now;
+        _handleBarcode = handleBarcode;
 
   final WearBarcodeHandler _handleBarcode;
-  final WearBarcodeClock _clock;
   final int maxPending;
-  final Duration duplicateWindow;
   final Queue<String> _pending = Queue<String>();
 
   bool _draining = false;
   int _generation = 0;
-  String? _lastAcceptedPayload;
-  DateTime? _lastAcceptedAt;
 
   int get pendingCount => _pending.length;
 
   bool add(String payload) {
     final String value = payload.trim();
     if (value.isEmpty || _pending.length >= maxPending) return false;
-    final DateTime now = _clock();
-    final DateTime? lastAcceptedAt = _lastAcceptedAt;
-    if (_lastAcceptedPayload == value &&
-        lastAcceptedAt != null &&
-        now.difference(lastAcceptedAt) < duplicateWindow) {
-      return false;
-    }
-    _lastAcceptedPayload = value;
-    _lastAcceptedAt = now;
     _pending.addLast(value);
     _ensureDrain();
     return true;
@@ -50,8 +32,6 @@ class WearBarcodeSerialQueue {
   void reset() {
     _generation += 1;
     _pending.clear();
-    _lastAcceptedPayload = null;
-    _lastAcceptedAt = null;
   }
 
   Future<void> waitUntilIdle() async {
@@ -91,14 +71,17 @@ class WearBarcodeDispatcher implements MultiScannerDelegate {
   WearBarcodeDispatcher({
     required WearFlowController flowController,
     MultiScanner? scanner,
-  })  : _scanner = scanner ?? MultiScanner.last(),
+  })  : _flowController = flowController,
+        _scanner = scanner ?? MultiScanner.last(),
         _queue = WearBarcodeSerialQueue(
           handleBarcode: flowController.handleBarcode,
         );
 
+  final WearFlowController _flowController;
   final MultiScanner _scanner;
   final WearBarcodeSerialQueue _queue;
   bool _started = false;
+  bool _routeAdmissionEnabled = false;
 
   void start() {
     if (_started) return;
@@ -113,9 +96,20 @@ class WearBarcodeDispatcher implements MultiScannerDelegate {
     _queue.reset();
   }
 
+  void resetPending() => _queue.reset();
+
+  void setRouteAdmission(bool enabled) {
+    _routeAdmissionEnabled = enabled;
+    if (!enabled) _queue.reset();
+  }
+
   @override
   bool? onScanEvent(String payload) {
-    if (!_started) return false;
+    if (!_started ||
+        !_routeAdmissionEnabled ||
+        !_flowController.currentScreenAcceptsBarcode) {
+      return false;
+    }
     final bool accepted = _queue.add(payload);
     if (!accepted) {
       print(

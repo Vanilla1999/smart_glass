@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:multi_scanner/multi_scanner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
@@ -50,13 +49,8 @@ class WearAuthState {
   }
 }
 
-class WearAuthNotifier extends StateNotifier<WearAuthState>
-    implements MultiScannerDelegate {
-  WearAuthNotifier(Ref ref) : super(WearAuthState.initial()) {
-    _scanner.addDelegate(this);
-  }
-
-  final MultiScanner _scanner = MultiScanner.last();
+class WearAuthNotifier extends StateNotifier<WearAuthState> {
+  WearAuthNotifier(Ref ref) : super(WearAuthState.initial());
 
   static const String _mockLogoBarcode =
       '{"uuid": "be9f894e-bebe-11f0-ccaf-00e04c1521d1", "kiscode": "mmmkakoikiss", "version": 2}';
@@ -68,26 +62,13 @@ class WearAuthNotifier extends StateNotifier<WearAuthState>
     name: 'Колиус',
   );
 
-  @override
-  void dispose() {
-    _scanner.removeDelegate(this);
-    super.dispose();
-  }
-
-  @override
-  bool? onScanEvent(String payload) {
+  Future<void> handleBarcode(String payload) async {
     print('[AUTH] onScanEvent called, payload: $payload');
     if (WearSession.isAuthorized) {
       print('[AUTH] Already authorized, ignoring');
-      return true;
+      return;
     }
-    authorizeByBadgeBarcode(payload);
-    return true;
-  }
-
-  @override
-  bool? onErrorScan(Exception error) {
-    return false;
+    await authorizeByBadgeBarcode(payload);
   }
 
   Future<void> handleLogoTap() async {

@@ -24,6 +24,12 @@ typedef WearScanNavigation = Future<void> Function(
   bool replaceCurrent,
 });
 
+class WearScanRuntimeState {
+  const WearScanRuntimeState({required this.busy});
+
+  final bool busy;
+}
+
 class WearScanRuntime implements WearBackgroundRuntime {
   WearScanRuntime({
     required WearBarcodeLookup lookupBarcode,
@@ -61,6 +67,11 @@ class WearScanRuntime implements WearBackgroundRuntime {
   bool handles(WearScreenId screen) {
     return screen == WearScreenId.scanIdle ||
         screen == WearScreenId.productSelect;
+  }
+
+  @override
+  bool acceptsBarcode(WearScreenId screen) {
+    return screen == WearScreenId.scanIdle && !_loading;
   }
 
   @override
@@ -275,7 +286,14 @@ class WearScanRuntime implements WearBackgroundRuntime {
   }
 
   @override
-  void restorePresentationState(WearScreenId screen, Object state) {}
+  void restorePresentationState(WearScreenId screen, Object state) {
+    if (screen != WearScreenId.scanIdle || state is! WearScanRuntimeState) {
+      return;
+    }
+    _screen = screen;
+    _loading = state.busy;
+    _publish(_payload());
+  }
 
   @override
   Object? presentationStateFor(WearScreenId screen) => null;

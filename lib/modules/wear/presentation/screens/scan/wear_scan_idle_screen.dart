@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_scan_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
@@ -61,6 +62,10 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen>
         onManualInput: _onVoiceSelect,
         onBarcode: (String barcode) =>
             ref.read(_provider.notifier).handleBarcode(barcode),
+        barcodeEnabled: () => !ref.read(_provider).isLoading,
+        presentationState: () => WearScanRuntimeState(
+          busy: ref.read(_provider).isLoading,
+        ),
       ),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -114,6 +119,10 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen>
 
     ref.listen<WearScanState>(_provider,
         (WearScanState? previous, WearScanState next) {
+      if (previous?.phase != next.phase) {
+        WearDependencies.I.wearFlowController
+            .refreshScreenActions(WearScreenId.scanIdle);
+      }
       void sendGlasses() {
         if (next.isPrinting) {
           WearStatusIconReporter.I.send(

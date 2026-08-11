@@ -1517,6 +1517,54 @@ void main() {
       expect(received, '4600000000001');
     });
 
+    test('route observation refreshes a retained screen projection', () async {
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      int visibleCalls = 0;
+      controller.registerScreenActions(
+        WearScreenId.availabilityProduct,
+        WearScreenActionHandler(onVisible: () => visibleCalls++),
+      );
+
+      controller.observeRoute(
+        WearScreenId.availabilityProduct,
+        canPop: true,
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(visibleCalls, 1);
+    });
+
+    test('barcode-disabled screen pauses admission and rejects events',
+        () async {
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      bool enabled = true;
+      int calls = 0;
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.availabilityCheck);
+      controller.registerScreenActions(
+        WearScreenId.availabilityCheck,
+        WearScreenActionHandler(
+          onBarcode: (_) => calls++,
+          barcodeEnabled: () => enabled,
+        ),
+      );
+
+      expect(controller.currentScreenAcceptsBarcode, isTrue);
+      expect(await controller.handleBarcode('product'), isTrue);
+
+      enabled = false;
+
+      expect(controller.currentScreenAcceptsBarcode, isFalse);
+      expect(await controller.handleBarcode('price-tag'), isFalse);
+      expect(calls, 1);
+    });
+
     test('inactive lifecycle does not invoke widget callbacks or phrases',
         () async {
       int actionCalls = 0;

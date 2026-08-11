@@ -21,7 +21,7 @@ class VoiceDeviceProfile {
 
   static const VoiceDeviceProfile defaultProfile = VoiceDeviceProfile(
     id: 'uac4',
-    forceHardRestartOnResume: true,
+    forceHardRestartOnResume: false,
     forceHardRestartAfterUnsilence: true,
     requireNonZeroPcmForStartup: true,
     exactZeroStartupGrace: Duration(seconds: 30),

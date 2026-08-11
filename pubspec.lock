@@ -565,7 +565,7 @@ packages:
       path: "packages/multi_scanner"
       relative: true
     source: path
-    version: "3.17.4"
+    version: "3.17.5"
   native_toolchain_c:
     dependency: transitive
     description:

@@ -83,6 +83,15 @@ class _WearAvailabilityCheckScreenState
               .read(wearAvailabilityCheckNotifierProvider(product).notifier)
               .handleBarcode(barcode);
         },
+        barcodeEnabled: () {
+          final WearAvailabilityProduct? product = widget.product;
+          if (product == null) return false;
+          final WearAvailabilityCheckState state =
+              ref.read(wearAvailabilityCheckNotifierProvider(product));
+          return !state.isLoading &&
+              (state.flow.step == WearAvailabilityFlowStep.productScan ||
+                  state.flow.step == WearAvailabilityFlowStep.priceTagScan);
+        },
         presentationState: () {
           final WearAvailabilityProduct? product = widget.product;
           if (product == null) return null;
@@ -127,6 +136,11 @@ class _WearAvailabilityCheckScreenState
     ref.listen<WearAvailabilityCheckState>(provider,
         (WearAvailabilityCheckState? previous,
             WearAvailabilityCheckState next) {
+      if (previous?.phase != next.phase ||
+          previous?.flow.step != next.flow.step) {
+        WearDependencies.I.wearFlowController
+            .refreshScreenActions(WearScreenId.availabilityCheck);
+      }
       if (previous?.flow != next.flow ||
           previous?.phase != next.phase ||
           previous?.loadingText != next.loadingText ||

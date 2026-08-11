@@ -6,8 +6,9 @@ import 'package:multi_scanner/src/platform/multi_scanner_method_channel.dart';
 
 void main() {
   MethodChannelMultiScanner platform = MethodChannelMultiScanner();
-  const MethodChannel channel =
-      MethodChannel('tander/multi_scanner_plugin/channel');
+  const MethodChannel channel = MethodChannel(
+    'tander/multi_scanner_plugin/channel',
+  );
 
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -45,6 +46,19 @@ void main() {
     });
 
     expect(await platform.getFlashlightState(), 1);
+  });
+
+  test('changeScanSound sends sound', () async {
+    final calls = <MethodCall>[];
+    channel.setMockMethodCallHandler((MethodCall methodCall) async {
+      calls.add(methodCall);
+      return null;
+    });
+
+    await platform.changeScanSound(2);
+
+    expect(calls.single.method, 'changeScanSound');
+    expect(calls.single.arguments, {'sound': 2});
   });
 
   test('takePhoto returns content URI', () async {
@@ -87,10 +101,9 @@ void main() {
     await platform.deletePhoto('content://photo-provider/glasses/photo.jpg');
 
     expect(calls.single.method, 'deletePhoto');
-    expect(
-      calls.single.arguments,
-      {'uri': 'content://photo-provider/glasses/photo.jpg'},
-    );
+    expect(calls.single.arguments, {
+      'uri': 'content://photo-provider/glasses/photo.jpg',
+    });
   });
 
   test('initBluetooth waits for the native call', () async {

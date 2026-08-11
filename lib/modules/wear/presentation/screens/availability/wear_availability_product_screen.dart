@@ -63,8 +63,21 @@ class _WearAvailabilityProductScreenState
         onDynamicItem: _onVoiceDynamicItem,
         dynamicVoiceItems: _dynamicVoiceItems,
         onPartialPhrase: _onVoicePartialPhrase,
+        onVisible: _resendVisibleState,
       ),
     );
+  }
+
+  void _resendVisibleState() {
+    final WearAvailabilityGroup? group = widget.group;
+    if (group == null) return;
+    final List<WearAvailabilityProduct>? products =
+        ref.read(wearAvailabilityProductsProvider(group)).valueOrNull;
+    if (products == null) {
+      _sendLoading(group);
+      return;
+    }
+    _sendGlassesState(group, products, fast: true);
   }
 
   @override

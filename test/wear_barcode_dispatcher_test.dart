@@ -66,12 +66,9 @@ void main() {
     await queue.waitUntilIdle();
   });
 
-  test('drops an immediate duplicate scan but accepts a later rescan',
-      () async {
-    DateTime now = DateTime(2026, 8, 10);
+  test('does not delay or suppress immediate duplicate scans', () async {
     final List<String> calls = <String>[];
     final WearBarcodeSerialQueue queue = WearBarcodeSerialQueue(
-      clock: () => now,
       handleBarcode: (String payload) async {
         calls.add(payload);
         return true;
@@ -79,11 +76,6 @@ void main() {
     );
 
     expect(queue.add('9000000001'), isTrue);
-    expect(queue.add('9000000001'), isFalse);
-    await queue.waitUntilIdle();
-    expect(calls, <String>['9000000001']);
-
-    now = now.add(const Duration(milliseconds: 300));
     expect(queue.add('9000000001'), isTrue);
     await queue.waitUntilIdle();
     expect(calls, <String>['9000000001', '9000000001']);

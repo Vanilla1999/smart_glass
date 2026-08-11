@@ -6,12 +6,16 @@ class WearScannerRuntime {
 
   final BaseController _controller;
   Future<void> _operation = Future<void>.value();
-  bool _prepared = false;
+  bool _initialized = false;
+  bool? _prepared;
 
   Future<void> start() {
     return _enqueue(() async {
-      if (_prepared) return;
-      await _controller.init();
+      if (_prepared == true) return;
+      if (!_initialized) {
+        await _controller.init();
+        _initialized = true;
+      }
       await _controller.prepareForWear();
       _prepared = true;
     });
@@ -19,7 +23,7 @@ class WearScannerRuntime {
 
   Future<void> pause() {
     return _enqueue(() async {
-      if (!_prepared) return;
+      if (_prepared == false) return;
       await _controller.pauseForWear();
       _prepared = false;
     });
@@ -28,6 +32,7 @@ class WearScannerRuntime {
   Future<void> release() {
     return _enqueue(() async {
       await _controller.release();
+      _initialized = false;
       _prepared = false;
     });
   }

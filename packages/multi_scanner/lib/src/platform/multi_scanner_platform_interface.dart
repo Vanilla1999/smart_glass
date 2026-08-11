@@ -30,20 +30,24 @@ abstract class MultiScannerPlatform extends PlatformInterface {
 
   /// Регистрируем получение баркода через SDK сканеров.
   Future<void> registerListenerScan(
-      Set<GlobalMultiScannerDelegate> listDelegate) {
+    Set<GlobalMultiScannerDelegate> listDelegate,
+  ) {
     throw UnimplementedError(
-        'registerListenerScan() has not been implemented.');
+      'registerListenerScan() has not been implemented.',
+    );
   }
 
   /// Если flag = false выключается фонарик.
   Future<void> switchHoneywellLight(bool flag) {
     throw UnimplementedError(
-        'switchHoneywellLight() has not been implemented.');
+      'switchHoneywellLight() has not been implemented.',
+    );
   }
 
   Future<void> initUserScannerSettings(BarcodeSettingsConfig settings) {
     throw UnimplementedError(
-        'initUserScannerSettings() has not been implemented.');
+      'initUserScannerSettings() has not been implemented.',
+    );
   }
 
   Future<void> setDefaultSettings() {
@@ -52,7 +56,8 @@ abstract class MultiScannerPlatform extends PlatformInterface {
 
   Future<void> setRecomendedSettings() {
     throw UnimplementedError(
-        'setRecomendedSettings() has not been implemented.');
+      'setRecomendedSettings() has not been implemented.',
+    );
   }
 
   Future<void> goToCOMMode() {
@@ -74,6 +79,10 @@ abstract class MultiScannerPlatform extends PlatformInterface {
 
   Future<int> getFlashlightState() {
     throw UnimplementedError('getFlashlightState() has not been implemented.');
+  }
+
+  Future<void> changeScanSound(int sound) {
+    throw UnimplementedError('changeScanSound() has not been implemented.');
   }
 
   Future<String> takePhoto() {
@@ -124,7 +133,8 @@ abstract class MultiScannerPlatform extends PlatformInterface {
 
   Stream<BTDevice?> get connectionStateStream async* {
     throw UnimplementedError(
-        'connectionStateStream() has not been implemented.');
+      'connectionStateStream() has not been implemented.',
+    );
   }
 
   Stream<BTDevice?> get isBoundingStream async* {
@@ -229,6 +239,7 @@ abstract class MultiScannerPlatform extends PlatformInterface {
 
   Future<bool> needDefaultExpandKeyboard() {
     throw UnimplementedError(
-        'needDefaultExpandKeyboard() has not been implemented.');
+      'needDefaultExpandKeyboard() has not been implemented.',
+    );
   }
 }

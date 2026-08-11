@@ -54,8 +54,19 @@ class _WearAvailabilityGroupScreenState
         onDynamicItem: _onVoiceDynamicItem,
         dynamicVoiceItems: _dynamicVoiceItems,
         onPartialPhrase: _onVoicePartialPhrase,
+        onVisible: _resendVisibleState,
       ),
     );
+  }
+
+  void _resendVisibleState() {
+    final List<WearAvailabilityGroup>? groups =
+        ref.read(wearAvailabilityGroupsProvider).valueOrNull;
+    if (groups == null) {
+      _sendLoading();
+      return;
+    }
+    _sendGlassesState(groups, fast: true);
   }
 
   @override

@@ -7,7 +7,7 @@ void main() {
         VoiceDeviceProfile.resolve(profileId: 'obsolete_audio_record_profile');
 
     expect(profile.id, 'uac4');
-    expect(profile.forceHardRestartOnResume, isTrue);
+    expect(profile.forceHardRestartOnResume, isFalse);
     expect(profile.requireNonZeroPcmForStartup, isTrue);
     expect(profile.exactZeroStartupGrace, const Duration(seconds: 30));
     expect(profile.recoveryCaptureTimeout, const Duration(seconds: 30));

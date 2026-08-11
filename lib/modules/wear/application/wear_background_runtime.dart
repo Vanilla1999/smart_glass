@@ -20,6 +20,8 @@ abstract interface class WearBackgroundRuntime {
 
   bool handles(WearScreenId screen);
 
+  bool acceptsBarcode(WearScreenId screen);
+
   bool supportsCommand(WearScreenId screen, WearVoiceCommand command);
 
   Future<void> enterScreen(WearScreenId screen, {Object? extra});
@@ -71,6 +73,11 @@ class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
 
   @override
   bool handles(WearScreenId screen) => _for(screen) != null;
+
+  @override
+  bool acceptsBarcode(WearScreenId screen) {
+    return _for(screen)?.acceptsBarcode(screen) ?? false;
+  }
 
   @override
   bool supportsCommand(WearScreenId screen, WearVoiceCommand command) {

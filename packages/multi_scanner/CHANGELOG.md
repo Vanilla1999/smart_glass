@@ -1,3 +1,7 @@
+## 3.17.5
+
+* Add Movfast scan sound selection for ViScanner service API 5.
+
 ## 3.17.2
 
 * Preserve the Android plugin classes in release application builds.

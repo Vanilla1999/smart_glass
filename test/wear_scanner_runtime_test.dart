@@ -13,9 +13,10 @@ void main() {
     await runtime.start();
     await runtime.pause();
     await runtime.pause();
+    await runtime.start();
 
     expect(controller.initCalls, 1);
-    expect(controller.prepareCalls, 1);
+    expect(controller.prepareCalls, 2);
     expect(controller.pauseCalls, 1);
   });
 
@@ -30,6 +31,18 @@ void main() {
     await Future.wait(<Future<void>>[start, release]);
 
     expect(controller.calls, <String>['init', 'prepare', 'release']);
+  });
+
+  test('first pause synchronizes scanner prepared outside runtime', () async {
+    final _FakeBaseController controller = _FakeBaseController();
+    final WearScannerRuntime runtime = WearScannerRuntime(
+      controller: controller,
+    );
+
+    await runtime.pause();
+    await runtime.pause();
+
+    expect(controller.pauseCalls, 1);
   });
 }
 
