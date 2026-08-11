@@ -18,6 +18,7 @@ class WearPrinterSettingsScreen extends StatefulWidget {
 class _WearPrinterSettingsScreenState extends State<WearPrinterSettingsScreen> {
   final WearPrinterStatusService _statusService =
       const WearPrinterStatusService();
+  late final WearScreenActionRegistration _screenActionsRegistration;
   bool _checking = false;
 
   @override
@@ -26,7 +27,8 @@ class _WearPrinterSettingsScreenState extends State<WearPrinterSettingsScreen> {
     WearDependencies.I.wearFlowController.enterScreen(
       WearScreenId.printerSettings,
     );
-    WearDependencies.I.wearFlowController.registerScreenActions(
+    _screenActionsRegistration =
+        WearDependencies.I.wearFlowController.registerScreenActions(
       WearScreenId.printerSettings,
       WearScreenActionHandler(onSelect: _refresh),
     );
@@ -35,9 +37,8 @@ class _WearPrinterSettingsScreenState extends State<WearPrinterSettingsScreen> {
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController.unregisterScreenActions(
-      WearScreenId.printerSettings,
-    );
+    WearDependencies.I.wearFlowController
+        .unregisterScreenActions(_screenActionsRegistration);
     super.dispose();
   }
 

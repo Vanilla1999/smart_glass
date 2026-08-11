@@ -95,6 +95,13 @@ class WearScreenActionHandler {
   final WearPresentationStateRestore? restorePresentationState;
 }
 
+class WearScreenActionRegistration {
+  WearScreenActionRegistration._(this.screen, this._handler);
+
+  final WearScreenId screen;
+  final WearScreenActionHandler _handler;
+}
+
 class WearFlowController {
   WearFlowController({
     required WearGlassesOutput glassesOutput,
@@ -124,6 +131,9 @@ class WearFlowController {
       StreamController<WearScreenId>.broadcast();
   final Map<WearScreenId, WearScreenActionHandler> _screenActions =
       <WearScreenId, WearScreenActionHandler>{};
+  final Map<WearScreenId, List<WearScreenActionRegistration>>
+      _screenActionRegistrations =
+      <WearScreenId, List<WearScreenActionRegistration>>{};
   final Map<WearScreenId, WearGlassesPayload> _screenPayloads =
       <WearScreenId, WearGlassesPayload>{};
   final List<({WearVoiceCommand command, WearScreenId? expectedScreen})>
@@ -308,17 +318,47 @@ class WearFlowController {
     unawaited(_enterBackgroundScreen(screen, extra: extra));
   }
 
-  void registerScreenActions(
+  WearScreenActionRegistration registerScreenActions(
     WearScreenId screen,
     WearScreenActionHandler handler,
   ) {
+    final WearScreenActionRegistration registration =
+        WearScreenActionRegistration._(screen, handler);
+    _screenActionRegistrations
+        .putIfAbsent(screen, () => <WearScreenActionRegistration>[])
+        .add(registration);
     _screenActions[screen] = handler;
     _screenActionsController.add(screen);
     print('[WearFlowController] register actions screen=$screen');
+    return registration;
   }
 
-  void unregisterScreenActions(WearScreenId screen) {
-    _screenActions.remove(screen);
+  void unregisterScreenActions(WearScreenActionRegistration registration) {
+    final WearScreenId screen = registration.screen;
+    final List<WearScreenActionRegistration>? registrations =
+        _screenActionRegistrations[screen];
+    final int index = registrations?.indexWhere(
+          (WearScreenActionRegistration item) => identical(item, registration),
+        ) ??
+        -1;
+    if (registrations == null || index < 0) {
+      print(
+        '[WearFlowController] stale unregister ignored screen=$screen',
+      );
+      return;
+    }
+    final bool wasCurrent = index == registrations.length - 1;
+    registrations.removeAt(index);
+    if (!wasCurrent) {
+      print('[WearFlowController] unregister inactive actions screen=$screen');
+      return;
+    }
+    if (registrations.isEmpty) {
+      _screenActionRegistrations.remove(screen);
+      _screenActions.remove(screen);
+    } else {
+      _screenActions[screen] = registrations.last._handler;
+    }
     _screenActionsController.add(screen);
     print('[WearFlowController] unregister actions screen=$screen');
   }

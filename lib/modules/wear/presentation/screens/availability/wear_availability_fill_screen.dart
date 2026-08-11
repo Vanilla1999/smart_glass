@@ -27,6 +27,7 @@ class WearAvailabilityFillScreen extends StatefulWidget {
 class _WearAvailabilityFillScreenState extends State<WearAvailabilityFillScreen>
     implements MultiScannerDelegate {
   final MultiScanner _scanner = MultiScanner.last();
+  late final WearScreenActionRegistration _screenActionsRegistration;
 
   bool _isLoading = false;
   int _savedCount = 0;
@@ -40,7 +41,8 @@ class _WearAvailabilityFillScreenState extends State<WearAvailabilityFillScreen>
     WearDependencies.I.wearFlowController.enterScreen(
       WearScreenId.availabilityFill,
     );
-    WearDependencies.I.wearFlowController.registerScreenActions(
+    _screenActionsRegistration =
+        WearDependencies.I.wearFlowController.registerScreenActions(
       WearScreenId.availabilityFill,
       WearScreenActionHandler(
         onSelect: _manualInput,
@@ -56,9 +58,8 @@ class _WearAvailabilityFillScreenState extends State<WearAvailabilityFillScreen>
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController.unregisterScreenActions(
-      WearScreenId.availabilityFill,
-    );
+    WearDependencies.I.wearFlowController
+        .unregisterScreenActions(_screenActionsRegistration);
     _scanner.removeDelegate(this);
     super.dispose();
   }

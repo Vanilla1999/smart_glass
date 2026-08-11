@@ -24,6 +24,7 @@ class WearHomeConfirmScreen extends StatefulWidget {
 class _WearHomeConfirmScreenState extends State<WearHomeConfirmScreen>
     with ScreenLifecycleLogging<WearHomeConfirmScreen> {
   final WearFlowController _flow = WearDependencies.I.wearFlowController;
+  late final WearScreenActionRegistration _screenActionsRegistration;
   StreamSubscription<WearFlowState>? _flowSub;
   int _focusedIndex = 0;
 
@@ -32,7 +33,7 @@ class _WearHomeConfirmScreenState extends State<WearHomeConfirmScreen>
     super.initState();
     _focusedIndex = _flow.state.homeConfirmFocusedIndex;
     _flow.enterScreen(WearScreenId.homeConfirm);
-    _flow.registerScreenActions(
+    _screenActionsRegistration = _flow.registerScreenActions(
       WearScreenId.homeConfirm,
       WearScreenActionHandler(
         onUp: _focusHome,
@@ -51,7 +52,7 @@ class _WearHomeConfirmScreenState extends State<WearHomeConfirmScreen>
   @override
   void dispose() {
     _flowSub?.cancel();
-    _flow.unregisterScreenActions(WearScreenId.homeConfirm);
+    _flow.unregisterScreenActions(_screenActionsRegistration);
     super.dispose();
   }
 

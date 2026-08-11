@@ -16,6 +16,7 @@ class WearWifiSettingsScreen extends StatefulWidget {
 
 class _WearWifiSettingsScreenState extends State<WearWifiSettingsScreen> {
   final WearWifiStatusService _statusService = const WearWifiStatusService();
+  late final WearScreenActionRegistration _screenActionsRegistration;
   bool _checking = false;
 
   @override
@@ -23,7 +24,8 @@ class _WearWifiSettingsScreenState extends State<WearWifiSettingsScreen> {
     super.initState();
     WearDependencies.I.wearFlowController
         .enterScreen(WearScreenId.wifiSettings);
-    WearDependencies.I.wearFlowController.registerScreenActions(
+    _screenActionsRegistration =
+        WearDependencies.I.wearFlowController.registerScreenActions(
       WearScreenId.wifiSettings,
       WearScreenActionHandler(onSelect: _refresh),
     );
@@ -32,9 +34,8 @@ class _WearWifiSettingsScreenState extends State<WearWifiSettingsScreen> {
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController.unregisterScreenActions(
-      WearScreenId.wifiSettings,
-    );
+    WearDependencies.I.wearFlowController
+        .unregisterScreenActions(_screenActionsRegistration);
     super.dispose();
   }
 

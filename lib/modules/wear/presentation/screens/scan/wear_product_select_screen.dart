@@ -40,6 +40,7 @@ class WearProductSelectScreen extends StatefulWidget {
 class _WearProductSelectScreenState extends State<WearProductSelectScreen>
     with ScreenLifecycleLogging<WearProductSelectScreen> {
   final ScrollController _scroll = ScrollController();
+  late final WearScreenActionRegistration _screenActionsRegistration;
   int _focusedIndex = 0;
   bool _isProductDialogOpen = false;
 
@@ -50,7 +51,8 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
       WearScreenId.productSelect,
       extra: widget.args,
     );
-    WearDependencies.I.wearFlowController.registerScreenActions(
+    _screenActionsRegistration =
+        WearDependencies.I.wearFlowController.registerScreenActions(
       WearScreenId.productSelect,
       WearScreenActionHandler(
         onUp: _onVoiceUp,
@@ -72,9 +74,8 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController.unregisterScreenActions(
-      WearScreenId.productSelect,
-    );
+    WearDependencies.I.wearFlowController
+        .unregisterScreenActions(_screenActionsRegistration);
     _scroll.dispose();
     super.dispose();
   }
@@ -228,11 +229,11 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
     switch (match.type) {
       case VoiceListMatchType.none:
         WearStatusIconReporter.I.showTransientStatusText(
-          WearScreenId.productSelect, 'Ничего не найдено');
+            WearScreenId.productSelect, 'Ничего не найдено');
         break;
       case VoiceListMatchType.ambiguous:
         WearStatusIconReporter.I.showTransientStatusText(
-          WearScreenId.productSelect, 'Назовите точнее');
+            WearScreenId.productSelect, 'Назовите точнее');
         break;
       case VoiceListMatchType.unique:
         final BarcodeProductInfo product = match.item!;

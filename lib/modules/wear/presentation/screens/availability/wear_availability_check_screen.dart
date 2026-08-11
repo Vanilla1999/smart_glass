@@ -43,6 +43,7 @@ class WearAvailabilityCheckScreen extends ConsumerStatefulWidget {
 
 class _WearAvailabilityCheckScreenState
     extends ConsumerState<WearAvailabilityCheckScreen> {
+  late final WearScreenActionRegistration _screenActionsRegistration;
   bool _isStatusRouteOpen = false;
   bool _sentInitialGlassesState = false;
   int _statusRouteSession = 0;
@@ -61,7 +62,8 @@ class _WearAvailabilityCheckScreenState
       WearScreenId.availabilityCheck,
       extra: initialFlow ?? product,
     );
-    WearDependencies.I.wearFlowController.registerScreenActions(
+    _screenActionsRegistration =
+        WearDependencies.I.wearFlowController.registerScreenActions(
       WearScreenId.availabilityCheck,
       WearScreenActionHandler(
         onUp: _onVoiceUp,
@@ -104,9 +106,8 @@ class _WearAvailabilityCheckScreenState
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController.unregisterScreenActions(
-      WearScreenId.availabilityCheck,
-    );
+    WearDependencies.I.wearFlowController
+        .unregisterScreenActions(_screenActionsRegistration);
     super.dispose();
   }
 

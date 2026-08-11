@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/application/ports/wear_glasses_output.dart';
 import 'package:smart_glasses/modules/wear/application/ports/wear_navigation_output.dart';
@@ -147,7 +149,8 @@ void main() {
       );
 
       controller.enterScreen(WearScreenId.printerSelect);
-      controller.registerScreenActions(
+      final WearScreenActionRegistration registration =
+          controller.registerScreenActions(
         WearScreenId.printerSelect,
         const WearScreenActionHandler(),
       );
@@ -156,9 +159,96 @@ void main() {
         const WearScreenActionHandler(),
       );
 
-      controller.unregisterScreenActions(WearScreenId.printerSelect);
+      controller.unregisterScreenActions(registration);
 
       expect(controller.state.screen, WearScreenId.printerSelect);
+    });
+
+    test('stale screen disposal keeps the newer handler registered', () async {
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      final List<WearScreenId> changed = <WearScreenId>[];
+      final StreamSubscription<WearScreenId> subscription =
+          controller.screenActionsChanged.listen(changed.add);
+      addTearDown(subscription.cancel);
+      int firstCalls = 0;
+      int secondCalls = 0;
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.availabilityCheck);
+      final WearScreenActionRegistration first =
+          controller.registerScreenActions(
+        WearScreenId.availabilityCheck,
+        WearScreenActionHandler(onManualInput: () => firstCalls++),
+      );
+      final WearScreenActionRegistration second =
+          controller.registerScreenActions(
+        WearScreenId.availabilityCheck,
+        WearScreenActionHandler(onManualInput: () => secondCalls++),
+      );
+
+      controller.unregisterScreenActions(first);
+      await controller.handleVoiceCommand(WearVoiceCommand.manualInput);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(firstCalls, 0);
+      expect(secondCalls, 1);
+      expect(
+        controller.canHandleVoiceCommand(
+          WearScreenId.availabilityCheck,
+          WearVoiceCommand.manualInput,
+        ),
+        isTrue,
+      );
+      expect(
+        changed,
+        <WearScreenId>[
+          WearScreenId.availabilityCheck,
+          WearScreenId.availabilityCheck,
+        ],
+      );
+
+      controller.unregisterScreenActions(second);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        controller.canHandleVoiceCommand(
+          WearScreenId.availabilityCheck,
+          WearVoiceCommand.manualInput,
+        ),
+        isFalse,
+      );
+      expect(changed, hasLength(3));
+    });
+
+    test('closing the newer screen restores the older live handler', () async {
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      int firstCalls = 0;
+      int secondCalls = 0;
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.availabilityCheck);
+      final WearScreenActionRegistration first =
+          controller.registerScreenActions(
+        WearScreenId.availabilityCheck,
+        WearScreenActionHandler(onManualInput: () => firstCalls++),
+      );
+      final WearScreenActionRegistration second =
+          controller.registerScreenActions(
+        WearScreenId.availabilityCheck,
+        WearScreenActionHandler(onManualInput: () => secondCalls++),
+      );
+
+      controller.unregisterScreenActions(second);
+      await controller.handleVoiceCommand(WearVoiceCommand.manualInput);
+
+      expect(firstCalls, 1);
+      expect(secondCalls, 0);
+
+      controller.unregisterScreenActions(first);
     });
 
     test('does not route commands to another screen handler', () async {

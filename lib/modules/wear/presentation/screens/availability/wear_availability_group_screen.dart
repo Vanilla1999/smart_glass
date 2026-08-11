@@ -32,6 +32,7 @@ class WearAvailabilityGroupScreen extends ConsumerStatefulWidget {
 class _WearAvailabilityGroupScreenState
     extends ConsumerState<WearAvailabilityGroupScreen> {
   final ScrollController _scroll = ScrollController();
+  late final WearScreenActionRegistration _screenActionsRegistration;
   int _focusedIndex = 0;
 
   @override
@@ -40,7 +41,8 @@ class _WearAvailabilityGroupScreenState
     WearDependencies.I.wearFlowController.enterScreen(
       WearScreenId.availabilityGroup,
     );
-    WearDependencies.I.wearFlowController.registerScreenActions(
+    _screenActionsRegistration =
+        WearDependencies.I.wearFlowController.registerScreenActions(
       WearScreenId.availabilityGroup,
       WearScreenActionHandler(
         onUp: _onVoiceUp,
@@ -70,9 +72,8 @@ class _WearAvailabilityGroupScreenState
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController.unregisterScreenActions(
-      WearScreenId.availabilityGroup,
-    );
+    WearDependencies.I.wearFlowController
+        .unregisterScreenActions(_screenActionsRegistration);
     _scroll.dispose();
     super.dispose();
   }
@@ -246,11 +247,11 @@ class _WearAvailabilityGroupScreenState
     switch (match.type) {
       case VoiceListMatchType.none:
         WearStatusIconReporter.I.showTransientStatusText(
-          WearScreenId.availabilityGroup, 'Ничего не найдено');
+            WearScreenId.availabilityGroup, 'Ничего не найдено');
         break;
       case VoiceListMatchType.ambiguous:
         WearStatusIconReporter.I.showTransientStatusText(
-          WearScreenId.availabilityGroup, 'Назовите точнее');
+            WearScreenId.availabilityGroup, 'Назовите точнее');
         break;
       case VoiceListMatchType.unique:
         final WearAvailabilityGroup group = match.item!;

@@ -25,6 +25,7 @@ class WearSettingsScreen extends ConsumerStatefulWidget {
 
 class _WearSettingsScreenState extends ConsumerState<WearSettingsScreen> {
   final ScrollController _scroll = ScrollController();
+  late final WearScreenActionRegistration _screenActionsRegistration;
   int _focusedIndex = 0;
   static const int _itemCount = 4;
 
@@ -32,7 +33,8 @@ class _WearSettingsScreenState extends ConsumerState<WearSettingsScreen> {
   void initState() {
     super.initState();
     WearDependencies.I.wearFlowController.enterScreen(WearScreenId.settings);
-    WearDependencies.I.wearFlowController.registerScreenActions(
+    _screenActionsRegistration =
+        WearDependencies.I.wearFlowController.registerScreenActions(
       WearScreenId.settings,
       WearScreenActionHandler(
         onUp: _onVoiceUp,
@@ -48,9 +50,8 @@ class _WearSettingsScreenState extends ConsumerState<WearSettingsScreen> {
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController.unregisterScreenActions(
-      WearScreenId.settings,
-    );
+    WearDependencies.I.wearFlowController
+        .unregisterScreenActions(_screenActionsRegistration);
     _scroll.dispose();
     super.dispose();
   }

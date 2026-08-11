@@ -23,12 +23,14 @@ class WearHelpScreen extends StatefulWidget {
 class _WearHelpScreenState extends State<WearHelpScreen>
     with ScreenLifecycleLogging<WearHelpScreen> {
   final ScrollController _scroll = ScrollController();
+  late final WearScreenActionRegistration _screenActionsRegistration;
 
   @override
   void initState() {
     super.initState();
     WearDependencies.I.wearFlowController.enterScreen(WearScreenId.help);
-    WearDependencies.I.wearFlowController.registerScreenActions(
+    _screenActionsRegistration =
+        WearDependencies.I.wearFlowController.registerScreenActions(
       WearScreenId.help,
       WearScreenActionHandler(onSelect: _onVoiceSelect),
     );
@@ -39,9 +41,8 @@ class _WearHelpScreenState extends State<WearHelpScreen>
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController.unregisterScreenActions(
-      WearScreenId.help,
-    );
+    WearDependencies.I.wearFlowController
+        .unregisterScreenActions(_screenActionsRegistration);
     _scroll.dispose();
     super.dispose();
   }

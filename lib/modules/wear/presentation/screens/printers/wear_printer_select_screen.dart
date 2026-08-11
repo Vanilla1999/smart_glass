@@ -45,17 +45,18 @@ class _WearPrinterSelectScreenState
     extends ConsumerState<WearPrinterSelectScreen>
     with ScreenLifecycleLogging<WearPrinterSelectScreen> {
   final ScrollController _scroll = ScrollController();
+  late final WearFlowController _flowController;
+  late final WearScreenActionRegistration _screenActionsRegistration;
   int _focusedIndex = 0;
   bool _isScanScreenOpen = false;
-
-  WearFlowController get _flowController =>
-      widget.flowController ?? WearDependencies.I.wearFlowController;
 
   @override
   void initState() {
     super.initState();
+    _flowController =
+        widget.flowController ?? WearDependencies.I.wearFlowController;
     _flowController.enterScreen(WearScreenId.printerSelect);
-    _flowController.registerScreenActions(
+    _screenActionsRegistration = _flowController.registerScreenActions(
       WearScreenId.printerSelect,
       WearScreenActionHandler(
         onUp: _onVoiceUp,
@@ -108,9 +109,7 @@ class _WearPrinterSelectScreenState
 
   @override
   void dispose() {
-    _flowController.unregisterScreenActions(
-      WearScreenId.printerSelect,
-    );
+    _flowController.unregisterScreenActions(_screenActionsRegistration);
     _scroll.dispose();
     super.dispose();
   }
@@ -351,11 +350,11 @@ class _WearPrinterSelectScreenState
     switch (match.type) {
       case VoiceListMatchType.none:
         WearStatusIconReporter.I.showTransientStatusText(
-          WearScreenId.printerSelect, 'Ничего не найдено');
+            WearScreenId.printerSelect, 'Ничего не найдено');
         break;
       case VoiceListMatchType.ambiguous:
         WearStatusIconReporter.I.showTransientStatusText(
-          WearScreenId.printerSelect, 'Назовите точнее');
+            WearScreenId.printerSelect, 'Назовите точнее');
         break;
       case VoiceListMatchType.unique:
         final WearPrinter printer = match.item!;

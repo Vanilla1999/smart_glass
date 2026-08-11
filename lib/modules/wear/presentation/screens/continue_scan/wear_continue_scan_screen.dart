@@ -29,6 +29,7 @@ class WearContinueScanScreen extends StatefulWidget {
 class _WearContinueScanScreenState extends State<WearContinueScanScreen>
     with WidgetsBindingObserver {
   final _flow = WearDependencies.I.wearFlowController;
+  late final WearScreenActionRegistration _screenActionsRegistration;
   StreamSubscription<WearFlowState>? _flowSub;
   int _selectedButtonIndex = 0;
   bool _isActionInProgress = false;
@@ -39,7 +40,7 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen>
     WidgetsBinding.instance.addObserver(this);
     _selectedButtonIndex = _flow.state.continueScanFocusedIndex;
     _flow.enterScreen(WearScreenId.continueScan);
-    _flow.registerScreenActions(
+    _screenActionsRegistration = _flow.registerScreenActions(
       WearScreenId.continueScan,
       WearScreenActionHandler(
         onUp: _onVoiceUp,
@@ -93,7 +94,7 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen>
   @override
   void dispose() {
     _flowSub?.cancel();
-    _flow.unregisterScreenActions(WearScreenId.continueScan);
+    _flow.unregisterScreenActions(_screenActionsRegistration);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

@@ -35,6 +35,7 @@ class WearAvailabilityDirectScanScreen extends ConsumerStatefulWidget {
 class _WearAvailabilityDirectScanScreenState
     extends ConsumerState<WearAvailabilityDirectScanScreen> {
   final ScrollController _scroll = ScrollController();
+  late final WearScreenActionRegistration _screenActionsRegistration;
   int _focusedIndex = 0;
 
   @override
@@ -43,7 +44,8 @@ class _WearAvailabilityDirectScanScreenState
     WearDependencies.I.wearFlowController.enterScreen(
       WearScreenId.availabilityDirectScan,
     );
-    WearDependencies.I.wearFlowController.registerScreenActions(
+    _screenActionsRegistration =
+        WearDependencies.I.wearFlowController.registerScreenActions(
       WearScreenId.availabilityDirectScan,
       WearScreenActionHandler(
         onUp: _onVoiceUp,
@@ -68,9 +70,8 @@ class _WearAvailabilityDirectScanScreenState
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController.unregisterScreenActions(
-      WearScreenId.availabilityDirectScan,
-    );
+    WearDependencies.I.wearFlowController
+        .unregisterScreenActions(_screenActionsRegistration);
     _scroll.dispose();
     super.dispose();
   }

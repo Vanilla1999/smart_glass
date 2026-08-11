@@ -45,5 +45,17 @@ void main() {
       ),
       isTrue,
     );
+    expect(
+      products
+          .expand(
+            (Map<String, dynamic> product) =>
+                product['priceTagBarcodes'] as List<dynamic>,
+          )
+          .every(
+            (dynamic barcode) =>
+                RegExp(r'^PP\d+$').hasMatch(barcode as String),
+          ),
+      isTrue,
+    );
   });
 }

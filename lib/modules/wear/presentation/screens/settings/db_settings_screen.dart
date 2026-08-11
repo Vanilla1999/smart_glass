@@ -98,6 +98,7 @@ class DBSettingsScreen extends ConsumerStatefulWidget {
 
 class _WearSettingsScreenState extends ConsumerState<DBSettingsScreen> {
   final ScrollController _scroll = ScrollController();
+  late final WearScreenActionRegistration _screenActionsRegistration;
 
   // Контроллеры для полей ввода
   late final TextEditingController _hostController;
@@ -113,7 +114,8 @@ class _WearSettingsScreenState extends ConsumerState<DBSettingsScreen> {
   void initState() {
     super.initState();
     WearDependencies.I.wearFlowController.enterScreen(WearScreenId.dbSettings);
-    WearDependencies.I.wearFlowController.registerScreenActions(
+    _screenActionsRegistration =
+        WearDependencies.I.wearFlowController.registerScreenActions(
       WearScreenId.dbSettings,
       WearScreenActionHandler(onSave: _saveSettings),
     );
@@ -154,9 +156,8 @@ class _WearSettingsScreenState extends ConsumerState<DBSettingsScreen> {
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController.unregisterScreenActions(
-      WearScreenId.dbSettings,
-    );
+    WearDependencies.I.wearFlowController
+        .unregisterScreenActions(_screenActionsRegistration);
     _hostController.dispose();
     _portController.dispose();
     _pathController.dispose();

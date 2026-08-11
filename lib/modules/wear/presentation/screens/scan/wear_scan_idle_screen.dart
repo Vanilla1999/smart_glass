@@ -38,6 +38,7 @@ class WearScanIdleScreen extends ConsumerStatefulWidget {
 
 class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen>
     with ScreenLifecycleLogging<WearScanIdleScreen> {
+  late final WearScreenActionRegistration _screenActionsRegistration;
   bool _isStatusRouteOpen = false;
   int _statusRouteSession = 0;
   bool _isManualInputOpen = false;
@@ -52,7 +53,8 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen>
       WearScreenId.scanIdle,
       extra: widget.printers,
     );
-    WearDependencies.I.wearFlowController.registerScreenActions(
+    _screenActionsRegistration =
+        WearDependencies.I.wearFlowController.registerScreenActions(
       WearScreenId.scanIdle,
       WearScreenActionHandler(
         onSelect: _onVoiceSelect,
@@ -68,9 +70,8 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen>
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController.unregisterScreenActions(
-      WearScreenId.scanIdle,
-    );
+    WearDependencies.I.wearFlowController
+        .unregisterScreenActions(_screenActionsRegistration);
     super.dispose();
   }
 

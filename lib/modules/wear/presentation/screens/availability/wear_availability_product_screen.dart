@@ -38,6 +38,7 @@ class WearAvailabilityProductScreen extends ConsumerStatefulWidget {
 class _WearAvailabilityProductScreenState
     extends ConsumerState<WearAvailabilityProductScreen> {
   final ScrollController _scroll = ScrollController();
+  late final WearScreenActionRegistration _screenActionsRegistration;
   int _focusedIndex = 0;
   List<WearAvailabilityProduct>? _voiceSnapshotProducts;
   VoiceDynamicItemsSnapshot _voiceSnapshot = VoiceDynamicItemsSnapshot.empty;
@@ -49,7 +50,8 @@ class _WearAvailabilityProductScreenState
       WearScreenId.availabilityProduct,
       extra: widget.group,
     );
-    WearDependencies.I.wearFlowController.registerScreenActions(
+    _screenActionsRegistration =
+        WearDependencies.I.wearFlowController.registerScreenActions(
       WearScreenId.availabilityProduct,
       WearScreenActionHandler(
         onUp: _onVoiceUp,
@@ -67,9 +69,8 @@ class _WearAvailabilityProductScreenState
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController.unregisterScreenActions(
-      WearScreenId.availabilityProduct,
-    );
+    WearDependencies.I.wearFlowController
+        .unregisterScreenActions(_screenActionsRegistration);
     _scroll.dispose();
     super.dispose();
   }

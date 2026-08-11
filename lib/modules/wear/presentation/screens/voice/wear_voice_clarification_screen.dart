@@ -36,6 +36,7 @@ class _WearVoiceClarificationScreenState
   String? _notice;
   Timer? _noticeTimer;
   VoiceClarificationArgs? _currentArgs;
+  late final WearScreenActionRegistration _screenActionsRegistration;
 
   WearFlowController get _flow => WearDependencies.I.wearFlowController;
 
@@ -54,7 +55,7 @@ class _WearVoiceClarificationScreenState
       WearScreenId.voiceClarification,
       extra: _currentArgs,
     );
-    _flow.registerScreenActions(
+    _screenActionsRegistration = _flow.registerScreenActions(
       WearScreenId.voiceClarification,
       WearScreenActionHandler(
         onUp: _onUp,
@@ -76,7 +77,7 @@ class _WearVoiceClarificationScreenState
   @override
   void dispose() {
     _noticeTimer?.cancel();
-    _flow.unregisterScreenActions(WearScreenId.voiceClarification);
+    _flow.unregisterScreenActions(_screenActionsRegistration);
     _scroll.dispose();
     super.dispose();
   }
