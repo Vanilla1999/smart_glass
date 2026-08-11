@@ -329,10 +329,10 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
                                 ViScanner.prepare()
                                 wearPrepared = true
                                 viBluetooth = ViScanner.getViBluetoothScannerApi()
-                            }
-                            ViScanner.registerBarcodeCallBack {
-                                Log.d("barcode", it)
-                                sendBroadcast(it, "")
+                                ViScanner.registerBarcodeCallBack {
+                                    Log.d("barcode", it)
+                                    sendBroadcast(it, "")
+                                }
                             }
                             ViScanner.setDisabledScannerListener {
                                 Log.d("viScanner", "Disabledddd")

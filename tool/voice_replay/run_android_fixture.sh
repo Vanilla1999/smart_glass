@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat >&2 <<'USAGE'
 Usage:
-  tool/voice_replay/run_android_fixture.sh <availability|yellow|unrecognized> <wav> [device-id]
+  tool/voice_replay/run_android_fixture.sh <availability|back|yellow|unrecognized> <wav> [device-id]
 USAGE
   exit 64
 }
@@ -15,7 +15,7 @@ wav_input=$2
 device_id=${3:-}
 
 case "$case_name" in
-  availability|yellow|unrecognized) ;;
+  availability|back|yellow|unrecognized) ;;
   *) usage ;;
 esac
 [[ -f "$wav_input" ]] || {

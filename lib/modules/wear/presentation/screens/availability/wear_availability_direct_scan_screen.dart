@@ -155,6 +155,8 @@ class _WearAvailabilityDirectScanScreenState
   Future<void> _openCheck(WearAvailabilityFlowState flow) async {
     if (!mounted) return;
     await context.push(WearAvailabilityCheckScreen.route, extra: flow);
+    if (!mounted) return;
+    ref.read(wearAvailabilityDirectScanProvider.notifier).resetForNextScan();
   }
 
   void _onVoiceUp() {

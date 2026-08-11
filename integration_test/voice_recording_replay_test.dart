@@ -62,11 +62,12 @@ void main() {
 
     final WearScreenId screen = switch (_caseName) {
       'yellow' || 'unrecognized' => WearScreenId.printerSelect,
+      'back' => WearScreenId.availabilityInteraction,
       'availability' || 'continuous' => WearScreenId.menu,
       _ => throw ArgumentError.value(
           _caseName,
           'VOICE_REPLAY_CASE',
-          'Expected availability, yellow, unrecognized or continuous',
+          'Expected availability, back, yellow, unrecognized or continuous',
         ),
     };
     flow.enterScreen(screen);
@@ -187,6 +188,9 @@ void main() {
         markAction();
       }
     };
+    if (_caseName == 'back') {
+      navigation.onBack = markAction;
+    }
 
     Future<void> dispatches = Future<void>.value();
     void enqueueDispatch(Future<void> Function() operation) {
@@ -361,6 +365,10 @@ void main() {
           navigation.goToCalls,
           <WearScreenId>[WearScreenId.availabilityInteraction],
         );
+      } else if (_caseName == 'back') {
+        expect(actionCount, 1);
+        expect(navigation.backCalls, 1);
+        expect(flow.state.screen, WearScreenId.menu);
       } else {
         expect(actionCount, 0);
         expect(selectedItems, isEmpty);
@@ -405,6 +413,7 @@ class _RecordingNavigationOutput implements WearNavigationOutput {
   int backCalls = 0;
   int homeCalls = 0;
   void Function(WearScreenId screen)? onGoTo;
+  void Function()? onBack;
 
   @override
   Future<void> goTo(WearScreenId screen, {Object? extra}) async {
@@ -415,6 +424,7 @@ class _RecordingNavigationOutput implements WearNavigationOutput {
   @override
   Future<void> back() async {
     backCalls++;
+    onBack?.call();
   }
 
   @override

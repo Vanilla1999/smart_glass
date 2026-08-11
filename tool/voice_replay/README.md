@@ -14,12 +14,13 @@ Run either regression case on an Android debug device:
 
 ```bash
 tool/voice_replay/run_android_fixture.sh availability /path/to/availability.wav DEVICE_ID
+tool/voice_replay/run_android_fixture.sh back /path/to/back.wav DEVICE_ID
 tool/voice_replay/run_android_fixture.sh yellow /path/to/yellow.wav DEVICE_ID
 tool/voice_replay/run_android_fixture.sh unrecognized /path/to/unrecognized.wav DEVICE_ID
 ```
 
 The recording must contain the complete utterance plus trailing silence. The
-`availability` and `yellow` cases require exactly one business action. The
+`availability`, `back`, and `yellow` cases require exactly one business action. The
 `unrecognized` case requires no action and the complete `Не распознано` visible
 then hidden feedback transition. Every case requires accepted production-format
 acknowledgements for all PCM packets. The harness starts after

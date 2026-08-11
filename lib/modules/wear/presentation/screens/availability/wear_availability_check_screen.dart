@@ -421,6 +421,14 @@ class _WearAvailabilityCheckScreenState
     if (session == _statusRouteSession) {
       _isStatusRouteOpen = false;
     }
+    final WearAvailabilityProduct? product = widget.product;
+    if (widget.initialFlow != null && product != null) {
+      final WearAvailabilityCheckState state =
+          ref.read(wearAvailabilityCheckNotifierProvider(product));
+      if (state.flow.step == WearAvailabilityFlowStep.completed) {
+        context.pop();
+      }
+    }
   }
 }
 

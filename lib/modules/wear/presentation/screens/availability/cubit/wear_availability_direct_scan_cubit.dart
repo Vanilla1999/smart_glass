@@ -143,6 +143,11 @@ class WearAvailabilityDirectScanNotifier
     state = state.copyWith(clearNavigation: true);
   }
 
+  void resetForNextScan() {
+    _lastAcceptedBarcode = null;
+    state = WearAvailabilityDirectScanState.initial();
+  }
+
   void selectDuplicate(WearAvailabilityProduct product) {
     final String? barcode = _lastAcceptedBarcode;
     if (barcode == null) return;

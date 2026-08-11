@@ -3037,6 +3037,111 @@ void main() {
     );
   });
 
+  test('overlapping same free-text configuration keeps one epoch', () async {
+    final _FakeRecognizer command = _FakeRecognizer();
+    final _FakeRecognizer freeText = _FakeRecognizer();
+    final Completer<void> creationStarted = Completer<void>();
+    final Completer<_FakeRecognizer> releaseCreation =
+        Completer<_FakeRecognizer>();
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () {
+        creationStarted.complete();
+        return releaseCreation.future;
+      },
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.startSession();
+    service.beginProcessingCapture();
+    final int initialEpoch = service.freeTextEpoch;
+
+    final Future<void> first = service.setFreeTextEnabled(true);
+    await creationStarted.future;
+    final Future<void> second = service.setFreeTextEnabled(true);
+    releaseCreation.complete(freeText);
+    await Future.wait(<Future<void>>[first, second]);
+
+    expect(service.freeTextEpoch, initialEpoch + 1);
+  });
+
+  test('VAD-closed speech survives free-text enable and a newer segment',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.addAll(<bool>[false, true])
+      ..resultSequence.add(_json());
+    final Completer<void> replayStarted = Completer<void>();
+    final Completer<bool> releaseReplay = Completer<bool>();
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..acceptOverride = (_) {
+        replayStarted.complete();
+        return releaseReplay.future;
+      }
+      ..finalSequence.add(_json(text: 'жёлтый'));
+    const VoiceDynamicItemsSnapshot items = VoiceDynamicItemsSnapshot(
+      revision: 1,
+      items: <VoiceDynamicItem>[
+        VoiceDynamicItem(id: 'yellow', label: 'Жёлтый'),
+      ],
+    );
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+      dynamicItemsProvider: (_) => items,
+      segmenter: _ScriptedSpeechSegmenter(const <SpeechSegment>[
+        SpeechSegment(
+          captureEpoch: 1,
+          segmentId: 1,
+          speechTurnId: 1,
+          lastChunkId: 1,
+          isEndpoint: false,
+          started: true,
+        ),
+        SpeechSegment(
+          captureEpoch: 1,
+          segmentId: 1,
+          speechTurnId: 1,
+          lastChunkId: 2,
+          isEndpoint: true,
+          started: false,
+          endpointReason: AcousticEndpointReason.silence,
+        ),
+        SpeechSegment(
+          captureEpoch: 1,
+          segmentId: 2,
+          speechTurnId: 2,
+          lastChunkId: 3,
+          isEndpoint: false,
+          started: true,
+        ),
+      ]),
+    );
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.switchCommandGrammar(
+      screen: WearScreenId.printerSelect,
+      grammar: const <String>['назад', 'жёлтый', '[unk]'],
+    );
+    await service.startSession();
+    service.beginProcessingCapture();
+    final List<String> phrases = <String>[];
+    service.segmentedResultsStream
+        .where((event) => event.lane == RecognitionLane.freeText)
+        .listen((event) => phrases.add(event.text));
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.setFreeTextEnabled(true);
+    final Future<void> endpoint = service.processAudioChunk(_pcmFrame(1000));
+    await replayStarted.future;
+    final Future<void> nextSegment = service.processAudioChunk(_pcmFrame(1000));
+    await Future<void>.delayed(Duration.zero);
+    releaseReplay.complete(false);
+    await Future.wait(<Future<void>>[endpoint, nextSegment]);
+    await service.waitForProcessing();
+
+    expect(phrases, <String>['жёлтый']);
+  });
+
   test('two delayed dynamic utterances publish once in utterance order',
       () async {
     final _FakeRecognizer command = _FakeRecognizer()

@@ -558,12 +558,17 @@ class SpeechRecognitionService {
 
   Future<void> setFreeTextEnabled(bool enabled) {
     if (_freeTextAcceptingPcm == enabled &&
-        (!enabled || _freeTextRecognizer != null)) {
+        (!enabled ||
+            _freeTextRecognizer != null ||
+            _freeTextController.state == FreeTextRecognizerState.creating ||
+            _freeTextController.state == FreeTextRecognizerState.recovering)) {
       print(
         '[SpeechRecognitionService] setFreeTextEnabled skipped '
         'enabled=$enabled',
       );
-      return Future<void>.value();
+      return enabled && _freeTextRecognizer == null
+          ? _freeTextController.ready
+          : Future<void>.value();
     }
 
     if (!enabled) {
@@ -1869,7 +1874,9 @@ class SpeechRecognitionService {
     final String normalizedCommandEvidence =
         VoiceListMatcher.normalize(commandEvidenceText);
     final bool cancelReplayOnNewerSegment =
-        normalizedCommandEvidence.isEmpty || normalizedCommandEvidence == 'unk';
+        segment.endpointReason != AcousticEndpointReason.silence &&
+            (normalizedCommandEvidence.isEmpty ||
+                normalizedCommandEvidence == 'unk');
     if (commandFound &&
         commandUtteranceId > _latestActionableCommandUtteranceId) {
       _latestActionableCommandUtteranceId = commandUtteranceId;
@@ -3289,7 +3296,7 @@ class SpeechRecognitionService {
     if (context.recognitionContextId != _recognitionContextId) {
       return VoiceReplayContextCancellation.recognitionContextChanged;
     }
-    if (!_freeTextEnabled || context.freeTextEpoch != _freeTextEpoch) {
+    if (!_freeTextEnabled) {
       return VoiceReplayContextCancellation.freeTextChanged;
     }
     if (context.sourceScreen != _sourceScreen) {
