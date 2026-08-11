@@ -1701,12 +1701,14 @@ void main() {
     );
   }
 
-  test('refinement timeout falls back to the stable advertised command',
-      () async {
+  test('refinement timeout rejects the ambiguous advertised command', () async {
     final _FakeRecognizer command = _FakeRecognizer()
-      ..endpointSequence.addAll(<bool>[false, true])
+      ..endpointSequence.addAll(<bool>[false, true, true])
       ..partialSequence.add(_json(partial: 'напиток'))
-      ..resultSequence.add(_json(text: 'напиток'));
+      ..resultSequence.addAll(<String>[
+        _json(text: 'напиток'),
+        _json(text: 'назад'),
+      ]);
     final Completer<bool> blockedAccept = Completer<bool>();
     final _FakeRecognizer blocked = _FakeRecognizer()
       ..acceptOverride = (_) => blockedAccept.future;
@@ -1731,6 +1733,15 @@ void main() {
         refinementBudget: Duration(milliseconds: 20),
       ),
     );
+    final WearVoiceControlService control = WearVoiceControlService(
+      speechRecognitionService: service,
+      screenProvider: () => WearScreenId.availabilityProduct,
+    );
+    final List<WearVoiceCommand> commands = <WearVoiceCommand>[];
+    final List<String> phrases = <String>[];
+    control.commandStream.listen(commands.add);
+    control.phraseStream.listen(phrases.add);
+    addTearDown(control.dispose);
     addTearDown(service.dispose);
     await service.prepare();
     await service.switchCommandGrammar(
@@ -1741,23 +1752,23 @@ void main() {
     await service.startSession();
     service.beginProcessingCapture();
     await service.setFreeTextEnabled(true);
-    final Future<SegmentedRecognitionResult> result =
-        service.segmentedResultsStream.firstWhere((event) =>
-            event.lane == RecognitionLane.freeText &&
-            event.kind == RecognitionKind.streamFinal);
+    final List<SegmentedRecognitionResult> results =
+        <SegmentedRecognitionResult>[];
+    final StreamSubscription<SegmentedRecognitionResult> subscription = service
+        .segmentedResultsStream
+        .where((event) => event.lane == RecognitionLane.freeText)
+        .listen(results.add);
+    addTearDown(subscription.cancel);
 
     await service.processAudioChunk(_pcmFrame(1000));
     await service.processAudioChunk(_pcmFrame(1000));
     await service.waitForProcessing().timeout(const Duration(seconds: 1));
 
-    final SegmentedRecognitionResult resolved =
-        await result.timeout(const Duration(seconds: 1));
-    expect(resolved.text, 'напиток');
-    expect(resolved.dynamicItemId, isNull);
+    expect(results, isEmpty);
     expect(blocked.finalCalls, 0);
     expect(
       service.replayOwnership.status,
-      VoiceReplayOwnershipStatus.resolvedAsDynamicPhrase,
+      VoiceReplayOwnershipStatus.timedOut,
     );
     for (int attempt = 0; attempt < 10 && factoryCalls < 2; attempt++) {
       await Future<void>.delayed(Duration.zero);
@@ -1765,6 +1776,12 @@ void main() {
     expect(factoryCalls, 2);
     blockedAccept.complete(false);
     await Future<void>.delayed(Duration.zero);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing();
+
+    expect(phrases, isEmpty);
+    expect(commands, <WearVoiceCommand>[WearVoiceCommand.back]);
   });
 
   test('exact advertised printer final skips free-text replay', () async {
@@ -2854,6 +2871,63 @@ void main() {
     expect(freeText.finalCalls, 0);
   });
 
+  test('endpoint-only partial supersedes older replay without executing',
+      () async {
+    final _FakeRecognizer command = _FakeRecognizer()
+      ..endpointSequence.addAll(<bool>[true, false, true])
+      ..resultSequence.addAll(<String>[
+        _json(text: 'молочная'),
+        _json(text: 'назад'),
+      ])
+      ..partialSequence.add(_json(partial: 'назад'));
+    final Completer<void> replayStarted = Completer<void>();
+    final Completer<bool> releaseReplay = Completer<bool>();
+    final _FakeRecognizer freeText = _FakeRecognizer()
+      ..acceptOverride = (_) {
+        replayStarted.complete();
+        return releaseReplay.future;
+      };
+    final SpeechRecognitionService service = _service(
+      command: command,
+      freeTextFactory: () async => freeText,
+    );
+    final WearVoiceControlService control = WearVoiceControlService(
+      speechRecognitionService: service,
+      screenProvider: () => WearScreenId.availabilityProduct,
+    );
+    final List<WearVoiceCommand> commands = <WearVoiceCommand>[];
+    control.commandStream.listen(commands.add);
+    addTearDown(control.dispose);
+    addTearDown(service.dispose);
+    await service.prepare();
+    await service.switchCommandGrammar(
+      screen: WearScreenId.availabilityProduct,
+      grammar: const <String>['назад', '[unk]'],
+    );
+    await service.startSession();
+    service.beginProcessingCapture();
+    await service.setFreeTextEnabled(true);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await replayStarted.future;
+    await service.processAudioChunk(_pcmFrame(1000));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(commands, isEmpty);
+    expect(
+      service.replayOwnership.status,
+      VoiceReplayOwnershipStatus.supersededByActionableUtterance,
+    );
+    releaseReplay.complete(false);
+    await service.waitForProcessing();
+    expect(freeText.finalCalls, 0);
+
+    await service.processAudioChunk(_pcmFrame(1000));
+    await service.waitForProcessing();
+
+    expect(commands, <WearVoiceCommand>[WearVoiceCommand.back]);
+  });
+
   test('empty-command replay yields to a newer acoustic segment', () async {
     final _FakeRecognizer command = _FakeRecognizer()
       ..endpointSequence.addAll(<bool>[true, false])
@@ -3416,7 +3490,10 @@ class _FakeRecognizer implements VoiceRecognizer {
   int disposeCalls = 0;
 
   @override
-  Future<bool> acceptWaveformBytes(Uint8List bytes) async {
+  Future<bool> acceptWaveformBytes(
+    Uint8List bytes, {
+    Duration? maximumQueueWait,
+  }) async {
     accepted.add(Uint8List.fromList(bytes));
     final Future<bool> Function(Uint8List bytes)? override = acceptOverride;
     if (override != null) return override(bytes);

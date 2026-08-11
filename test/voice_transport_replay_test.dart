@@ -248,7 +248,10 @@ class _EndpointRecognizer implements VoiceRecognizer {
   final List<Uint8List> accepted = <Uint8List>[];
 
   @override
-  Future<bool> acceptWaveformBytes(Uint8List bytes) async {
+  Future<bool> acceptWaveformBytes(
+    Uint8List bytes, {
+    Duration? maximumQueueWait,
+  }) async {
     accepted.add(Uint8List.fromList(bytes));
     if (accepted.length == 1) {
       trace.add('recognizer_accepted');

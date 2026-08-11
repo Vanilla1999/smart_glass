@@ -1111,7 +1111,10 @@ class _FakeRecognizer implements VoiceRecognizer {
   int finalCalls = 0;
 
   @override
-  Future<bool> acceptWaveformBytes(Uint8List bytes) async {
+  Future<bool> acceptWaveformBytes(
+    Uint8List bytes, {
+    Duration? maximumQueueWait,
+  }) async {
     accepted.add(Uint8List.fromList(bytes));
     onAccept?.call(bytes);
     final Future<bool> Function(Uint8List bytes)? override = acceptOverride;

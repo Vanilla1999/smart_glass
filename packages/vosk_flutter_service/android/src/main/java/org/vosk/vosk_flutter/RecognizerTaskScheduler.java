@@ -148,11 +148,41 @@ final class RecognizerTaskScheduler {
       String operation,
       Callable<T> callable,
       Callback<T> callback) {
+    return submit(recognizerId, lane, operation, "native", callable, callback);
+  }
+
+  <T> boolean submit(
+      int recognizerId,
+      Lane lane,
+      String operation,
+      String operationId,
+      Callable<T> callable,
+      Callback<T> callback) {
+    return submit(
+        recognizerId,
+        lane,
+        operation,
+        operationId,
+        -1L,
+        callable,
+        callback);
+  }
+
+  <T> boolean submit(
+      int recognizerId,
+      Lane lane,
+      String operation,
+      String operationId,
+      long maximumQueueWaitMs,
+      Callable<T> callable,
+      Callback<T> callback) {
     final ScheduledTask<T> task = new ScheduledTask<>(
         nextSequence.incrementAndGet(),
         recognizerId,
         lane,
         operation,
+        operationId,
+        maximumQueueWaitMs,
         callable,
         callback,
         false);
@@ -193,6 +223,7 @@ final class RecognizerTaskScheduler {
               + " recognizerId=" + recognizerId
               + " lane=" + lane.wireName()
               + " operation=" + operation
+              + " operationId=" + operationId
               + " queueDepth=" + queueDepth
               + " activeLane=" + (active == null ? "none" : active.lane.wireName())
               + " activeRecognizerId="
@@ -222,6 +253,8 @@ final class RecognizerTaskScheduler {
             SHUTDOWN_RECOGNIZER_ID,
             Lane.SHUTDOWN,
             "shutdown",
+            "native-shutdown",
+            -1L,
             () -> {
               cleanup.run();
               return null;
@@ -349,42 +382,56 @@ final class RecognizerTaskScheduler {
         final long startedAtNanos = System.nanoTime();
         final long waitMs = TimeUnit.NANOSECONDS.toMillis(
             startedAtNanos - task.enqueuedAtNanos);
-        if (task.logLifecycle || waitMs >= SLOW_QUEUE_WAIT_MS) {
+        if (task.isQueueDeadlineExpired(startedAtNanos)) {
           logger.log(
-              waitMs >= SLOW_QUEUE_WAIT_MS && task.lane == Lane.COMMAND,
-              "[VOSK_SCHEDULER] stage=start seq=" + task.sequence
+              false,
+              "[VOSK_SCHEDULER] stage=expired seq=" + task.sequence
                   + " recognizerId=" + task.recognizerId
                   + " lane=" + task.lane.wireName()
                   + " operation=" + task.operation
+                  + " operationId=" + task.operationId
                   + " waitMs=" + waitMs
-                  + " queueDepth=" + queueDepth()
-                  + " thread=" + Thread.currentThread().getName());
+                  + " maximumQueueWaitMs=" + task.maximumQueueWaitMs);
+          task.cancel("queue_deadline_expired", logger);
+          synchronized (stateLock) {
+            finishActiveTaskLocked(task);
+            activeTask = null;
+            stateLock.notifyAll();
+          }
+          continue;
         }
+        logger.log(
+            waitMs >= SLOW_QUEUE_WAIT_MS && task.lane == Lane.COMMAND,
+            "[VOSK_SCHEDULER] stage=start seq=" + task.sequence
+                + " recognizerId=" + task.recognizerId
+                + " lane=" + task.lane.wireName()
+                + " operation=" + task.operation
+                + " operationId=" + task.operationId
+                + " waitMs=" + waitMs
+                + " queueDepth=" + queueDepth()
+                + " thread=" + Thread.currentThread().getName());
 
         task.run(logger);
-        final long runMs = TimeUnit.NANOSECONDS.toMillis(
-            System.nanoTime() - startedAtNanos);
-        if (task.logLifecycle
-            || waitMs >= SLOW_QUEUE_WAIT_MS
-            || runMs >= SLOW_NATIVE_CALL_MS) {
-          logger.log(
-              runMs >= SLOW_NATIVE_CALL_MS
-                  || (waitMs >= SLOW_QUEUE_WAIT_MS && task.lane == Lane.COMMAND),
-              "[VOSK_SCHEDULER] stage=done seq=" + task.sequence
-                  + " recognizerId=" + task.recognizerId
-                  + " lane=" + task.lane.wireName()
-                  + " operation=" + task.operation
-                  + " waitMs=" + waitMs
-                  + " runMs=" + runMs
-                  + " queueDepth=" + queueDepth()
-                  + " thread=" + Thread.currentThread().getName());
-        }
+        final long nativeMs = task.nativeMs;
+        logger.log(
+            nativeMs >= SLOW_NATIVE_CALL_MS
+                || (waitMs >= SLOW_QUEUE_WAIT_MS && task.lane == Lane.COMMAND),
+            "[VOSK_SCHEDULER] stage=done seq=" + task.sequence
+                + " recognizerId=" + task.recognizerId
+                + " lane=" + task.lane.wireName()
+                + " operation=" + task.operation
+                + " operationId=" + task.operationId
+                + " waitMs=" + waitMs
+                + " nativeMs=" + nativeMs
+                + " queueDepth=" + queueDepth()
+                + " thread=" + Thread.currentThread().getName());
 
         synchronized (stateLock) {
           finishActiveTaskLocked(task);
           if (task.lane == Lane.COMMAND
               && commandPriorityLease
-              && !shutdownScheduled) {
+              && !shutdownScheduled
+              && commandHandoffUntilNanos == 0L) {
             commandHandoffUntilNanos = System.nanoTime()
                 + TimeUnit.MILLISECONDS.toNanos(COMMAND_HANDOFF_GRACE_MS);
           }
@@ -525,6 +572,8 @@ final class RecognizerTaskScheduler {
     private final int recognizerId;
     private final Lane lane;
     private final String operation;
+    private final String operationId;
+    private final long maximumQueueWaitMs;
     private final Callable<T> callable;
     private final Callback<T> callback;
     private final boolean terminal;
@@ -532,12 +581,15 @@ final class RecognizerTaskScheduler {
     private final AtomicBoolean completed = new AtomicBoolean();
     private volatile boolean logLifecycle;
     private volatile boolean handoffLogged;
+    private volatile long nativeMs;
 
     ScheduledTask(
         long sequence,
         int recognizerId,
         Lane lane,
         String operation,
+        String operationId,
+        long maximumQueueWaitMs,
         Callable<T> callable,
         Callback<T> callback,
         boolean terminal) {
@@ -545,9 +597,17 @@ final class RecognizerTaskScheduler {
       this.recognizerId = recognizerId;
       this.lane = lane;
       this.operation = operation;
+      this.operationId = operationId;
+      this.maximumQueueWaitMs = maximumQueueWaitMs;
       this.callable = callable;
       this.callback = callback;
       this.terminal = terminal;
+    }
+
+    boolean isQueueDeadlineExpired(long startedAtNanos) {
+      return maximumQueueWaitMs >= 0L
+          && startedAtNanos - enqueuedAtNanos
+              >= TimeUnit.MILLISECONDS.toNanos(maximumQueueWaitMs);
     }
 
     @Override
@@ -565,7 +625,14 @@ final class RecognizerTaskScheduler {
         return;
       }
       try {
-        final T value = callable.call();
+        final long nativeStartedAtNanos = System.nanoTime();
+        final T value;
+        try {
+          value = callable.call();
+        } finally {
+          nativeMs = TimeUnit.NANOSECONDS.toMillis(
+              System.nanoTime() - nativeStartedAtNanos);
+        }
         if (completed.compareAndSet(false, true)) {
           try {
             callback.onSuccess(value);

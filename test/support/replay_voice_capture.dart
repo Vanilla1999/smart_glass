@@ -64,6 +64,7 @@ class ReplayVoiceCapture
   int _lastElapsedRealtimeNanos = 0;
 
   bool get isCapturing => _leaseId != null;
+  int get sourceAudioOffsetMs => _lastElapsedRealtimeNanos ~/ 1000000;
   Stream<NativeVoiceStateEvent> get stateEvents => _stateController.stream;
 
   @override
@@ -276,5 +277,4 @@ class ReplayVoiceCapture
         ),
     ];
   }
-
 }

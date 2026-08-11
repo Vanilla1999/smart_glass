@@ -56,11 +56,14 @@ class VoiceNativeTimeoutPolicy {
         ReplayNativeStage.dispose => dispose,
       };
 
+  Duration effectiveForStage(ReplayNativeStage stage, {Duration? maximum}) {
+    final Duration configured = forStage(stage);
+    return maximum != null && maximum < configured ? maximum : configured;
+  }
+
   Future<T> run<T>(ReplayNativeStage stage, Future<T> operation,
       {Duration? maximum}) async {
-    final Duration configured = forStage(stage);
-    final Duration effective =
-        maximum != null && maximum < configured ? maximum : configured;
+    final Duration effective = effectiveForStage(stage, maximum: maximum);
     try {
       return await operation.timeout(effective);
     } on TimeoutException {

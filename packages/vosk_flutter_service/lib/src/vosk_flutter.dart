@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../vosk_flutter.dart';
 import 'ffi_provider.dart';
 import 'generated_vosk_bindings.dart';
+import 'operation_diagnostics.dart';
 import 'permission_service.dart';
 import 'stubs/io_stub.dart' if (dart.library.io) 'dart:io';
 import 'utils.dart';
@@ -114,9 +115,15 @@ class VoskFlutterPlugin {
     if (grammar != null) {
       args['grammar'] = jsonEncode(grammar);
     }
-    final id = await _channel.invokeMethod('recognizer.create', args);
+    final id = await invokeDiagnosedVoskMethod<Object?>(
+      operation: 'create',
+      invoke: (final operationId) {
+        args['operationId'] = operationId;
+        return _channel.invokeMethod('recognizer.create', args);
+      },
+    );
     return Recognizer(
-      id: id as int,
+      id: id! as int,
       model: model,
       sampleRate: sampleRate,
       channel: _channel,

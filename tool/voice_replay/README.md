@@ -37,6 +37,25 @@ tool/voice_replay/run_full_continuous.sh \
   DEVICE_ID
 ```
 
-This mode has no ground-truth timeline. It reports observed Vosk-to-command,
-admission, feedback and application-flow events without asserting which spoken
-commands should be present.
+The runner writes the external recording's SHA-256 and byte length to the log.
+It also writes `<report>.android.log` with native scheduler/GC events and
+`<report>.device.log` with before/after CPU, process-memory, battery and thermal
+snapshots. Correlate Dart and Android Vosk stages by `operationId`.
+Structured events include the current source-audio offset. Continuous mode
+fails on rejected PCM acknowledgements or any terminal native replay timeout;
+the checked-in gate then compares current admissions and completed deterministic
+actions with the immutable recording manifest.
+
+```bash
+dart run tool/voice_replay/run_voice_replay_gate.dart \
+  artifacts/voice_replay/recording_manifest_2026-08-11.json \
+  artifacts/voice_replay/current-run
+```
+
+The log directory must contain `flutter_1786374027358.log`,
+`flutter_1786374143173.log`, and `flutter_1786374322845.log`.
+
+The manifest contains only recording identity and human annotations. Historical
+Vosk output, parser decisions and business observations remain in
+`ground_truth_events_2026-08-11.json` and are not used to score a current run.
+Do not update the manifest from decoder output after a runtime change.

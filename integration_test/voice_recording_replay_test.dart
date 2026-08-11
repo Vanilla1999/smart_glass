@@ -81,9 +81,28 @@ void main() {
           label: 'Жёлтый',
           voiceAliases: <String>['желтый'],
         ),
+        VoiceDynamicItem(id: 'mobile', label: 'Мобильный'),
       ],
     );
+    const VoiceDynamicItemsSnapshot availabilityGroups =
+        VoiceDynamicItemsSnapshot(
+      revision: 1,
+      items: <VoiceDynamicItem>[
+        VoiceDynamicItem(
+          id: 'soft-drinks',
+          label: 'Безалкогольное',
+          voiceAliases: <String>['безалкогольные'],
+        ),
+        VoiceDynamicItem(id: 'dairy', label: 'Молочная'),
+      ],
+    );
+    const VoiceDynamicItemsSnapshot availabilityProducts =
+        VoiceDynamicItemsSnapshot(
+      revision: 1,
+      items: <VoiceDynamicItem>[],
+    );
     final List<String> selectedItems = <String>[];
+    var printerSelections = 0;
     if (screen == WearScreenId.printerSelect) {
       flow.registerScreenActions(
         screen,
@@ -98,6 +117,32 @@ void main() {
         WearScreenId.printerSelect,
         WearScreenActionHandler(
           dynamicVoiceItems: () => printerItems,
+          onDynamicItem: (String itemId) async {
+            selectedItems.add(itemId);
+            printerSelections++;
+            if (printerSelections.isEven) {
+              await flow.requestNavigation(WearScreenId.scanIdle);
+            }
+          },
+        ),
+      );
+      flow.registerScreenActions(
+        WearScreenId.availabilityGroup,
+        WearScreenActionHandler(
+          dynamicVoiceItems: () => availabilityGroups,
+          onDynamicItem: (String itemId) async {
+            selectedItems.add(itemId);
+            await flow.requestNavigation(
+              WearScreenId.availabilityProduct,
+              extra: itemId,
+            );
+          },
+        ),
+      );
+      flow.registerScreenActions(
+        WearScreenId.availabilityProduct,
+        WearScreenActionHandler(
+          dynamicVoiceItems: () => availabilityProducts,
           onDynamicItem: selectedItems.add,
         ),
       );
@@ -111,10 +156,7 @@ void main() {
       speechSegmenter: _caseName == 'continuous'
           ? SpeechSegmenter()
           : SpeechSegmenter(calibrationDuration: Duration.zero),
-      dynamicItemsProvider: (WearScreenId candidate) =>
-          candidate == WearScreenId.printerSelect
-              ? printerItems
-              : VoiceDynamicItemsSnapshot.empty,
+      dynamicItemsProvider: flow.dynamicVoiceItemsFor,
     );
     final WearVoiceControlService control = WearVoiceControlService(
       speechRecognitionService: speech,
@@ -206,11 +248,58 @@ void main() {
       }
     }
 
+    ({
+      WearScreenId screen,
+      int focusedIndex,
+      int menuFocusedIndex,
+      int goTo,
+      int replace,
+      int back,
+      int home,
+      int selected,
+    }) actionSnapshot() => (
+          screen: flow.state.screen,
+          focusedIndex: flow.state.focusedIndex,
+          menuFocusedIndex: flow.state.menuFocusedIndex,
+          goTo: navigation.goToCalls.length,
+          replace: navigation.replaceCalls.length,
+          back: navigation.backCalls,
+          home: navigation.homeCalls,
+          selected: selectedItems.length,
+        );
+
+    bool actionCompleted(
+      ({
+        WearScreenId screen,
+        int focusedIndex,
+        int menuFocusedIndex,
+        int goTo,
+        int replace,
+        int back,
+        int home,
+        int selected,
+      }) before,
+      ({
+        WearScreenId screen,
+        int focusedIndex,
+        int menuFocusedIndex,
+        int goTo,
+        int replace,
+        int back,
+        int home,
+        int selected,
+      }) after,
+    ) =>
+        before != after;
+
     final StreamSubscription<WearVoiceCommandEvent> commands =
         control.commandEventStream.listen((WearVoiceCommandEvent event) {
+      final int sourceAudioOffsetMs = capture.sourceAudioOffsetMs;
       enqueueDispatch(() async {
+        final before = actionSnapshot();
         final decision =
             await dispatcher.dispatchCommand(event.command, event: event);
+        final bool completed = actionCompleted(before, actionSnapshot());
         if (_caseName == 'continuous') {
           print('VOICE_CONTINUOUS_EVENT ${jsonEncode(<String, Object?>{
                 'stage': 'command',
@@ -221,16 +310,28 @@ void main() {
                 'utteranceId': event.commandUtteranceId,
                 'traceId': event.traceId,
                 'asrMillis': event.asrMillis,
+                'sourceAudioOffsetMs': sourceAudioOffsetMs,
+              })}');
+          print('VOICE_CONTINUOUS_EVENT ${jsonEncode(<String, Object?>{
+                'stage': 'action',
+                'action': event.command.name,
+                'completed': completed,
+                'screen': event.sourceScreen.name,
+                'utteranceId': event.commandUtteranceId,
+                'traceId': event.traceId,
+                'sourceAudioOffsetMs': sourceAudioOffsetMs,
               })}');
         }
       });
     });
     final StreamSubscription<WearVoicePhraseEvent> phrases =
         control.phraseEventStream.listen((WearVoicePhraseEvent event) {
+      final int sourceAudioOffsetMs = capture.sourceAudioOffsetMs;
       enqueueDispatch(() async {
-        final int before = selectedItems.length;
+        final before = actionSnapshot();
         final decision =
             await dispatcher.dispatchPhrase(event.phrase, event: event);
+        final bool completed = actionCompleted(before, actionSnapshot());
         if (_caseName == 'continuous') {
           print('VOICE_CONTINUOUS_EVENT ${jsonEncode(<String, Object?>{
                 'stage': 'phrase',
@@ -241,9 +342,20 @@ void main() {
                 'utteranceId': event.commandUtteranceId,
                 'freeTextEpoch': event.freeTextEpoch,
                 'listRevision': event.listRevision,
+                'sourceAudioOffsetMs': sourceAudioOffsetMs,
+              })}');
+          print('VOICE_CONTINUOUS_EVENT ${jsonEncode(<String, Object?>{
+                'stage': 'action',
+                'action': 'dynamic',
+                'phrase': event.phrase,
+                'completed': completed,
+                'screen': event.sourceScreen.name,
+                'utteranceId': event.commandUtteranceId,
+                'traceId': event.traceId,
+                'sourceAudioOffsetMs': sourceAudioOffsetMs,
               })}');
         }
-        if (_caseName == 'yellow' && selectedItems.length > before) {
+        if (_caseName == 'yellow' && completed) {
           markAction();
         }
       });
@@ -258,6 +370,7 @@ void main() {
     });
     final StreamSubscription<WearVoiceDelayEvent> delays =
         control.delayEventStream.listen((WearVoiceDelayEvent event) {
+      final int sourceAudioOffsetMs = capture.sourceAudioOffsetMs;
       enqueueDispatch(() async {
         delayEvents.add(event);
         if (_caseName == 'continuous') {
@@ -269,6 +382,7 @@ void main() {
                 'screen': event.sourceScreen.name,
                 'segmentId': event.segmentId,
                 'utteranceId': event.commandUtteranceId,
+                'sourceAudioOffsetMs': sourceAudioOffsetMs,
               })}');
         }
         if (event.visible && event.statusText == 'Не распознано') {
@@ -298,13 +412,10 @@ void main() {
       await voiceConfiguration;
       await speech.waitForProcessing();
       await drainDispatches();
-      if (_caseName == 'continuous') {
-        // The complete recording has no ground-truth application timeline.
-        // Its structured trace is scored after the run instead.
-      } else if (_caseName == 'unrecognized') {
+      if (_caseName == 'unrecognized') {
         await notRecognizedVisible.future.timeout(const Duration(seconds: 8));
         await notRecognizedHidden.future.timeout(const Duration(seconds: 4));
-      } else {
+      } else if (_caseName != 'continuous') {
         await firstAction.future.timeout(const Duration(seconds: 8));
       }
       await drainDispatches();
@@ -344,8 +455,16 @@ void main() {
                   .where((event) =>
                       event.visible && event.statusText == 'Не распознано')
                   .length,
-              'diagnostics': await speech.diagnostics(),
+               'diagnostics': await speech.diagnostics(),
             })}');
+        final Map<String, int> replayTimeouts =
+            speech.metricsSnapshot.replayNativeTimeouts;
+        expect(
+          replayTimeouts.values.fold<int>(0, (sum, count) => sum + count),
+          0,
+          reason: 'Continuous replay must not hide terminal Vosk timeouts: '
+              '$replayTimeouts',
+        );
       } else if (_caseName == 'yellow') {
         expect(actionCount, 1);
         expect(selectedItems, <String>['yellow']);

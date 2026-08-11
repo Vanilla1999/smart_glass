@@ -111,7 +111,10 @@ class VoiceReplayBatchPolicy {
 }
 
 abstract interface class VoiceRecognizer {
-  Future<bool> acceptWaveformBytes(Uint8List bytes);
+  Future<bool> acceptWaveformBytes(
+    Uint8List bytes, {
+    Duration? maximumQueueWait,
+  });
   Future<String> getPartialResult();
   Future<String> getResult();
   Future<String> getFinalResult();
@@ -135,8 +138,14 @@ class VoskVoiceRecognizer implements VoiceRecognizer {
   final vosk.Recognizer _recognizer;
 
   @override
-  Future<bool> acceptWaveformBytes(Uint8List bytes) =>
-      _recognizer.acceptWaveformBytes(bytes);
+  Future<bool> acceptWaveformBytes(
+    Uint8List bytes, {
+    Duration? maximumQueueWait,
+  }) =>
+      _recognizer.acceptWaveformBytes(
+        bytes,
+        maximumQueueWait: maximumQueueWait,
+      );
   @override
   Future<void> dispose() => _recognizer.dispose();
   @override
@@ -1810,6 +1819,10 @@ class SpeechRecognitionService {
         'chunkTotalMs=${finishedAt - startedAt})',
       );
       if (source == _RecognitionSource.command) {
+        if (partialAction?.activationPolicy ==
+            VoiceActivationPolicy.endpointOnly) {
+          _markEndpointOnlyCandidateUtterance(_commandUtteranceId);
+        }
         _recordCommandPartial(
           commandUtteranceId: _commandUtteranceId,
           text: partialText,
@@ -2612,7 +2625,6 @@ class SpeechRecognitionService {
       'utteranceId=$commandUtteranceId replayBytes=${bytes.lengthInBytes} '
       'batchCount=$replayBatchCount audioMs=$replayAudioMs '
       'budgetMs=${replayBudget.inMilliseconds} '
-      'operationTimeoutMs=${_segmentCloseGuard.timeout.inMilliseconds} '
       'purpose=${replayPurpose.name} '
       'epoch=$epoch '
       'freeTextEpoch=$_freeTextEpoch '
@@ -2797,8 +2809,13 @@ class SpeechRecognitionService {
         batchIndex++;
         stage = 'accept_call';
         operationStartedAt = DateTime.now().millisecondsSinceEpoch;
+        final Duration acceptQueueWait = _remainingReplayBudget(
+          replayClock,
+          replayBudget,
+        );
         final Future<bool> accept = replayRecognizer.acceptWaveformBytes(
           Uint8List.sublistView(bytes, offset, end),
+          maximumQueueWait: acceptQueueWait,
         );
         final int callFinishedAt = DateTime.now().millisecondsSinceEpoch;
         print(
@@ -3037,6 +3054,38 @@ class SpeechRecognitionService {
   }) {
     if (commandFallback == null || _abortReplayIfInvalid(replayContext)) {
       return false;
+    }
+    final bool timedOut = reason.contains('timeout') ||
+        reason.contains('_budget_') ||
+        reason.endsWith('_budget_fallback');
+    if (timedOut) {
+      onCompleted?.call('', replayMs);
+      _logUtteranceDiagnostic(
+        outcome: 'refinement_timeout_rejected',
+        trace: commandTrace ??
+            _snapshotCommandHypothesis(
+              commandUtteranceId,
+              commandFinal: commandFallback.text,
+            ),
+        captureEpoch: captureEpoch,
+        segment: segment,
+        context: resultContext ?? _currentResultContext(commandUtteranceId),
+        selectedText: '',
+        reason: reason,
+        commandMatchCount: commandFallback.matchCount,
+      );
+      _replayOwnership.resolve(
+        replayContext,
+        VoiceReplayOwnershipStatus.timedOut,
+        failure: TimeoutException('Ambiguous refinement timed out'),
+      );
+      _logReplayDecision(replayContext, 'rejected', reason);
+      print(
+        '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=refinement_timeout_rejected '
+        'reason=$reason ${replayContext.describeCaptured()} '
+        'matchCount=${commandFallback.matchCount} replayMs=$replayMs',
+      );
+      return true;
     }
     _emitResult(
       _RecognitionSource.freeText,
@@ -3286,6 +3335,18 @@ class SpeechRecognitionService {
     return false;
   }
 
+  void _markEndpointOnlyCandidateUtterance(int commandUtteranceId) {
+    if (commandUtteranceId <= _latestActionableCommandUtteranceId) return;
+    _latestActionableCommandUtteranceId = commandUtteranceId;
+    final VoiceReplayOwnership ownership = _replayOwnership.current;
+    final VoiceReplayContext? context = ownership.context;
+    if (ownership.status == VoiceReplayOwnershipStatus.pending &&
+        context != null &&
+        commandUtteranceId > context.commandUtteranceId) {
+      _supersedeReplay(context, supersededBy: commandUtteranceId);
+    }
+  }
+
   VoiceReplayContextCancellation? _replayStaleReason(
     VoiceReplayContext context,
   ) {
@@ -3410,11 +3471,20 @@ class SpeechRecognitionService {
     Stopwatch replayClock,
     Duration replayBudget,
   ) {
+    final Duration remaining =
+        _remainingReplayBudget(replayClock, replayBudget);
+    final Duration effectiveTimeout = _replayPolicy.nativeTimeoutPolicy
+        .effectiveForStage(stage, maximum: remaining);
+    print(
+      '[VOICE_FREE_TEXT_REPLAY_TRACE] stage=native_operation '
+      'operation=${stage.name} operationTimeoutMs=${effectiveTimeout.inMilliseconds} '
+      'remainingMs=${remaining.inMilliseconds}',
+    );
     return _replayPolicy.nativeTimeoutPolicy
         .run<T>(
       stage,
       operation,
-      maximum: _remainingReplayBudget(replayClock, replayBudget),
+      maximum: remaining,
     )
         .onError<ReplayNativeTimeoutException>((error, stackTrace) {
       _voiceMetrics.recordReplayNativeTimeout(error.stage.name);
@@ -3734,14 +3804,13 @@ class SpeechRecognitionService {
         !capturedHints.normalizedAdvertisedPhrases.contains(normalized)) {
       return null;
     }
-    final List<String> capturedItemIds =
-        capturedHints.hintsByItemId.entries
-            .where(
-              (MapEntry<String, VoiceHint> entry) =>
-                  VoiceListMatcher.normalize(entry.value.phrase) == normalized,
-            )
-            .map((MapEntry<String, VoiceHint> entry) => entry.key)
-            .toList(growable: false);
+    final List<String> capturedItemIds = capturedHints.hintsByItemId.entries
+        .where(
+          (MapEntry<String, VoiceHint> entry) =>
+              VoiceListMatcher.normalize(entry.value.phrase) == normalized,
+        )
+        .map((MapEntry<String, VoiceHint> entry) => entry.key)
+        .toList(growable: false);
     if (capturedItemIds.length != 1) return null;
     final String capturedItemId = capturedItemIds.single;
 

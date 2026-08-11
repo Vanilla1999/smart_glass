@@ -331,8 +331,9 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
     try {
       final Map<String, Object> argsMap =
           castMethodCallArgs(call, argsMapClass);
+      final String operationId = operationIdFrom(argsMap);
       if ("recognizer.create".equals(call.method)) {
-        handleRecognizerCreate(argsMap, result);
+        handleRecognizerCreate(argsMap, operationId, result);
         return;
       }
       final Integer recognizerId = getRequiredArgumentFromMap(
@@ -369,6 +370,7 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
             submitRecognizerOperationLocked(
                 handle,
                 "setSpeakerModel",
+                operationId,
                 () -> {
                   handle.recognizer.setSpeakerModel(speakerModel);
                   return null;
@@ -383,6 +385,7 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
             submitRecognizerOperationLocked(
                 handle,
                 "setMaxAlternatives",
+                operationId,
                 () -> {
                   handle.recognizer.setMaxAlternatives(maxAlternatives);
                   return null;
@@ -397,6 +400,7 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
             submitRecognizerOperationLocked(
                 handle,
                 "setWords",
+                operationId,
                 () -> {
                   handle.recognizer.setWords(words);
                   return null;
@@ -411,6 +415,7 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
             submitRecognizerOperationLocked(
                 handle,
                 "setPartialWords",
+                operationId,
                 () -> {
                   handle.recognizer.setPartialWords(partialWords);
                   return null;
@@ -420,6 +425,8 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
           }
 
           case "recognizer.acceptWaveForm": {
+            final Integer maximumQueueWaitMs = getArgumentFromMap(
+                argsMap, "maximumQueueWaitMs", Integer.class);
             final byte[] bytesArgument = getArgumentFromMap(
                 argsMap, "bytes", byte[].class);
             final float[] floatsArgument = getArgumentFromMap(
@@ -438,6 +445,8 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
             submitRecognizerOperationLocked(
                 handle,
                 "acceptWaveForm",
+                operationId,
+                maximumQueueWaitMs == null ? -1L : maximumQueueWaitMs.longValue(),
                 () -> {
                   final long startedAt = SystemClock.elapsedRealtime();
                   final boolean accepted = bytes == null
@@ -471,6 +480,7 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
             submitRecognizerOperationLocked(
                 handle,
                 "getResult",
+                operationId,
                 () -> handle.recognizer.getResult(),
                 result);
             return;
@@ -479,6 +489,7 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
             submitRecognizerOperationLocked(
                 handle,
                 "getPartialResult",
+                operationId,
                 () -> handle.recognizer.getPartialResult(),
                 result);
             return;
@@ -487,6 +498,7 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
             submitRecognizerOperationLocked(
                 handle,
                 "getFinalResult",
+                operationId,
                 () -> handle.recognizer.getFinalResult(),
                 result);
             return;
@@ -509,6 +521,7 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
             submitRecognizerOperationLocked(
                 handle,
                 "setGrammar",
+                operationId,
                 () -> {
                   handle.recognizer.setGrammar(grammar);
                   return null;
@@ -521,6 +534,7 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
             submitRecognizerOperationLocked(
                 handle,
                 "reset",
+                operationId,
                 () -> {
                   handle.recognizer.reset();
                   return null;
@@ -529,7 +543,7 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
             return;
 
           case "recognizer.close":
-            submitRecognizerCloseLocked(handle, result);
+            submitRecognizerCloseLocked(handle, operationId, result);
             return;
 
           default:
@@ -553,6 +567,7 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
 
   private void handleRecognizerCreate(
       Map<String, Object> argsMap,
+      String operationId,
       Result result)
       throws MissingRequiredArgument, WrongArgumentTypeException {
     final Integer sampleRate = getRequiredArgumentFromMap(
@@ -587,6 +602,7 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
           recognizerId,
           lane,
           "create",
+          operationId,
           () -> grammar == null
               ? new Recognizer(model, sampleRate)
               : new Recognizer(model, sampleRate, grammar),
@@ -621,7 +637,8 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
                       + lane.wireName()
                       + " grammarPresent="
                       + (grammar != null));
-              postResultSuccess(generation, result, recognizerId);
+              postResultSuccess(
+                  generation, result, recognizerId, operationId, "create");
             }
 
             @Override
@@ -633,6 +650,7 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
                   result,
                   placeholder,
                   "create",
+                  operationId,
                   error);
             }
           });
@@ -660,6 +678,18 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
   private <T> void submitRecognizerOperationLocked(
       ManagedRecognizer handle,
       String operation,
+      String operationId,
+      Callable<T> callable,
+      Result result) {
+    submitRecognizerOperationLocked(
+        handle, operation, operationId, -1L, callable, result);
+  }
+
+  private <T> void submitRecognizerOperationLocked(
+      ManagedRecognizer handle,
+      String operation,
+      String operationId,
+      long maximumQueueWaitMs,
       Callable<T> callable,
       Result result) {
     final RecognizerTaskScheduler scheduler = recognizerScheduler;
@@ -673,11 +703,14 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
         handle.id,
         lane,
         operation,
+        operationId,
+        maximumQueueWaitMs,
         callable,
         new RecognizerTaskScheduler.Callback<T>() {
           @Override
           public void onSuccess(T value) {
-            postResultSuccess(generation, result, value);
+            postResultSuccess(
+                generation, result, value, operationId, operation);
           }
 
           @Override
@@ -687,6 +720,7 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
                 result,
                 handle,
                 operation,
+                operationId,
                 error);
           }
         });
@@ -694,6 +728,7 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
 
   private void submitRecognizerCloseLocked(
       ManagedRecognizer handle,
+      String operationId,
       Result result) {
     if (handle.closing) {
       result.error(
@@ -714,6 +749,7 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
         handle.id,
         handle.lane,
         "close",
+        operationId,
         () -> {
           handle.closeIfNeeded();
           return null;
@@ -726,7 +762,8 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
                 recognizersMap.remove(handle.id);
               }
             }
-            postResultSuccess(generation, result, null);
+            postResultSuccess(
+                generation, result, null, operationId, "close");
           }
 
           @Override
@@ -736,7 +773,8 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
                 handle.closing = false;
               }
             }
-            postResultError(generation, result, handle, "close", error);
+            postResultError(
+                generation, result, handle, "close", operationId, error);
           }
         });
   }
@@ -745,7 +783,18 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
       int generation,
       Result result,
       Object value) {
+    postResultSuccess(generation, result, value, "native", "unspecified");
+  }
+
+  private void postResultSuccess(
+      int generation,
+      Result result,
+      Object value,
+      String operationId,
+      String operation) {
+    final long postedAt = SystemClock.elapsedRealtime();
     mainHandler.post(() -> {
+      final long mainDeliveryMs = SystemClock.elapsedRealtime() - postedAt;
       synchronized (lifecycleLock) {
         if (!attached || generation != engineGeneration) {
           Log.i(
@@ -758,6 +807,14 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
           return;
         }
       }
+      Log.i(
+          TAG,
+          "[VOSK_OPERATION] stage=android_main_delivery operationId="
+              + operationId
+              + " operation="
+              + operation
+              + " mainDeliveryMs="
+              + mainDeliveryMs);
       result.success(value);
     });
   }
@@ -768,7 +825,19 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
       ManagedRecognizer handle,
       String operation,
       Exception error) {
+    postResultError(generation, result, handle, operation, "native", error);
+  }
+
+  private void postResultError(
+      int generation,
+      Result result,
+      ManagedRecognizer handle,
+      String operation,
+      String operationId,
+      Exception error) {
+    final long postedAt = SystemClock.elapsedRealtime();
     mainHandler.post(() -> {
+      final long mainDeliveryMs = SystemClock.elapsedRealtime() - postedAt;
       synchronized (lifecycleLock) {
         if (!attached || generation != engineGeneration) {
           Log.i(
@@ -793,6 +862,7 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
       details.put("recognizerId", handle.id);
       details.put("lane", handle.lane.wireName());
       details.put("operation", operation);
+      details.put("operationId", operationId);
       details.put("errorType", error.getClass().getSimpleName());
       Log.w(
           TAG,
@@ -802,12 +872,23 @@ public class VoskFlutterPlugin implements FlutterPlugin, MethodCallHandler {
               + handle.lane.wireName()
               + " operation="
               + operation
+              + " operationId="
+              + operationId
+              + " mainDeliveryMs="
+              + mainDeliveryMs
               + " cancelled="
               + cancelled
               + " error="
               + error);
       result.error(code, error.getMessage(), details);
     });
+  }
+
+  private String operationIdFrom(Map<String, Object> argsMap) {
+    final Object value = argsMap.get("operationId");
+    return value instanceof String && !((String) value).isEmpty()
+        ? (String) value
+        : "native-" + SystemClock.elapsedRealtimeNanos();
   }
 
   private void postChannelMethod(

@@ -1,11 +1,12 @@
 import 'dart:convert';
-import 'ffi_provider.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 
 import '../vosk_flutter.dart';
+import 'ffi_provider.dart';
 import 'generated_vosk_bindings.dart';
+import 'operation_diagnostics.dart';
 import 'utils.dart';
 
 /// Native scheduling lane used by Android recognizer operations.
@@ -103,7 +104,10 @@ class Recognizer {
 
   /// Accept and process new chunk of voice data(audio data in PCM 16-bit
   /// mono format).
-  Future<bool> acceptWaveformBytes(final Uint8List bytes) {
+  Future<bool> acceptWaveformBytes(
+    final Uint8List bytes, {
+    final Duration? maximumQueueWait,
+  }) {
     if (_voskLibrary != null) {
       final result = using((final arena) {
         final data = bytes.toCharPtr(arena);
@@ -118,6 +122,8 @@ class Recognizer {
 
     return _invokeRecognizerMethod<bool>('acceptWaveForm', {
       'bytes': bytes,
+      if (maximumQueueWait != null)
+        'maximumQueueWaitMs': maximumQueueWait.inMilliseconds,
     }).then((final value) => value!);
   }
 
@@ -230,11 +236,15 @@ class Recognizer {
   Future<T?> _invokeRecognizerMethod<T>(
     final String method, [
     final Map<String, dynamic> arguments = const {},
-  ]) {
-    final args = Map<String, dynamic>.from(arguments);
-    args['recognizerId'] = id;
-    return _channel.invokeMethod<T>('recognizer.$method', args);
-  }
+  ]) => invokeDiagnosedVoskMethod<T>(
+    operation: method,
+    invoke: (final operationId) {
+      final args = Map<String, dynamic>.from(arguments);
+      args['recognizerId'] = id;
+      args['operationId'] = operationId;
+      return _channel.invokeMethod<T>('recognizer.$method', args);
+    },
+  );
 
   @override
   String toString() =>

@@ -14,6 +14,60 @@ import org.junit.Test;
 
 public class RecognizerTaskSchedulerTest {
   @Test
+  public void expiredQueuedReplayDoesNotEnterNativeCall() throws Exception {
+    final RecognizerTaskScheduler scheduler = scheduler();
+    final CountDownLatch blockerStarted = new CountDownLatch(1);
+    final CountDownLatch releaseBlocker = new CountDownLatch(1);
+    final CountDownLatch completed = new CountDownLatch(2);
+    final AtomicInteger replayCalls = new AtomicInteger();
+    final AtomicInteger replayErrors = new AtomicInteger();
+
+    scheduler.submit(
+        1,
+        RecognizerTaskScheduler.Lane.COMMAND,
+        "blocker",
+        () -> {
+          blockerStarted.countDown();
+          assertTrue(releaseBlocker.await(2, TimeUnit.SECONDS));
+          return null;
+        },
+        callback(completed));
+    assertTrue(blockerStarted.await(2, TimeUnit.SECONDS));
+
+    scheduler.submit(
+        2,
+        RecognizerTaskScheduler.Lane.FREE_TEXT,
+        "acceptWaveForm",
+        "expired-operation",
+        10L,
+        () -> {
+          replayCalls.incrementAndGet();
+          return false;
+        },
+        new RecognizerTaskScheduler.Callback<Boolean>() {
+          @Override
+          public void onSuccess(Boolean value) {
+            completed.countDown();
+          }
+
+          @Override
+          public void onError(Exception error) {
+            if (error instanceof RecognizerTaskScheduler.TaskCancelledException) {
+              replayErrors.incrementAndGet();
+            }
+            completed.countDown();
+          }
+        });
+
+    Thread.sleep(30L);
+    releaseBlocker.countDown();
+    assertTrue(completed.await(2, TimeUnit.SECONDS));
+    assertEquals(0, replayCalls.get());
+    assertEquals(1, replayErrors.get());
+    assertTrue(scheduler.shutdownAfterCurrent(() -> {}, 2000));
+  }
+
+  @Test
   public void commandOvertakesQueuedFreeTextAfterActiveReplay() throws Exception {
     final RecognizerTaskScheduler scheduler = scheduler();
     final List<String> order = Collections.synchronizedList(new ArrayList<>());
@@ -137,6 +191,75 @@ public class RecognizerTaskSchedulerTest {
         java.util.Arrays.asList(
             "activeReplay", "commandAccept", "commandPartial", "replay"),
         order);
+    assertTrue(scheduler.shutdownAfterCurrent(() -> {}, 2000));
+  }
+
+  @Test
+  public void commandHandoffLeaseIsNotRenewedIndefinitely() throws Exception {
+    final RecognizerTaskScheduler scheduler = scheduler();
+    final List<String> order = Collections.synchronizedList(new ArrayList<>());
+    final CountDownLatch initialStarted = new CountDownLatch(1);
+    final CountDownLatch releaseInitial = new CountDownLatch(1);
+    final CountDownLatch firstFollowUpSubmitted = new CountDownLatch(1);
+    final CountDownLatch completed = new CountDownLatch(6);
+
+    scheduler.submit(
+        1,
+        RecognizerTaskScheduler.Lane.COMMAND,
+        "initialCommand",
+        () -> {
+          order.add("initialCommand");
+          initialStarted.countDown();
+          assertTrue(releaseInitial.await(2, TimeUnit.SECONDS));
+          return null;
+        },
+        callback(completed));
+    assertTrue(initialStarted.await(2, TimeUnit.SECONDS));
+
+    scheduler.submit(
+        2,
+        RecognizerTaskScheduler.Lane.FREE_TEXT,
+        "freeText",
+        () -> {
+          order.add("freeText");
+          return null;
+        },
+        callback(completed));
+
+    final Thread producer = new Thread(() -> {
+      for (int index = 1; index <= 4; index++) {
+        final int commandIndex = index;
+        scheduler.submit(
+            1,
+            RecognizerTaskScheduler.Lane.COMMAND,
+            "command" + commandIndex,
+            () -> {
+              order.add("command" + commandIndex);
+              return null;
+            },
+            callback(completed));
+        if (index == 1) {
+          firstFollowUpSubmitted.countDown();
+        }
+        if (index < 4) {
+          try {
+            Thread.sleep(60L);
+          } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            return;
+          }
+        }
+      }
+    });
+    producer.start();
+    assertTrue(firstFollowUpSubmitted.await(2, TimeUnit.SECONDS));
+    releaseInitial.countDown();
+
+    assertTrue(completed.await(3, TimeUnit.SECONDS));
+    producer.join(1000L);
+    assertTrue(order.indexOf("command1") < order.indexOf("freeText"));
+    assertTrue(order.indexOf("command2") < order.indexOf("freeText"));
+    assertTrue(order.indexOf("freeText") < order.indexOf("command4"));
     assertTrue(scheduler.shutdownAfterCurrent(() -> {}, 2000));
   }
 
@@ -395,6 +518,33 @@ public class RecognizerTaskSchedulerTest {
         message -> message.contains("commandWaitingForReplay=true")));
     releaseActive.countDown();
     assertTrue(completed.await(2, TimeUnit.SECONDS));
+    assertTrue(scheduler.shutdownAfterCurrent(() -> {}, 2000));
+  }
+
+  @Test
+  public void preservesOperationIdAcrossLifecycleLogs() throws Exception {
+    final List<String> logs = Collections.synchronizedList(new ArrayList<>());
+    final RecognizerTaskScheduler scheduler = new RecognizerTaskScheduler(
+        "test-vosk-scheduler",
+        (warning, message) -> logs.add(message));
+    final CountDownLatch completed = new CountDownLatch(1);
+
+    scheduler.submit(
+        3,
+        RecognizerTaskScheduler.Lane.FREE_TEXT,
+        "getFinalResult",
+        "dart-operation-42",
+        () -> null,
+        callback(completed));
+
+    assertTrue(completed.await(2, TimeUnit.SECONDS));
+    assertTrue(logs.stream().anyMatch(message ->
+        message.contains("stage=start")
+            && message.contains("operationId=dart-operation-42")));
+    assertTrue(logs.stream().anyMatch(message ->
+        message.contains("stage=done")
+            && message.contains("operationId=dart-operation-42")
+            && message.contains("nativeMs=")));
     assertTrue(scheduler.shutdownAfterCurrent(() -> {}, 2000));
   }
 
