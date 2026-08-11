@@ -43,10 +43,9 @@ class WearStatusIconReporter {
     printerAvailable: false,
     voiceCommandsEnabled: true,
   );
-  WearGlassesPayload? _lastPayload;
+  WearGlassesPayload? _lastDeliveredPayload;
   WearVoiceCommandEvent? _pendingPerformanceTrace;
   Timer? _timer;
-  Timer? _transientTimer;
   int _payloadGeneration = 0;
   int _lifecycleGeneration = 0;
   int _voiceStartupGeneration = 0;
@@ -55,12 +54,13 @@ class WearStatusIconReporter {
   bool _wasPrinterAvailable = true;
   bool _voiceStartupActive = false;
   bool _projectionVisible = false;
+  bool _hasDeliveredBase = false;
   final ValueNotifier<bool> _voiceCommandsEnabled = ValueNotifier<bool>(true);
   WearScreenId Function()? _currentScreenForTesting;
   Future<WearStatusIconSnapshot> Function()? _refreshForTesting;
 
   WearStatusIconSnapshot get snapshot => _snapshot;
-  WearGlassesPayload? get lastPayload => _lastPayload;
+  WearGlassesPayload? get lastPayload => _lastDeliveredPayload;
 
   void beginPerformanceTrace(WearVoiceCommandEvent event) {
     _pendingPerformanceTrace = event;
@@ -125,11 +125,10 @@ class WearStatusIconReporter {
     _lifecycleGeneration++;
     _timer?.cancel();
     _timer = null;
-    _transientTimer?.cancel();
-    _transientTimer = null;
     _voiceStartupActive = false;
     _projectionVisible = false;
-    _lastPayload = null;
+    _hasDeliveredBase = false;
+    _lastDeliveredPayload = null;
     _payloadGeneration++;
     _wasWifiAvailable = true;
     _wasPrinterAvailable = true;
@@ -278,40 +277,6 @@ class WearStatusIconReporter {
     await _sendToProjection(next, lifecycleGeneration, payloadGeneration);
   }
 
-  Future<void> showTransientFastForScreen(
-    WearScreenId screen,
-    WearGlassesPayload payload, {
-    Duration duration = const Duration(seconds: 3),
-  }) async {
-    final int lifecycleGeneration = _lifecycleGeneration;
-    if (_shouldDeferForVoiceStartup(payload)) return;
-    if (!_isCurrentScreen(screen)) return;
-    _transientTimer?.cancel();
-    final WearGlassesPayload? restorePayload = _lastPayload;
-    final int restoreGeneration = _payloadGeneration;
-    await sendTransientFast(payload);
-    if (lifecycleGeneration != _lifecycleGeneration) return;
-    _transientTimer = Timer(duration, () {
-      if (restorePayload == null ||
-          restoreGeneration != _payloadGeneration ||
-          !_isCurrentScreen(screen)) {
-        return;
-      }
-      unawaited(sendFastForScreen(screen, restorePayload));
-    });
-  }
-
-  Future<void> showTransientStatusText(
-    WearScreenId screen,
-    String statusText, {
-    Duration duration = const Duration(seconds: 3),
-  }) async {
-    final WearGlassesPayload? current = _lastPayload;
-    if (current == null) return;
-    final WearGlassesPayload withNotice = current.copyWithStatusText(statusText);
-    await showTransientFastForScreen(screen, withNotice, duration: duration);
-  }
-
   Future<void> show(WearGlassesPayload payload) async {
     final int lifecycleGeneration = _lifecycleGeneration;
     if (_shouldDeferForVoiceStartup(payload)) return;
@@ -328,13 +293,12 @@ class WearStatusIconReporter {
 
   Future<void> refreshAndResend() async {
     final int lifecycleGeneration = _lifecycleGeneration;
-    final WearGlassesPayload? payload = _lastPayload;
     final int payloadGeneration = _payloadGeneration;
-    if (payload == null) {
+    if (_voiceStartupActive) return;
+    if (!_hasDeliveredBase) {
       await refresh(expectedGeneration: lifecycleGeneration);
       return;
     }
-    if (_voiceStartupActive) return;
 
     final WearStatusIconSnapshot previous = _snapshot;
     final WearStatusIconSnapshot next = await refresh(
@@ -348,14 +312,7 @@ class WearStatusIconReporter {
       return;
     }
 
-    final WearGlassesPayload updated = _withSnapshot(payload, next);
-    final int nextPayloadGeneration = _beginPayloadUpdate();
-    _commitPayload(updated, nextPayloadGeneration);
-    await _sendToProjection(
-      updated,
-      lifecycleGeneration,
-      nextPayloadGeneration,
-    );
+    await WearDependencies.I.wearFlowController.renderCurrentGlasses();
   }
 
   WearGlassesPayload _withSnapshot(
@@ -381,14 +338,13 @@ class WearStatusIconReporter {
   }
 
   int _beginPayloadUpdate() {
-    _transientTimer?.cancel();
-    _transientTimer = null;
     return ++_payloadGeneration;
   }
 
   void _commitPayload(WearGlassesPayload payload, int generation) {
     if (generation == _payloadGeneration) {
-      _lastPayload = payload;
+      _lastDeliveredPayload = payload;
+      _hasDeliveredBase = true;
     }
   }
 

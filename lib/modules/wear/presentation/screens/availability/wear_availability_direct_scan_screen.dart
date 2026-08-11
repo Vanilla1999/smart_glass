@@ -1,508 +1,141 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_availability_runtime.dart';
+import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
-import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_flow_state.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
-import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
-import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
-import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availability_glasses_payloads.dart';
-import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_input_screen.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/availability/cubit/wear_availability_direct_scan_cubit.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_check_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
-import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
-import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
-class WearAvailabilityDirectScanScreen extends ConsumerStatefulWidget {
+class WearAvailabilityDirectScanScreen extends StatefulWidget {
   const WearAvailabilityDirectScanScreen({super.key});
-
   static const String route = '/wear_availability_direct_scan';
 
   @override
-  ConsumerState<WearAvailabilityDirectScanScreen> createState() =>
-      _WearAvailabilityDirectScanScreenState();
+  State<WearAvailabilityDirectScanScreen> createState() => _State();
 }
 
-class _WearAvailabilityDirectScanScreenState
-    extends ConsumerState<WearAvailabilityDirectScanScreen> {
+class _State extends State<WearAvailabilityDirectScanScreen> {
   final ScrollController _scroll = ScrollController();
-  late final WearScreenActionRegistration _screenActionsRegistration;
-  int _focusedIndex = 0;
+  late final WearFlowController _flow = WearDependencies.I.wearFlowController;
+  late final StreamSubscription<WearAvailabilityRuntimeState> _subscription;
+  late WearAvailabilityRuntimeState _state;
+  late final WearScreenActionRegistration _actions;
 
   @override
   void initState() {
     super.initState();
-    WearDependencies.I.wearFlowController.enterScreen(
-      WearScreenId.availabilityDirectScan,
-    );
-    _screenActionsRegistration =
-        WearDependencies.I.wearFlowController.registerScreenActions(
-      WearScreenId.availabilityDirectScan,
-      WearScreenActionHandler(
-        onUp: _onVoiceUp,
-        onDown: _onVoiceDown,
-        onSelect: _onVoiceSelect,
-        onManualInput: _manualInput,
-        onPhrase: _onVoicePhrase,
-        onPartialPhrase: _onVoicePartialPhrase,
-        onDynamicItem: _onVoiceDynamicItem,
-        dynamicVoiceItems: _dynamicVoiceItems,
-        onBarcode: (String barcode) => ref
-            .read(wearAvailabilityDirectScanProvider.notifier)
-            .handleBarcode(barcode),
-        barcodeEnabled: () {
-          final WearAvailabilityDirectScanState state =
-              ref.read(wearAvailabilityDirectScanProvider);
-          return !state.isLoading && state.duplicateProducts.isEmpty;
-        },
-        presentationState: () {
-          final WearAvailabilityDirectScanState state =
-              ref.read(wearAvailabilityDirectScanProvider);
-          return WearAvailabilityRuntimeState(
-            flow: WearAvailabilityFlowState(
-              step: WearAvailabilityFlowStep.productSelection,
-              duplicateProducts: state.duplicateProducts,
-              message: state.message,
-            ),
-            focusedIndex: _focusedIndex,
-            busy: state.isLoading,
-          );
-        },
-        restorePresentationState: (Object snapshot) {
-          if (snapshot is! WearAvailabilityRuntimeState) return;
-          ref
-              .read(wearAvailabilityDirectScanProvider.notifier)
-              .restoreFlow(snapshot.flow);
-        },
-      ),
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      WearStatusIconReporter.I.send(
-        WearAvailabilityGlassesPayloads.directScanWaiting(),
-      );
+    _state = _flow.availabilityState;
+    _subscription = _flow.availabilityStateStream.listen((next) {
+      final int previous = _state.focusedIndex;
+      if (mounted) setState(() => _state = next);
+      if (previous != next.focusedIndex) _scrollTo(next.focusedIndex);
     });
+    _flow.enterScreen(WearScreenId.availabilityDirectScan);
+    _actions = _flow.registerScreenActions(
+      WearScreenId.availabilityDirectScan,
+      WearScreenActionHandler(onManualInput: _manualInput),
+    );
   }
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController
-        .unregisterScreenActions(_screenActionsRegistration);
+    _flow.unregisterScreenActions(_actions);
+    unawaited(_subscription.cancel());
     _scroll.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final WearAvailabilityDirectScanState state =
-        ref.watch(wearAvailabilityDirectScanProvider);
-
-    ref.listen<WearAvailabilityDirectScanState>(
-      wearAvailabilityDirectScanProvider,
-      (
-        WearAvailabilityDirectScanState? previous,
-        WearAvailabilityDirectScanState next,
-      ) {
-        if (previous?.phase != next.phase ||
-            previous?.duplicateProducts != next.duplicateProducts) {
-          WearDependencies.I.wearFlowController
-              .refreshScreenActions(WearScreenId.availabilityDirectScan);
-        }
-        _sendGlassesState(next);
-        if (previous?.navFlow != next.navFlow && next.navFlow != null) {
-          final WearAvailabilityFlowState flow = next.navFlow!;
-          ref
-              .read(wearAvailabilityDirectScanProvider.notifier)
-              .consumeNavigation();
-          _openCheck(flow);
-        }
-      },
-    );
-
+    final List<WearAvailabilityProduct> duplicates = _state.duplicateProducts;
     return WearScreenScaffold(
       showHomeButton: true,
       scrollController: _scroll,
-      child: Stack(
-        children: <Widget>[
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(4.5),
-              child: state.duplicateProducts.isEmpty
-                  ? _DirectScanContent(
-                      message: state.message,
-                      onManualInput: _manualInput,
-                    )
-                  : _DuplicateProductsContent(
-                      scroll: _scroll,
-                      products: state.duplicateProducts,
-                      selectedIndex: _focusedIndex,
-                      onFocusChanged: (int index) {
-                        if (index == _focusedIndex) return;
-                        _focusedIndex = index;
-                        _sendGlassesState(
-                          ref.read(wearAvailabilityDirectScanProvider),
-                          fast: true,
-                        );
-                      },
-                      onSelect: (WearAvailabilityProduct product) => ref
-                          .read(wearAvailabilityDirectScanProvider.notifier)
-                          .selectDuplicate(product),
+      child: Stack(children: <Widget>[
+        Center(
+          child: duplicates.isEmpty
+              ? Column(mainAxisSize: MainAxisSize.min, children: <Widget>[
+                  Text('Сканирование товара', style: WearTypography.lable18),
+                  const SizedBox(height: 12),
+                  Text(
+                    _state.message ?? 'Наведите камеру на штрих-код',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: 150,
+                    child: WearPill(
+                      title: 'Ручной ввод',
+                      icon: WearImages.barcode,
+                      onTap: _manualInput,
                     ),
+                  ),
+                ])
+              : WearScalingListView(
+                  controller: _scroll,
+                  itemCount: duplicates.length + 2,
+                  itemExtent: 56,
+                  padding: const EdgeInsets.fromLTRB(0, 40, 0, 4.5),
+                  itemBuilder: (_, int index) {
+                    if (index == 0) {
+                      return Align(
+                        alignment: Alignment.topCenter,
+                        child: Text('Дубль ШК', style: WearTypography.lable),
+                      );
+                    }
+                    if (index == duplicates.length + 1) {
+                      return const SizedBox.shrink();
+                    }
+                    final WearAvailabilityProduct product =
+                        duplicates[index - 1];
+                    return WearPill(
+                      title: product.name,
+                      subtitle: 'Код ${product.code}',
+                      icon: WearImages.barcode,
+                      onTap: () => _flow.selectAvailabilityItem(product),
+                    );
+                  },
+                  onFocusChanged: (int index) => _flow.focusAvailabilityItem(
+                    (index - 1).clamp(0, duplicates.length - 1),
+                  ),
+                ),
+        ),
+        if (_state.busy)
+          const Positioned.fill(
+            child: ColoredBox(
+              color: Color(0xCCFFFFFF),
+              child: Center(child: WearLoading(size: 44)),
             ),
           ),
-          if (state.isLoading)
-            Positioned.fill(
-              child: ColoredBox(
-                color: const Color(0xCCFFFFFF),
-                child: Center(
-                  child: _LoadingContent(state: state),
-                ),
-              ),
-            ),
-        ],
-      ),
+      ]),
     );
   }
 
   Future<void> _manualInput() async {
-    final String? code = await context.push<String>(
-      WearPrintCodeInputScreen.route,
-    );
-    if (code == null || code.trim().isEmpty) return;
-    ref
-        .read(wearAvailabilityDirectScanProvider.notifier)
-        .handleBarcode(code.trim());
-  }
-
-  Future<void> _openCheck(WearAvailabilityFlowState flow) async {
-    if (!mounted) return;
-    await context.push(WearAvailabilityCheckScreen.route, extra: flow);
-    if (!mounted) return;
-    ref.read(wearAvailabilityDirectScanProvider.notifier).resetForNextScan();
-  }
-
-  void _onVoiceUp() {
-    final WearAvailabilityDirectScanState state =
-        ref.read(wearAvailabilityDirectScanProvider);
-    final List<WearAvailabilityProduct> products = state.duplicateProducts;
-    if (products.isEmpty) return;
-    _focusedIndex = _focusedIndex.clamp(0, products.length - 1);
-    if (_focusedIndex <= 0) return;
-    _focusedIndex--;
-    _scrollToFocused();
-    _sendGlassesState(state, fast: true);
-  }
-
-  void _onVoiceDown() {
-    final WearAvailabilityDirectScanState state =
-        ref.read(wearAvailabilityDirectScanProvider);
-    final List<WearAvailabilityProduct> products = state.duplicateProducts;
-    if (products.isEmpty) return;
-    _focusedIndex = _focusedIndex.clamp(0, products.length - 1);
-    if (_focusedIndex >= products.length - 1) return;
-    _focusedIndex++;
-    _scrollToFocused();
-    _sendGlassesState(state, fast: true);
-  }
-
-  void _onVoiceSelect() {
-    final WearAvailabilityDirectScanState state =
-        ref.read(wearAvailabilityDirectScanProvider);
-    final List<WearAvailabilityProduct> products = state.duplicateProducts;
-    if (products.isEmpty) {
-      _manualInput();
-      return;
-    }
-    final int productIndex = _focusedIndex.clamp(0, products.length - 1);
-    ref
-        .read(wearAvailabilityDirectScanProvider.notifier)
-        .selectDuplicate(products[productIndex]);
-  }
-
-  VoiceDynamicItemsSnapshot _dynamicVoiceItems() {
-    final List<VoiceDynamicItem> items = ref
-        .read(wearAvailabilityDirectScanProvider)
-        .duplicateProducts
-        .map((WearAvailabilityProduct product) => VoiceDynamicItem(
-              id: product.id.toString(),
-              label: product.name,
-            ))
-        .toList(growable: false);
-    return VoiceDynamicItemsSnapshot(
-      revision: Object.hashAll(
-        items.map((VoiceDynamicItem item) => item.revisionHash),
-      ),
-      items: items,
-    );
-  }
-
-  Future<void> _onVoicePhrase(String phrase) async {
-    final VoiceListMatch<VoiceDynamicItem> match = VoiceListMatcher.match(
-      phrase,
-      _dynamicVoiceItems().items,
-      (VoiceDynamicItem item) => item.label,
-      aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
-    );
-    if (match.type == VoiceListMatchType.unique) {
-      await _onVoiceDynamicItem(match.item!.id);
+    final String? code =
+        await context.push<String>(WearPrintCodeInputScreen.route);
+    if (code != null && code.trim().isNotEmpty) {
+      await _flow.handleBarcode(code.trim());
     }
   }
 
-  bool _onVoicePartialPhrase(String phrase) {
-    final List<VoiceDynamicItem> items = _dynamicVoiceItems().items;
-    final VoiceListMatch<VoiceDynamicItem> match =
-        VoiceListMatcher.canMatchPartial(phrase)
-            ? VoiceListMatcher.match(
-                phrase,
-                items,
-                (VoiceDynamicItem item) => item.label,
-                aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
-              )
-            : VoiceListMatcher.matchExactPhrase(
-                phrase,
-                items,
-                (VoiceDynamicItem item) => item.label,
-                aliasesOf: (VoiceDynamicItem item) => item.voiceAliases,
-              );
-    if (match.type != VoiceListMatchType.unique) return false;
-    final int index = items.indexWhere(
-      (VoiceDynamicItem item) => item.id == match.item!.id,
-    );
-    if (index < 0) return false;
-    _focusedIndex = index;
-    _scrollToFocused();
-    _sendGlassesState(
-      ref.read(wearAvailabilityDirectScanProvider),
-      fast: true,
-    );
-    return true;
-  }
-
-  Future<void> _onVoiceDynamicItem(String itemId) async {
-    final List<WearAvailabilityProduct> products =
-        ref.read(wearAvailabilityDirectScanProvider).duplicateProducts;
-    final int index = products.indexWhere(
-      (WearAvailabilityProduct product) => product.id.toString() == itemId,
-    );
-    if (index < 0) return;
-    _focusedIndex = index;
-    ref
-        .read(wearAvailabilityDirectScanProvider.notifier)
-        .selectDuplicate(products[index]);
-  }
-
-  void _scrollToFocused() {
-    if (!_scroll.hasClients) return;
-    final double target = ((_focusedIndex + 1) * 56.0).clamp(
-      0.0,
-      _scroll.position.maxScrollExtent,
-    );
-    _scroll.animateTo(
-      target,
-      duration: const Duration(milliseconds: 150),
-      curve: Curves.easeOut,
-    );
-  }
-
-  void _sendGlassesState(
-    WearAvailabilityDirectScanState state, {
-    bool fast = false,
-  }) {
-    if (fast) {
-      _sendGlassesPayload(state, fast: true);
-      return;
-    }
+  void _scrollTo(int index) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _sendGlassesPayload(state);
+      if (!_scroll.hasClients) return;
+      _scroll.animateTo(
+        (index * 56.0).clamp(0.0, _scroll.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+      );
     });
-  }
-
-  void _sendGlassesPayload(
-    WearAvailabilityDirectScanState state, {
-    bool fast = false,
-  }) {
-    if (!mounted ||
-        WearDependencies.I.wearFlowController.state.screen !=
-            WearScreenId.availabilityDirectScan) {
-      return;
-    }
-    final int expectedRevision = _dynamicVoiceItems().revision;
-    WearGlassesPayload payload;
-    if (state.isLoading) {
-      payload = WearAvailabilityGlassesPayloads.loading(
-        title: 'Сканирование товара',
-        statusText: state.loadingText,
-        statusIcon: state.loadingIcon,
-      );
-    } else if (state.duplicateProducts.isNotEmpty) {
-      payload = WearAvailabilityGlassesPayloads.duplicates(
-        state.duplicateProducts,
-        selectedIndex: _focusedIndex,
-        onVoiceHintsPrepared: () {
-          if (!mounted) return;
-          final WearAvailabilityDirectScanState current =
-              ref.read(wearAvailabilityDirectScanProvider);
-          if (_dynamicVoiceItems().revision != expectedRevision) {
-            return;
-          }
-          _sendGlassesPayload(current, fast: true);
-        },
-      );
-    } else {
-      payload = WearAvailabilityGlassesPayloads.directScanWaiting(
-        statusText: state.message,
-      );
-    }
-    WearDependencies.I.wearFlowController.rememberScreenPayload(
-      WearScreenId.availabilityDirectScan,
-      payload,
-    );
-    if (fast) {
-      WearStatusIconReporter.I.sendFastForScreen(
-        WearScreenId.availabilityDirectScan,
-        payload,
-      );
-    } else {
-      WearStatusIconReporter.I.sendForScreen(
-        WearScreenId.availabilityDirectScan,
-        payload,
-      );
-    }
-  }
-}
-
-class _DirectScanContent extends StatelessWidget {
-  const _DirectScanContent({
-    required this.message,
-    required this.onManualInput,
-  });
-
-  final String message;
-  final VoidCallback onManualInput;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Text(
-          'Сканирование товара',
-          style: WearTypography.lable18,
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Наведите камеру\nна штрих-код',
-          style: WearTypography.lable.copyWith(
-            color: WearColors.textSecondary,
-            height: 1.2,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 14),
-        Text(
-          message,
-          style: WearTypography.bodysml,
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          width: 150,
-          child: WearPill(
-            title: 'Ручной ввод',
-            icon: WearImages.barcode,
-            onTap: onManualInput,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DuplicateProductsContent extends StatelessWidget {
-  const _DuplicateProductsContent({
-    required this.scroll,
-    required this.products,
-    required this.selectedIndex,
-    required this.onFocusChanged,
-    required this.onSelect,
-  });
-
-  final ScrollController scroll;
-  final List<WearAvailabilityProduct> products;
-  final int selectedIndex;
-  final ValueChanged<int> onFocusChanged;
-  final ValueChanged<WearAvailabilityProduct> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    return WearScalingListView(
-      controller: scroll,
-      itemCount: products.length + 2,
-      itemExtent: 56,
-      padding: const EdgeInsets.fromLTRB(0, 40, 0, 4.5),
-      edgeFractionTop: 0.0,
-      minScale: 0.68,
-      minOpacity: 0.26,
-      extraSideInset: 40,
-      itemBuilder: (BuildContext context, int i) {
-        if (i == 0) {
-          return Align(
-            alignment: Alignment.topCenter,
-            child: Text(
-              'Дубль ШК',
-              style: WearTypography.lable,
-              textAlign: TextAlign.center,
-            ),
-          );
-        }
-        if (i == products.length + 1) {
-          return const SizedBox.shrink();
-        }
-
-        final WearAvailabilityProduct product = products[i - 1];
-        return WearPill(
-          title: product.name,
-          subtitle: 'Код ${product.code}',
-          icon: WearImages.barcode,
-          onTap: () => onSelect(product),
-        );
-      },
-      onFocusChanged: (int listIndex) {
-        final int productIndex = (listIndex - 1).clamp(0, products.length - 1);
-        onFocusChanged(productIndex);
-      },
-    );
-  }
-}
-
-class _LoadingContent extends StatelessWidget {
-  const _LoadingContent({required this.state});
-
-  final WearAvailabilityDirectScanState state;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        const WearLoading(size: 44),
-        const SizedBox(height: 12),
-        Text(
-          state.loadingText,
-          style: WearTypography.lable,
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
   }
 }

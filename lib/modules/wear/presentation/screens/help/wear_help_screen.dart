@@ -7,7 +7,6 @@ import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
-import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
@@ -35,7 +34,10 @@ class _WearHelpScreenState extends State<WearHelpScreen>
       WearScreenActionHandler(onSelect: _onVoiceSelect),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      WearStatusIconReporter.I.send(WearGlassesPayload.help());
+      WearDependencies.I.wearFlowController.publishScreenPayload(
+        WearScreenId.help,
+        WearGlassesPayload.help(),
+      );
     });
   }
 
@@ -48,7 +50,6 @@ class _WearHelpScreenState extends State<WearHelpScreen>
   }
 
   void _onVoiceSelect() {
-    WearStatusIconReporter.I.send(WearGlassesPayload.menu());
     context.pop();
   }
 
@@ -87,7 +88,6 @@ class _WearHelpScreenState extends State<WearHelpScreen>
           _OutlinedButton(
             title: 'Начать работу',
             onTap: () {
-              WearStatusIconReporter.I.send(WearGlassesPayload.menu());
               context.pop();
             },
           ),

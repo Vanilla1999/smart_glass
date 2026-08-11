@@ -10,10 +10,7 @@ import 'package:smart_glasses/core/constants/app_constants.dart';
 import 'package:smart_glasses/core/services/method_channel_service.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
-import 'package:smart_glasses/modules/wear/data/bdto/data_source/bdto_datasource.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
-import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/available_printer.dart';
-import 'package:smart_glasses/modules/wear/domain/price_tag_print/use_case/get_available_printers_use_case.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_control_service.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_command_parser_service.dart';
 import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_glasses_state.dart';
@@ -41,7 +38,6 @@ import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/wear_main_screen.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/printers/cubit/wear_printer_select_cubit.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/menu/wear_menu_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/photo/wear_latest_photo_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/printers/wear_printer_select_screen.dart';
@@ -50,7 +46,6 @@ import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_scan_i
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_module_app.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/services/wear_wifi_status_service.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Bridges WearGlassesOutput → MethodChannel → GlassesCoordinatorCubit
 /// simulating the real native bridge path.
@@ -1597,7 +1592,8 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
           WearStatusIconReporter.I.lastPayload?.title, 'Товар есть на полке?');
     });
 
-    test('transient feedback does not restore an older payload', () async {
+    test('transient delivery does not replace base delivery telemetry',
+        () async {
       WearStatusIconReporter.I.debugSetCurrentScreenProviderForTesting(
         () => WearScreenId.menu,
       );
@@ -1605,21 +1601,17 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
         WearScreenId.menu,
         WearGlassesPayload.menu(selectedIndex: 0),
       );
-      await WearStatusIconReporter.I.showTransientFastForScreen(
-        WearScreenId.menu,
+      await WearStatusIconReporter.I.sendTransientFast(
         WearGlassesPayload.status(
           isError: true,
           title: 'Голосовой выбор',
           statusText: 'Не найдено',
         ),
-        duration: const Duration(milliseconds: 10),
       );
       await WearStatusIconReporter.I.sendFastForScreen(
         WearScreenId.menu,
         WearGlassesPayload.menu(selectedIndex: 2),
       );
-
-      await Future<void>.delayed(const Duration(milliseconds: 20));
 
       expect(WearStatusIconReporter.I.lastPayload?.selectedIndex, 2);
       expect(WearStatusIconReporter.I.lastPayload?.title, 'Выбор раздела');
@@ -1913,86 +1905,6 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       expect(flow.state.menuFocusedIndex, 1);
     });
   });
-
-  group('WearPrinterSelectScreen widget integration', () {
-    setUp(() {
-      dotenv.testLoad(
-        fileInput: 'WEAR_GLASSES_ENABLED=false\nWEAR_USE_MOCKS=true',
-      );
-      WearSession.setUser(AuthenticatedUser(
-        idUser: 1,
-        idEmployee: 1,
-        name: 'Test User',
-      ));
-    });
-
-    tearDown(() {
-      WearSession.clear();
-    });
-
-    testWearWidget(
-        're-selecting already selected yellow printer pushes scanIdle once with selection extra',
-        (WidgetTester tester) async {
-      GoRouter? router;
-      Object? pushedExtra;
-      int scanIdleBuilds = 0;
-      final WearFlowController printerFlow = WearFlowController(
-        glassesOutput: _TestGlassesOutput(),
-        navigationOutput: _FakeNavigationOutput(),
-      )..setUiLifecycle(WearUiLifecycle.active);
-      final List<RouteBase> routes = <RouteBase>[
-        GoRoute(
-          path: WearPrinterSelectScreen.route,
-          builder: (_, __) => WearPrinterSelectScreen(
-            flowController: printerFlow,
-          ),
-        ),
-        GoRoute(
-          path: WearScanIdleScreen.route,
-          builder: (_, GoRouterState state) {
-            scanIdleBuilds++;
-            pushedExtra = state.extra;
-            return const SizedBox(key: Key('scanIdle'));
-          },
-        ),
-      ];
-      router = GoRouter(
-        initialLocation: WearPrinterSelectScreen.route,
-        routes: routes,
-      );
-      addTearDown(router.dispose);
-      WearStatusIconReporter.I.debugSetCurrentScreenProviderForTesting(
-        () => WearScreenId.printerSelect,
-      );
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: <Override>[
-            wearPrinterSelectNotifierProvider.overrideWith(
-              (ref) => _PresetPrinterSelectNotifier(),
-            ),
-          ],
-          child: MaterialApp.router(routerConfig: router),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(router.state.matchedLocation, WearPrinterSelectScreen.route);
-      expect(find.text('Yellow'), findsOneWidget);
-
-      await printerFlow.handleVoiceCommand(
-        WearVoiceCommand.select,
-      );
-      await tester.pumpAndSettle();
-
-      expect(router.state.matchedLocation, WearScanIdleScreen.route);
-      expect(scanIdleBuilds, 1);
-      final WearPrinterSelection selection =
-          pushedExtra as WearPrinterSelection;
-      expect(selection.whitePrinter.id, 'white');
-      expect(selection.yellowPrinter.id, 'yellow');
-    });
-  });
 }
 
 final List<RouteBase> _testRoutes = <RouteBase>[
@@ -2065,30 +1977,6 @@ class _TraceNavigationOutput extends _FakeNavigationOutput {
     trace.add('navigate:${screen.name}');
     await super.goTo(screen, extra: extra);
   }
-}
-
-class _PresetPrinterSelectNotifier extends WearPrinterSelectNotifier {
-  _PresetPrinterSelectNotifier() : super(useCase: _NeverPrintersUseCase()) {
-    state = const WearPrinterSelectState(
-      phase: WearPrinterSelectPhase.idle,
-      printers: <WearPrinter>[
-        WearPrinter(id: 'white', name: 'White'),
-        WearPrinter(id: 'yellow', name: 'Yellow'),
-      ],
-      error: null,
-      whitePrinter: WearPrinter(id: 'white', name: 'White'),
-      yellowPrinter: WearPrinter(id: 'yellow', name: 'Yellow'),
-      step: WearPrinterSelectStep.yellow,
-    );
-  }
-}
-
-class _NeverPrintersUseCase extends GetAvailablePrintersUseCase {
-  _NeverPrintersUseCase() : super(BdtoDataSource());
-
-  @override
-  Future<List<AvailablePrinter>> call() =>
-      Completer<List<AvailablePrinter>>().future;
 }
 
 Future<void> _expectStaleRevisionDropped(

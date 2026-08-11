@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:smart_glasses/modules/wear/application/wear_printer_runtime.dart';
@@ -5,7 +7,6 @@ import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/available_printer.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
-import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 
 void main() {
   setUp(() {
@@ -88,38 +89,82 @@ void main() {
     expect(WearSession.printerSelectionOrNull?.yellowPrinter.id, '2');
   });
 
-  test('screen-off handoff continues from selected white printer', () async {
-    WearScreenId? target;
+  test('pause and resume preserve step and load printers once', () async {
+    int loadCount = 0;
     final WearPrinterRuntime runtime = WearPrinterRuntime(
-      loadPrinters: () async => const <AvailablePrinter>[],
+      loadPrinters: () async {
+        loadCount++;
+        return <AvailablePrinter>[
+          AvailablePrinter(number: '1', name: 'Белый'),
+          AvailablePrinter(number: '2', name: 'Жёлтый'),
+        ];
+      },
       navigate: (
-        WearScreenId screen, {
+        WearScreenId _, {
         Object? extra,
         bool replaceCurrent = false,
-      }) async {
-        target = screen;
-      },
+      }) async {},
     );
     addTearDown(runtime.dispose);
-    const WearPrinter white = WearPrinter(id: '1', name: 'Белый');
-    const WearPrinter yellow = WearPrinter(id: '2', name: 'Жёлтый');
 
-    runtime.restorePresentationState(
+    await runtime.enterScreen(WearScreenId.printerSelect);
+    await runtime.selectPrinter(runtime.state.printers.first);
+    final int focusedBeforeResume = runtime.state.focusedIndex;
+    await runtime.enterScreen(
       WearScreenId.printerSelect,
-      const WearPrinterRuntimeState(
-        printers: <WearPrinter>[white, yellow],
-        whitePrinter: white,
-        step: WearPrinterRuntimeStep.yellow,
-        focusedIndex: 0,
-      ),
     );
+
+    expect(loadCount, 1);
+    expect(runtime.state.step, WearPrinterRuntimeStep.yellow);
+    expect(runtime.state.focusedIndex, focusedBeforeResume);
+  });
+
+  test('touch and voice update the same state stream', () async {
+    final WearPrinterRuntime runtime = WearPrinterRuntime(
+      loadPrinters: () async => <AvailablePrinter>[
+        AvailablePrinter(number: '1', name: 'Белый'),
+        AvailablePrinter(number: '2', name: 'Жёлтый'),
+      ],
+      navigate: (_, {extra, replaceCurrent = false}) async {},
+    );
+    addTearDown(runtime.dispose);
+    await runtime.enterScreen(WearScreenId.printerSelect);
+
+    await runtime.selectPrinter(runtime.state.printers.first);
+    expect(runtime.state.step, WearPrinterRuntimeStep.yellow);
     await runtime.handleCommand(
       WearScreenId.printerSelect,
       WearVoiceCommand.select,
     );
 
-    expect(target, WearScreenId.scanIdle);
-    expect(WearSession.printerSelectionOrNull?.whitePrinter, white);
-    expect(WearSession.printerSelectionOrNull?.yellowPrinter, yellow);
+    expect(runtime.state.selection?.whitePrinter.id, '1');
+    expect(runtime.state.selection?.yellowPrinter.id, '2');
+  });
+
+  test('completed printer pair navigates only once', () async {
+    int navigationCount = 0;
+    final Completer<void> navigation = Completer<void>();
+    final WearPrinterRuntime runtime = WearPrinterRuntime(
+      loadPrinters: () async => <AvailablePrinter>[
+        AvailablePrinter(number: '1', name: 'Белый'),
+        AvailablePrinter(number: '2', name: 'Жёлтый'),
+      ],
+      navigate: (_, {extra, replaceCurrent = false}) {
+        navigationCount++;
+        return navigation.future;
+      },
+    );
+    addTearDown(runtime.dispose);
+    await runtime.enterScreen(WearScreenId.printerSelect);
+    await runtime.selectPrinter(runtime.state.printers.first);
+
+    final Future<void> first =
+        runtime.selectPrinter(runtime.state.visiblePrinters.first);
+    final Future<void> duplicate =
+        runtime.selectPrinter(runtime.state.visiblePrinters.first);
+    expect(navigationCount, 1);
+    navigation.complete();
+    await Future.wait(<Future<void>>[first, duplicate]);
+    expect(navigationCount, 1);
   });
 }

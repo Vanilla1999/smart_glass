@@ -62,6 +62,9 @@ class WearDependencies {
 
   late final WearFlowController wearFlowController;
   late final WearBarcodeDispatcher barcodeDispatcher;
+  late final WearScanRuntime wearScanRuntime;
+  late final WearPrinterRuntime _wearPrinterRuntime;
+  late final WearAvailabilityRuntime _wearAvailabilityRuntime;
   final WearActualScreenStore actualScreenStore = WearActualScreenStore();
 
   /// Shared audio stream — один на оба голосовых сервиса.
@@ -88,61 +91,65 @@ class WearDependencies {
       );
     }
 
+    wearScanRuntime = WearScanRuntime(
+      lookupBarcode: getBarcodeInfoUseCase().call,
+      navigate: navigate,
+      showStatus: (args, completion) => wearFlowController.showStatus(
+        args,
+        completion: completion,
+      ),
+      printProduct: (BarcodeProductInfo product) async {
+        final selection = WearSession.printerSelectionOrNull;
+        final user = WearSession.userOrNull;
+        if (selection == null) {
+          throw StateError('Не выбраны принтеры');
+        }
+        if (user == null) {
+          throw StateError('Пользователь не авторизован');
+        }
+        return printPriceTagUseCase.call(
+          userId: user.idUser,
+          employeeId: user.idEmployee,
+          articleId: product.id,
+          whiteTagsPrinterName: selection.whitePrinter.name,
+          yellowTagsPrinterName: selection.yellowPrinter.name,
+        );
+      },
+    );
+    _wearPrinterRuntime = WearPrinterRuntime(
+      loadPrinters: getAvailablePrintersUseCase().call,
+      navigate: navigate,
+    );
+    wearFlowController.setPrinterRuntime(_wearPrinterRuntime);
+    _wearAvailabilityRuntime = WearAvailabilityRuntime(
+      flowUseCase: availabilityFlowUseCase,
+      navigate: navigate,
+      fillAdd: availabilityCatalogFillUseCase().addByBarcode,
+      fillReset: availabilityCatalogFillUseCase().reset,
+      capturePhoto: () async {
+        await photoStore.captureLatestPhoto();
+      },
+      printPriceTag: (WearAvailabilityProduct product) async {
+        final selection = WearSession.printerSelectionOrNull;
+        final user = WearSession.userOrNull;
+        if (selection == null) throw StateError('Не выбраны принтеры');
+        if (user == null) throw StateError('Пользователь не авторизован');
+        if (WearMockConfig.isEnabled) return selection.whitePrinter.name;
+        return printPriceTagUseCase.call(
+          userId: user.idUser,
+          employeeId: user.idEmployee,
+          articleId: product.id,
+          whiteTagsPrinterName: selection.whitePrinter.name,
+          yellowTagsPrinterName: selection.yellowPrinter.name,
+        );
+      },
+    );
+    wearFlowController.setAvailabilityRuntime(_wearAvailabilityRuntime);
     wearFlowController.setBackgroundRuntime(
       CompositeWearBackgroundRuntime(<WearBackgroundRuntime>[
-        WearPrinterRuntime(
-          loadPrinters: getAvailablePrintersUseCase().call,
-          navigate: navigate,
-        ),
-        WearScanRuntime(
-          lookupBarcode: getBarcodeInfoUseCase().call,
-          navigate: navigate,
-          currentScreen: () => wearFlowController.state.screen,
-          printProduct: (BarcodeProductInfo product) async {
-            final selection = WearSession.printerSelectionOrNull;
-            final user = WearSession.userOrNull;
-            if (selection == null) {
-              throw StateError('Не выбраны принтеры');
-            }
-            if (user == null) {
-              throw StateError('Пользователь не авторизован');
-            }
-            return printPriceTagUseCase.call(
-              userId: user.idUser,
-              employeeId: user.idEmployee,
-              articleId: product.id,
-              whiteTagsPrinterName: selection.whitePrinter.name,
-              yellowTagsPrinterName: selection.yellowPrinter.name,
-            );
-          },
-        ),
-        WearAvailabilityRuntime(
-          flowUseCase: availabilityFlowUseCase,
-          navigate: navigate,
-          capturePhoto: () async {
-            await photoStore.captureLatestPhoto();
-          },
-          printPriceTag: (WearAvailabilityProduct product) async {
-            final selection = WearSession.printerSelectionOrNull;
-            final user = WearSession.userOrNull;
-            if (selection == null) {
-              throw StateError('Не выбраны принтеры');
-            }
-            if (user == null) {
-              throw StateError('Пользователь не авторизован');
-            }
-            if (WearMockConfig.isEnabled) {
-              return selection.whitePrinter.name;
-            }
-            return printPriceTagUseCase.call(
-              userId: user.idUser,
-              employeeId: user.idEmployee,
-              articleId: product.id,
-              whiteTagsPrinterName: selection.whitePrinter.name,
-              yellowTagsPrinterName: selection.yellowPrinter.name,
-            );
-          },
-        ),
+        _wearPrinterRuntime,
+        wearScanRuntime,
+        _wearAvailabilityRuntime,
       ]),
     );
     barcodeDispatcher = WearBarcodeDispatcher(

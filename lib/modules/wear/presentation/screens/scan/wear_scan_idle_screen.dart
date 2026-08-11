@@ -1,29 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_scan_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
-import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
-import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
-import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
-import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_voice_hints.dart';
 import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_input_screen.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/scan/cubit/wear_scan_cubit.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_product_select_screen.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_svg_icon.dart';
-import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
-class WearScanIdleScreen extends ConsumerStatefulWidget {
+class WearScanIdleScreen extends StatefulWidget {
   const WearScanIdleScreen({
     super.key,
     required this.printers,
@@ -34,22 +26,24 @@ class WearScanIdleScreen extends ConsumerStatefulWidget {
   final WearPrinterSelection? printers;
 
   @override
-  ConsumerState<WearScanIdleScreen> createState() => _WearScanIdleScreenState();
+  State<WearScanIdleScreen> createState() => _WearScanIdleScreenState();
 }
 
-class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen>
+class _WearScanIdleScreenState extends State<WearScanIdleScreen>
     with ScreenLifecycleLogging<WearScanIdleScreen> {
   late final WearScreenActionRegistration _screenActionsRegistration;
-  bool _isStatusRouteOpen = false;
-  int _statusRouteSession = 0;
+  late final StreamSubscription<WearScanRuntimeState> _stateSubscription;
+  late WearScanRuntimeState _state;
   bool _isManualInputOpen = false;
-
-  AutoDisposeStateNotifierProvider<WearScanNotifier, WearScanState>
-      get _provider => wearScanNotifierProvider(widget.printers);
 
   @override
   void initState() {
     super.initState();
+    _state = WearDependencies.I.wearScanRuntime.state;
+    _stateSubscription =
+        WearDependencies.I.wearScanRuntime.stateStream.listen((next) {
+      if (mounted) setState(() => _state = next);
+    });
     WearDependencies.I.wearFlowController.enterScreen(
       WearScreenId.scanIdle,
       extra: widget.printers,
@@ -60,23 +54,15 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen>
       WearScreenActionHandler(
         onSelect: _onVoiceSelect,
         onManualInput: _onVoiceSelect,
-        onBarcode: (String barcode) =>
-            ref.read(_provider.notifier).handleBarcode(barcode),
-        barcodeEnabled: () => !ref.read(_provider).isLoading,
-        presentationState: () => WearScanRuntimeState(
-          busy: ref.read(_provider).isLoading,
-        ),
       ),
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      WearStatusIconReporter.I.send(WearGlassesPayload.scanWaiting());
-    });
   }
 
   @override
   void dispose() {
     WearDependencies.I.wearFlowController
         .unregisterScreenActions(_screenActionsRegistration);
+    unawaited(_stateSubscription.cancel());
     super.dispose();
   }
 
@@ -110,111 +96,11 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen>
     if (code == null || code.trim().isEmpty) {
       return;
     }
-    ref.read(_provider.notifier).handleBarcode(code.trim());
+    await WearDependencies.I.wearFlowController.handleBarcode(code.trim());
   }
 
   @override
   Widget build(BuildContext context) {
-    final WearScanState state = ref.watch(_provider);
-
-    ref.listen<WearScanState>(_provider,
-        (WearScanState? previous, WearScanState next) {
-      if (previous?.phase != next.phase) {
-        WearDependencies.I.wearFlowController
-            .refreshScreenActions(WearScreenId.scanIdle);
-      }
-      void sendGlasses() {
-        if (next.isPrinting) {
-          WearStatusIconReporter.I.send(
-            WearGlassesPayload.printing(
-              productName: next.productName,
-              statusIcon: next.loadingIcon,
-            ),
-          );
-        } else {
-          WearStatusIconReporter.I.send(
-            WearGlassesPayload.loading(
-              screenType: WearGlassesScreenType.scan,
-              title: 'Сканирование',
-              statusText: next.loadingText,
-              statusIcon: next.loadingIcon,
-            ),
-          );
-        }
-      }
-
-      if (previous?.phase != next.phase &&
-          next.phase == WearScanPhase.loading) {
-        sendGlasses();
-        _dismissStatusIfOpen();
-      }
-
-      if (previous?.loadingText != next.loadingText && next.isLoading) {
-        sendGlasses();
-      }
-
-      if (previous?.loadingIcon != next.loadingIcon && next.isLoading) {
-        sendGlasses();
-      }
-
-      if (previous?.navStatus != next.navStatus && next.navStatus != null) {
-        final WearStatusScreenArgs nav = next.navStatus!;
-        WearStatusIconReporter.I.send(
-          WearGlassesPayload.status(
-            isError: nav.kind == WearStatusKind.error,
-            title: nav.title,
-            subtitle: nav.message,
-            statusText: nav.kind == WearStatusKind.error
-                ? (nav.glassesStatusText ?? 'Ошибка')
-                : 'Успешно',
-            statusIcon: nav.glassesStatusIcon ??
-                (nav.kind == WearStatusKind.success ? WearImages.good : null),
-          ),
-        );
-        ref.read(_provider.notifier).consumeNavigation();
-        _openOrReplaceStatus(nav);
-      }
-      if (previous?.navSelect != next.navSelect && next.navSelect != null) {
-        final WearProductSelectArgs args = next.navSelect!;
-        final List<VoiceDynamicItem> voiceItems = args.products
-            .map((BarcodeProductInfo product) => VoiceDynamicItem(
-                  id: product.id.toString(),
-                  label: product.name,
-                ))
-            .toList(growable: false);
-        final VoiceDynamicItemsSnapshot snapshot = VoiceDynamicItemsSnapshot(
-          revision: Object.hashAll(
-            voiceItems.map((VoiceDynamicItem item) => item.revisionHash),
-          ),
-          items: voiceItems,
-        );
-        final List<BarcodeProductInfo> visibleProducts =
-            args.products.take(4).toList(growable: false);
-        WearStatusIconReporter.I.send(
-          WearGlassesPayload(
-            screenType: WearGlassesScreenType.productSelect,
-            phase: WearGlassesPhase.idle,
-            title: 'Дубль ШК',
-            subtitle: 'Выберите нужный товар',
-            items: visibleProducts
-                .map((BarcodeProductInfo product) => product.name)
-                .toList(growable: false),
-            voiceHints: WearGlassesVoiceHints.forVisibleItems(
-              screen: WearScreenId.productSelect,
-              snapshot: snapshot,
-              visibleItemIds: visibleProducts
-                  .map((BarcodeProductInfo product) => product.id.toString())
-                  .toList(growable: false),
-            ),
-            selectedIndex: 0,
-            pageText: args.products.length > 4 ? 'Показаны первые 4' : null,
-          ),
-        );
-        ref.read(_provider.notifier).consumeNavigation();
-        _openProductSelect(args);
-      }
-    });
-
     return WearScreenScaffold(
       showHomeButton: true,
       child: Stack(
@@ -227,101 +113,16 @@ class _WearScanIdleScreenState extends ConsumerState<WearScanIdleScreen>
               ),
             ),
           ),
-          if (state.isLoading)
+          if (_state.busy)
             Positioned.fill(
               child: _ScanLoadingView(
-                statusText: state.loadingText,
-                icon: state.loadingIcon,
+                statusText: _state.loadingText,
+                icon: _state.loadingIcon,
               ),
             ),
         ],
       ),
     );
-  }
-
-  Future<void> _openOrReplaceStatus(WearStatusScreenArgs args) async {
-    final int session = ++_statusRouteSession;
-    final int statusStartedAt = DateTime.now().millisecondsSinceEpoch;
-    final WearStatusScreenArgs statusArgs = args.autoStartedAtMillis == null
-        ? args.withAutoStartedAt(statusStartedAt)
-        : args;
-    final bool scanScreenIsCurrent = ModalRoute.of(context)?.isCurrent ?? true;
-
-    if (_isStatusRouteOpen && !scanScreenIsCurrent) {
-      if (mounted && Navigator.of(context).canPop()) {
-        context.pop();
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    _isStatusRouteOpen = true;
-    print(
-      '[BACK-DEBUG] ScanIdle._openOrReplaceStatus: pushing status, '
-      'kind=${statusArgs.kind}, title=${statusArgs.title}, '
-      'autoAfter=${statusArgs.autoAfter}, startedAt=$statusStartedAt',
-    );
-    await context.push(WearStatusScreen.route, extra: statusArgs);
-    print(
-      '[BACK-DEBUG] ScanIdle._openOrReplaceStatus: status popped back, '
-      'session=$session, _statusRouteSession=$_statusRouteSession',
-    );
-
-    if (!mounted) {
-      return;
-    }
-    if (session == _statusRouteSession) {
-      _isStatusRouteOpen = false;
-    }
-
-    final bool isPrintSuccess = statusArgs.kind == WearStatusKind.success &&
-        statusArgs.title.toLowerCase().contains('ценник');
-    print(
-      '[BACK-DEBUG] ScanIdle._openOrReplaceStatus: isPrintSuccess=$isPrintSuccess, '
-      'mounted=$mounted',
-    );
-    if (isPrintSuccess && mounted) {
-      ref.read(_provider.notifier).allowRepeatLastBarcode();
-      WearStatusIconReporter.I.sendFast(WearGlassesPayload.scanWaiting());
-    }
-  }
-
-  void _dismissStatusIfOpen() {
-    final bool scanScreenIsCurrent = ModalRoute.of(context)?.isCurrent ?? true;
-    if (!_isStatusRouteOpen || scanScreenIsCurrent) {
-      return;
-    }
-    if (Navigator.of(context).canPop()) {
-      context.pop();
-    }
-    _isStatusRouteOpen = false;
-  }
-
-  Future<void> _openProductSelect(WearProductSelectArgs args) async {
-    final bool scanScreenIsCurrent = ModalRoute.of(context)?.isCurrent ?? true;
-    if (_isStatusRouteOpen && !scanScreenIsCurrent) {
-      if (mounted && Navigator.of(context).canPop()) {
-        context.pop();
-      }
-      _isStatusRouteOpen = false;
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    final BarcodeProductInfo? product = await context.push<BarcodeProductInfo>(
-      WearProductSelectScreen.route,
-      extra: args,
-    );
-    if (product == null) {
-      return;
-    }
-    ref.read(_provider.notifier).printSelectedProduct(product);
   }
 }
 

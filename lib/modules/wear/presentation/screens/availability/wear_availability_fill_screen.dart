@@ -1,15 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_availability_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
-import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
-import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_input_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
-import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
@@ -26,15 +26,18 @@ class WearAvailabilityFillScreen extends StatefulWidget {
 class _WearAvailabilityFillScreenState
     extends State<WearAvailabilityFillScreen> {
   late final WearScreenActionRegistration _screenActionsRegistration;
-
-  bool _isLoading = false;
-  int _savedCount = 0;
-  String _message = 'Сканируйте товары с полки';
-  String? _lastBarcode;
+  late final StreamSubscription<WearAvailabilityRuntimeState> _subscription;
+  late WearAvailabilityRuntimeState _state;
 
   @override
   void initState() {
     super.initState();
+    _state = WearDependencies.I.wearFlowController.availabilityState;
+    _subscription = WearDependencies
+        .I.wearFlowController.availabilityStateStream
+        .listen((next) {
+      if (mounted) setState(() => _state = next);
+    });
     WearDependencies.I.wearFlowController.enterScreen(
       WearScreenId.availabilityFill,
     );
@@ -43,22 +46,19 @@ class _WearAvailabilityFillScreenState
       WearScreenId.availabilityFill,
       WearScreenActionHandler(
         onSelect: _manualInput,
-        onDown: _reset,
+        onDown: WearDependencies.I.wearFlowController.resetAvailabilityFill,
         onManualInput: _manualInput,
-        onClear: _reset,
-        onBarcode: _addBarcode,
-        barcodeEnabled: () => !_isLoading,
+        onClear: WearDependencies.I.wearFlowController.resetAvailabilityFill,
+        onBarcode: WearDependencies.I.wearFlowController.handleBarcode,
       ),
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _sendGlassesState();
-    });
   }
 
   @override
   void dispose() {
     WearDependencies.I.wearFlowController
         .unregisterScreenActions(_screenActionsRegistration);
+    unawaited(_subscription.cancel());
     super.dispose();
   }
 
@@ -77,16 +77,16 @@ class _WearAvailabilityFillScreenState
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
-            if (_isLoading) const WearLoading(size: 44),
-            if (_isLoading) const SizedBox(height: 12),
+            if (_state.busy) const WearLoading(size: 44),
+            if (_state.busy) const SizedBox(height: 12),
             Text(
-              _message,
+              _state.message ?? 'Сканируйте товары с полки',
               style: WearTypography.bodysml,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              'Добавлено: $_savedCount',
+              'Добавлено: ${_state.savedCount}',
               style: WearTypography.bodyxsm,
               textAlign: TextAlign.center,
             ),
@@ -109,7 +109,8 @@ class _WearAvailabilityFillScreenState
                   child: WearPill(
                     title: 'Очистить',
                     icon: WearImages.clear,
-                    onTap: _reset,
+                    onTap: WearDependencies
+                        .I.wearFlowController.resetAvailabilityFill,
                   ),
                 ),
               ],
@@ -125,82 +126,6 @@ class _WearAvailabilityFillScreenState
       WearPrintCodeInputScreen.route,
     );
     if (code == null || code.trim().isEmpty) return;
-    await _addBarcode(code);
-  }
-
-  Future<void> _addBarcode(String barcode) async {
-    if (_isLoading) return;
-    final String normalized = barcode.trim();
-    if (normalized.isEmpty || normalized == _lastBarcode) return;
-    setState(() {
-      _isLoading = true;
-      _lastBarcode = normalized;
-      _message = 'Получаем товар...';
-    });
-    _refreshBarcodeAdmission();
-    _sendGlassesState();
-
-    try {
-      final List<WearAvailabilityProduct> products = await WearDependencies.I
-          .availabilityCatalogFillUseCase()
-          .addByBarcode(normalized);
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _savedCount += products.length;
-        _message = products.length == 1
-            ? 'Добавлено: ${products.first.name}'
-            : 'Добавлено позиций: ${products.length}';
-      });
-      _refreshBarcodeAdmission();
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _lastBarcode = null;
-        _message = _asUiMessage(error);
-      });
-      _refreshBarcodeAdmission();
-    }
-    _sendGlassesState();
-  }
-
-  void _refreshBarcodeAdmission() {
-    WearDependencies.I.wearFlowController
-        .refreshScreenActions(WearScreenId.availabilityFill);
-  }
-
-  Future<void> _reset() async {
-    if (_isLoading) return;
-    await WearDependencies.I.availabilityCatalogFillUseCase().reset();
-    if (!mounted) return;
-    setState(() {
-      _savedCount = 0;
-      _lastBarcode = null;
-      _message = 'База сканированной полки очищена';
-    });
-    _sendGlassesState();
-  }
-
-  void _sendGlassesState() {
-    WearStatusIconReporter.I.send(
-      WearGlassesPayload(
-        screenType: WearGlassesScreenType.availability,
-        phase: _isLoading ? WearGlassesPhase.loading : WearGlassesPhase.idle,
-        title: 'Наполнение базы',
-        statusText: _message,
-        isLoading: _isLoading,
-        statusIcon: _isLoading ? WearImages.barcode : WearImages.database,
-        bodyLines: <String>['Добавлено: $_savedCount'],
-      ),
-    );
-  }
-
-  String _asUiMessage(Object error) {
-    final String raw = error.toString();
-    if (raw.startsWith('Exception: ')) {
-      return raw.substring('Exception: '.length);
-    }
-    return raw;
+    await WearDependencies.I.wearFlowController.handleBarcode(code);
   }
 }

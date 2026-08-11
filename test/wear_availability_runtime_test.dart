@@ -129,18 +129,16 @@ void main() {
       ),
       product: _AvailabilityRepository.product,
     );
-    runtime.restorePresentationState(
+    await runtime.enterScreen(
       WearScreenId.availabilityCheck,
-      WearAvailabilityRuntimeState(flow: activeFlow, focusedIndex: 0),
+      extra: activeFlow,
     );
     repository.groups.complete(
       const <WearAvailabilityGroup>[_AvailabilityRepository.group],
     );
     await oldLoad;
 
-    final WearAvailabilityRuntimeState restored = runtime.presentationStateFor(
-      WearScreenId.availabilityCheck,
-    )! as WearAvailabilityRuntimeState;
+    final WearAvailabilityRuntimeState restored = runtime.state;
     expect(restored.flow.selectedProduct, _AvailabilityRepository.product);
     expect(restored.flow.step, WearAvailabilityFlowStep.productQuestion);
   });
@@ -302,17 +300,15 @@ void main() {
       product: _AvailabilityRepository.product,
     );
 
-    runtime.restorePresentationState(
+    await runtime.enterScreen(
       WearScreenId.availabilityCheck,
-      WearAvailabilityRuntimeState(flow: activeFlow, focusedIndex: 0),
+      extra: activeFlow,
     );
     await runtime.handleCommand(
       WearScreenId.availabilityCheck,
       WearVoiceCommand.no,
     );
-    final WearAvailabilityRuntimeState restored = runtime.presentationStateFor(
-      WearScreenId.availabilityCheck,
-    )! as WearAvailabilityRuntimeState;
+    final WearAvailabilityRuntimeState restored = runtime.state;
 
     expect(
       restored.flow.step,

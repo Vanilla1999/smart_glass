@@ -89,6 +89,24 @@ void main() {
     expect(json['performanceSentAtMillis'], 1040);
   });
 
+  test('status overlay preserves performance trace', () {
+    final WearGlassesPayload payload = WearGlassesPayload.menu()
+        .copyWithPerformanceTrace(
+          traceId: '7:3:1',
+          command: 'up',
+          recognizedAtMillis: 1000,
+          asrMillis: 125,
+          sentAtMillis: 1040,
+        )
+        .copyWithStatusText('Распознаю...');
+
+    expect(payload.performanceTraceId, '7:3:1');
+    expect(payload.performanceCommand, 'up');
+    expect(payload.performanceRecognizedAtMillis, 1000);
+    expect(payload.performanceAsrMillis, 125);
+    expect(payload.performanceSentAtMillis, 1040);
+  });
+
   test('structured voice hint survives bridge serialization', () {
     final Map<String, dynamic> json = const WearGlassesPayload(
       screenType: WearGlassesScreenType.printer,

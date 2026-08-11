@@ -1,77 +1,65 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smart_glasses/modules/wear/application/wear_availability_runtime.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/data/availability/local_wear_availability_repository.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_flow_state.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/use_case/wear_availability_flow_use_case.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/availability/cubit/wear_availability_check_cubit.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-
   test('camera capture is ignored before photo control step', () async {
-    var captureCalls = 0;
-    final WearAvailabilityCheckNotifier notifier =
-        WearAvailabilityCheckNotifier(
-      _photoProduct,
-      capturePhoto: () async {
-        captureCalls++;
-        return '/app/latest_photo';
-      },
-      flowUseCase: _flowUseCase(),
-    );
-    addTearDown(notifier.dispose);
+    var calls = 0;
+    final WearAvailabilityRuntime runtime = _runtime(() async => calls++);
+    addTearDown(runtime.dispose);
+    await runtime.enterScreen(WearScreenId.availabilityCheck,
+        extra: _photoProduct);
 
-    await notifier.capturePhoto();
+    await runtime.takePhoto();
 
-    expect(captureCalls, 0);
-    expect(notifier.state.flow.step, WearAvailabilityFlowStep.productQuestion);
-    expect(notifier.state.flow.check?.photoCaptured, isFalse);
+    expect(calls, 0);
+    expect(runtime.state.flow.step, WearAvailabilityFlowStep.productQuestion);
   });
 
   test('successful camera capture completes photo control step', () async {
-    var captureCalls = 0;
-    final WearAvailabilityCheckNotifier notifier =
-        WearAvailabilityCheckNotifier(
-      _photoProduct,
-      capturePhoto: () async {
-        captureCalls++;
-        return '/app/latest_photo';
-      },
-      flowUseCase: _flowUseCase(),
-    );
-    addTearDown(notifier.dispose);
-    notifier.answerProductAvailable(true);
+    var calls = 0;
+    final WearAvailabilityRuntime runtime = _runtime(() async => calls++);
+    addTearDown(runtime.dispose);
+    await runtime.enterScreen(WearScreenId.availabilityCheck,
+        extra: _photoProduct);
+    runtime.answerAvailable(true);
 
-    expect(notifier.state.flow.step, WearAvailabilityFlowStep.photoCapture);
-    await notifier.capturePhoto();
+    await runtime.takePhoto();
 
-    expect(captureCalls, 1);
-    expect(notifier.state.flow.check?.photoCaptured, isTrue);
-    expect(notifier.state.flow.step, WearAvailabilityFlowStep.readyToComplete);
+    expect(calls, 1);
+    expect(runtime.state.flow.check?.photoCaptured, isTrue);
+    expect(runtime.state.flow.step, WearAvailabilityFlowStep.readyToComplete);
   });
 
   test('camera error keeps photo control step incomplete', () async {
-    final WearAvailabilityCheckNotifier notifier =
-        WearAvailabilityCheckNotifier(
-      _photoProduct,
-      capturePhoto: () async => throw Exception('camera unavailable'),
-      flowUseCase: _flowUseCase(),
+    final WearAvailabilityRuntime runtime = _runtime(
+      () async => throw Exception('camera unavailable'),
     );
-    addTearDown(notifier.dispose);
-    notifier.answerProductAvailable(true);
+    addTearDown(runtime.dispose);
+    await runtime.enterScreen(WearScreenId.availabilityCheck,
+        extra: _photoProduct);
+    runtime.answerAvailable(true);
 
-    await notifier.capturePhoto();
+    await runtime.takePhoto();
 
-    expect(notifier.state.flow.step, WearAvailabilityFlowStep.photoCapture);
-    expect(notifier.state.flow.check?.photoCaptured, isFalse);
-    expect(notifier.state.navStatus?.kind, WearStatusKind.error);
-    expect(notifier.state.navStatus?.message, 'camera unavailable');
+    expect(runtime.state.flow.step, WearAvailabilityFlowStep.photoCapture);
+    expect(runtime.state.flow.check?.photoCaptured, isFalse);
+    expect(runtime.state.error, 'camera unavailable');
   });
 }
 
-WearAvailabilityFlowUseCase _flowUseCase() =>
-    WearAvailabilityFlowUseCase(LocalWearAvailabilityRepository());
+WearAvailabilityRuntime _runtime(Future<void> Function() capture) {
+  return WearAvailabilityRuntime(
+    flowUseCase: WearAvailabilityFlowUseCase(LocalWearAvailabilityRepository()),
+    navigate: (_, {extra, replaceCurrent = false}) async {},
+    capturePhoto: capture,
+    printPriceTag: (_) async => 'printer',
+  );
+}
 
 const WearAvailabilityProduct _photoProduct = WearAvailabilityProduct(
   id: 1,

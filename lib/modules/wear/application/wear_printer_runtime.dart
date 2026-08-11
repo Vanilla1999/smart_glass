@@ -23,18 +23,38 @@ typedef WearPrinterNavigation = Future<void> Function(
 
 enum WearPrinterRuntimeStep { white, yellow }
 
+enum WearPrinterRuntimePhase { idle, loading, error }
+
 class WearPrinterRuntimeState {
   const WearPrinterRuntimeState({
+    required this.phase,
     required this.printers,
     required this.whitePrinter,
+    required this.selection,
     required this.step,
     required this.focusedIndex,
+    required this.error,
   });
 
+  final WearPrinterRuntimePhase phase;
   final List<WearPrinter> printers;
   final WearPrinter? whitePrinter;
+  final WearPrinterSelection? selection;
   final WearPrinterRuntimeStep step;
   final int focusedIndex;
+  final String? error;
+
+  bool get isLoading => phase == WearPrinterRuntimePhase.loading;
+
+  List<WearPrinter> get visiblePrinters {
+    final WearPrinter? white = whitePrinter;
+    if (step == WearPrinterRuntimeStep.yellow && white != null) {
+      return printers
+          .where((WearPrinter printer) => printer.id != white.id)
+          .toList(growable: false);
+    }
+    return printers;
+  }
 }
 
 class WearPrinterRuntime implements WearBackgroundRuntime {
@@ -50,6 +70,8 @@ class WearPrinterRuntime implements WearBackgroundRuntime {
   final WearPrinterNavigation _navigate;
   final StreamController<WearBackgroundScreenUpdate> _updates =
       StreamController<WearBackgroundScreenUpdate>.broadcast();
+  final StreamController<WearPrinterRuntimeState> _stateController =
+      StreamController<WearPrinterRuntimeState>.broadcast();
 
   List<WearPrinter> _printers = const <WearPrinter>[];
   WearPrinter? _whitePrinter;
@@ -57,11 +79,30 @@ class WearPrinterRuntime implements WearBackgroundRuntime {
   int _focusedIndex = 0;
   bool _loading = false;
   String? _error;
+  WearPrinterSelection? _selection;
   Future<void>? _loadOperation;
+  Future<void>? _selectionOperation;
+  bool _returnSelection = false;
   int _generation = 0;
 
   @override
   Stream<WearBackgroundScreenUpdate> get updates => _updates.stream;
+
+  WearPrinterRuntimeState get state => WearPrinterRuntimeState(
+        phase: _loading
+            ? WearPrinterRuntimePhase.loading
+            : _error != null
+                ? WearPrinterRuntimePhase.error
+                : WearPrinterRuntimePhase.idle,
+        printers: List<WearPrinter>.unmodifiable(_printers),
+        whitePrinter: _whitePrinter,
+        selection: _selection,
+        step: _step,
+        focusedIndex: _focusedIndex,
+        error: _error,
+      );
+
+  Stream<WearPrinterRuntimeState> get stateStream => _stateController.stream;
 
   @override
   bool handles(WearScreenId screen) => screen == WearScreenId.printerSelect;
@@ -84,9 +125,7 @@ class WearPrinterRuntime implements WearBackgroundRuntime {
   @override
   Future<void> enterScreen(WearScreenId screen, {Object? extra}) async {
     if (!handles(screen)) return;
-    _whitePrinter = null;
-    _step = WearPrinterRuntimeStep.white;
-    _focusedIndex = 0;
+    _returnSelection = extra == true;
     if (_printers.isEmpty) {
       await load();
     } else {
@@ -104,6 +143,17 @@ class WearPrinterRuntime implements WearBackgroundRuntime {
     _loadOperation = operation;
     return operation;
   }
+
+  void focusPrinter(int index) {
+    final List<WearPrinter> printers = _visiblePrinters;
+    if (printers.isEmpty) return;
+    final int next = index.clamp(0, printers.length - 1);
+    if (_focusedIndex == next) return;
+    _focusedIndex = next;
+    _publish();
+  }
+
+  Future<void> selectPrinter(WearPrinter printer) => _select(printer);
 
   Future<void> _load() async {
     final int generation = _generation;
@@ -218,27 +268,10 @@ class WearPrinterRuntime implements WearBackgroundRuntime {
   }
 
   @override
-  void restorePresentationState(WearScreenId screen, Object state) {
-    if (!handles(screen) || state is! WearPrinterRuntimeState) return;
-    _printers = List<WearPrinter>.unmodifiable(state.printers);
-    _whitePrinter = state.whitePrinter;
-    _step = state.step;
-    _focusedIndex = state.focusedIndex;
-    _loading = false;
-    _error = null;
-    _publish();
-  }
+  void restorePresentationState(WearScreenId screen, Object state) {}
 
   @override
-  Object? presentationStateFor(WearScreenId screen) {
-    if (!handles(screen)) return null;
-    return WearPrinterRuntimeState(
-      printers: _printers,
-      whitePrinter: _whitePrinter,
-      step: _step,
-      focusedIndex: _focusedIndex,
-    );
-  }
+  Object? presentationStateFor(WearScreenId screen) => null;
 
   void _move(int delta) {
     final List<WearPrinter> printers = _visiblePrinters;
@@ -263,6 +296,10 @@ class WearPrinterRuntime implements WearBackgroundRuntime {
   }
 
   Future<void> _select(WearPrinter printer) async {
+    if (_loading || _selectionOperation != null) return;
+    if (!_visiblePrinters.any((WearPrinter item) => item.id == printer.id)) {
+      return;
+    }
     if (_step == WearPrinterRuntimeStep.white) {
       _whitePrinter = printer;
       _step = WearPrinterRuntimeStep.yellow;
@@ -276,8 +313,19 @@ class WearPrinterRuntime implements WearBackgroundRuntime {
       whitePrinter: white,
       yellowPrinter: printer,
     );
+    _selection = selection;
     WearSession.setPrinterSelection(selection);
-    await _navigate(WearScreenId.scanIdle, extra: selection);
+    _publish();
+    if (_returnSelection) return;
+    late final Future<void> operation;
+    operation =
+        _navigate(WearScreenId.scanIdle, extra: selection).whenComplete(() {
+      if (identical(_selectionOperation, operation)) {
+        _selectionOperation = null;
+      }
+    });
+    _selectionOperation = operation;
+    await operation;
   }
 
   List<WearPrinter> get _visiblePrinters {
@@ -291,6 +339,8 @@ class WearPrinterRuntime implements WearBackgroundRuntime {
   }
 
   void _publish() {
+    final WearPrinterRuntimeState next = state;
+    if (!_stateController.isClosed) _stateController.add(next);
     if (_updates.isClosed) return;
     _updates.add(
       WearBackgroundScreenUpdate(
@@ -371,15 +421,19 @@ class WearPrinterRuntime implements WearBackgroundRuntime {
     _loadOperation = null;
     _printers = const <WearPrinter>[];
     _whitePrinter = null;
+    _selection = null;
     _step = WearPrinterRuntimeStep.white;
     _focusedIndex = 0;
     _loading = false;
     _error = null;
+    _selectionOperation = null;
+    _returnSelection = false;
   }
 
   @override
   Future<void> dispose() async {
     await reset();
+    await _stateController.close();
     await _updates.close();
   }
 }

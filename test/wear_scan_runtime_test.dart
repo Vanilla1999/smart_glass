@@ -4,11 +4,13 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/application/wear_scan_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/application/wear_status_state.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_product_select_screen.dart';
 
 void main() {
   setUp(() {
@@ -39,7 +41,9 @@ void main() {
         printCalls++;
         return 'white';
       },
-      currentScreen: () => WearScreenId.status,
+      showStatus: (args, completion) async {
+        navigation.add(WearScreenId.status);
+      },
       navigate: (
         WearScreenId screen, {
         Object? extra,
@@ -67,7 +71,7 @@ void main() {
         BarcodeProductInfo(id: 11, name: 'Товар второй'),
       ],
       printProduct: (_) async => 'white',
-      currentScreen: () => WearScreenId.status,
+      showStatus: (args, completion) async {},
       navigate: (
         WearScreenId _, {
         Object? extra,
@@ -97,7 +101,9 @@ void main() {
         BarcodeProductInfo(id: 10, name: 'Товар', articleRest: 4),
       ],
       printProduct: (_) => printResult.future,
-      currentScreen: () => WearScreenId.status,
+      showStatus: (args, completion) async {
+        navigation.add(WearScreenId.status);
+      },
       navigate: (
         WearScreenId screen, {
         Object? extra,
@@ -119,65 +125,87 @@ void main() {
     expect(navigation, isEmpty);
   });
 
-  test('status timer does not override a route chosen by the user', () async {
-    WearScreenId currentScreen = WearScreenId.scanIdle;
-    final List<WearScreenId> navigation = <WearScreenId>[];
+  test('print status declares an explicit scan completion target', () async {
+    WearStatusCompletion? statusCompletion;
     final WearScanRuntime runtime = WearScanRuntime(
       lookupBarcode: (_) async => <BarcodeProductInfo>[
         BarcodeProductInfo(id: 10, name: 'Товар', articleRest: 4),
       ],
       printProduct: (_) async => 'white',
-      currentScreen: () => currentScreen,
-      statusDuration: const Duration(milliseconds: 10),
+      showStatus: (args, completion) async {
+        statusCompletion = completion;
+      },
       navigate: (
-        WearScreenId screen, {
+        WearScreenId _, {
         Object? extra,
         bool replaceCurrent = false,
-      }) async {
-        currentScreen = screen;
-        navigation.add(screen);
-      },
+      }) async {},
     );
     addTearDown(runtime.dispose);
 
     await runtime.enterScreen(WearScreenId.scanIdle);
     await runtime.handleBarcode(WearScreenId.scanIdle, '4600000000004');
-    expect(navigation, <WearScreenId>[WearScreenId.status]);
-
-    currentScreen = WearScreenId.menu;
-    await Future<void>.delayed(const Duration(milliseconds: 30));
-
-    expect(navigation, <WearScreenId>[WearScreenId.status]);
+    expect(statusCompletion?.kind, WearStatusCompletionKind.goTo);
+    expect(statusCompletion?.target, WearScreenId.scanIdle);
   });
 
-  test('successful print returns directly to scanning after status', () async {
-    WearScreenId currentScreen = WearScreenId.scanIdle;
-    final List<WearScreenId> navigation = <WearScreenId>[];
+  test('repeated barcode during lookup starts one request', () async {
+    final Completer<List<BarcodeProductInfo>> lookup =
+        Completer<List<BarcodeProductInfo>>();
+    var lookupCalls = 0;
     final WearScanRuntime runtime = WearScanRuntime(
-      lookupBarcode: (_) async => <BarcodeProductInfo>[
-        BarcodeProductInfo(id: 10, name: 'Товар', articleRest: 4),
-      ],
-      printProduct: (_) async => 'white',
-      currentScreen: () => currentScreen,
-      statusDuration: const Duration(milliseconds: 10),
-      navigate: (
-        WearScreenId screen, {
-        Object? extra,
-        bool replaceCurrent = false,
-      }) async {
-        currentScreen = screen;
-        navigation.add(screen);
+      lookupBarcode: (_) {
+        lookupCalls++;
+        return lookup.future;
       },
+      printProduct: (_) async => 'white',
+      showStatus: (args, completion) async {},
+      navigate: (_, {extra, replaceCurrent = false}) async {},
     );
     addTearDown(runtime.dispose);
-
     await runtime.enterScreen(WearScreenId.scanIdle);
-    await runtime.handleBarcode(WearScreenId.scanIdle, '4600000000005');
-    await Future<void>.delayed(const Duration(milliseconds: 30));
 
-    expect(
-      navigation,
-      <WearScreenId>[WearScreenId.status, WearScreenId.scanIdle],
+    final Future<bool> first =
+        runtime.handleBarcode(WearScreenId.scanIdle, '4600000000006');
+    await Future<void>.delayed(Duration.zero);
+    final bool second =
+        await runtime.handleBarcode(WearScreenId.scanIdle, '4600000000006');
+
+    expect(second, isFalse);
+    expect(lookupCalls, 1);
+    expect(runtime.state.phase, WearScanRuntimePhase.lookup);
+    expect(runtime.state.lastAcceptedBarcode, '4600000000006');
+
+    lookup.complete(const <BarcodeProductInfo>[]);
+    await first;
+  });
+
+  test('state stream exposes selection focus and products', () async {
+    final WearScanRuntime runtime = WearScanRuntime(
+      lookupBarcode: (_) async => <BarcodeProductInfo>[
+        BarcodeProductInfo(id: 10, name: 'Первый'),
+        BarcodeProductInfo(id: 11, name: 'Второй'),
+      ],
+      printProduct: (_) async => 'white',
+      showStatus: (args, completion) async {},
+      navigate: (_, {extra, replaceCurrent = false}) async {},
     );
+    addTearDown(runtime.dispose);
+    await runtime.enterScreen(WearScreenId.scanIdle);
+    await runtime.handleBarcode(WearScreenId.scanIdle, '4600000000007');
+    await runtime.enterScreen(
+      WearScreenId.productSelect,
+      extra: WearProductSelectArgs(
+        barcode: '4600000000007',
+        products: runtime.state.products,
+      ),
+    );
+
+    runtime.setFocusedIndex(1);
+
+    expect(runtime.state.phase, WearScanRuntimePhase.selection);
+    expect(runtime.state.focusedIndex, 1);
+    expect(runtime.state.products.map((product) => product.name),
+        <String>['Первый', 'Второй']);
   });
 }

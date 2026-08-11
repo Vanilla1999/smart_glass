@@ -6,9 +6,7 @@ import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availa
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/repository/wear_availability_repository.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/use_case/wear_availability_flow_use_case.dart';
-import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availability_glasses_payloads.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/printers/cubit/wear_printer_select_cubit.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -84,23 +82,6 @@ void main() {
     expect(flow.step, WearAvailabilityFlowStep.productSelection);
     expect(flow.selectedProduct, isNull);
     expect(flow.message, 'Позиция не найдена');
-  });
-
-  test('printer selection reset clears previous white and yellow printers', () {
-    final WearPrinterSelectNotifier notifier = WearPrinterSelectNotifier();
-    addTearDown(notifier.dispose);
-
-    notifier.selectPrinter(const WearPrinter(id: 'white', name: 'White'));
-    notifier.selectPrinter(const WearPrinter(id: 'yellow', name: 'Yellow'));
-
-    expect(notifier.state.whitePrinter?.name, 'White');
-    expect(notifier.state.yellowPrinter?.name, 'Yellow');
-
-    notifier.resetSelection();
-
-    expect(notifier.state.whitePrinter, isNull);
-    expect(notifier.state.yellowPrinter, isNull);
-    expect(notifier.state.step, WearPrinterSelectStep.white);
   });
 
   test('product question glasses payload matches shelf question design', () {

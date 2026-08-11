@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/application/wear_status_state.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
@@ -10,12 +11,10 @@ import 'package:smart_glasses/modules/wear/presentation/screens/main/cubit/wear_
 import 'package:smart_glasses/modules/wear/presentation/screens/menu/wear_menu_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/db_settings_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scanner_status_indicator.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_status_bar.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_svg_icon.dart';
-import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
@@ -48,13 +47,15 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
             !ref.read(wearAuthNotifierProvider).isLoading,
       ),
     );
-    WearStatusIconReporter.I.start();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (WearSession.isAuthorized) {
         context.go(WearMenuScreen.route);
         return;
       }
-      WearStatusIconReporter.I.show(WearGlassesPayload.authWaitingBarcode());
+      WearDependencies.I.wearFlowController.publishScreenPayload(
+        WearScreenId.main,
+        WearGlassesPayload.authWaitingBarcode(),
+      );
     });
   }
 
@@ -64,9 +65,6 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
         .unregisterScreenActions(_screenActionsRegistration);
     super.dispose();
   }
-
-  bool _isStatusRouteOpen = false;
-  int _statusRouteSession = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -78,21 +76,20 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
       }
       if (previous?.phase != next.phase &&
           next.phase == WearAuthPhase.loading) {
-        WearStatusIconReporter.I.send(WearGlassesPayload.authLoading());
-        _dismissStatusIfOpen();
+        WearDependencies.I.wearFlowController.publishScreenPayload(
+          WearScreenId.main,
+          WearGlassesPayload.authLoading(),
+        );
       }
       if (previous?.nav != next.nav && next.nav != null) {
         final WearStatusScreenArgs nav = next.nav!;
-        WearStatusIconReporter.I.send(
-          WearGlassesPayload.status(
-            isError: nav.kind == WearStatusKind.error,
-            title: nav.title,
-            subtitle: nav.message,
-            statusText: nav.kind == WearStatusKind.error ? 'Ошибка' : 'Успешно',
-          ),
-        );
         ref.read(wearAuthNotifierProvider.notifier).consumeNavigation();
-        _openOrReplaceStatus(nav);
+        WearDependencies.I.wearFlowController.showStatus(
+          nav,
+          completion: nav.kind == WearStatusKind.success
+              ? const WearStatusCompletion.goTo(WearScreenId.menu)
+              : const WearStatusCompletion.goTo(WearScreenId.main),
+        );
       }
     });
 
@@ -223,56 +220,5 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
         child: SvgPicture.asset(WearImages.logo),
       ),
     ];
-  }
-
-  Future<void> _openOrReplaceStatus(WearStatusScreenArgs args) async {
-    final int session = ++_statusRouteSession;
-    final bool isCurrent = ModalRoute.of(context)?.isCurrent ?? true;
-
-    if (_isStatusRouteOpen && !isCurrent) {
-      if (mounted && Navigator.of(context).canPop()) {
-        context.pop();
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-    }
-
-    if (!mounted) return;
-
-    _isStatusRouteOpen = true;
-    print(
-      '[BACK-DEBUG] MainScreen._openOrReplaceStatus: pushing status, '
-      'kind=${args.kind}, title=${args.title}',
-    );
-    await context.push(WearStatusScreen.route, extra: args);
-    print(
-      '[BACK-DEBUG] MainScreen._openOrReplaceStatus: status popped back, '
-      'session=$session, _statusRouteSession=$_statusRouteSession, '
-      'kind=${args.kind}, isAuthorized=${WearSession.isAuthorized}',
-    );
-
-    if (!mounted) return;
-    if (session == _statusRouteSession) {
-      _isStatusRouteOpen = false;
-    }
-    if (args.kind == WearStatusKind.success && WearSession.isAuthorized) {
-      if (!mounted) return;
-      print('[BACK-DEBUG] MainScreen: opening WearMenuScreen');
-      context.go(WearMenuScreen.route);
-    } else if (args.kind == WearStatusKind.error && !WearSession.isAuthorized) {
-      await WearStatusIconReporter.I.send(
-        WearGlassesPayload.authWaitingBarcode(),
-      );
-    }
-  }
-
-  void _dismissStatusIfOpen() {
-    final bool isCurrent = ModalRoute.of(context)?.isCurrent ?? true;
-    if (!_isStatusRouteOpen || isCurrent) {
-      return;
-    }
-    if (Navigator.of(context).canPop()) {
-      context.pop();
-    }
-    _isStatusRouteOpen = false;
   }
 }

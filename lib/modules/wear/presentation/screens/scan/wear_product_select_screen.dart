@@ -1,6 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_scan_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
@@ -8,11 +10,9 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_ut
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
-import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_voice_hints.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
-import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
@@ -41,12 +41,21 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
     with ScreenLifecycleLogging<WearProductSelectScreen> {
   final ScrollController _scroll = ScrollController();
   late final WearScreenActionRegistration _screenActionsRegistration;
+  late final StreamSubscription<WearScanRuntimeState> _stateSubscription;
   int _focusedIndex = 0;
   bool _isProductDialogOpen = false;
 
   @override
   void initState() {
     super.initState();
+    _focusedIndex = WearDependencies.I.wearScanRuntime.state.focusedIndex;
+    _stateSubscription =
+        WearDependencies.I.wearScanRuntime.stateStream.listen((state) {
+      if (!mounted || state.screen != WearScreenId.productSelect) return;
+      final int previous = _focusedIndex;
+      setState(() => _focusedIndex = state.focusedIndex);
+      if (previous != _focusedIndex) _scrollToFocused();
+    });
     WearDependencies.I.wearFlowController.enterScreen(
       WearScreenId.productSelect,
       extra: widget.args,
@@ -76,58 +85,13 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
   void dispose() {
     WearDependencies.I.wearFlowController
         .unregisterScreenActions(_screenActionsRegistration);
+    unawaited(_stateSubscription.cancel());
     _scroll.dispose();
     super.dispose();
   }
 
   void _sendGlassesFocus() {
-    if (!mounted ||
-        WearDependencies.I.wearFlowController.state.screen !=
-            WearScreenId.productSelect) {
-      return;
-    }
-    final List<BarcodeProductInfo> products =
-        widget.args?.products ?? <BarcodeProductInfo>[];
-    if (products.isEmpty) return;
-    final int idx = _focusedIndex.clamp(0, products.length - 1);
-    final int start = _pageStart(idx);
-    final List<BarcodeProductInfo> visibleProducts = products
-        .skip(start)
-        .take(_visibleGlassesItemCount)
-        .toList(growable: false);
-    final VoiceDynamicItemsSnapshot snapshot = _dynamicVoiceItems();
-    final WearGlassesPayload payload = WearGlassesPayload(
-      screenType: WearGlassesScreenType.productSelect,
-      phase: WearGlassesPhase.idle,
-      title: 'Дубль ШК',
-      subtitle: 'Выберите нужный товар',
-      items: visibleProducts
-          .map((BarcodeProductInfo p) => p.name)
-          .toList(growable: false),
-      voiceHints: WearGlassesVoiceHints.forVisibleItems(
-        screen: WearScreenId.productSelect,
-        snapshot: snapshot,
-        visibleItemIds: visibleProducts
-            .map((BarcodeProductInfo product) => product.id.toString())
-            .toList(growable: false),
-        onPrepared: () {
-          if (!mounted || _dynamicVoiceItems().revision != snapshot.revision) {
-            return;
-          }
-          _sendGlassesFocus();
-        },
-      ),
-      selectedIndex: idx - start,
-      pageText: _pageText(products.length, idx),
-    );
-    WearDependencies.I.wearFlowController.rememberScreenPayload(
-      WearScreenId.productSelect,
-      payload,
-    );
-    WearStatusIconReporter.I.sendFastForScreen(
-      WearScreenId.productSelect,
-      payload,
-    );
+    WearDependencies.I.wearScanRuntime.setFocusedIndex(_focusedIndex);
   }
 
   void _onVoiceUp() {
@@ -167,7 +131,7 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
         widget.args?.products ?? <BarcodeProductInfo>[];
     if (products.isEmpty) return;
     final int productIndex = _focusedIndex.clamp(0, products.length - 1);
-    context.pop(products[productIndex]);
+    WearDependencies.I.wearScanRuntime.selectProduct(products[productIndex]);
   }
 
   void _onVoiceNextPage() {
@@ -228,11 +192,11 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
     );
     switch (match.type) {
       case VoiceListMatchType.none:
-        WearStatusIconReporter.I.showTransientStatusText(
+        WearDependencies.I.wearFlowController.publishTransientStatusText(
             WearScreenId.productSelect, 'Ничего не найдено');
         break;
       case VoiceListMatchType.ambiguous:
-        WearStatusIconReporter.I.showTransientStatusText(
+        WearDependencies.I.wearFlowController.publishTransientStatusText(
             WearScreenId.productSelect, 'Назовите точнее');
         break;
       case VoiceListMatchType.unique:
@@ -243,7 +207,7 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
           _scrollToFocused();
           _sendGlassesFocus();
         }
-        context.pop(product);
+        WearDependencies.I.wearScanRuntime.selectProduct(product);
         break;
     }
   }
@@ -259,7 +223,7 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
         _scrollToFocused();
         _sendGlassesFocus();
       }
-      context.pop(product);
+      WearDependencies.I.wearScanRuntime.selectProduct(product);
       return;
     }
   }
@@ -313,7 +277,7 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
   }
 
   void _showVoiceSearchMessage(String message) {
-    WearStatusIconReporter.I.showTransientFastForScreen(
+    WearDependencies.I.wearFlowController.publishTransientPayload(
       WearScreenId.productSelect,
       WearGlassesPayload.status(
         isError: true,
@@ -324,18 +288,6 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
   }
 
   static const int _visibleGlassesItemCount = 4;
-
-  int _pageStart(int selectedIndex) {
-    return (selectedIndex ~/ _visibleGlassesItemCount) *
-        _visibleGlassesItemCount;
-  }
-
-  String? _pageText(int itemCount, int selectedIndex) {
-    if (itemCount <= _visibleGlassesItemCount) return null;
-    final int page = (selectedIndex ~/ _visibleGlassesItemCount) + 1;
-    final int pageCount = ((itemCount - 1) ~/ _visibleGlassesItemCount) + 1;
-    return 'Страница: $page из $pageCount';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -390,7 +342,9 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
           return WearPill(
             title: _resolveTitle(product),
             subtitle: _resolveSubtitle(product),
-            onTap: () => context.pop(product),
+            onTap: () => WearDependencies.I.wearScanRuntime.selectProduct(
+              product,
+            ),
             onLongPress: () => _showProductDialog(context, product),
           );
         },

@@ -1,6 +1,9 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smart_glasses/modules/wear/application/wear_scan_runtime.dart';
+import 'package:smart_glasses/modules/wear/application/wear_printer_runtime.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
@@ -8,8 +11,7 @@ import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/cubit/wear_auth_cubit.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/printers/cubit/wear_printer_select_cubit.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/scan/cubit/wear_scan_cubit.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_product_select_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 
 void main() {
@@ -53,21 +55,18 @@ void main() {
   });
 
   test('mock printer loading returns mock printers', () async {
-    final ProviderContainer container = ProviderContainer();
-    addTearDown(container.dispose);
-    container.listen<WearPrinterSelectState>(
-      wearPrinterSelectNotifierProvider,
-      (_, __) {},
+    final WearPrinterRuntime runtime = WearPrinterRuntime(
+      loadPrinters: () async => throw StateError('mock loader must not run'),
+      navigate: (_, {extra, replaceCurrent = false}) async {},
     );
-    final WearPrinterSelectNotifier notifier =
-        container.read(wearPrinterSelectNotifierProvider.notifier);
+    addTearDown(runtime.dispose);
 
-    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await runtime.enterScreen(WearScreenId.printerSelect);
 
-    expect(notifier.state.phase, WearPrinterSelectPhase.idle);
-    expect(notifier.state.printers, hasLength(3));
+    expect(runtime.state.phase, WearPrinterRuntimePhase.idle);
+    expect(runtime.state.printers, hasLength(3));
     expect(
-      notifier.state.printers.map((WearPrinter printer) => printer.name),
+      runtime.state.printers.map((WearPrinter printer) => printer.name),
       containsAll(<String>[
         'MOCK Белый 1',
         'MOCK Жёлтый 1',
@@ -78,39 +77,66 @@ void main() {
 
   test('mock scan with barcode ending 2 opens product selection', () async {
     WearSession.setUser(_testUser());
-    final ProviderContainer container = ProviderContainer();
-    addTearDown(container.dispose);
-    final provider = wearScanNotifierProvider(_selection());
-    container.listen<WearScanState>(provider, (_, __) {});
-    final WearScanNotifier notifier = container.read(provider.notifier);
+    WearSession.setPrinterSelection(_selection());
+    WearProductSelectArgs? selection;
+    final WearScanRuntime runtime = _runtime((screen, extra) {
+      if (screen == WearScreenId.productSelect) {
+        selection = extra as WearProductSelectArgs;
+      }
+    });
+    addTearDown(runtime.dispose);
 
-    await notifier.handleBarcode('2200002');
+    await runtime.enterScreen(WearScreenId.scanIdle);
+    await runtime.handleBarcode(WearScreenId.scanIdle, '2200002');
 
-    expect(notifier.state.phase, WearScanPhase.idle);
-    expect(notifier.state.navSelect?.barcode, '2200002');
-    expect(notifier.state.navSelect?.products, hasLength(2));
-    expect(notifier.state.navStatus, isNull);
+    expect(runtime.state.phase, WearScanRuntimePhase.selection);
+    expect(selection?.barcode, '2200002');
+    expect(selection?.products, hasLength(2));
   });
 
   test('mock print uses yellow printer for even product id', () async {
     WearSession.setUser(_testUser());
-    final ProviderContainer container = ProviderContainer();
-    addTearDown(container.dispose);
-    final provider = wearScanNotifierProvider(_selection());
-    container.listen<WearScanState>(provider, (_, __) {});
-    final WearScanNotifier notifier = container.read(provider.notifier);
+    WearSession.setPrinterSelection(_selection());
+    WearStatusScreenArgs? status;
+    final WearScanRuntime runtime = _runtime((screen, extra) {
+      if (screen == WearScreenId.status) {
+        status = extra as WearStatusScreenArgs;
+      }
+    });
+    addTearDown(runtime.dispose);
 
-    await notifier.printSelectedProduct(
-      BarcodeProductInfo(
-        id: 1002002,
-        name: 'MOCK Молоко 3,2% 930 мл',
+    final BarcodeProductInfo product = BarcodeProductInfo(
+      id: 1002002,
+      name: 'MOCK Молоко 3,2% 930 мл',
+    );
+    await runtime.enterScreen(
+      WearScreenId.productSelect,
+      extra: WearProductSelectArgs(
+        barcode: '2200002',
+        products: <BarcodeProductInfo>[product],
       ),
     );
+    await runtime.selectProduct(product);
 
-    expect(notifier.state.phase, WearScanPhase.idle);
-    expect(notifier.state.navStatus?.kind, WearStatusKind.success);
-    expect(notifier.state.navStatus?.details, 'MOCK: MOCK Желтый 1');
+    expect(runtime.state.phase, WearScanRuntimePhase.status);
+    expect(status?.kind, WearStatusKind.success);
+    expect(status?.details, 'MOCK Желтый 1');
   });
+}
+
+WearScanRuntime _runtime(
+  void Function(WearScreenId screen, Object? extra) onNavigate,
+) {
+  return WearScanRuntime(
+    lookupBarcode: (_) async => const <BarcodeProductInfo>[],
+    printProduct: (_) async => 'unused',
+    showStatus: (args, completion) async {
+      onNavigate(WearScreenId.status, args);
+    },
+    navigate: (screen, {extra, replaceCurrent = false}) async {
+      onNavigate(screen, extra);
+    },
+  );
 }
 
 AuthenticatedUser _testUser() {

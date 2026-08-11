@@ -21,17 +21,32 @@ typedef WearAvailabilityPhotoCapture = Future<void> Function();
 typedef WearAvailabilityPrint = Future<String> Function(
   WearAvailabilityProduct product,
 );
+typedef WearAvailabilityFillAdd = Future<List<WearAvailabilityProduct>>
+    Function(
+  String barcode,
+);
+typedef WearAvailabilityFillReset = Future<void> Function();
 
 class WearAvailabilityRuntimeState {
   const WearAvailabilityRuntimeState({
     required this.flow,
     required this.focusedIndex,
     this.busy = false,
+    this.error,
+    this.savedCount = 0,
+    this.message,
   });
 
   final WearAvailabilityFlowState flow;
   final int focusedIndex;
   final bool busy;
+  final String? error;
+  final int savedCount;
+  final String? message;
+
+  List<WearAvailabilityGroup> get groups => flow.groups;
+  List<WearAvailabilityProduct> get products => flow.products;
+  List<WearAvailabilityProduct> get duplicateProducts => flow.duplicateProducts;
 }
 
 class WearAvailabilityRuntime implements WearBackgroundRuntime {
@@ -40,10 +55,19 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     required WearAvailabilityNavigation navigate,
     required WearAvailabilityPhotoCapture capturePhoto,
     required WearAvailabilityPrint printPriceTag,
+    WearAvailabilityFillAdd? fillAdd,
+    WearAvailabilityFillReset? fillReset,
   })  : _flowUseCase = flowUseCase,
         _navigate = navigate,
         _capturePhoto = capturePhoto,
-        _printPriceTag = printPriceTag;
+        _printPriceTag = printPriceTag,
+        _fillAdd = fillAdd ?? _emptyFillAdd,
+        _fillReset = fillReset ?? _emptyFillReset;
+
+  static Future<List<WearAvailabilityProduct>> _emptyFillAdd(String _) async =>
+      const <WearAvailabilityProduct>[];
+
+  static Future<void> _emptyFillReset() async {}
 
   static const int _pageSize = 4;
   static const Set<WearScreenId> _screens = <WearScreenId>{
@@ -51,14 +75,19 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     WearScreenId.availabilityProduct,
     WearScreenId.availabilityDirectScan,
     WearScreenId.availabilityCheck,
+    WearScreenId.availabilityFill,
   };
 
   final WearAvailabilityFlowUseCase _flowUseCase;
   final WearAvailabilityNavigation _navigate;
   final WearAvailabilityPhotoCapture _capturePhoto;
   final WearAvailabilityPrint _printPriceTag;
+  final WearAvailabilityFillAdd _fillAdd;
+  final WearAvailabilityFillReset _fillReset;
   final StreamController<WearBackgroundScreenUpdate> _updates =
       StreamController<WearBackgroundScreenUpdate>.broadcast();
+  final StreamController<WearAvailabilityRuntimeState> _stateController =
+      StreamController<WearAvailabilityRuntimeState>.broadcast();
 
   WearAvailabilityFlowState? _flow;
   WearScreenId _screen = WearScreenId.availabilityGroup;
@@ -69,13 +98,29 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
   WearAvailabilityFlowStep? _lastBarcodeStep;
   int _generation = 0;
   int _requestRevision = 0;
-  bool _presentationStateRestorable = true;
+  int _savedCount = 0;
+  String? _message;
   Future<void>? _enterOperation;
   WearScreenId? _enteringScreen;
   Object? _enteringExtra;
 
   @override
   Stream<WearBackgroundScreenUpdate> get updates => _updates.stream;
+
+  WearAvailabilityRuntimeState get state => WearAvailabilityRuntimeState(
+        flow: _flow ??
+            const WearAvailabilityFlowState(
+              step: WearAvailabilityFlowStep.groupSelection,
+            ),
+        focusedIndex: _focusedIndex,
+        busy: _loading,
+        error: _error,
+        savedCount: _savedCount,
+        message: _message ?? _flow?.message,
+      );
+
+  Stream<WearAvailabilityRuntimeState> get stateStream =>
+      _stateController.stream;
 
   @override
   bool handles(WearScreenId screen) => _screens.contains(screen);
@@ -86,6 +131,7 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     if (screen == WearScreenId.availabilityDirectScan) {
       return _flow?.duplicateProducts.isEmpty ?? true;
     }
+    if (screen == WearScreenId.availabilityFill) return true;
     if (screen != WearScreenId.availabilityCheck) return false;
     final WearAvailabilityFlowStep? step = _flow?.step;
     return step == WearAvailabilityFlowStep.productScan ||
@@ -169,6 +215,9 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
           requestRevision: requestRevision,
         );
         return;
+      }
+      if (screen == WearScreenId.availabilityFill) {
+        _message ??= 'Сканируйте товары с полки';
       }
       if (screen == WearScreenId.availabilityProduct &&
           extra is WearAvailabilityGroup &&
@@ -324,6 +373,27 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     if (_lastBarcode == value && _lastBarcodeStep == flow.step) return true;
     _lastBarcode = value;
     _lastBarcodeStep = flow.step;
+    if (screen == WearScreenId.availabilityFill) {
+      try {
+        await _runLoading((int operationGeneration) async {
+          final List<WearAvailabilityProduct> products = await _fillAdd(value);
+          if (_isCurrent(operationGeneration)) {
+            _savedCount += products.length;
+            _message = products.length == 1
+                ? 'Добавлено: ${products.first.name}'
+                : 'Добавлено позиций: ${products.length}';
+          }
+        });
+      } catch (error) {
+        _lastBarcode = null;
+        _lastBarcodeStep = null;
+        _error = _messageFor(error);
+        _message = _error;
+        _loading = false;
+        _publish();
+      }
+      return true;
+    }
     if (screen == WearScreenId.availabilityDirectScan) {
       final int generation = _generation;
       final int requestRevision = _requestRevision;
@@ -384,6 +454,36 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     return true;
   }
 
+  void focus(int index) {
+    final int count = _listValues.length;
+    if (count == 0) return;
+    final int next = index.clamp(0, count - 1);
+    if (next == _focusedIndex) return;
+    _focusedIndex = next;
+    _publish();
+  }
+
+  Future<void> select(Object value) => _select(value);
+
+  bool answerAvailable(bool available) => _answerAvailable(available);
+
+  Future<void> printPriceTag() => _print();
+
+  Future<void> takePhoto() => _takePhoto();
+
+  Future<void> complete() => _complete();
+
+  Future<void> resetFill() async {
+    if (_loading) return;
+    await _fillReset();
+    _savedCount = 0;
+    _lastBarcode = null;
+    _lastBarcodeStep = null;
+    _message = 'База сканированной полки очищена';
+    _error = null;
+    _publish();
+  }
+
   Future<void> _print() async {
     final WearAvailabilityFlowState? flow = _flow;
     final WearAvailabilityProduct? product = flow?.selectedProduct;
@@ -414,15 +514,21 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
       return;
     }
     final int requestRevision = _requestRevision;
-    await _runLoading(
-      (int generation) async {
-        await _capturePhoto();
-        if (_isCurrent(generation, requestRevision: requestRevision)) {
-          _flow = _flowUseCase.capturePhoto(flow);
-        }
-      },
-      requestRevision: requestRevision,
-    );
+    try {
+      await _runLoading(
+        (int generation) async {
+          await _capturePhoto();
+          if (_isCurrent(generation, requestRevision: requestRevision)) {
+            _flow = _flowUseCase.capturePhoto(flow);
+          }
+        },
+        requestRevision: requestRevision,
+      );
+    } catch (error) {
+      _error = _messageFor(error);
+      _loading = false;
+      _publish();
+    }
   }
 
   Future<void> _complete() async {
@@ -537,33 +643,10 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
   }
 
   @override
-  void restorePresentationState(WearScreenId screen, Object state) {
-    if (!handles(screen) || state is! WearAvailabilityRuntimeState) return;
-    _generation += 1;
-    _requestRevision += 1;
-    _enterOperation = null;
-    _enteringScreen = null;
-    _enteringExtra = null;
-    _screen = screen;
-    _flow = state.flow;
-    _focusedIndex = state.focusedIndex;
-    _loading = state.busy;
-    _presentationStateRestorable = !state.busy;
-    _error = null;
-    _publish();
-  }
+  void restorePresentationState(WearScreenId screen, Object state) {}
 
   @override
-  Object? presentationStateFor(WearScreenId screen) {
-    final WearAvailabilityFlowState? flow = _flow;
-    if (!handles(screen) || flow == null || !_presentationStateRestorable) {
-      return null;
-    }
-    return WearAvailabilityRuntimeState(
-      flow: flow,
-      focusedIndex: _focusedIndex,
-    );
-  }
+  Object? presentationStateFor(WearScreenId screen) => null;
 
   String _idFor(Object value) => switch (value) {
         WearAvailabilityGroup group => group.id.toString(),
@@ -583,6 +666,7 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
   }
 
   void _publish() {
+    if (!_stateController.isClosed) _stateController.add(state);
     if (_updates.isClosed) return;
     _updates.add(
       WearBackgroundScreenUpdate(screen: _screen, payload: _payload()),
@@ -606,6 +690,16 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     if (_screen == WearScreenId.availabilityDirectScan) {
       return WearAvailabilityGlassesPayloads.directScanWaiting(
         statusText: _flow?.message ?? 'Поиск ШК...',
+      );
+    }
+    if (_screen == WearScreenId.availabilityFill) {
+      return WearGlassesPayload(
+        screenType: WearGlassesScreenType.availability,
+        phase: _loading ? WearGlassesPhase.loading : WearGlassesPhase.idle,
+        title: 'Наполнение базы',
+        statusText: _message ?? 'Сканируйте товары с полки',
+        isLoading: _loading,
+        bodyLines: <String>['Добавлено: $_savedCount'],
       );
     }
     final WearAvailabilityFlowState? flow = _flow;
@@ -660,15 +754,17 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     _screen = WearScreenId.availabilityGroup;
     _focusedIndex = 0;
     _loading = false;
-    _presentationStateRestorable = true;
     _error = null;
     _lastBarcode = null;
     _lastBarcodeStep = null;
+    _savedCount = 0;
+    _message = null;
   }
 
   @override
   Future<void> dispose() async {
     await reset();
+    await _stateController.close();
     await _updates.close();
   }
 }

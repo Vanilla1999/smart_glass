@@ -3,12 +3,15 @@ import 'dart:math' as math;
 
 import 'package:multi_scanner/multi_scanner.dart';
 import 'package:smart_glasses/modules/wear/application/wear_background_runtime.dart';
+import 'package:smart_glasses/modules/wear/application/wear_availability_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/ports/wear_glasses_output.dart';
 import 'package:smart_glasses/modules/wear/application/ports/wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
 import 'package:smart_glasses/modules/wear/application/wear_navigation_entry.dart';
 import 'package:smart_glasses/modules/wear/application/wear_navigation_request.dart';
+import 'package:smart_glasses/modules/wear/application/wear_printer_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/application/wear_status_state.dart';
 import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/application/voice_clarification_args.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
@@ -16,9 +19,11 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_se
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_delay_event.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
+import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availability_glasses_payloads.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_voice_hints.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 
 typedef WearFlowAction = FutureOr<void> Function();
 typedef WearFlowPhraseAction = FutureOr<void> Function(String phrase);
@@ -141,6 +146,7 @@ class WearFlowController {
       <WearScreenId, List<WearScreenActionRegistration>>{};
   final Map<WearScreenId, WearGlassesPayload> _screenPayloads =
       <WearScreenId, WearGlassesPayload>{};
+  int _basePayloadRevision = 0;
   final List<({WearVoiceCommand command, WearScreenId? expectedScreen})>
       _commandQueue =
       <({WearVoiceCommand command, WearScreenId? expectedScreen})>[];
@@ -152,10 +158,18 @@ class WearFlowController {
   int? _deliveredNavigationRequestId;
   int _inactiveNavigationCount = 0;
   WearBackgroundRuntime? _backgroundRuntime;
+  WearPrinterRuntime? _printerRuntime;
+  WearAvailabilityRuntime? _availabilityRuntime;
   StreamSubscription<WearBackgroundScreenUpdate>? _backgroundRuntimeSub;
   Future<void> _runtimeReset = Future<void>.value();
   String? _recognitionPreviewText;
   String? _recognitionProcessingText;
+  Timer? _transientPayloadTimer;
+  int _transientPayloadGeneration = 0;
+  WearGlassesPayload? _transientPayload;
+  Timer? _statusTimer;
+  int _statusGeneration = 0;
+  WearStatusState? _statusState;
 
   WearFlowState get state => _state;
 
@@ -163,10 +177,26 @@ class WearFlowController {
   Stream<WearScreenId> get screenActionsChanged =>
       _screenActionsController.stream;
 
+  int get basePayloadRevision => _basePayloadRevision;
+
+  WearStatusState? get statusState => _statusState;
+
+  WearPrinterRuntimeState get printerState => _printerRuntime!.state;
+
+  Stream<WearPrinterRuntimeState> get printerStateStream =>
+      _printerRuntime!.stateStream;
+
+  WearAvailabilityRuntimeState get availabilityState =>
+      _availabilityRuntime!.state;
+
+  Stream<WearAvailabilityRuntimeState> get availabilityStateStream =>
+      _availabilityRuntime!.stateStream;
+
   bool get currentScreenAcceptsBarcode {
     if (!_runtimeActive) return false;
-    if (_uiLifecycle == WearUiLifecycle.inactive) {
-      return _backgroundRuntime?.acceptsBarcode(_state.screen) ?? false;
+    final WearBackgroundRuntime? runtime = _backgroundRuntime;
+    if (runtime?.handles(_state.screen) == true) {
+      return runtime!.acceptsBarcode(_state.screen);
     }
     final WearScreenActionHandler? handler = _screenActions[_state.screen];
     return handler?.onBarcode != null &&
@@ -175,9 +205,7 @@ class WearFlowController {
 
   VoiceDynamicItemsSnapshot dynamicVoiceItemsFor(WearScreenId screen) {
     final WearBackgroundRuntime? runtime = _backgroundRuntime;
-    if (_uiLifecycle == WearUiLifecycle.inactive &&
-        runtime != null &&
-        runtime.handles(screen)) {
+    if (runtime != null && runtime.handles(screen)) {
       return runtime.dynamicVoiceItemsFor(screen);
     }
     return _screenActions[screen]?.dynamicVoiceItems?.call() ??
@@ -213,7 +241,17 @@ class WearFlowController {
     _backgroundRuntime = runtime;
     _backgroundRuntimeSub = runtime.updates.listen(
       (WearBackgroundScreenUpdate update) {
-        if (_uiLifecycle != WearUiLifecycle.inactive) return;
+        final bool migratedScreen = update.screen == WearScreenId.scanIdle ||
+            update.screen == WearScreenId.productSelect ||
+            update.screen == WearScreenId.printerSelect ||
+            update.screen == WearScreenId.availabilityGroup ||
+            update.screen == WearScreenId.availabilityProduct ||
+            update.screen == WearScreenId.availabilityDirectScan ||
+            update.screen == WearScreenId.availabilityCheck ||
+            update.screen == WearScreenId.availabilityFill;
+        if (_uiLifecycle != WearUiLifecycle.inactive && !migratedScreen) {
+          return;
+        }
         rememberScreenPayload(update.screen, update.payload);
         if (_state.screen == update.screen) {
           _screenActionsController.add(update.screen);
@@ -222,6 +260,38 @@ class WearFlowController {
       },
     );
   }
+
+  void setPrinterRuntime(WearPrinterRuntime runtime) {
+    _printerRuntime = runtime;
+  }
+
+  Future<void> reloadPrinters() => _printerRuntime!.load();
+
+  void focusPrinter(int index) => _printerRuntime!.focusPrinter(index);
+
+  Future<void> selectPrinter(WearPrinter printer) =>
+      _printerRuntime!.selectPrinter(printer);
+
+  void setAvailabilityRuntime(WearAvailabilityRuntime runtime) {
+    _availabilityRuntime = runtime;
+  }
+
+  void focusAvailabilityItem(int index) => _availabilityRuntime!.focus(index);
+
+  Future<void> selectAvailabilityItem(Object value) =>
+      _availabilityRuntime!.select(value);
+
+  bool answerAvailability(bool available) =>
+      _availabilityRuntime!.answerAvailable(available);
+
+  Future<void> printAvailabilityPriceTag() =>
+      _availabilityRuntime!.printPriceTag();
+
+  Future<void> captureAvailabilityPhoto() => _availabilityRuntime!.takePhoto();
+
+  Future<void> completeAvailability() => _availabilityRuntime!.complete();
+
+  Future<void> resetAvailabilityFill() => _availabilityRuntime!.resetFill();
 
   Future<void> renderCurrentGlasses() {
     return _renderGlasses();
@@ -289,6 +359,7 @@ class WearFlowController {
     _runtimeActive = active;
     print('[WearFlowController] runtimeActive=$active');
     if (!active) {
+      _clearStatus();
       _clearRecognitionFeedback();
       _commandQueue.clear();
       _inactiveNavigationCount = 0;
@@ -304,6 +375,7 @@ class WearFlowController {
   }
 
   void resetSessionState() {
+    _clearStatus();
     _clearRecognitionFeedback();
     _commandQueue.clear();
     _inactiveNavigationCount = 0;
@@ -516,10 +588,75 @@ class WearFlowController {
   ) {
     final List<String> previous = voiceGrammarPhrasesFor(screen);
     _screenPayloads[screen] = payload;
+    _basePayloadRevision += 1;
     final List<String> next = voiceGrammarPhrasesFor(screen);
     if (!_sameStrings(previous, next)) {
       _screenActionsController.add(screen);
     }
+  }
+
+  Future<bool> publishScreenPayload(
+    WearScreenId screen,
+    WearGlassesPayload payload,
+  ) async {
+    if (_state.screen != screen) return false;
+    _clearTransientPayload();
+    rememberScreenPayload(screen, payload);
+    await _renderGlasses();
+    return true;
+  }
+
+  Future<bool> publishTransientPayload(
+    WearScreenId screen,
+    WearGlassesPayload payload, {
+    Duration duration = const Duration(seconds: 3),
+  }) async {
+    if (_state.screen != screen) return false;
+    _transientPayloadTimer?.cancel();
+    final int generation = ++_transientPayloadGeneration;
+    _transientPayload = payload;
+    final WearGlassesOutput output = _glassesOutput;
+    if (output is WearTransientGlassesOutput) {
+      await _sendTransientGlassesPayload(
+        output as WearTransientGlassesOutput,
+        payload,
+      );
+    } else {
+      await _sendGlassesPayload(payload);
+    }
+    if (_state.screen != screen || generation != _transientPayloadGeneration) {
+      return false;
+    }
+    _transientPayloadTimer = Timer(duration, () {
+      if (_state.screen != screen ||
+          generation != _transientPayloadGeneration) {
+        return;
+      }
+      _transientPayloadTimer = null;
+      _transientPayload = null;
+      unawaited(_renderGlasses());
+    });
+    return true;
+  }
+
+  Future<bool> publishTransientStatusText(
+    WearScreenId screen,
+    String statusText, {
+    Duration duration = const Duration(seconds: 3),
+  }) {
+    if (_state.screen != screen) return Future<bool>.value(false);
+    return publishTransientPayload(
+      screen,
+      _payloadForState(_state).copyWithStatusText(statusText),
+      duration: duration,
+    );
+  }
+
+  void _clearTransientPayload() {
+    _transientPayloadTimer?.cancel();
+    _transientPayloadTimer = null;
+    _transientPayload = null;
+    _transientPayloadGeneration += 1;
   }
 
   static bool _sameStrings(List<String> left, List<String> right) {
@@ -584,6 +721,55 @@ class WearFlowController {
     await _navigateTo(target, extra: extra, replaceCurrent: replaceCurrent);
   }
 
+  Future<void> showStatus(
+    WearStatusScreenArgs args, {
+    required WearStatusCompletion completion,
+  }) async {
+    _statusTimer?.cancel();
+    final int generation = ++_statusGeneration;
+    final Duration? duration = args.autoAfter;
+    final DateTime? deadline =
+        duration == null ? null : DateTime.now().add(duration);
+    final WearStatusScreenArgs passiveArgs = WearStatusScreenArgs(
+      kind: args.kind,
+      title: args.title,
+      message: args.message,
+      details: args.details,
+      glassesStatusText: args.glassesStatusText,
+      glassesStatusIcon: args.glassesStatusIcon,
+      autoAction: WearStatusAutoAction.none,
+    );
+    _statusState = WearStatusState(
+      args: passiveArgs,
+      deadline: deadline,
+      completion: completion,
+    );
+    await requestNavigation(WearScreenId.status, extra: passiveArgs);
+    if (duration == null || completion.kind == WearStatusCompletionKind.stay) {
+      return;
+    }
+    _statusTimer = Timer(duration, () {
+      if (generation != _statusGeneration ||
+          _state.screen != WearScreenId.status) {
+        return;
+      }
+      final WearScreenId? target = completion.target;
+      if (target == null) return;
+      if (completion.kind == WearStatusCompletionKind.returnTo) {
+        unawaited(_returnToPreviousScreen(target));
+      } else {
+        unawaited(requestNavigation(target, replaceCurrent: true));
+      }
+    });
+  }
+
+  void _clearStatus() {
+    _statusTimer?.cancel();
+    _statusTimer = null;
+    _statusGeneration += 1;
+    _statusState = null;
+  }
+
   void setContinueScanFocusedIndex(int index) {
     _setContinueScanFocus(index);
   }
@@ -606,6 +792,14 @@ class WearFlowController {
 
   Future<bool> handleBarcode(String barcode) async {
     if (!_runtimeActive) return false;
+    final WearBackgroundRuntime? runtime = _backgroundRuntime;
+    if (runtime?.handles(_state.screen) == true &&
+        (_state.screen == WearScreenId.scanIdle ||
+            _state.screen == WearScreenId.productSelect)) {
+      await _runtimeReset.catchError((Object _) {});
+      if (!_runtimeActive) return false;
+      return runtime!.handleBarcode(_state.screen, barcode);
+    }
     if (_uiLifecycle == WearUiLifecycle.active) {
       final WearFlowBarcodeAction? action =
           _screenActions[_state.screen]?.onBarcode;
@@ -675,9 +869,7 @@ class WearFlowController {
       }
     }
     final WearBackgroundRuntime? runtime = _backgroundRuntime;
-    if (_uiLifecycle == WearUiLifecycle.inactive &&
-        runtime != null &&
-        await runtime.handlePhrase(_state.screen, trimmed)) {
+    if (runtime != null && await runtime.handlePhrase(_state.screen, trimmed)) {
       return;
     }
     if (_uiLifecycle == WearUiLifecycle.active) {
@@ -802,8 +994,7 @@ class WearFlowController {
         }
         print('[WearFlowController] command=$command state=$_state');
         final WearBackgroundRuntime? runtime = _backgroundRuntime;
-        if (_uiLifecycle == WearUiLifecycle.inactive &&
-            runtime != null &&
+        if (runtime != null &&
             await runtime.handleCommand(_state.screen, command)) {
           continue;
         }
@@ -1493,6 +1684,9 @@ class WearFlowController {
   }
 
   void _clearContextPayload(WearScreenId screen, Object? extra) {
+    if (_state.screen != screen) {
+      _clearTransientPayload();
+    }
     switch (screen) {
       case WearScreenId.printerSelect:
         final bool returningFromHomeConfirm =
@@ -1780,9 +1974,7 @@ class WearFlowController {
     VoiceDynamicItem item,
   ) async {
     final WearBackgroundRuntime? runtime = _backgroundRuntime;
-    if (_uiLifecycle == WearUiLifecycle.inactive &&
-        runtime != null &&
-        runtime.handles(screen)) {
+    if (runtime != null && runtime.handles(screen)) {
       final bool handled = await runtime.handleDynamicItem(screen, item.id);
       if (handled) {
         print(
@@ -1831,9 +2023,10 @@ class WearFlowController {
   Future<void> _renderGlasses() async {
     final WearGlassesPayload basePayload = _payloadForState(_state);
     final String? feedbackText = _recognitionFeedbackText();
-    final WearGlassesPayload payload = feedbackText == null
+    final WearGlassesPayload contentPayload = feedbackText == null
         ? basePayload
         : basePayload.copyWithStatusText(feedbackText);
+    final WearGlassesPayload payload = _transientPayload ?? contentPayload;
     if (feedbackText != null) {
       print(
         '[VOICE_FEEDBACK_PAYLOAD] screen=${_state.screen.name} '
@@ -1842,11 +2035,37 @@ class WearFlowController {
         'selectedIndex=${payload.selectedIndex}',
       );
     }
+    final WearGlassesOutput output = _glassesOutput;
+    if (_transientPayload != null && output is WearTransientGlassesOutput) {
+      await _sendTransientGlassesPayload(
+        output as WearTransientGlassesOutput,
+        payload,
+      );
+    } else {
+      await _sendGlassesPayload(payload);
+    }
+  }
+
+  Future<void> _sendGlassesPayload(WearGlassesPayload payload) async {
     try {
       await _glassesOutput.send(payload);
     } catch (error, stackTrace) {
       print(
         '[WearFlowController] glasses projection failed: '
+        '$error\n$stackTrace',
+      );
+    }
+  }
+
+  Future<void> _sendTransientGlassesPayload(
+    WearTransientGlassesOutput output,
+    WearGlassesPayload payload,
+  ) async {
+    try {
+      await output.sendTransient(payload);
+    } catch (error, stackTrace) {
+      print(
+        '[WearFlowController] transient glasses projection failed: '
         '$error\n$stackTrace',
       );
     }
@@ -1860,7 +2079,8 @@ class WearFlowController {
           selectedIndex: state.homeConfirmFocusedIndex,
         ),
       WearScreenId.help => WearGlassesPayload.help(),
-      WearScreenId.scanIdle => WearGlassesPayload.scanWaiting(),
+      WearScreenId.scanIdle => _screenPayloads[WearScreenId.scanIdle] ??
+          WearGlassesPayload.scanWaiting(),
       WearScreenId.continueScan => WearGlassesPayload.continueScan(
           selectedIndex: state.continueScanFocusedIndex,
         ),
@@ -1896,10 +2116,12 @@ class WearFlowController {
               title: 'Проверка товара',
               statusText: 'Загружаем...',
             ),
-      WearScreenId.availabilityFill => WearAvailabilityGlassesPayloads.loading(
-          title: 'Наполнение базы',
-          statusText: 'Загружаем...',
-        ),
+      WearScreenId.availabilityFill =>
+        _screenPayloads[WearScreenId.availabilityFill] ??
+            WearAvailabilityGlassesPayloads.loading(
+              title: 'Наполнение базы',
+              statusText: 'Загружаем...',
+            ),
       WearScreenId.productSelect =>
         _screenPayloads[WearScreenId.productSelect] ??
             WearGlassesPayload.loading(
@@ -1908,13 +2130,19 @@ class WearFlowController {
               statusText: 'Открываем список...',
             ),
       WearScreenId.voiceClarification => _voiceClarificationPayload(state),
-      WearScreenId.printCodeInput ||
-      WearScreenId.status =>
-        WearGlassesPayload.status(
-          isError: false,
-          title: 'Статус',
-          statusText: 'Открываем экран...',
-        ),
+      WearScreenId.printCodeInput =>
+        _screenPayloads[WearScreenId.printCodeInput] ??
+            WearGlassesPayload.status(
+              isError: false,
+              title: 'Статус',
+              statusText: 'Открываем экран...',
+            ),
+      WearScreenId.status => _screenPayloads[WearScreenId.status] ??
+          WearGlassesPayload.status(
+            isError: false,
+            title: 'Статус',
+            statusText: 'Открываем экран...',
+          ),
       WearScreenId.settings ||
       WearScreenId.dbSettings ||
       WearScreenId.wifiSettings ||
@@ -1924,9 +2152,9 @@ class WearFlowController {
           title: 'Настройки',
           statusText: 'Открываем настройки...',
         ),
-      WearScreenId.scannerConnect ||
-      WearScreenId.main =>
-        WearGlassesPayload.authWaitingBarcode(),
+      WearScreenId.scannerConnect => WearGlassesPayload.authWaitingBarcode(),
+      WearScreenId.main => _screenPayloads[WearScreenId.main] ??
+          WearGlassesPayload.authWaitingBarcode(),
     };
   }
 
@@ -2018,6 +2246,8 @@ class WearFlowController {
   }
 
   Future<void> dispose() async {
+    _clearTransientPayload();
+    _clearStatus();
     await _backgroundRuntimeSub?.cancel();
     await _backgroundRuntime?.dispose();
     await _screenActionsController.close();

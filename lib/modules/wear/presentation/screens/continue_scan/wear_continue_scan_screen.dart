@@ -11,7 +11,6 @@ import 'package:smart_glasses/modules/wear/presentation/screens/menu/wear_menu_s
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_svg_icon.dart';
-import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/services/wear_voice_session.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
@@ -143,7 +142,6 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen>
   void _continueScanning() {
     if (_isActionInProgress) return;
     _isActionInProgress = true;
-    WearStatusIconReporter.I.sendFast(WearGlassesPayload.scanWaiting());
     context.pop(true);
   }
 
@@ -151,7 +149,6 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen>
     if (_isActionInProgress) return;
     _isActionInProgress = true;
     _flow.enterScreen(WearScreenId.menu);
-    WearStatusIconReporter.I.sendFast(WearGlassesPayload.menu());
     context.go(WearMenuScreen.route);
   }
 
@@ -177,11 +174,7 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen>
     final WearGlassesPayload payload = WearGlassesPayload.continueScan(
       selectedIndex: _selectedButtonIndex,
     );
-    if (fast) {
-      WearStatusIconReporter.I.sendFast(payload);
-    } else {
-      WearStatusIconReporter.I.send(payload);
-    }
+    _flow.publishScreenPayload(WearScreenId.continueScan, payload);
   }
 
   @override

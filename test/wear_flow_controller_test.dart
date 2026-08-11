@@ -7,11 +7,13 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart
 import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
 import 'package:smart_glasses/modules/wear/application/wear_navigation_entry.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/application/wear_status_state.dart';
 import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/application/voice_clarification_args.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 
 void main() {
   group('WearFlowController', () {
@@ -2151,6 +2153,32 @@ void main() {
       controller.enterScreen(WearScreenId.menu);
 
       expect(controller.state.currentVoiceClarificationArgs, isNull);
+    });
+
+    test('status timeout navigates to its explicit target', () async {
+      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
+      final WearFlowController controller = WearFlowController(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: navigation,
+      );
+      addTearDown(controller.dispose);
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      controller.enterScreen(WearScreenId.scanIdle);
+
+      await controller.showStatus(
+        const WearStatusScreenArgs(
+          kind: WearStatusKind.success,
+          title: 'Готово',
+          message: 'Ценник напечатан',
+          autoAfter: Duration(milliseconds: 10),
+        ),
+        completion: const WearStatusCompletion.goTo(WearScreenId.scanIdle),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(controller.statusState?.completion.target, WearScreenId.scanIdle);
+      expect(navigation.goToCalls, <WearScreenId>[WearScreenId.status]);
+      expect(navigation.replaceCalls, <WearScreenId>[WearScreenId.scanIdle]);
     });
   });
 }

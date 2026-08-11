@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:smart_glasses/modules/wear/application/wear_background_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/application/wear_status_state.dart';
 import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
@@ -12,22 +13,65 @@ import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_pay
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_voice_hints.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_product_select_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
+import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 
 typedef WearBarcodeLookup = Future<List<BarcodeProductInfo>> Function(
   String barcode,
 );
 typedef WearProductPrint = Future<String> Function(BarcodeProductInfo product);
-typedef WearScanScreenProvider = WearScreenId Function();
 typedef WearScanNavigation = Future<void> Function(
   WearScreenId screen, {
   Object? extra,
   bool replaceCurrent,
 });
+typedef WearScanStatusPublisher = Future<void> Function(
+  WearStatusScreenArgs args,
+  WearStatusCompletion completion,
+);
+
+enum WearScanRuntimePhase { waiting, lookup, selection, printing, status }
 
 class WearScanRuntimeState {
-  const WearScanRuntimeState({required this.busy});
+  const WearScanRuntimeState({
+    required this.phase,
+    required this.screen,
+    required this.barcode,
+    required this.products,
+    required this.focusedIndex,
+    required this.productName,
+    required this.loadingText,
+    required this.loadingIcon,
+    required this.status,
+    required this.lastAcceptedBarcode,
+  });
 
-  final bool busy;
+  factory WearScanRuntimeState.initial() => const WearScanRuntimeState(
+        phase: WearScanRuntimePhase.waiting,
+        screen: WearScreenId.scanIdle,
+        barcode: null,
+        products: <BarcodeProductInfo>[],
+        focusedIndex: 0,
+        productName: null,
+        loadingText: 'ШК отсканирован, распознаю...',
+        loadingIcon: WearImages.barcode,
+        status: null,
+        lastAcceptedBarcode: null,
+      );
+
+  final WearScanRuntimePhase phase;
+  final WearScreenId screen;
+  final String? barcode;
+  final List<BarcodeProductInfo> products;
+  final int focusedIndex;
+  final String? productName;
+  final String loadingText;
+  final String loadingIcon;
+  final WearStatusScreenArgs? status;
+  final String? lastAcceptedBarcode;
+
+  bool get busy =>
+      phase == WearScanRuntimePhase.lookup ||
+      phase == WearScanRuntimePhase.printing;
 }
 
 class WearScanRuntime implements WearBackgroundRuntime {
@@ -35,33 +79,52 @@ class WearScanRuntime implements WearBackgroundRuntime {
     required WearBarcodeLookup lookupBarcode,
     required WearProductPrint printProduct,
     required WearScanNavigation navigate,
-    required WearScanScreenProvider currentScreen,
-    Duration statusDuration = const Duration(seconds: 5),
+    required WearScanStatusPublisher showStatus,
   })  : _lookupBarcode = lookupBarcode,
         _printProduct = printProduct,
         _navigate = navigate,
-        _currentScreen = currentScreen,
-        _statusDuration = statusDuration;
+        _showStatusOutput = showStatus;
 
   static const int _pageSize = 4;
   final WearBarcodeLookup _lookupBarcode;
   final WearProductPrint _printProduct;
   final WearScanNavigation _navigate;
-  final WearScanScreenProvider _currentScreen;
-  final Duration _statusDuration;
+  final WearScanStatusPublisher _showStatusOutput;
   final StreamController<WearBackgroundScreenUpdate> _updates =
       StreamController<WearBackgroundScreenUpdate>.broadcast();
+  final StreamController<WearScanRuntimeState> _states =
+      StreamController<WearScanRuntimeState>.broadcast();
 
   WearScreenId _screen = WearScreenId.scanIdle;
   List<BarcodeProductInfo> _products = const <BarcodeProductInfo>[];
   int _focusedIndex = 0;
   bool _loading = false;
   String? _lastBarcode;
-  Timer? _statusTimer;
   int _generation = 0;
+  String? _barcode;
+  String? _productName;
+  String _loadingText = 'ШК отсканирован, распознаю...';
+  String _loadingIcon = WearImages.barcode;
+  WearStatusScreenArgs? _status;
+  WearScanRuntimePhase _phase = WearScanRuntimePhase.waiting;
 
   @override
   Stream<WearBackgroundScreenUpdate> get updates => _updates.stream;
+
+  Stream<WearScanRuntimeState> get stateStream => _states.stream;
+
+  WearScanRuntimeState get state => WearScanRuntimeState(
+        phase: _phase,
+        screen: _screen,
+        barcode: _barcode,
+        products: List<BarcodeProductInfo>.unmodifiable(_products),
+        focusedIndex: _focusedIndex,
+        productName: _productName,
+        loadingText: _loadingText,
+        loadingIcon: _loadingIcon,
+        status: _status,
+        lastAcceptedBarcode: _lastBarcode,
+      );
 
   @override
   bool handles(WearScreenId screen) {
@@ -91,11 +154,16 @@ class WearScanRuntime implements WearBackgroundRuntime {
     if (!handles(screen)) return;
     _screen = screen;
     _focusedIndex = 0;
+    _status = null;
     if (screen == WearScreenId.scanIdle) {
       _lastBarcode = null;
+      _barcode = null;
       _products = const <BarcodeProductInfo>[];
+      _phase = WearScanRuntimePhase.waiting;
     } else if (extra is WearProductSelectArgs) {
       _products = extra.products;
+      _barcode = extra.barcode;
+      _phase = WearScanRuntimePhase.selection;
     }
     _publish(_payload());
   }
@@ -106,6 +174,7 @@ class WearScanRuntime implements WearBackgroundRuntime {
     final String value = barcode.trim();
     if (value.isEmpty || value == _lastBarcode) return true;
     _lastBarcode = value;
+    _barcode = value;
     if (WearSession.printerSelectionOrNull == null) {
       await _showStatus(isError: true, message: 'Не выбраны принтеры');
       return true;
@@ -115,6 +184,9 @@ class WearScanRuntime implements WearBackgroundRuntime {
       return true;
     }
     _loading = true;
+    _phase = WearScanRuntimePhase.lookup;
+    _loadingText = 'ШК отсканирован, распознаю...';
+    _loadingIcon = WearImages.barcode;
     final int generation = _generation;
     _publish(WearGlassesPayload.scanLoading());
     try {
@@ -128,6 +200,7 @@ class WearScanRuntime implements WearBackgroundRuntime {
         await _print(_products.single);
       } else {
         _loading = false;
+        _phase = WearScanRuntimePhase.selection;
         await _navigate(
           WearScreenId.productSelect,
           extra: WearProductSelectArgs(barcode: value, products: _products),
@@ -195,13 +268,30 @@ class WearScanRuntime implements WearBackgroundRuntime {
     return false;
   }
 
+  void setFocusedIndex(int index) {
+    if (_products.isEmpty || _loading) return;
+    _focusedIndex = index.clamp(0, _products.length - 1);
+    _publish(_payload());
+  }
+
+  Future<void> selectProduct(BarcodeProductInfo product) async {
+    if (_loading || !_products.any((item) => item.id == product.id)) return;
+    await _print(product);
+  }
+
   Future<void> _print(BarcodeProductInfo product) async {
     _loading = true;
+    _phase = WearScanRuntimePhase.printing;
+    _productName = product.name.trim().isEmpty ? 'Без названия' : product.name;
+    _loadingText = 'Отправляем на печать...';
+    _loadingIcon = WearImages.printer;
     final int generation = _generation;
     _publish(WearGlassesPayload.printing(productName: product.name));
     try {
       final String printer = WearMockConfig.isEnabled
-          ? WearSession.printerSelectionOrNull!.whitePrinter.name
+          ? (product.id.isEven
+              ? WearSession.printerSelectionOrNull!.yellowPrinter.name
+              : WearSession.printerSelectionOrNull!.whitePrinter.name)
           : await _printProduct(product);
       if (generation != _generation) return;
       await _showStatus(
@@ -226,36 +316,33 @@ class WearScanRuntime implements WearBackgroundRuntime {
       title: isError ? 'Ошибка' : 'Ценник отправлен на печать',
       message: message,
       details: details,
-      autoAfter: _statusDuration,
+      autoAfter: const Duration(seconds: 5),
       autoAction: WearStatusAutoAction.none,
     );
-    await _navigate(WearScreenId.status, extra: args);
-    _statusTimer?.cancel();
-    final int generation = _generation;
-    _statusTimer = Timer(_statusDuration, () {
-      if (generation != _generation ||
-          _currentScreen() != WearScreenId.status) {
-        return;
-      }
-      unawaited(
-        _navigate(
-          WearScreenId.scanIdle,
-          replaceCurrent: true,
-        ).catchError((Object _, StackTrace __) {}),
-      );
-    });
+    _status = args;
+    _phase = WearScanRuntimePhase.status;
+    _emitState();
+    await _showStatusOutput(
+      args,
+      const WearStatusCompletion.goTo(WearScreenId.scanIdle),
+    );
   }
 
   @override
   Future<void> reset() async {
     _generation += 1;
-    _statusTimer?.cancel();
-    _statusTimer = null;
     _screen = WearScreenId.scanIdle;
     _products = const <BarcodeProductInfo>[];
     _focusedIndex = 0;
     _loading = false;
     _lastBarcode = null;
+    _barcode = null;
+    _productName = null;
+    _status = null;
+    _phase = WearScanRuntimePhase.waiting;
+    _loadingText = 'ШК отсканирован, распознаю...';
+    _loadingIcon = WearImages.barcode;
+    _emitState();
   }
 
   void _move(int delta) {
@@ -286,14 +373,7 @@ class WearScanRuntime implements WearBackgroundRuntime {
   }
 
   @override
-  void restorePresentationState(WearScreenId screen, Object state) {
-    if (screen != WearScreenId.scanIdle || state is! WearScanRuntimeState) {
-      return;
-    }
-    _screen = screen;
-    _loading = state.busy;
-    _publish(_payload());
-  }
+  void restorePresentationState(WearScreenId screen, Object state) {}
 
   @override
   Object? presentationStateFor(WearScreenId screen) => null;
@@ -335,11 +415,30 @@ class WearScanRuntime implements WearBackgroundRuntime {
   }
 
   void _publish(WearGlassesPayload payload) {
+    _emitState();
     if (_updates.isClosed) return;
     _updates.add(WearBackgroundScreenUpdate(screen: _screen, payload: payload));
   }
 
+  void _emitState() {
+    if (!_states.isClosed) _states.add(state);
+  }
+
   List<BarcodeProductInfo> _mockProducts(String barcode) {
+    if (barcode.endsWith('2')) {
+      return <BarcodeProductInfo>[
+        BarcodeProductInfo(
+          id: 1002001,
+          name: 'MOCK Молоко 2,5% 930 мл',
+          articleRest: 24,
+        ),
+        BarcodeProductInfo(
+          id: 1002002,
+          name: 'MOCK Молоко 3,2% 930 мл',
+          articleRest: 16,
+        ),
+      ];
+    }
     return <BarcodeProductInfo>[
       BarcodeProductInfo(
         id: 1001001,
@@ -360,5 +459,6 @@ class WearScanRuntime implements WearBackgroundRuntime {
   Future<void> dispose() async {
     await reset();
     await _updates.close();
+    await _states.close();
   }
 }

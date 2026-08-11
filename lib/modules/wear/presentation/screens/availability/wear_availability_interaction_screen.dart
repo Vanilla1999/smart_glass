@@ -8,7 +8,6 @@ import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availabilit
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
-import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
@@ -37,7 +36,8 @@ class _WearAvailabilityInteractionScreenState
     _flow.enterScreen(WearScreenId.availabilityInteraction);
     _flowSub = _flow.stateStream.listen(_onFlowState);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      WearStatusIconReporter.I.send(
+      _flow.publishScreenPayload(
+        WearScreenId.availabilityInteraction,
         WearAvailabilityGlassesPayloads.interactionTypes(
           selectedIndex: _focusedIndex,
         ),

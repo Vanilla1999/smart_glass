@@ -380,6 +380,11 @@ class WearGlassesPayload {
       showPrinterIcon: showPrinterIcon,
       printerAvailable: printerAvailable,
       voiceCommandsEnabled: voiceCommandsEnabled,
+      performanceTraceId: performanceTraceId,
+      performanceCommand: performanceCommand,
+      performanceRecognizedAtMillis: performanceRecognizedAtMillis,
+      performanceAsrMillis: performanceAsrMillis,
+      performanceSentAtMillis: performanceSentAtMillis,
     );
   }
 

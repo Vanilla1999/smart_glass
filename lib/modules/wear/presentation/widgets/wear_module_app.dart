@@ -197,6 +197,7 @@ class _WearModuleAppState extends State<WearModuleApp>
               : null,
       log: print,
     );
+    WearStatusIconReporter.I.start();
     WearStatusIconReporter.I.setVoiceCommandsEnabled(_voiceCommandsEnabled);
     flow.setNavigationOutput(FlutterWearNavigationOutput(router: _router));
     flow.setRuntimeActive(true);
