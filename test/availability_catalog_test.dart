@@ -17,12 +17,26 @@ void main() {
     expect(
         products.map((Map<String, dynamic> product) => product['id']).toSet(),
         hasLength(products.length));
-    expect(beverages, hasLength(209));
+    expect(products, hasLength(248));
+    expect(beverages, hasLength(164));
     expect(
       products.any(
         (Map<String, dynamic> product) => product['id'] == 9000000001,
       ),
       isTrue,
+    );
+    expect(
+      products.where(
+        (Map<String, dynamic> product) =>
+            (product['name'] as String).startsWith('ТЕСТ'),
+      ),
+      hasLength(2),
+    );
+    expect(
+      products.where(
+        (Map<String, dynamic> product) => product['photoControl'] == true,
+      ),
+      hasLength(25),
     );
     expect(
       beverages.every(

@@ -70,7 +70,7 @@ class InitializationCubit extends Cubit<InitializationState> {
 
     await Future.any([
       scannerFuture,
-      Future.delayed(const Duration(seconds: 10)),
+      Future.delayed(const Duration(seconds: 20)),
     ]);
 
     if (_scannerCubit.state is ScannerReady) {

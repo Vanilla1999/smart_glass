@@ -9,8 +9,8 @@ void main() {
     expect(profile.id, 'uac4');
     expect(profile.forceHardRestartOnResume, isTrue);
     expect(profile.requireNonZeroPcmForStartup, isTrue);
-    expect(profile.exactZeroStartupGrace, const Duration(seconds: 15));
-    expect(profile.recoveryCaptureTimeout, const Duration(seconds: 15));
+    expect(profile.exactZeroStartupGrace, const Duration(seconds: 30));
+    expect(profile.recoveryCaptureTimeout, const Duration(seconds: 30));
     expect(profile.maxStartupRecorderRecreates, 0);
   });
 }
