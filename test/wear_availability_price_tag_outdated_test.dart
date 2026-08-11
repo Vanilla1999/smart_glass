@@ -69,6 +69,23 @@ void main() {
     expect(flow.message, 'Отсканируйте ценник');
   });
 
+  test('direct scan rejects a price tag as the first barcode', () async {
+    final WearAvailabilityFlowUseCase useCase = WearAvailabilityFlowUseCase(
+      _FakeAvailabilityRepository(),
+    );
+
+    final WearAvailabilityFlowState flow = await useCase.findProductByBarcode(
+      const WearAvailabilityFlowState(
+        step: WearAvailabilityFlowStep.productSelection,
+      ),
+      barcode: '220700001',
+    );
+
+    expect(flow.step, WearAvailabilityFlowStep.productSelection);
+    expect(flow.selectedProduct, isNull);
+    expect(flow.message, 'Позиция не найдена');
+  });
+
   test('printer selection reset clears previous white and yellow printers', () {
     final WearPrinterSelectNotifier notifier = WearPrinterSelectNotifier();
     addTearDown(notifier.dispose);
@@ -124,7 +141,8 @@ class _FakeAvailabilityRepository implements WearAvailabilityRepository {
   @override
   Future<List<WearAvailabilityProduct>> findProductsByBarcode(String barcode) =>
       Future<List<WearAvailabilityProduct>>.value(
-        _outdatedProduct.matchesProductBarcode(barcode)
+        _outdatedProduct.matchesProductBarcode(barcode) ||
+                _outdatedProduct.matchesPriceTagBarcode(barcode)
             ? const <WearAvailabilityProduct>[_outdatedProduct]
             : const <WearAvailabilityProduct>[],
       );

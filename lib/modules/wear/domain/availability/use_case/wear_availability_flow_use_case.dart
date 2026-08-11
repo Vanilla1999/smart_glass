@@ -70,7 +70,12 @@ class WearAvailabilityFlowUseCase {
     required String barcode,
   }) async {
     final List<WearAvailabilityProduct> foundProducts =
-        await _repository.findProductsByBarcode(barcode);
+        (await _repository.findProductsByBarcode(barcode))
+            .where(
+              (WearAvailabilityProduct product) =>
+                  product.matchesProductBarcode(barcode),
+            )
+            .toList(growable: false);
     if (foundProducts.isEmpty) {
       return state.copyWith(
         step: WearAvailabilityFlowStep.productSelection,
