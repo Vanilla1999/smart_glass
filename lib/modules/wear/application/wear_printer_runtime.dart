@@ -179,6 +179,7 @@ class WearPrinterRuntime implements WearBackgroundRuntime {
           .toList(growable: false);
       if (generation != _generation) return;
       _printers = printers;
+      _reconcileSelectionAfterReload();
     } catch (error) {
       if (generation != _generation) return;
       _error = _messageFor(error);
@@ -189,6 +190,53 @@ class WearPrinterRuntime implements WearBackgroundRuntime {
         _publish();
       }
     }
+  }
+
+  void _reconcileSelectionAfterReload() {
+    final WearPrinter? currentWhite = _whitePrinter;
+    if (currentWhite == null) {
+      if (_selection != null) {
+        _selection = null;
+        _step = WearPrinterRuntimeStep.white;
+        WearSession.clearPrinterSelection();
+      }
+      return;
+    }
+
+    final WearPrinter? refreshedWhite = _printerById(currentWhite.id);
+    if (refreshedWhite == null) {
+      _whitePrinter = null;
+      _selection = null;
+      _step = WearPrinterRuntimeStep.white;
+      WearSession.clearPrinterSelection();
+      return;
+    }
+    _whitePrinter = refreshedWhite;
+
+    final WearPrinterSelection? selection = _selection;
+    if (selection == null) return;
+    final WearPrinter? refreshedYellow =
+        _printerById(selection.yellowPrinter.id);
+    if (refreshedYellow == null || refreshedYellow.id == refreshedWhite.id) {
+      _selection = null;
+      _step = WearPrinterRuntimeStep.yellow;
+      WearSession.clearPrinterSelection();
+      return;
+    }
+
+    final WearPrinterSelection refreshedSelection = WearPrinterSelection(
+      whitePrinter: refreshedWhite,
+      yellowPrinter: refreshedYellow,
+    );
+    _selection = refreshedSelection;
+    WearSession.setPrinterSelection(refreshedSelection);
+  }
+
+  WearPrinter? _printerById(String id) {
+    for (final WearPrinter printer in _printers) {
+      if (printer.id == id) return printer;
+    }
+    return null;
   }
 
   @override
