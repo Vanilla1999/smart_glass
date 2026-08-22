@@ -13,6 +13,7 @@ import 'package:smart_glasses/modules/wear/application/wear_printer_runtime.dart
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
+import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_flow_state.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_group.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/repository/wear_availability_repository.dart';
@@ -193,6 +194,35 @@ void main() {
       expect(runtime.state.savedCount, 1);
     });
 
+    test('stale fill result cannot update a newer availability screen',
+        () async {
+      final Completer<List<WearAvailabilityProduct>> fill =
+          Completer<List<WearAvailabilityProduct>>();
+      final WearAvailabilityRuntime runtime = _availabilityRuntime(
+        repository: _DuplicateAvailabilityRepository(),
+        fillAdd: (_) => fill.future,
+      );
+      addTearDown(runtime.dispose);
+      await runtime.enterScreen(WearScreenId.availabilityFill);
+
+      final Future<bool> scan = runtime.handleBarcode(
+        WearScreenId.availabilityFill,
+        _DuplicateAvailabilityRepository.barcode,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(runtime.state.busy, isTrue);
+
+      await runtime.enterScreen(WearScreenId.availabilityGroup);
+      fill.complete(const <WearAvailabilityProduct>[
+        _DuplicateAvailabilityRepository.first,
+      ]);
+
+      expect(await scan, isTrue);
+      expect(runtime.state.busy, isFalse);
+      expect(runtime.state.savedCount, 0);
+      expect(runtime.state.error, isNull);
+    });
+
     test('direct scan does not advertise list commands before duplicates',
         () async {
       final WearAvailabilityRuntime runtime = _availabilityRuntime(
@@ -283,42 +313,195 @@ void main() {
       );
       expect(resetCalls, 1);
     });
+
+    test('fill reset blocks scanner input until repository reset completes',
+        () async {
+      final Completer<void> reset = Completer<void>();
+      var fillCalls = 0;
+      final WearAvailabilityRuntime runtime = _availabilityRuntime(
+        repository: _DuplicateAvailabilityRepository(),
+        fillAdd: (_) async {
+          fillCalls++;
+          return const <WearAvailabilityProduct>[
+            _DuplicateAvailabilityRepository.first,
+          ];
+        },
+        fillReset: () => reset.future,
+      );
+      addTearDown(runtime.dispose);
+      await runtime.enterScreen(WearScreenId.availabilityFill);
+      await runtime.handleBarcode(
+        WearScreenId.availabilityFill,
+        _DuplicateAvailabilityRepository.barcode,
+      );
+      expect(runtime.state.savedCount, 1);
+
+      final Future<void> resetting = runtime.resetFill();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(runtime.state.busy, isTrue);
+      expect(runtime.acceptsBarcode(WearScreenId.availabilityFill), isFalse);
+      expect(
+        await runtime.handleBarcode(
+          WearScreenId.availabilityFill,
+          '4600000000099',
+        ),
+        isFalse,
+      );
+      expect(fillCalls, 1);
+
+      reset.complete();
+      await resetting;
+
+      expect(runtime.state.busy, isFalse);
+      expect(runtime.state.savedCount, 0);
+      expect(runtime.state.message, 'База сканированной полки очищена');
+    });
+
+    test('stale photo error cannot overwrite a newer screen', () async {
+      final Completer<void> photo = Completer<void>();
+      final WearAvailabilityRuntime runtime = _availabilityRuntime(
+        repository: _DuplicateAvailabilityRepository(),
+        capturePhoto: () => photo.future,
+      );
+      addTearDown(runtime.dispose);
+      await runtime.enterScreen(
+        WearScreenId.availabilityCheck,
+        extra: const WearAvailabilityFlowState(
+          step: WearAvailabilityFlowStep.photoCapture,
+          check: WearAvailabilityProductCheck(
+            product: _DuplicateAvailabilityRepository.first,
+            productScanned: true,
+          ),
+        ),
+      );
+
+      final Future<void> capture = runtime.takePhoto();
+      await Future<void>.delayed(Duration.zero);
+      expect(runtime.state.busy, isTrue);
+
+      await runtime.enterScreen(WearScreenId.availabilityGroup);
+      photo.completeError(Exception('stale photo failure'));
+      await capture;
+
+      expect(runtime.state.busy, isFalse);
+      expect(runtime.state.error, isNull);
+    });
   });
 
-  test('printer reload invalidates a disappeared white printer', () async {
-    var loadCount = 0;
-    final WearPrinterRuntime runtime = WearPrinterRuntime(
-      loadPrinters: () async {
-        loadCount++;
-        if (loadCount == 1) {
+  group('printer reload reconciliation', () {
+    test('reload invalidates a disappeared white printer', () async {
+      var loadCount = 0;
+      final WearPrinterRuntime runtime = WearPrinterRuntime(
+        loadPrinters: () async {
+          loadCount++;
+          if (loadCount == 1) {
+            return <AvailablePrinter>[
+              AvailablePrinter(number: 'a', name: 'Белый A'),
+              AvailablePrinter(number: 'b', name: 'Жёлтый B'),
+            ];
+          }
+          return <AvailablePrinter>[
+            AvailablePrinter(number: 'b', name: 'Жёлтый B'),
+            AvailablePrinter(number: 'c', name: 'Мобильный C'),
+          ];
+        },
+        navigate: (
+          WearScreenId _, {
+          Object? extra,
+          bool replaceCurrent = false,
+        }) async {},
+      );
+      addTearDown(runtime.dispose);
+      await runtime.enterScreen(WearScreenId.printerSelect);
+      await runtime.selectPrinter(runtime.state.printers.first);
+      await runtime.selectPrinter(runtime.state.visiblePrinters.first);
+      expect(WearSession.printerSelectionOrNull, isNotNull);
+
+      await runtime.load();
+
+      expect(runtime.state.whitePrinter, isNull);
+      expect(runtime.state.selection, isNull);
+      expect(runtime.state.step, WearPrinterRuntimeStep.white);
+      expect(WearSession.printerSelectionOrNull, isNull);
+    });
+
+    test('reload keeps a valid pair and refreshes printer models', () async {
+      var loadCount = 0;
+      final WearPrinterRuntime runtime = WearPrinterRuntime(
+        loadPrinters: () async {
+          loadCount++;
+          return <AvailablePrinter>[
+            AvailablePrinter(
+              number: 'a',
+              name: loadCount == 1 ? 'Белый A' : 'Белый A обновлённый',
+            ),
+            AvailablePrinter(
+              number: 'b',
+              name: loadCount == 1 ? 'Жёлтый B' : 'Жёлтый B обновлённый',
+            ),
+          ];
+        },
+        navigate: (
+          WearScreenId _, {
+          Object? extra,
+          bool replaceCurrent = false,
+        }) async {},
+      );
+      addTearDown(runtime.dispose);
+      await runtime.enterScreen(WearScreenId.printerSelect);
+      await runtime.selectPrinter(runtime.state.printers.first);
+      await runtime.selectPrinter(runtime.state.visiblePrinters.first);
+
+      await runtime.load();
+
+      expect(runtime.state.selection?.whitePrinter.name,
+          'Белый A обновлённый');
+      expect(runtime.state.selection?.yellowPrinter.name,
+          'Жёлтый B обновлённый');
+      expect(runtime.state.step, WearPrinterRuntimeStep.yellow);
+      expect(WearSession.printerSelectionOrNull?.whitePrinter.name,
+          'Белый A обновлённый');
+      expect(WearSession.printerSelectionOrNull?.yellowPrinter.name,
+          'Жёлтый B обновлённый');
+    });
+
+    test('reload keeps white and requests yellow again when yellow disappears',
+        () async {
+      var loadCount = 0;
+      final WearPrinterRuntime runtime = WearPrinterRuntime(
+        loadPrinters: () async {
+          loadCount++;
+          if (loadCount == 1) {
+            return <AvailablePrinter>[
+              AvailablePrinter(number: 'a', name: 'Белый A'),
+              AvailablePrinter(number: 'b', name: 'Жёлтый B'),
+            ];
+          }
           return <AvailablePrinter>[
             AvailablePrinter(number: 'a', name: 'Белый A'),
-            AvailablePrinter(number: 'b', name: 'Жёлтый B'),
+            AvailablePrinter(number: 'c', name: 'Жёлтый C'),
           ];
-        }
-        return <AvailablePrinter>[
-          AvailablePrinter(number: 'b', name: 'Жёлтый B'),
-          AvailablePrinter(number: 'c', name: 'Мобильный C'),
-        ];
-      },
-      navigate: (
-        WearScreenId _, {
-        Object? extra,
-        bool replaceCurrent = false,
-      }) async {},
-    );
-    addTearDown(runtime.dispose);
-    await runtime.enterScreen(WearScreenId.printerSelect);
-    await runtime.selectPrinter(runtime.state.printers.first);
-    await runtime.selectPrinter(runtime.state.visiblePrinters.first);
-    expect(WearSession.printerSelectionOrNull, isNotNull);
+        },
+        navigate: (
+          WearScreenId _, {
+          Object? extra,
+          bool replaceCurrent = false,
+        }) async {},
+      );
+      addTearDown(runtime.dispose);
+      await runtime.enterScreen(WearScreenId.printerSelect);
+      await runtime.selectPrinter(runtime.state.printers.first);
+      await runtime.selectPrinter(runtime.state.visiblePrinters.first);
 
-    await runtime.load();
+      await runtime.load();
 
-    expect(runtime.state.whitePrinter, isNull);
-    expect(runtime.state.selection, isNull);
-    expect(runtime.state.step, WearPrinterRuntimeStep.white);
-    expect(WearSession.printerSelectionOrNull, isNull);
+      expect(runtime.state.whitePrinter?.id, 'a');
+      expect(runtime.state.selection, isNull);
+      expect(runtime.state.step, WearPrinterRuntimeStep.yellow);
+      expect(WearSession.printerSelectionOrNull, isNull);
+      expect(runtime.state.visiblePrinters.single.id, 'c');
+    });
   });
 }
 
@@ -333,6 +516,7 @@ WearAvailabilityRuntime _availabilityRuntime({
   required WearAvailabilityRepository repository,
   WearAvailabilityFillAdd? fillAdd,
   WearAvailabilityFillReset? fillReset,
+  WearAvailabilityPhotoCapture? capturePhoto,
 }) {
   return WearAvailabilityRuntime(
     flowUseCase: WearAvailabilityFlowUseCase(repository),
@@ -341,7 +525,7 @@ WearAvailabilityRuntime _availabilityRuntime({
       Object? extra,
       bool replaceCurrent = false,
     }) async {},
-    capturePhoto: () async {},
+    capturePhoto: capturePhoto ?? () async {},
     printPriceTag: (_) async => 'printer',
     fillAdd: fillAdd,
     fillReset: fillReset,
