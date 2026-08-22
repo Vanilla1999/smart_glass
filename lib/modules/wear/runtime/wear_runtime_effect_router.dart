@@ -1,6 +1,10 @@
+import 'dart:collection';
+
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
 abstract interface class WearEffectExecutor {
+  String get registrationKey;
+
   bool handles(WearEffect effect);
 
   Future<WearIntent?> execute(WearEffect effect);
@@ -11,19 +15,33 @@ abstract interface class WearEffectExecutor {
 /// Executors can only perform an effect and return a typed intent. They never
 /// receive a setter or mutable reference to aggregate state.
 class WearRuntimeEffectRouter implements WearEffectHandler {
-  final List<WearEffectExecutor> _executors = <WearEffectExecutor>[];
+  final Map<String, WearEffectExecutor> _executors =
+      <String, WearEffectExecutor>{};
+
+  UnmodifiableMapView<String, WearEffectExecutor> get executors =>
+      UnmodifiableMapView<String, WearEffectExecutor>(_executors);
 
   void register(WearEffectExecutor executor) {
-    if (_executors.any((WearEffectExecutor item) => identical(item, executor))) {
-      return;
+    final String key = executor.registrationKey.trim();
+    if (key.isEmpty || key != executor.registrationKey) {
+      throw ArgumentError.value(
+        executor.registrationKey,
+        'registrationKey',
+        'Effect executor key must be non-empty and normalized',
+      );
     }
-    _executors.add(executor);
+    final WearEffectExecutor? existing = _executors[key];
+    if (identical(existing, executor)) return;
+    if (existing != null) {
+      throw StateError('Effect executor key $key is already registered');
+    }
+    _executors[key] = executor;
   }
 
   @override
   Future<WearIntent?> handle(WearEffect effect) async {
     WearEffectExecutor? matched;
-    for (final WearEffectExecutor executor in _executors) {
+    for (final WearEffectExecutor executor in _executors.values) {
       if (!executor.handles(effect)) continue;
       if (matched != null) {
         throw StateError(
