@@ -31,20 +31,22 @@
 |---|---|---|---|---|
 | | | | | |
 
-Блокирующая ошибка: один value указан writable одновременно в двух колонках/компонентах.
+Блокирующая ошибка: один value указан writable одновременно в двух компонентах.
 
-## 3. Version contract
+## 3. Version и immutability contract
 
 - [ ] `sessionEpoch` имеет однозначный lifecycle scope.
 - [ ] `revision` монотонна внутри epoch.
 - [ ] Ordering сравнивается по `(sessionEpoch, revision)`, а не только по revision.
 - [ ] Новый epoch не принимает payload/result старого epoch.
-- [ ] No-op intent не публикует snapshot и не увеличивает revision.
+- [ ] No-op/rejected intent не публикует snapshot и не увеличивает revision.
 - [ ] Регистрация pending operation/effect увеличивает revision как реальная state mutation.
 - [ ] Projection/read не увеличивает revision.
+- [ ] Aggregate state и вложенные collections immutable/unmodifiable.
+- [ ] Equality/selectors не зависят от mutable collection identity.
 - [ ] Process restart semantics явно не обещают больше Variant A.
 
-## 4. Intent boundary
+## 4. Intent и dispatch boundary
 
 - [ ] Touch, voice, hardware button и scanner используют semantic intents, если относятся к одному действию.
 - [ ] Input adapter не меняет state напрямую.
@@ -53,6 +55,12 @@
 - [ ] Повторный input имеет явную dedupe/exactly-once семантику.
 - [ ] Capability и фактическое исполнение команды совпадают.
 - [ ] Legacy entry point либо делегирует единственному owner, либо помечен к удалению.
+- [ ] Dispatch возвращает typed accepted/rejected receipt.
+- [ ] Reject reason различает stale screen, terminal, unsupported, duplicate и busy.
+- [ ] Receipt возвращает epoch/revision после reducer-processing.
+- [ ] Receipt не ждёт завершения внешнего effect.
+- [ ] Scanner/native acknowledgement основан на receipt, а не на факте вызова callback.
+- [ ] Receipt не хранится как второй mutable state source.
 
 ## 5. Store queue
 
@@ -61,6 +69,7 @@
 - [ ] Ошибка одного intent не оставляет очередь навсегда в processing state.
 - [ ] Queue ordering зафиксирован тестами.
 - [ ] После terminal/reset ожидающие inputs не продолжают mutation.
+- [ ] Каждый queued intent получает ровно один receipt.
 
 ## 6. Reducer/state transition
 
@@ -71,6 +80,7 @@
 - [ ] Loading/success/error представлены согласованно.
 - [ ] Reset/logout не оставляет feature state от старой сессии.
 - [ ] Status/overlay не дублируется в task и widget timer.
+- [ ] Reducer формирует receipt согласованно с transition/effects.
 
 ## 7. Async effects
 
@@ -92,7 +102,7 @@
 - [ ] Rejected stale result имеет различимую причину в diagnostics.
 - [ ] Pending operation ID очищается/заменяется атомарно.
 
-## 8. Lifecycle
+## 8. Lifecycle и runtime-control slices
 
 - [ ] `paused`/`hidden` не завершают Wear runtime без причины.
 - [ ] `detached`, logout и dispose закрывают input admission.
@@ -101,6 +111,12 @@
 - [ ] Scanner hardware lifecycle отделён от barcode admission.
 - [ ] Resource cleanup идемпотентен.
 - [ ] Epoch/reset policy одинакова для success и error paths.
+- [ ] Voice coarse phase имеет одного owner.
+- [ ] Scanner hardware/admission state имеет одного owner.
+- [ ] Connectivity coarse observation имеет одного owner.
+- [ ] `WearModuleApp`, scanner policy и reporters являются adapters/observers, а не параллельными owners.
+- [ ] PCM chunks, audio buffers, high-frequency level и native lease objects не помещены в aggregate state.
+- [ ] High-frequency audio callbacks не создают aggregate revision на каждый packet/level.
 
 ## 9. Navigation
 
@@ -148,16 +164,17 @@
 - [ ] Ownership transfer удаляет/замораживает legacy writer.
 - [ ] Duplicate screen owner отклоняется.
 
-### Reducer
+### Reducer/receipt
 
-- [ ] Happy path.
-- [ ] Invalid intent.
-- [ ] No-op intent.
+- [ ] Happy path + accepted receipt.
+- [ ] Invalid/unsupported intent + typed rejected receipt.
+- [ ] No-op intent без новой revision.
 - [ ] Stale screen.
 - [ ] Stale epoch.
 - [ ] Stale operation ID.
 - [ ] Terminal runtime.
 - [ ] Duplicate input.
+- [ ] Receipt не ждёт внешнего effect.
 
 ### Store/queue
 
@@ -167,6 +184,16 @@
 - [ ] Revision monotonicity.
 - [ ] No-op не меняет revision.
 - [ ] Новый subscriber получает current snapshot.
+- [ ] Каждый intent завершает свой receipt ровно один раз.
+
+### Runtime control
+
+- [ ] Voice coarse observation.
+- [ ] Scanner hardware/admission independence.
+- [ ] Terminal admission close.
+- [ ] Stale native callback rejection.
+- [ ] Connectivity observation ordering.
+- [ ] PCM/audio level не меняют aggregate state.
 
 ### Effects
 
@@ -211,6 +238,8 @@
 - [ ] Нет dual-write «для совместимости».
 - [ ] Нет unbounded pending event/effect collection.
 - [ ] Read-only adapter действительно не содержит setter/mutation path.
+- [ ] Dispatch receipt не маскирует rejected intent как success.
+- [ ] Aggregate state не содержит PCM/audio/native resource objects.
 
 ## 14. Документация
 
@@ -236,9 +265,12 @@ PR нельзя считать готовым, если выполняется �
 - существует два writable owner одного business value;
 - read-only mirror можно изменять;
 - async error path не имеет того же stale guard, что success;
+- dispatch не возвращает честный typed receipt;
 - actual route управляет screen-off business logic;
 - widget lifecycle запускает единственный business load;
 - phone и glasses строятся из независимых mutable sources;
+- voice/scanner/connectivity control остаётся раздвоенным;
+- aggregate state обновляется от каждого PCM/audio-level event;
 - terminal lifecycle допускает поздний restart;
 - no-op intent беспричинно увеличивает revision;
 - UI effects хранятся без bound/ack policy;
@@ -252,6 +284,7 @@ Exact HEAD:
 Проверенные файлы:
 Ownership transfers:
 Read-only adapters:
+Dispatch receipt semantics:
 Найденные blocking issues:
 Исправленные issues:
 Не запущено:
