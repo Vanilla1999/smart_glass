@@ -80,6 +80,8 @@ class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
       <WearScreenId, WearBackgroundScreenUpdate>{};
 
   Future<void> _entryOperation = Future<void>.value();
+  Completer<void> _entryChanged = Completer<void>();
+  WearScreenId? _entryTargetScreen;
   WearScreenId? _readyScreen;
   int _entryGeneration = 0;
 
@@ -97,17 +99,29 @@ class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
 
   bool _isReadyFor(WearScreenId screen) => _readyScreen == screen;
 
+  void _signalEntryChanged() {
+    final Completer<void> previous = _entryChanged;
+    _entryChanged = Completer<void>();
+    if (!previous.isCompleted) previous.complete();
+  }
+
   Future<bool> _waitUntilReady(WearScreenId screen) async {
     while (true) {
       if (_isReadyFor(screen)) return true;
+      if (_entryTargetScreen != screen) return false;
+
       final Future<void> operation = _entryOperation;
+      final Future<void> changed = _entryChanged.future;
       try {
-        await operation;
+        await Future.any<void>(<Future<void>>[operation, changed]);
       } catch (_) {
+        if (!identical(operation, _entryOperation)) continue;
         return false;
       }
-      if (!identical(operation, _entryOperation)) continue;
-      return _isReadyFor(screen);
+
+      if (_isReadyFor(screen)) return true;
+      if (_entryTargetScreen != screen) return false;
+      if (identical(operation, _entryOperation)) return false;
     }
   }
 
@@ -134,13 +148,17 @@ class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
     final int generation = ++_entryGeneration;
     final WearBackgroundRuntime? runtime = _for(screen);
     if (runtime == null) {
-      // Non-runtime overlays (for example voice clarification) must supersede
-      // an older pending entry without discarding the last ready source state.
+      // Non-runtime overlays (for example voice clarification) supersede an
+      // older pending entry, but keep an already-ready source state available.
+      _entryTargetScreen = null;
       _entryOperation = Future<void>.value();
+      _signalEntryChanged();
       return;
     }
 
+    _entryTargetScreen = screen;
     _readyScreen = null;
+    _lastUpdates.remove(screen);
     final Future<void> operation = _enterRuntime(
       runtime,
       screen,
@@ -148,6 +166,7 @@ class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
       generation: generation,
     );
     _entryOperation = operation;
+    _signalEntryChanged();
     await operation;
   }
 
@@ -158,7 +177,7 @@ class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
     required int generation,
   }) async {
     await runtime.enterScreen(screen, extra: extra);
-    if (generation != _entryGeneration) return;
+    if (generation != _entryGeneration || _entryTargetScreen != screen) return;
 
     _readyScreen = screen;
     final WearBackgroundScreenUpdate? lastUpdate = _lastUpdates[screen];
@@ -225,10 +244,12 @@ class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
   @override
   Future<void> reset() async {
     _entryGeneration += 1;
+    _entryTargetScreen = null;
     _readyScreen = null;
     _lastUpdates.clear();
     final Future<void> operation = _resetRuntimes();
     _entryOperation = operation;
+    _signalEntryChanged();
     await operation;
   }
 
@@ -241,9 +262,11 @@ class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
   @override
   Future<void> dispose() async {
     _entryGeneration += 1;
+    _entryTargetScreen = null;
     _readyScreen = null;
     _lastUpdates.clear();
     _entryOperation = Future<void>.value();
+    _signalEntryChanged();
     for (final StreamSubscription<WearBackgroundScreenUpdate> subscription
         in _subscriptions) {
       await subscription.cancel();
