@@ -89,20 +89,14 @@ class WearAuthNotifier extends StateNotifier<WearAuthState> {
   }
 
   Future<void> handleLogoLongPress() async {
-    if (WearSession.isAuthorized) {
-      return;
-    }
-    if (!_isMockLogoSkipAuthEnabled()) {
-      return;
-    }
+    if (WearSession.isAuthorized) return;
+    if (!_isMockLogoSkipAuthEnabled()) return;
     if (state.isLoading) return;
 
     state = state.copyWith(phase: WearAuthPhase.loading);
 
     try {
-      // await WearDependencies.I.ensureBdtoOpened();
-
-      WearSession.setUser(_mockSkipUser);
+      await WearSession.setUser(_mockSkipUser);
 
       await WearFeedback.play(WearStatusKind.success);
       state = state.copyWith(
@@ -159,21 +153,14 @@ class WearAuthNotifier extends StateNotifier<WearAuthState> {
 
       print('[AUTH] Using real authorization');
 
-      // 0) поднимаем соединение с БД объекта сразу
-      // await WearDependencies.I.ensureBdtoOpened();
-
-      // 1) аутентификация
       final AuthenticateUserUseCase useCase =
           await WearDependencies.I.authenticateUserUseCase;
-
       final AuthenticatedUser user = await useCase.call(trimmedBarcode);
 
-      // 2) сохраняем сессию
-      WearSession.setUser(user);
+      await WearSession.setUser(user);
       print('[AUTH] User authorized: ${user.name}');
 
       await WearFeedback.play(WearStatusKind.success);
-      // 3) показываем статус — pop вернёт на WearMainScreen, тот push-нет меню
       state = state.copyWith(
         phase: WearAuthPhase.idle,
         nav: WearStatusScreenArgs(
@@ -202,7 +189,7 @@ class WearAuthNotifier extends StateNotifier<WearAuthState> {
 
   Future<void> _authorizeWithMockUser() async {
     await Future<void>.delayed(const Duration(milliseconds: 350));
-    WearSession.setUser(_mockSkipUser);
+    await WearSession.setUser(_mockSkipUser);
 
     await WearFeedback.play(WearStatusKind.success);
     state = state.copyWith(
