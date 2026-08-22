@@ -793,24 +793,18 @@ class WearFlowController {
   Future<bool> handleBarcode(String barcode) async {
     if (!_runtimeActive) return false;
     final WearBackgroundRuntime? runtime = _backgroundRuntime;
-    if (runtime?.handles(_state.screen) == true &&
-        (_state.screen == WearScreenId.scanIdle ||
-            _state.screen == WearScreenId.productSelect)) {
+    final WearScreenId sourceScreen = _state.screen;
+    if (runtime?.handles(sourceScreen) == true) {
       await _runtimeReset.catchError((Object _) {});
-      if (!_runtimeActive) return false;
-      return runtime!.handleBarcode(_state.screen, barcode);
+      if (!_runtimeActive || _state.screen != sourceScreen) return false;
+      return runtime!.handleBarcode(sourceScreen, barcode);
     }
-    if (_uiLifecycle == WearUiLifecycle.active) {
-      final WearFlowBarcodeAction? action =
-          _screenActions[_state.screen]?.onBarcode;
-      if (action == null || !currentScreenAcceptsBarcode) return false;
-      await action(barcode);
-      return true;
-    }
-    await _runtimeReset.catchError((Object _) {});
-    if (!_runtimeActive) return false;
-    return await _backgroundRuntime?.handleBarcode(_state.screen, barcode) ??
-        false;
+    if (_uiLifecycle != WearUiLifecycle.active) return false;
+    final WearFlowBarcodeAction? action =
+        _screenActions[sourceScreen]?.onBarcode;
+    if (action == null || !currentScreenAcceptsBarcode) return false;
+    await action(barcode);
+    return true;
   }
 
   Future<void> handleVoicePhrase(String phrase) async {
@@ -917,9 +911,7 @@ class WearFlowController {
         _screenActions[args.sourceScreen];
     final WearBackgroundRuntime? runtime = _backgroundRuntime;
     final bool runtimeHandlesSource =
-        _uiLifecycle == WearUiLifecycle.inactive &&
-            runtime != null &&
-            runtime.handles(args.sourceScreen);
+        runtime != null && runtime.handles(args.sourceScreen);
     VoiceDynamicItem? selected;
     for (final VoiceDynamicItem item in args.matches) {
       if (item.id == itemId) {
