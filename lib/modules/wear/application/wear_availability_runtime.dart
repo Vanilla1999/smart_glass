@@ -140,18 +140,33 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
 
   @override
   bool supportsCommand(WearScreenId screen, WearVoiceCommand command) {
-    if (!handles(screen)) return false;
-    if (screen == WearScreenId.availabilityCheck) {
-      return <WearVoiceCommand>{
-        WearVoiceCommand.yes,
-        WearVoiceCommand.no,
-        WearVoiceCommand.print,
-        WearVoiceCommand.takePhoto,
-        WearVoiceCommand.finish,
-        WearVoiceCommand.select,
-        WearVoiceCommand.backToList,
-      }.contains(command);
+    if (!handles(screen) || _loading) return false;
+    if (screen == WearScreenId.availabilityFill) {
+      return command == WearVoiceCommand.down ||
+          command == WearVoiceCommand.clear;
     }
+    if (screen == WearScreenId.availabilityCheck) {
+      if (command == WearVoiceCommand.backToList) return true;
+      return switch (_flow?.step) {
+        WearAvailabilityFlowStep.productQuestion =>
+          command == WearVoiceCommand.yes || command == WearVoiceCommand.no,
+        WearAvailabilityFlowStep.priceTagOutdated =>
+          command == WearVoiceCommand.print,
+        WearAvailabilityFlowStep.photoCapture =>
+          command == WearVoiceCommand.takePhoto,
+        WearAvailabilityFlowStep.readyToComplete ||
+        WearAvailabilityFlowStep.manualInventoryRequired =>
+          command == WearVoiceCommand.finish ||
+              command == WearVoiceCommand.select,
+        _ => false,
+      };
+    }
+    if (screen != WearScreenId.availabilityGroup &&
+        screen != WearScreenId.availabilityProduct &&
+        !_isDuplicateSelection) {
+      return false;
+    }
+    if (_listValues.isEmpty) return false;
     return <WearVoiceCommand>{
       WearVoiceCommand.up,
       WearVoiceCommand.down,
@@ -288,6 +303,14 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     WearVoiceCommand command,
   ) async {
     if (!handles(screen) || _loading) return false;
+    if (screen == WearScreenId.availabilityFill) {
+      if (command != WearVoiceCommand.down &&
+          command != WearVoiceCommand.clear) {
+        return false;
+      }
+      await resetFill();
+      return true;
+    }
     if (screen == WearScreenId.availabilityGroup ||
         screen == WearScreenId.availabilityProduct ||
         _isDuplicateSelection) {
@@ -312,19 +335,26 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
       }
     }
     if (screen != WearScreenId.availabilityCheck) return false;
+    final WearAvailabilityFlowStep? step = _flow?.step;
     switch (command) {
       case WearVoiceCommand.yes:
         return _answerAvailable(true);
       case WearVoiceCommand.no:
         return _answerAvailable(false);
       case WearVoiceCommand.print:
+        if (step != WearAvailabilityFlowStep.priceTagOutdated) return false;
         await _print();
         return true;
       case WearVoiceCommand.takePhoto:
+        if (step != WearAvailabilityFlowStep.photoCapture) return false;
         await _takePhoto();
         return true;
       case WearVoiceCommand.finish:
       case WearVoiceCommand.select:
+        if (step != WearAvailabilityFlowStep.readyToComplete &&
+            step != WearAvailabilityFlowStep.manualInventoryRequired) {
+          return false;
+        }
         await _complete();
         return true;
       case WearVoiceCommand.backToList:
@@ -687,22 +717,27 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
         message: _error,
       );
     }
+    final WearAvailabilityFlowState? flow = _flow;
+    if (_isDuplicateSelection && flow != null) {
+      return WearAvailabilityGlassesPayloads.duplicates(
+        flow.duplicateProducts,
+        selectedIndex: _focusedIndex,
+      );
+    }
     if (_screen == WearScreenId.availabilityDirectScan) {
       return WearAvailabilityGlassesPayloads.directScanWaiting(
-        statusText: _flow?.message ?? 'Поиск ШК...',
+        statusText: flow?.message ?? 'Поиск ШК...',
       );
     }
     if (_screen == WearScreenId.availabilityFill) {
       return WearGlassesPayload(
         screenType: WearGlassesScreenType.availability,
-        phase: _loading ? WearGlassesPhase.loading : WearGlassesPhase.idle,
+        phase: WearGlassesPhase.idle,
         title: 'Наполнение базы',
         statusText: _message ?? 'Сканируйте товары с полки',
-        isLoading: _loading,
         bodyLines: <String>['Добавлено: $_savedCount'],
       );
     }
-    final WearAvailabilityFlowState? flow = _flow;
     if (flow == null) {
       return WearAvailabilityGlassesPayloads.loading(title: 'Доступность');
     }
@@ -724,12 +759,6 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
         group: group,
         products: flow.products,
         voiceSnapshot: dynamicVoiceItemsFor(_screen),
-        selectedIndex: _focusedIndex,
-      );
-    }
-    if (_isDuplicateSelection) {
-      return WearAvailabilityGlassesPayloads.duplicates(
-        flow.duplicateProducts,
         selectedIndex: _focusedIndex,
       );
     }
