@@ -21,8 +21,9 @@ class WearSession {
       StreamController<WearPrinterSelection?>.broadcast();
 
   static WearRuntimeAuthority get identityAuthority {
-    return _configuredAuthority ??=
-        _lazyAuthority ??= WearRuntimeAuthority();
+    final WearRuntimeAuthority? configured = _configuredAuthority;
+    if (configured != null) return configured;
+    return _lazyAuthority ??= WearRuntimeAuthority();
   }
 
   /// Starts a fresh identity runtime only from an explicit module-entry path.
