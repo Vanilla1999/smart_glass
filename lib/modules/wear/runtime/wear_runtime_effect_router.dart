@@ -10,6 +10,12 @@ abstract interface class WearEffectExecutor {
   Future<WearIntent?> execute(WearEffect effect);
 }
 
+abstract interface class WearEffectExecutorLease {
+  bool get isActive;
+
+  void deactivate();
+}
+
 class WearRuntimeEffectRouter implements WearEffectHandler {
   final Map<String, WearEffectExecutor> _executors =
       <String, WearEffectExecutor>{};
@@ -22,7 +28,11 @@ class WearRuntimeEffectRouter implements WearEffectHandler {
     final WearEffectExecutor? existing = _executors[key];
     if (identical(existing, executor)) return;
     if (existing != null) {
-      throw StateError('Effect executor key $key is already registered');
+      final bool replaceable = existing is WearEffectExecutorLease &&
+          !(existing as WearEffectExecutorLease).isActive;
+      if (!replaceable) {
+        throw StateError('Effect executor key $key is already registered');
+      }
     }
     _executors[key] = executor;
   }
@@ -50,6 +60,10 @@ class WearRuntimeEffectRouter implements WearEffectHandler {
   Future<WearIntent?> handle(WearEffect effect) async {
     WearEffectExecutor? matched;
     for (final WearEffectExecutor executor in _executors.values) {
+      if (executor is WearEffectExecutorLease &&
+          !(executor as WearEffectExecutorLease).isActive) {
+        continue;
+      }
       if (!executor.handles(effect)) continue;
       if (matched != null) {
         throw StateError(
@@ -59,7 +73,7 @@ class WearRuntimeEffectRouter implements WearEffectHandler {
       matched = executor;
     }
     if (matched == null) {
-      throw StateError('No executor registered for ${effect.runtimeType}');
+      throw StateError('No active executor registered for ${effect.runtimeType}');
     }
     return matched.execute(effect);
   }
