@@ -21,16 +21,29 @@ class WearSession {
       StreamController<WearPrinterSelection?>.broadcast();
 
   static WearRuntimeAuthority get identityAuthority {
-    return _configuredAuthority ??=
-        _lazyAuthority ??= WearRuntimeAuthority();
+    final WearRuntimeAuthority? configured = _configuredAuthority;
+    if (configured != null) return configured;
+
+    final WearRuntimeAuthority? current = _lazyAuthority;
+    if (current == null || current.state.terminal) {
+      _lazyAuthority = WearRuntimeAuthority();
+    }
+    return _lazyAuthority!;
   }
 
   static void configureIdentityAuthority(WearRuntimeAuthority authority) {
-    final WearRuntimeAuthority? current = _configuredAuthority;
-    if (identical(current, authority)) return;
-    if (current != null || _lazyAuthority != null) {
+    final WearRuntimeAuthority? configured = _configuredAuthority;
+    if (identical(configured, authority)) return;
+    if (configured != null && !configured.state.terminal) {
       throw StateError('Wear session identity authority is already configured');
     }
+    final WearRuntimeAuthority? lazy = _lazyAuthority;
+    if (lazy != null && !lazy.state.terminal) {
+      throw StateError(
+        'Lazy Wear identity authority was already created; configure earlier',
+      );
+    }
+    _lazyAuthority = null;
     _configuredAuthority = authority;
   }
 
