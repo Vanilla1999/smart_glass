@@ -49,7 +49,6 @@ class _WearAvailabilityFillScreenState
         onDown: WearDependencies.I.wearFlowController.resetAvailabilityFill,
         onManualInput: _manualInput,
         onClear: WearDependencies.I.wearFlowController.resetAvailabilityFill,
-        onBarcode: WearDependencies.I.wearFlowController.handleBarcode,
       ),
     );
   }
