@@ -10,11 +10,12 @@ class WearScannerRuntimeDecision {
 
 WearScannerRuntimeDecision resolveWearScannerRuntimeDecision({
   required bool sessionAuthorized,
+  required bool phoneUiActive,
   required bool routeMatchesLogicalScreen,
   required bool currentScreenAcceptsBarcode,
 }) {
   final bool barcodeAdmissionEnabled = currentScreenAcceptsBarcode &&
-      (sessionAuthorized || routeMatchesLogicalScreen);
+      (phoneUiActive ? routeMatchesLogicalScreen : sessionAuthorized);
   return WearScannerRuntimeDecision(
     barcodeAdmissionEnabled: barcodeAdmissionEnabled,
     hardwarePrepared: sessionAuthorized || barcodeAdmissionEnabled,
