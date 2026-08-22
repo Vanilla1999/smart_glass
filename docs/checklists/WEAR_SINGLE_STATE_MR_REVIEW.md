@@ -1,6 +1,6 @@
 # Review checklist для MR миграции Wear single-state
 
-Этот шаблон применяется ко всем кодовым MR из [`../WEAR_SINGLE_STATE_RUNTIME_PLAN.md`](../WEAR_SINGLE_STATE_RUNTIME_PLAN.md).
+Этот шаблон применяется ко всем кодовым MR из [`../WEAR_SINGLE_STATE_RUNTIME_PLAN.md`](../WEAR_SINGLE_STATE_RUNTIME_PLAN.md) и учитывает [`../decisions/ADR-0002-WEAR_STORE_EXECUTION_ORDER.md`](../decisions/ADR-0002-WEAR_STORE_EXECUTION_ORDER.md).
 
 ## 1. Область MR
 
@@ -62,7 +62,7 @@
 - [ ] Scanner/native acknowledgement основан на receipt, а не на факте вызова callback.
 - [ ] Receipt не хранится как второй mutable state source.
 
-## 5. Store queue
+## 5. Store queue и execution order
 
 - [ ] Intents обрабатываются последовательно.
 - [ ] Nested dispatch ставится в хвост и не re-enter reducer.
@@ -70,8 +70,27 @@
 - [ ] Queue ordering зафиксирован тестами.
 - [ ] После terminal/reset ожидающие inputs не продолжают mutation.
 - [ ] Каждый queued intent получает ровно один receipt.
+- [ ] Expected `operationId` committed в state до запуска effect.
+- [ ] Committed snapshot опубликован до effect result.
+- [ ] Effect scheduled/registered до завершения accepted receipt.
+- [ ] Rejected intent не запускает effect.
+- [ ] Медленный external effect не удерживает dispatch queue.
+- [ ] Back/home/logout/terminal intent не ждёт unrelated network/print/photo effect.
 
-## 6. Reducer/state transition
+## 6. State stream и dispose
+
+- [ ] `state` всегда содержит последний committed snapshot.
+- [ ] Новый subscriber сразу получает current snapshot.
+- [ ] Одна authoritative revision не публикуется повторно без причины.
+- [ ] No-op не создаёт state event.
+- [ ] `dispose()` идемпотентен.
+- [ ] Dispose создаёт terminal barrier до освобождения adapters/resources.
+- [ ] Dispatch после terminal не мутирует state и имеет одну документированную rejection/error policy.
+- [ ] State stream закрывается после terminal cleanup.
+- [ ] Поздний effect result после dispose игнорируется.
+- [ ] Зависший внешний effect не блокирует terminal barrier бесконечно.
+
+## 7. Reducer/state transition
 
 - [ ] Transition атомарен.
 - [ ] Невозможные состояния исключены типами или явными invariants.
@@ -81,17 +100,20 @@
 - [ ] Reset/logout не оставляет feature state от старой сессии.
 - [ ] Status/overlay не дублируется в task и widget timer.
 - [ ] Reducer формирует receipt согласованно с transition/effects.
+- [ ] Reducer exception не публикует частичный state.
 
-## 7. Async effects
+## 8. Async effects и concurrency
 
 Для каждого effect заполнить:
 
-| Effect | `sessionEpoch` | `operationId` | Условие принятия result | Поведение при stale result |
-|---|---|---|---|---|
-| | | | | |
+| Effect | `sessionEpoch` | `operationId` | Concurrency/exclusive policy | Условие принятия result | Поведение при stale result |
+|---|---|---|---|---|---|
+| | | | | | |
 
 Проверки:
 
+- [ ] Effect handler не имеет setter-доступа к store state.
+- [ ] Effect возвращает success/error только через typed result intent.
 - [ ] Result содержит epoch и operation identity.
 - [ ] Проверяется ожидаемая task phase.
 - [ ] Screen change делает старый result неприменимым, где это требуется.
@@ -101,8 +123,11 @@
 - [ ] Exactly-once effects не запускаются повторно от двойного select/tap.
 - [ ] Rejected stale result имеет различимую причину в diagnostics.
 - [ ] Pending operation ID очищается/заменяется атомарно.
+- [ ] Независимые effects могут завершаться out of order безопасно.
+- [ ] Exclusive resource имеет mutex/dedupe/coordinator policy.
+- [ ] Нет случайной глобальной сериализации всех effects через `await` в dispatch queue.
 
-## 8. Lifecycle и runtime-control slices
+## 9. Lifecycle и runtime-control slices
 
 - [ ] `paused`/`hidden` не завершают Wear runtime без причины.
 - [ ] `detached`, logout и dispose закрывают input admission.
@@ -118,7 +143,7 @@
 - [ ] PCM chunks, audio buffers, high-frequency level и native lease objects не помещены в aggregate state.
 - [ ] High-frequency audio callbacks не создают aggregate revision на каждый packet/level.
 
-## 9. Navigation
+## 10. Navigation
 
 - [ ] Business decision использует logical screen.
 - [ ] Actual phone route используется только как observation/admission при активном UI.
@@ -128,8 +153,9 @@
 - [ ] Widget construction не повторяет business entry.
 - [ ] Screen-off flow не зависит от нового Flutter frame.
 - [ ] Route observer не запускает feature load напрямую.
+- [ ] Navigation delivery одного pending request имеет exclusive/exactly-once policy.
 
-## 10. UI effects
+## 11. UI effects
 
 - [ ] `BuildContext` не передаётся в runtime/reducer.
 - [ ] Manual input, system settings и dialogs оформлены как UI-only effects либо остаются явно локальными до своего migration slice.
@@ -142,7 +168,7 @@
 - [ ] Reset удаляет effects старого epoch.
 - [ ] Поведение при inactive phone UI определено явно: defer, alternative или reject.
 
-## 11. Phone/glasses projection
+## 12. Phone/glasses projection
 
 - [ ] Phone и glasses читают один aggregate snapshot либо один read-only adapter текущего owner на переходном этапе.
 - [ ] Focus/item/status совпадают.
@@ -155,7 +181,7 @@
 - [ ] Legacy projection adapter не принимает business decisions.
 - [ ] Projection read не увеличивает revision.
 
-## 12. Тесты
+## 13. Тесты
 
 ### Ownership/compatibility
 
@@ -176,7 +202,7 @@
 - [ ] Duplicate input.
 - [ ] Receipt не ждёт внешнего effect.
 
-### Store/queue
+### Store/queue/order
 
 - [ ] Последовательность конкурентных intents.
 - [ ] Nested dispatch в хвост.
@@ -185,6 +211,26 @@
 - [ ] No-op не меняет revision.
 - [ ] Новый subscriber получает current snapshot.
 - [ ] Каждый intent завершает свой receipt ровно один раз.
+- [ ] Commit происходит до effect start.
+- [ ] Effect scheduled до receipt completion.
+- [ ] Rejected intent не schedules effect.
+- [ ] Terminal intent не ждёт blocked unrelated effect.
+
+### Effect concurrency
+
+- [ ] Независимые operations могут завершиться в обратном порядке.
+- [ ] Stale result старой operation отклоняется.
+- [ ] Exclusive effect не запускается дважды.
+- [ ] Success/error используют один guard.
+
+### Dispose
+
+- [ ] Dispose идемпотентен.
+- [ ] Dispatch после terminal не мутирует state.
+- [ ] Pending receipts завершаются по документированной policy.
+- [ ] Поздний effect result игнорируется.
+- [ ] Stream/subscriptions закрываются.
+- [ ] Hung fake effect не блокирует terminal barrier.
 
 ### Runtime control
 
@@ -194,14 +240,6 @@
 - [ ] Stale native callback rejection.
 - [ ] Connectivity observation ordering.
 - [ ] PCM/audio level не меняют aggregate state.
-
-### Effects
-
-- [ ] Success.
-- [ ] Error через тот же guard.
-- [ ] Result после screen change.
-- [ ] Result после logout/detached.
-- [ ] Exactly-once operation.
 
 ### UI effects
 
@@ -225,14 +263,14 @@
 - [ ] Resume синхронизирует телефон.
 - [ ] Resource teardown не допускает restart.
 
-## 13. Статическая проверка diff
+## 14. Статическая проверка diff
 
 - [ ] Нет нового `Object?` в cross-layer contract без обоснования.
 - [ ] Нет нового `!` на optional runtime dependency без construction invariant.
 - [ ] Нет fire-and-forget mutation без error/stale handling.
 - [ ] Success и catch используют одинаковые identity guards.
 - [ ] Timer имеет generation/epoch guard или scheduler effect.
-- [ ] Broadcast stream не используется как replayable state без current snapshot.
+- [ ] Broadcast stream не используется как replayable state без current snapshot contract.
 - [ ] Нет зависимости business load от `initState()`/`build()`.
 - [ ] Нет отдельного формирования business payload из widget state.
 - [ ] Нет dual-write «для совместимости».
@@ -240,17 +278,21 @@
 - [ ] Read-only adapter действительно не содержит setter/mutation path.
 - [ ] Dispatch receipt не маскирует rejected intent как success.
 - [ ] Aggregate state не содержит PCM/audio/native resource objects.
+- [ ] External repository/native call не awaited внутри dispatch queue до следующего intent.
+- [ ] Effect start не предшествует commit expected operation identity.
+- [ ] Dispose имеет terminal barrier до закрытия stream/resources.
 
-## 14. Документация
+## 15. Документация
 
 - [ ] Обновлён ownership contract, если решение изменилось.
 - [ ] Обновлён ownership ledger.
 - [ ] Обновлён migration plan/status.
+- [ ] Execution/concurrency policy соответствует ADR-0002.
 - [ ] Добавлен или обновлён acceptance checklist.
 - [ ] Явно указано, что реально запускалось.
 - [ ] Непроверенные hardware assumptions отмечены как риски.
 
-## 15. Rollback
+## 16. Rollback
 
 - [ ] Описан безопасный rollback.
 - [ ] Rollback не создаёт третий state holder.
@@ -258,7 +300,7 @@
 - [ ] Compatibility adapter можно вернуть независимо от других slices.
 - [ ] Ownership ledger после rollback остаётся однозначным.
 
-## 16. Финальный review verdict
+## 17. Финальный review verdict
 
 PR нельзя считать готовым, если выполняется хотя бы одно:
 
@@ -266,6 +308,9 @@ PR нельзя считать готовым, если выполняется �
 - read-only mirror можно изменять;
 - async error path не имеет того же stale guard, что success;
 - dispatch не возвращает честный typed receipt;
+- effect стартует до commit operation identity;
+- медленный effect блокирует back/logout/terminal queue;
+- dispose не создаёт terminal barrier;
 - actual route управляет screen-off business logic;
 - widget lifecycle запускает единственный business load;
 - phone и glasses строятся из независимых mutable sources;
@@ -285,6 +330,8 @@ Exact HEAD:
 Ownership transfers:
 Read-only adapters:
 Dispatch receipt semantics:
+Execution/effect concurrency:
+Dispose policy:
 Найденные blocking issues:
 Исправленные issues:
 Не запущено:
