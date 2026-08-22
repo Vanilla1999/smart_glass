@@ -6,6 +6,7 @@ void main() {
     final WearScannerRuntimeDecision decision =
         resolveWearScannerRuntimeDecision(
       sessionAuthorized: false,
+      phoneUiActive: true,
       routeMatchesLogicalScreen: false,
       currentScreenAcceptsBarcode: true,
     );
@@ -18,6 +19,7 @@ void main() {
     final WearScannerRuntimeDecision decision =
         resolveWearScannerRuntimeDecision(
       sessionAuthorized: false,
+      phoneUiActive: true,
       routeMatchesLogicalScreen: true,
       currentScreenAcceptsBarcode: true,
     );
@@ -26,10 +28,11 @@ void main() {
     expect(decision.hardwarePrepared, isTrue);
   });
 
-  test('authorized logical state admits barcode while phone route lags', () {
+  test('background logical state admits barcode while phone route lags', () {
     final WearScannerRuntimeDecision decision =
         resolveWearScannerRuntimeDecision(
       sessionAuthorized: true,
+      phoneUiActive: false,
       routeMatchesLogicalScreen: false,
       currentScreenAcceptsBarcode: true,
     );
@@ -38,10 +41,24 @@ void main() {
     expect(decision.hardwarePrepared, isTrue);
   });
 
+  test('active route drift blocks barcode but keeps hardware prepared', () {
+    final WearScannerRuntimeDecision decision =
+        resolveWearScannerRuntimeDecision(
+      sessionAuthorized: true,
+      phoneUiActive: true,
+      routeMatchesLogicalScreen: false,
+      currentScreenAcceptsBarcode: true,
+    );
+
+    expect(decision.barcodeAdmissionEnabled, isFalse);
+    expect(decision.hardwarePrepared, isTrue);
+  });
+
   test('authorized session keeps hardware prepared outside barcode screens', () {
     final WearScannerRuntimeDecision decision =
         resolveWearScannerRuntimeDecision(
       sessionAuthorized: true,
+      phoneUiActive: false,
       routeMatchesLogicalScreen: false,
       currentScreenAcceptsBarcode: false,
     );
