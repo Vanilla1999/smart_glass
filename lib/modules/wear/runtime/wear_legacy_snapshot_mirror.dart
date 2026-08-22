@@ -38,25 +38,37 @@ class WearLegacySnapshotMirror {
 
     final Completer<void> completer = Completer<void>();
     _startFuture = completer.future;
-    Future<void>.sync(() async {
-      await _store.dispatch(
-        WearObserveLegacySnapshot(_source.currentSnapshot),
-      );
-      if (_disposed) {
+    unawaited(
+      Future<void>.sync(() async {
+        final WearDispatchResult initial = await _store.dispatch(
+          WearObserveLegacySnapshot(_source.currentSnapshot),
+        );
+        if (!initial.accepted &&
+            initial.rejectReason == WearDispatchRejectReason.terminal) {
+          throw StateError('Cannot attach mirror to a terminal Wear store');
+        }
+        if (_disposed) {
+          completer.complete();
+          return;
+        }
+        _subscription = _source.snapshots.listen(
+          (WearLegacyRuntimeSnapshot snapshot) {
+            unawaited(
+              _store.dispatch(WearObserveLegacySnapshot(snapshot)),
+            );
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            if (!completer.isCompleted) {
+              completer.completeError(error, stackTrace);
+            }
+          },
+        );
         completer.complete();
-        return;
-      }
-      _subscription = _source.snapshots.listen(
-        (WearLegacyRuntimeSnapshot snapshot) {
-          unawaited(
-            _store.dispatch(WearObserveLegacySnapshot(snapshot)),
-          );
-        },
-      );
-      completer.complete();
-    }).catchError((Object error, StackTrace stackTrace) {
-      if (!completer.isCompleted) completer.completeError(error, stackTrace);
-    });
+      }).catchError((Object error, StackTrace stackTrace) {
+        _startFuture = null;
+        if (!completer.isCompleted) completer.completeError(error, stackTrace);
+      }),
+    );
     return completer.future;
   }
 
