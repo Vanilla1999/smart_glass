@@ -409,17 +409,29 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     _lastBarcode = value;
     _lastBarcodeStep = flow.step;
     if (screen == WearScreenId.availabilityFill) {
+      final int generation = _generation;
+      final int requestRevision = _requestRevision;
       try {
-        await _runLoading((int operationGeneration) async {
-          final List<WearAvailabilityProduct> products = await _fillAdd(value);
-          if (_isCurrent(operationGeneration)) {
-            _savedCount += products.length;
-            _message = products.length == 1
-                ? 'Добавлено: ${products.first.name}'
-                : 'Добавлено позиций: ${products.length}';
-          }
-        });
+        await _runLoading(
+          (int operationGeneration) async {
+            final List<WearAvailabilityProduct> products =
+                await _fillAdd(value);
+            if (_isCurrent(
+              operationGeneration,
+              requestRevision: requestRevision,
+            )) {
+              _savedCount += products.length;
+              _message = products.length == 1
+                  ? 'Добавлено: ${products.first.name}'
+                  : 'Добавлено позиций: ${products.length}';
+            }
+          },
+          requestRevision: requestRevision,
+        );
       } catch (error) {
+        if (!_isCurrent(generation, requestRevision: requestRevision)) {
+          return true;
+        }
         _lastBarcode = null;
         _lastBarcodeStep = null;
         _error = _messageFor(error);
@@ -509,14 +521,33 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
   Future<void> complete() => _complete();
 
   Future<void> resetFill() async {
-    if (_loading) return;
-    await _fillReset();
-    _savedCount = 0;
-    _lastBarcode = null;
-    _lastBarcodeStep = null;
-    _message = 'База сканированной полки очищена';
-    _error = null;
-    _publish();
+    if (_loading || _screen != WearScreenId.availabilityFill) return;
+    final int generation = _generation;
+    final int requestRevision = _requestRevision;
+    try {
+      await _runLoading(
+        (int operationGeneration) async {
+          await _fillReset();
+          if (_isCurrent(
+            operationGeneration,
+            requestRevision: requestRevision,
+          )) {
+            _savedCount = 0;
+            _lastBarcode = null;
+            _lastBarcodeStep = null;
+            _message = 'База сканированной полки очищена';
+            _error = null;
+          }
+        },
+        requestRevision: requestRevision,
+      );
+    } catch (error) {
+      if (!_isCurrent(generation, requestRevision: requestRevision)) return;
+      _error = _messageFor(error);
+      _message = _error;
+      _loading = false;
+      _publish();
+    }
   }
 
   Future<void> _print() async {
@@ -548,18 +579,23 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     if (flow == null || flow.step != WearAvailabilityFlowStep.photoCapture) {
       return;
     }
+    final int generation = _generation;
     final int requestRevision = _requestRevision;
     try {
       await _runLoading(
-        (int generation) async {
+        (int operationGeneration) async {
           await _capturePhoto();
-          if (_isCurrent(generation, requestRevision: requestRevision)) {
+          if (_isCurrent(
+            operationGeneration,
+            requestRevision: requestRevision,
+          )) {
             _flow = _flowUseCase.capturePhoto(flow);
           }
         },
         requestRevision: requestRevision,
       );
     } catch (error) {
+      if (!_isCurrent(generation, requestRevision: requestRevision)) return;
       _error = _messageFor(error);
       _loading = false;
       _publish();
