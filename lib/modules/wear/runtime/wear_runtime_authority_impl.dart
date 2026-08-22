@@ -4,6 +4,7 @@ import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_epoch_reducer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_slices.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_validation_reducer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_core_slices.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
@@ -23,6 +24,7 @@ class WearRuntimeAuthority {
           ),
           reducer: WearAggregateReducer(
             sliceReducers: const <WearSliceReducer>[
+              WearControlInputValidationReducer(),
               WearControlEpochResetReducer(),
               WearControlSliceReducer(),
               WearCoreSliceReducer(),
