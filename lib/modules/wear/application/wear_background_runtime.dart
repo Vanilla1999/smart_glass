@@ -55,6 +55,22 @@ class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
     }
   }
 
+  static const Set<WearVoiceCommand> _runtimeOwnedCommands =
+      <WearVoiceCommand>{
+    WearVoiceCommand.up,
+    WearVoiceCommand.down,
+    WearVoiceCommand.select,
+    WearVoiceCommand.yes,
+    WearVoiceCommand.no,
+    WearVoiceCommand.print,
+    WearVoiceCommand.takePhoto,
+    WearVoiceCommand.backToList,
+    WearVoiceCommand.clear,
+    WearVoiceCommand.finish,
+    WearVoiceCommand.nextPage,
+    WearVoiceCommand.previousPage,
+  };
+
   final List<WearBackgroundRuntime> _runtimes;
   final StreamController<WearBackgroundScreenUpdate> _updates =
       StreamController<WearBackgroundScreenUpdate>.broadcast();
@@ -160,7 +176,7 @@ class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
     WearVoiceCommand command,
   ) async {
     final WearBackgroundRuntime? runtime = _for(screen);
-    if (runtime == null || !runtime.supportsCommand(screen, command)) {
+    if (runtime == null || !_runtimeOwnedCommands.contains(command)) {
       return false;
     }
     if (!await _waitUntilReady(screen)) return false;
