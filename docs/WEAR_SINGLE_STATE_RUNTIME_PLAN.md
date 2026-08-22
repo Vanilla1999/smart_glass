@@ -43,6 +43,8 @@ MR #1 исправляет runtime-first barcode routing, scanner admission/read
 - mutable `WearSession`;
 - actual-screen store;
 - локальный voice state в `WearModuleApp`;
+- scanner lifecycle/admission state в UI orchestration;
+- connectivity/status reporters;
 - screen payload cache;
 - status/transient timers и generations;
 - screen-owned callbacks и локальные Cubit/Provider.
@@ -119,6 +121,10 @@ PhoneRouteObserved
 SessionCleared
 ```
 
+### Dispatch receipt
+
+Типизированный результат обработки intent. Он сообщает, был ли intent принят текущим logical state, но не подменяет поздний business-result внешнего effect.
+
 ### Effect
 
 Внешняя операция, которую reducer сам выполнять не должен:
@@ -179,7 +185,7 @@ legacy owner -> ownership transfer MR -> aggregate slice
 
 Каждый migration MR содержит таблицу:
 
-| Business value | Owner до MR | Owner после MR | Read-only compatibility view | Дата/этап удаления |
+| Business value | Owner до MR | Owner после MR | Read-only compatibility view | Этап удаления |
 |---|---|---|---|---|
 | | | | | |
 
@@ -190,6 +196,7 @@ legacy owner -> ownership transfer MR -> aggregate slice
 Имена могут уточняться в кодовом MR, но semantic contract фиксируется сейчас.
 
 ```dart
+@immutable
 class WearRuntimeState {
   const WearRuntimeState({
     required this.sessionEpoch,
@@ -219,6 +226,8 @@ class WearRuntimeState {
 }
 ```
 
+State и все вложенные collections immutable/unmodifiable. Equality и selectors не должны зависеть от identity mutable list/map.
+
 ### 6.1 Version semantics
 
 Transport и stale ordering сравниваются по tuple:
@@ -229,12 +238,13 @@ Transport и stale ordering сравниваются по tuple:
 
 Правила:
 
-- `sessionEpoch` увеличивается при новой авторизованной сессии, logout/reset и terminal teardown по выбранной implementation policy;
+- `sessionEpoch` увеличивается при новой авторизованной сессии, logout/reset и terminal teardown по единой implementation policy;
 - внутри epoch `revision` только возрастает;
 - новый epoch может начать revision заново;
 - snapshot старого epoch всегда stale независимо от большого revision;
 - no-op intent не публикует snapshot и не увеличивает revision;
 - регистрация pending operation/effect является изменением state и увеличивает revision;
+- projection/read не увеличивает revision;
 - process restart создаёт новый lifetime; cross-process ordering Variant A не поддерживает.
 
 ### 6.2 Session state
@@ -245,7 +255,7 @@ Transport и stale ordering сравниваются по tuple:
 authenticated user
 store/employee identity
 session status
-printer selection после MR-S3
+printer selection после MR-S4
 ```
 
 Не содержит Flutter context или native object references.
@@ -304,7 +314,7 @@ Status/transient presentation хранится в overlay/status slice и не �
 
 ### 6.6 Voice state
 
-В aggregate state хранится coarse state, влияющий на UI и admission:
+В aggregate state хранится только coarse state, влияющий на UI и admission:
 
 ```text
 disabled/loading/ready/reconnecting/unavailable
@@ -319,7 +329,8 @@ last visible error
 - PCM chunks;
 - audio buffers;
 - высокочастотный level stream;
-- внутренние Vosk objects.
+- внутренние Vosk objects;
+- native audio lease object.
 
 ### 6.7 Scanner state
 
@@ -334,7 +345,19 @@ last accepted delivery id
 
 `hardwarePrepared` и `barcodeAdmissionEnabled` — разные свойства.
 
-### 6.8 Overlay/status state
+### 6.8 Connectivity state
+
+Содержит только coarse observations, необходимые business/UI:
+
+```text
+unknown/online/offline/degraded
+last observation revision
+displayable error
+```
+
+Сам network/socket/client объект в state не хранится. Polling и native observation являются effects/adapters.
+
+### 6.9 Overlay/status state
 
 Base status и transient overlay versioned относительно того же `sessionEpoch` и aggregate revision.
 
@@ -345,7 +368,7 @@ Overlay:
 - не может восстановить payload старого logical screen;
 - не дублирует business status в widget-local timer.
 
-### 6.9 Pending UI effects
+### 6.10 Pending UI effects
 
 Это bounded pending state, не append-only event log.
 
@@ -377,9 +400,37 @@ abstract interface class WearRuntimeStore {
   WearRuntimeState get state;
   Stream<WearRuntimeState> get states;
 
-  Future<void> dispatch(WearIntent intent);
+  Future<WearDispatchResult> dispatch(WearIntent intent);
 }
 ```
+
+Пример receipt:
+
+```dart
+class WearDispatchResult {
+  const WearDispatchResult({
+    required this.accepted,
+    required this.sessionEpoch,
+    required this.revision,
+    this.reason,
+  });
+
+  final bool accepted;
+  final int sessionEpoch;
+  final int revision;
+  final WearDispatchRejectReason? reason;
+}
+```
+
+Семантика:
+
+- Future завершается после reducer-processing данного intent, а не после всех внешних effects;
+- `accepted=true` означает, что intent принадлежал текущему state и был обработан/запустил operation;
+- `accepted=false` имеет typed reason: stale screen, terminal, unsupported, duplicate, busy, stale epoch и т.п.;
+- receipt revision — snapshot после обработки intent либо неизменившаяся revision для rejected no-op;
+- scanner/native adapter использует receipt для acknowledgement delivery;
+- поздний business success/error приходит отдельным result intent;
+- receipt не является вторым state и не хранится как mutable source.
 
 Запрещено:
 
@@ -474,6 +525,7 @@ ForegroundHostStopped
 ```text
 PhoneRouteObserved(screen, observationRevision)
 NavigationAcknowledged(requestId, screen)
+VoiceStateObserved(...)
 ScannerHardwareStateObserved(...)
 ConnectivityObserved(...)
 ```
@@ -503,7 +555,7 @@ class PrintersLoaded extends WearEffectResultIntent {
 Reducer должен быть чистым относительно внешнего мира:
 
 ```text
-(current state, intent) -> (next state, effects)
+(current state, intent) -> (next state, effects, receipt)
 ```
 
 Effects исполняются adapters/handlers и возвращают result intent.
@@ -515,6 +567,7 @@ PrinterScreenEntered
   -> state.phase=loading
   -> state.expectedLoadOperationId=N
   -> effect LoadPrinters(epoch, N)
+  -> accepted receipt
 
 LoadPrinters effect
   -> repository call
@@ -529,7 +582,8 @@ LoadPrinters effect
 - stale-result guard размазывается по `try/catch`;
 - navigation и repository вызовы меняют state в произвольном порядке;
 - повторный tap может запустить duplicate effect;
-- success и error часто получают разные guards.
+- success и error часто получают разные guards;
+- adapter не может честно подтвердить принятие input.
 
 ## 10. Async safety contract
 
@@ -573,7 +627,7 @@ Logout/terminal lifecycle:
 sessionEpoch + effect kind + operationId/deliveryId
 ```
 
-Повторный intent во время активной exactly-once операции либо отклоняется, либо связывается с существующей операцией. Решение для каждого effect фиксируется тестом.
+Повторный intent во время активной exactly-once операции либо отклоняется typed receipt, либо связывается с существующей операцией. Решение для каждого effect фиксируется тестом.
 
 ## 11. Phone UI contract
 
@@ -653,7 +707,7 @@ payload
 - transient overlay привязан к epoch/revision;
 - phone projection и glasses projection используют один focus/item/status.
 
-До финального MR-S7 aggregate shell может использовать read-only legacy projection adapters. Они не являются state owners и удаляются по мере migration slices.
+До финального MR-S8 aggregate shell может использовать read-only legacy projection adapters. Они не являются state owners и удаляются по мере migration slices.
 
 ## 13. Ownership matrix
 
@@ -661,11 +715,13 @@ payload
 |---|---|---|---|
 | Logical screen | `WearRuntimeStore` | phone router, glasses projector, voice | Flutter route |
 | Actual phone route | navigation slice | route observer | feature runtime |
+| Session identity | session slice | auth UI, effects | mutable `WearSession` copy |
 | Printer selection | printer task slice | phone/glasses projection, print effect | mutable `WearSession` copy |
 | Scan lookup/duplicates | scan task slice | phone/glasses projection | screen notifier |
 | Availability step | availability task slice | phone/glasses projection | widget/provider |
-| Voice coarse phase | voice slice | phone/glasses overlay | `WearModuleApp` authoritative local field |
-| Scanner admission | scanner slice/policy | dispatcher/native adapter | actual route alone |
+| Voice coarse phase | voice slice | phone/glasses overlay, voice adapter | `WearModuleApp` authoritative local field |
+| Scanner hardware/admission | scanner slice/policy | dispatcher/native adapter | UI orchestration/actual route alone |
+| Connectivity coarse state | connectivity slice | network/native observer | reporter singleton as business owner |
 | Status deadline | overlay/status slice + scheduler effect | projections | widget timer |
 | UI dialog/input | bounded versioned UI effect state | phone UI | runtime `BuildContext` |
 | Foreground service | native host adapter | lifecycle slice observation | business store inside service |
@@ -689,15 +745,15 @@ payload
 
 ## 15. Последовательность MR
 
-### MR-S1. Store shell и version contract
+### MR-S1. Store shell, immutable snapshot и version contract
 
 Изменения:
 
-- добавить `WearRuntimeState` root envelope;
+- добавить immutable `WearRuntimeState` root envelope;
 - добавить `WearRuntimeStore` и последовательную dispatch queue;
-- добавить `WearIntent` base types;
+- добавить `WearIntent`, `WearDispatchResult` и typed reject reasons;
 - добавить `sessionEpoch`, `revision`, operation identity primitives;
-- определить no-op и nested-dispatch semantics;
+- определить no-op, receipt и nested-dispatch semantics;
 - обернуть текущий controller/runtime entry points compatibility facade-ом;
 - публиковать legacy values только как read-only adapted snapshot;
 - добавить provisional phone/glasses selectors поверх snapshot без удаления старых builders;
@@ -714,7 +770,7 @@ Shell не должен «синхронизировать» два stores. Он
 
 Почему первым:
 
-Без root/version/queue contract последующие features будут мигрировать в разные формы и снова потребуют объединения.
+Без root/version/queue/receipt contract последующие features будут мигрировать в разные формы и scanner/native adapters не смогут единообразно подтверждать input.
 
 Не входит:
 
@@ -726,9 +782,12 @@ Shell не должен «синхронизировать» два stores. Он
 Тесты:
 
 - новый subscriber немедленно получает current snapshot;
+- state и nested collections immutable;
 - revisions строго возрастают только при опубликованном изменении;
-- no-op intent не увеличивает revision;
+- no-op/rejected intent не увеличивает revision;
 - tuple ordering корректно работает при новом epoch;
+- dispatch receipt содержит accepted/rejected, epoch, revision и typed reason;
+- receipt не ждёт завершения внешнего effect;
 - intents выполняются последовательно;
 - nested dispatch ставится в хвост и не re-enter reducer;
 - ошибка intent не блокирует очередь;
@@ -743,7 +802,8 @@ Stop/revert:
 
 - если shell требует менять feature behavior, MR нужно разделить;
 - если одновременно существуют два writable roots одного value, MR не готов;
-- если revision увеличивается от простого повторного чтения/projection, contract нарушен.
+- если revision увеличивается от повторного чтения/projection, contract нарушен;
+- если barcode adapter не может отличить rejected intent от принятого, receipt contract недостаточен.
 
 ### MR-S2. Session identity, lifecycle и navigation slices
 
@@ -753,13 +813,12 @@ Stop/revert:
 - перенести logical/actual navigation, pending request/history;
 - route observer отправляет intents;
 - terminal lifecycle supersede epoch и operations;
-- scanner policy читает aggregate lifecycle/navigation state;
 - запретить новые direct writes в `WearSession` identity/lifecycle API;
-- оставить printer selection временно legacy-owned через явно названный compatibility port до MR-S3.
+- оставить printer selection временно legacy-owned через явно названный compatibility port до MR-S4.
 
 Важно:
 
-`WearSession` не объявляется целиком read-only, пока printer selection не передан в MR-S3. В MR-S2 read-only становится только уже мигрированная identity/lifecycle часть. Printer selection не копируется writable в aggregate заранее.
+`WearSession` не объявляется целиком read-only, пока printer selection не передан в MR-S4. В MR-S2 read-only становится только уже мигрированная identity/lifecycle часть. Printer selection не копируется writable в aggregate заранее.
 
 Почему до feature state:
 
@@ -773,11 +832,40 @@ Feature transitions должны сразу опираться на оконча
 - resume синхронизирует latest route ровно один раз;
 - stale acknowledgement игнорируется;
 - поздний authorization callback не оживляет terminal state;
-- screen-off barcode policy использует logical screen;
-- active route drift блокирует admission;
-- legacy printer selection остаётся единственным owner до MR-S3.
+- receipt старого logical screen rejected;
+- legacy printer selection остаётся единственным owner до MR-S4.
 
-### MR-S3. Printer vertical slice
+### MR-S3. Voice, scanner и connectivity control slices
+
+Изменения:
+
+- перенести coarse voice phase/admission в voice slice;
+- перенести scanner hardware lifecycle и barcode admission в scanner slice;
+- перенести coarse connectivity observations в connectivity slice;
+- `WearModuleApp`, scanner policy и reporters превратить в adapters/observers;
+- native callbacks отправляют typed observation intents;
+- scanner delivery использует `WearDispatchResult`;
+- сохранить PCM/Vosk/audio lease вне aggregate state;
+- не менять UAC4 transport или recognition algorithms.
+
+Почему отдельным этапом:
+
+Эти control states влияют на все feature slices и screen-off behavior, но не являются printer/scan/availability business data. Если оставить их в UI orchestration до конца, единый root будет неполным, а terminal/admission решения останутся раздвоенными.
+
+Тесты:
+
+- voice phase observation меняет только coarse slice;
+- PCM/audio level не публикуют aggregate snapshots;
+- commandsEnabled/voice admission соответствуют coarse state;
+- scanner hardware prepared и barcode admission независимы;
+- active/background route drift использует navigation + scanner slices;
+- terminal state безусловно закрывает scanner/voice admission;
+- поздний native voice/scanner callback старого epoch игнорируется;
+- barcode receipt accepted/rejected корректно подтверждается dispatcher-у;
+- connectivity observation versioned и stale observation не откатывает state;
+- reporter/adapters не становятся writable owners.
+
+### MR-S4. Printer vertical slice
 
 Изменения:
 
@@ -789,7 +877,7 @@ Feature transitions должны сразу опираться на оконча
 - phone/glasses читают один migrated snapshot;
 - load/reload возвращают versioned result intents.
 
-Почему printer первым:
+Почему printer первым feature slice:
 
 Flow короткий, dependencies ограничены, а selection уже почти вынесен из widget tree.
 
@@ -806,7 +894,7 @@ Flow короткий, dependencies ограничены, а selection уже п
 - touch/voice/button приводят к одинаковому state;
 - repository search подтверждает отсутствие mutable `WearSession` printer copy.
 
-### MR-S4. Scan, print и status slice
+### MR-S5. Scan, print и status slice
 
 Изменения:
 
@@ -829,7 +917,7 @@ Flow короткий, dependencies ограничены, а selection уже п
 - printer -> scan -> print без widgets;
 - phone/glasses projection parity.
 
-### MR-S5. Availability slice
+### MR-S6. Availability slice
 
 Изменения:
 
@@ -853,7 +941,7 @@ Flow короткий, dependencies ограничены, а selection уже п
 - session reset во время каждого effect;
 - полный availability flow при inactive phone UI.
 
-### MR-S6. Unified input intents и UI effects
+### MR-S7. Unified input intents и UI effects
 
 Изменения:
 
@@ -876,7 +964,7 @@ Flow короткий, dependencies ограничены, а selection уже п
 - command старого screen ignored;
 - очередь сохраняет порядок.
 
-### MR-S7. Единственная projection pipeline
+### MR-S8. Единственная projection pipeline
 
 Изменения:
 
@@ -898,7 +986,7 @@ Flow короткий, dependencies ограничены, а selection уже п
 - старый overlay не перекрывает новый screen;
 - projection read не увеличивает state revision.
 
-### MR-S8. Удаление compatibility layer
+### MR-S9. Удаление compatibility layer
 
 Удалить:
 
@@ -910,7 +998,7 @@ Flow короткий, dependencies ограничены, а selection уже п
 - business `enterScreen()` из widgets;
 - ненужные presentation-state bridges;
 - оставшиеся screen-owned business callbacks;
-- duplicate actual-screen owner, если navigation slice уже принят;
+- duplicate actual-screen owner;
 - read-only mirrors, больше не нужные consumers.
 
 Тесты/gates:
@@ -930,14 +1018,14 @@ Flow короткий, dependencies ограничены, а selection уже п
 Чистые таблицы:
 
 ```text
-state + intent -> expected state + effects
+state + intent -> expected state + effects + receipt
 ```
 
 Проверять happy path, invalid/stale intent и no-op revision behavior.
 
 ### 16.2 Store serialization tests
 
-Проверять конкурентные inputs, nested result dispatch, очередь после exception и monotonic versions.
+Проверять конкурентные inputs, nested result dispatch, очередь после exception, receipt semantics и monotonic versions.
 
 ### 16.3 Effect-handler tests
 
@@ -953,11 +1041,13 @@ Golden/structural tests для phone view model и glasses payload. Projection r
 
 - capability означает реальное исполнение;
 - barcode admission означает, что handler готов;
+- dispatch receipt соответствует фактическому принятию intent;
 - каждый screen имеет максимум одного owner;
 - каждый value имеет максимум одного writable owner;
 - read-only mirror совпадает с source owner;
 - UI effect имеет exactly-once acknowledgement и bounded pending state;
-- result identity проверяется единообразно.
+- result identity проверяется единообразно;
+- high-frequency PCM/audio level не попадает в aggregate state.
 
 ### 16.6 Integration tests без widget tree
 
@@ -979,7 +1069,7 @@ Golden/structural tests для phone view model и glasses payload. Projection r
 T2151:
 
 - 20+ barcode scans screen-off;
-- 30 минут PCM;
+- 30 минут PCM без aggregate snapshot на каждый packet/level;
 - Firebird через 5/30 минут screen-off;
 - photo capture/delete;
 - printer flow;
@@ -995,14 +1085,16 @@ T2151:
 2. Какой один owner остаётся для каждого value?
 3. Есть ли read-only mirror и когда он удаляется?
 4. Какие intents добавлены?
-5. Какие effects добавлены?
-6. Как success и error защищены epoch/operationId?
-7. Что происходит при screen change?
-8. Что происходит при logout/detached?
-9. Совпадают ли phone и glasses projection?
-10. Меняется ли revision только от state mutation?
-11. Какие tests доказывают invariant?
-12. Как безопасно откатить MR?
+5. Каков dispatch receipt для accepted/rejected paths?
+6. Какие effects добавлены?
+7. Как success и error защищены epoch/operationId?
+8. Что происходит при screen change?
+9. Что происходит при logout/detached?
+10. Совпадают ли phone и glasses projection?
+11. Меняется ли revision только от state mutation?
+12. Не попал ли high-frequency transport в aggregate state?
+13. Какие tests доказывают invariant?
+14. Как безопасно откатить MR?
 
 Шаблон: [`checklists/WEAR_SINGLE_STATE_MR_REVIEW.md`](checklists/WEAR_SINGLE_STATE_MR_REVIEW.md).
 
@@ -1019,8 +1111,10 @@ T2151:
 - дублирует touch и voice business logic;
 - использует `Object?` там, где это новый cross-layer contract;
 - применяет async success/error без identity;
+- не даёт adapter-у typed accepted/rejected receipt;
 - меняет state и отправляет glasses payload двумя независимыми путями;
 - хранит UI effects без bound/ack policy;
+- кладёт PCM chunks/audio level/native objects в aggregate state;
 - переносит business logic в foreground service;
 - смешивает state migration с UAC4/PCM refactoring без необходимости.
 
@@ -1032,6 +1126,7 @@ T2151:
 sessionEpoch
 stateRevision
 intentType
+dispatchAccepted/rejectReason
 logicalScreen
 actualPhoneScreen
 operationId
@@ -1050,6 +1145,8 @@ wrong operation id
 wrong task phase
 terminal runtime
 superseded screen
+unsupported command
+duplicate delivery
 acknowledged UI effect
 ```
 
@@ -1061,7 +1158,7 @@ acknowledged UI effect
 
 - schema aggregate root расширяется совместимо;
 - adapter удаляется только после полного slice migration;
-- нельзя одновременно менять repository protocol и ownership без необходимости;
+- нельзя одновременно менять repository/native protocol и ownership без необходимости;
 - before/after behavior фиксируется contract tests;
 - hardware-specific изменения отделяются от pure Dart state changes;
 - при regression возвращается предыдущий owner, а не создаётся третий state holder;
@@ -1073,28 +1170,32 @@ acknowledged UI effect
 
 1. существует один authoritative `WearRuntimeState` на живую сессию;
 2. только `dispatch(WearIntent)` меняет business-state;
-3. каждый snapshot имеет определённую `(sessionEpoch, revision)` semantics;
-4. no-op intent не создаёт новую revision;
-5. каждый async result имеет epoch/operation identity;
-6. success и error проходят одинаковый stale guard;
-7. logical screen управляет commands, scanner и glasses;
-8. actual phone route является observation;
-9. phone и glasses строятся из одного snapshot;
-10. feature runtimes не владеют отдельными authoritative streams;
-11. widgets не запускают business flow из lifecycle;
-12. UI-only действия оформлены bounded effects с acknowledgement;
-13. foreground service не владеет Dart state;
-14. logout/detached окончательно закрывают resources/admission;
-15. printer/scan/availability проходят без widget tree;
-16. automated и hardware gates зелёные;
-17. legacy owners и compatibility adapters удалены;
-18. ownership ledger пуст от временных записей;
-19. canonical docs соответствуют коду.
+3. dispatch возвращает typed accepted/rejected receipt;
+4. каждый snapshot имеет определённую `(sessionEpoch, revision)` semantics;
+5. state и collections immutable;
+6. no-op intent не создаёт новую revision;
+7. каждый async result имеет epoch/operation identity;
+8. success и error проходят одинаковый stale guard;
+9. logical screen управляет commands, scanner и glasses;
+10. actual phone route является observation;
+11. session, voice, scanner и connectivity control имеют aggregate owners;
+12. PCM/audio transport остаётся вне aggregate state;
+13. phone и glasses строятся из одного snapshot;
+14. feature runtimes не владеют отдельными authoritative streams;
+15. widgets не запускают business flow из lifecycle;
+16. UI-only действия оформлены bounded effects с acknowledgement;
+17. foreground service не владеет Dart state;
+18. logout/detached окончательно закрывают resources/admission;
+19. printer/scan/availability проходят без widget tree;
+20. automated и hardware gates зелёные;
+21. legacy owners и compatibility adapters удалены;
+22. ownership ledger пуст от временных записей;
+23. canonical docs соответствуют коду.
 
 ## 22. Ближайшее действие
 
-После принятия этого документа следующий кодовый MR — **MR-S1: Store shell и version contract**.
+После принятия этого документа следующий кодовый MR — **MR-S1: Store shell, immutable snapshot и version contract**.
 
-Он должен быть намеренно небольшим: root envelope, intent base, serialization, epoch/revision и read-only compatibility adapters без переноса feature behavior.
+Он должен быть намеренно небольшим: root envelope, intent/receipt base, serialization, epoch/revision и read-only compatibility adapters без переноса feature behavior.
 
 Главное доказательство MR-S1 — не количество новых классов, а отсутствие второго writable owner. Любое legacy value либо остаётся legacy-owned и только отражается read-only, либо передаётся aggregate slice атомарно в отдельном migration MR.
