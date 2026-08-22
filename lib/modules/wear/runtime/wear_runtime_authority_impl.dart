@@ -2,37 +2,59 @@ import 'dart:async';
 
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
-import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_epoch_reducer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_slices.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_validation_reducer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_core_slices.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_effect_router.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_epoch_reducer.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
 class WearRuntimeAuthority {
-  WearRuntimeAuthority({
+  factory WearRuntimeAuthority({
     WearScreenId initialScreen = WearScreenId.main,
-  }) : _store = WearRuntimeStore(
+  }) {
+    final WearRuntimeEffectRouter effectRouter = WearRuntimeEffectRouter();
+    return WearRuntimeAuthority._(
+      initialScreen: initialScreen,
+      effectRouter: effectRouter,
+    );
+  }
+
+  WearRuntimeAuthority._({
+    required WearScreenId initialScreen,
+    required WearRuntimeEffectRouter effectRouter,
+  })  : _effectRouter = effectRouter,
+        _store = WearRuntimeStore(
           initialState: WearRuntimeState.initial(
             legacy: WearLegacyRuntimeSnapshot(
               logicalScreen: initialScreen,
               sourceRevision: 0,
             ),
-            payload: WearAggregatePayload.initial(
-              initialScreen: initialScreen,
+            payload: WearAggregatePayload(
+              session: const WearSessionSlice.anonymous(),
+              lifecycle: const WearLifecycleSlice.initial(),
+              navigation: WearNavigationSlice.initial(screen: initialScreen),
+              features: WearRuntimeFeaturePayload.initial(),
               controls: const WearRuntimeControlPayload.initial(),
+              presentation: const WearLegacyPresentationPayload(),
             ),
           ),
           reducer: WearAggregateReducer(
             sliceReducers: const <WearSliceReducer>[
               WearControlInputValidationReducer(),
-              WearControlEpochResetReducer(),
+              WearPrinterEpochResetReducer(),
               WearControlSliceReducer(),
+              WearPrinterSliceReducer(),
               WearCoreSliceReducer(),
             ],
           ),
+          effectHandler: effectRouter,
         );
 
   final WearRuntimeStore _store;
+  final WearRuntimeEffectRouter _effectRouter;
+  final WearOperationIdGenerator _operationIds = WearOperationIdGenerator();
   final StreamController<AuthenticatedUser> _authorized =
       StreamController<AuthenticatedUser>.broadcast();
   final StreamController<void> _cleared = StreamController<void>.broadcast();
@@ -49,6 +71,9 @@ class WearRuntimeAuthority {
   WearRuntimeControlPayload get controls =>
       payload.controls as WearRuntimeControlPayload;
 
+  WearRuntimeFeaturePayload get features =>
+      payload.features as WearRuntimeFeaturePayload;
+
   Stream<WearRuntimeState> get states => _store.states;
 
   Stream<AuthenticatedUser> get authorizedStream => _authorized.stream;
@@ -58,6 +83,12 @@ class WearRuntimeAuthority {
   bool get isAuthorized => payload.session.isAuthorized;
 
   AuthenticatedUser? get userOrNull => payload.session.user;
+
+  int allocateOperationId() => _operationIds.next();
+
+  void registerEffectExecutor(WearEffectExecutor executor) {
+    _effectRouter.register(executor);
+  }
 
   Future<WearDispatchResult> authorize(AuthenticatedUser user) async {
     final bool wasAuthorized = payload.session.isAuthorized;
