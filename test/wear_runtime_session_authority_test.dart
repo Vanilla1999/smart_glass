@@ -118,12 +118,12 @@ void main() {
     expect(late.rejectReason, WearDispatchRejectReason.terminal);
   });
 
-  test('unmigrated ownership remains explicit', () {
+  test('only later ownership slices remain explicit legacy placeholders', () {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
 
     expect(authority.payload.features, isA<WearLegacyFeaturePayload>());
-    expect(authority.payload.controls, isA<WearLegacyControlPayload>());
+    expect(authority.payload.controls, isA<WearRuntimeControlPayload>());
     expect(
       authority.payload.presentation,
       isA<WearLegacyPresentationPayload>(),
