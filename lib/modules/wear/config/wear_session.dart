@@ -21,14 +21,22 @@ class WearSession {
       StreamController<WearPrinterSelection?>.broadcast();
 
   static WearRuntimeAuthority get identityAuthority {
-    final WearRuntimeAuthority? configured = _configuredAuthority;
-    if (configured != null) return configured;
+    return _configuredAuthority ??=
+        _lazyAuthority ??= WearRuntimeAuthority();
+  }
 
-    final WearRuntimeAuthority? current = _lazyAuthority;
-    if (current == null || current.state.terminal) {
-      _lazyAuthority = WearRuntimeAuthority();
+  /// Starts a fresh identity runtime only from an explicit module-entry path.
+  ///
+  /// Ordinary getters and late callbacks never recreate a terminal runtime.
+  static WearRuntimeAuthority beginNewIdentityRuntime() {
+    final WearRuntimeAuthority current = identityAuthority;
+    if (!current.state.terminal) return current;
+    if (_configuredAuthority != null) {
+      throw StateError(
+        'A configured terminal authority must be explicitly replaced',
+      );
     }
-    return _lazyAuthority!;
+    return _lazyAuthority = WearRuntimeAuthority();
   }
 
   static void configureIdentityAuthority(WearRuntimeAuthority authority) {
