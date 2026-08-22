@@ -1,4 +1,5 @@
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/available_printer.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_effect_router.dart';
@@ -48,7 +49,19 @@ class WearPrinterEffectExecutor
     }
     if (effect is WearLoadPrintersEffect) {
       try {
-        final List<AvailablePrinter> available = await _loadPrinters();
+        final List<AvailablePrinter> available = WearMockConfig.isEnabled
+            ? <AvailablePrinter>[
+                AvailablePrinter(number: 'mock-white-1', name: 'MOCK Белый 1'),
+                AvailablePrinter(
+                  number: 'mock-yellow-1',
+                  name: 'MOCK Жёлтый 1',
+                ),
+                AvailablePrinter(
+                  number: 'mock-mobile-2',
+                  name: 'MOCK Мобильный 2',
+                ),
+              ]
+            : await _loadPrinters();
         final List<WearPrinter> printers = available
             .map(
               (AvailablePrinter item) => WearPrinter(
