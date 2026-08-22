@@ -338,6 +338,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     final WearScannerRuntimeDecision decision =
         resolveWearScannerRuntimeDecision(
       sessionAuthorized: WearSession.isAuthorized,
+      phoneUiActive: !_wasActuallyBackgrounded,
       routeMatchesLogicalScreen: routeMatches,
       currentScreenAcceptsBarcode: _flow.currentScreenAcceptsBarcode,
     );
