@@ -30,13 +30,13 @@ Wear-модуль одновременно отображается на тел�
 
 ## Решение
 
-В одной живой Wear-сессии существует ровно один authoritative aggregate state:
+Целевое состояние одной живой Wear-сессии — ровно один authoritative aggregate state:
 
 ```text
 WearRuntimeState
 ```
 
-Единственная разрешённая mutation boundary:
+Целевая единственная mutation boundary:
 
 ```text
 WearRuntimeStore.dispatch(WearIntent)
@@ -50,18 +50,55 @@ inputs -> WearIntent -> WearRuntimeStore -> WearRuntimeState
                                       |-> glasses projection
 ```
 
+### Переходное правило миграции
+
+Переход выполняется по slices, поэтому до завершения roadmap старые owners ещё существуют. Это не разрешает две writable копии одного значения.
+
+Для каждого business value в любой момент допускается ровно один writable owner:
+
+```text
+legacy owner -> атомарная передача ownership -> aggregate slice
+```
+
+Пока slice не мигрирован:
+
+- legacy component остаётся единственным writable owner;
+- aggregate store может публиковать только read-only adapted view этого значения;
+- запись в mirror запрещена;
+- adapter не хранит самостоятельную mutable копию;
+- phone/glasses могут читать mirror, но business decision продолжает принимать текущий объявленный owner.
+
+В MR, который передаёт ownership:
+
+1. aggregate slice становится единственным writable owner;
+2. legacy API превращается в read-only projection/deprecated facade либо удаляется;
+3. запись в оба места даже временно в одном commit запрещена;
+4. tests доказывают отсутствие расходящихся копий.
+
+Таким образом, migration shell не считается вторым store: он либо оборачивает существующего owner, либо владеет уже перенесённым slice, но не конкурирует с ним.
+
 ### Авторитетные понятия
 
 - `logicalScreen` — бизнес-экран и источник истины для команд, scanner admission и glasses projection;
 - `actualPhoneScreen` — наблюдение о реально построенном Flutter route, но не business authority;
 - `pendingNavigation` — запрос догнать logical state при доступном phone UI;
-- `sessionEpoch` — идентификатор поколения Wear-сессии;
-- `revision` — монотонная версия опубликованного aggregate snapshot;
+- `sessionEpoch` — идентификатор поколения Wear-сессии в пределах жизни store/process;
+- `revision` — монотонная версия опубликованного aggregate snapshot внутри epoch;
 - `operationId` — идентификатор async effect внутри `sessionEpoch`.
+
+Порядок transport snapshots сравнивается по паре:
+
+```text
+(sessionEpoch, revision)
+```
+
+При новом epoch revision может начаться заново. Snapshot старого epoch всегда stale независимо от его revision.
+
+No-op intent не публикует новый snapshot и не увеличивает revision. Любое реальное изменение state, включая регистрацию ожидаемой async-операции или pending UI effect, публикует новую revision.
 
 ### Разрешённые feature-компоненты
 
-Printer, scan и availability компоненты могут оставаться отдельными reducer/effect-handler классами, но не могут владеть независимым authoritative stream или копией бизнес-state.
+Printer, scan и availability компоненты могут оставаться отдельными reducer/effect-handler классами, но не могут владеть независимым authoritative stream или копией бизнес-state после передачи соответствующего slice.
 
 Они получают state slice и intent/effect result и возвращают новый slice либо следующий intent.
 
@@ -84,6 +121,8 @@ Printer, scan и availability компоненты могут оставатьс
 3. не нужен после уничтожения widget;
 4. не участвует в voice grammar, scanner admission или navigation.
 
+Если draft должен пережить уничтожение widget, влиять на очки или участвовать в voice flow, он уже не локальный и должен стать aggregate slice либо versioned UI effect state.
+
 ### UI-only операции
 
 Операции, требующие `BuildContext` или системного UI, оформляются как versioned `WearUiEffect`, например:
@@ -94,6 +133,15 @@ Printer, scan и availability компоненты могут оставатьс
 - запросить разрешение.
 
 UI исполняет effect и возвращает typed result с `effectId` и `sessionEpoch`. Runtime не вызывает `BuildContext` напрямую.
+
+Pending UI effects являются bounded state, а не бесконечным event log:
+
+- effect имеет stable ID;
+- хранится до acknowledgement/cancel/supersede;
+- повторная подписка UI не создаёт второй effect;
+- acknowledged effect удаляется атомарно;
+- effects старого epoch удаляются при reset;
+- количество pending effects ограничено явным контрактом.
 
 ### Android foreground service
 
@@ -113,7 +161,7 @@ UI исполняет effect и возвращает typed result с `effectId` 
 
 ### Snapshot + revision вместо отдельных payload callbacks
 
-Phone и glasses projection, построенные из одного versioned snapshot, можно сравнивать, тестировать как чистые функции и отбрасывать при stale revision.
+Phone и glasses projection, построенные из одного versioned snapshot, можно сравнивать, тестировать как чистые функции и отбрасывать при stale `(sessionEpoch, revision)`.
 
 ### Typed intent/effect вместо screen callbacks
 
@@ -123,7 +171,7 @@ Touch, voice, button и scanner должны приводить к одному 
 
 Положительные:
 
-- один источник истины;
+- один источник истины для каждого перенесённого business value;
 - детерминированный порядок mutation;
 - одинаковое поведение touch/voice/button/scanner;
 - phone и glasses можно проверять на одной revision;
@@ -133,11 +181,12 @@ Touch, voice, button и scanner должны приводить к одному 
 
 Стоимость:
 
-- потребуется временный compatibility layer;
+- потребуется временный read-only compatibility layer;
 - feature runtimes придётся превратить из владельцев state в reducer/effect handlers;
 - часть screen callbacks будет заменена UI effects;
-- статический `WearSession` нужно сделать read-only adapter, затем удалить;
-- старые тесты придётся перевести с внутренних streams на aggregate snapshots.
+- статический `WearSession` нужно по slices сделать read-only adapter, затем удалить;
+- старые тесты придётся перевести с внутренних streams на aggregate snapshots;
+- на переходных этапах ownership matrix должна документироваться в каждом MR.
 
 ## Запрещённые обходы
 
@@ -145,11 +194,14 @@ Touch, voice, button и scanner должны приводить к одному 
 
 - добавлять новый mutable singleton с Wear business-state;
 - добавлять новый feature state stream как второй source of truth;
+- делать read-only mirror writable «временно»;
+- выполнять dual write в legacy owner и aggregate slice;
 - считать Flutter route authoritative;
 - менять business-state напрямую из widget lifecycle;
 - выполнять одну и ту же бизнес-команду отдельно в touch и voice path;
-- принимать async result без проверки `sessionEpoch` и `operationId`;
+- принимать async success или error без проверки `sessionEpoch` и `operationId`;
 - формировать glasses business payload из widget state;
+- хранить UI effects как неограниченный event history;
 - переносить Dart business-state в Android foreground service.
 
 ## Критерий завершения решения
@@ -157,13 +209,15 @@ Touch, voice, button и scanner должны приводить к одному 
 ADR считается реализованным, когда:
 
 1. все business mutations проходят через `dispatch(WearIntent)`;
-2. aggregate state имеет `sessionEpoch` и `revision`;
+2. aggregate state имеет `sessionEpoch` и `revision` с определённой tuple-семантикой;
 3. phone и glasses projections строятся из одного snapshot;
 4. feature runtimes не публикуют независимые authoritative states;
 5. widget `initState()` не запускает бизнес-переход;
-6. старый async result не способен изменить новую сессию;
-7. полный printer/scan/availability flow проходит без построенного phone widget tree;
-8. logout и terminal lifecycle окончательно закрывают admission и resources.
+6. старый async success/error не способен изменить новую сессию;
+7. pending UI effects bounded и exactly-once acknowledged;
+8. полный printer/scan/availability flow проходит без построенного phone widget tree;
+9. logout и terminal lifecycle окончательно закрывают admission и resources;
+10. compatibility mirrors либо удалены, либо доказуемо read-only.
 
 ## Пересмотр решения
 
