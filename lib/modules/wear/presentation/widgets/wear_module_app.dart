@@ -22,6 +22,7 @@ import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_navigatio
 import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/navigation/wear_routes.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
+import 'package:smart_glasses/modules/wear/services/wear_scanner_runtime_policy.dart';
 import 'package:smart_glasses/modules/wear/services/wear_voice_session.dart';
 import 'package:smart_glasses/modules/wear/services/voice_state.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
@@ -334,16 +335,24 @@ class _WearModuleAppState extends State<WearModuleApp>
     if (routeScreen != null) _actualRouteScreen = routeScreen;
     WearDependencies.I.barcodeDispatcher.resetPending();
     final bool routeMatches = _actualRouteScreen == _flow.state.screen;
-    final bool shouldPrepare =
-        routeMatches && _flow.currentScreenAcceptsBarcode;
-    WearDependencies.I.barcodeDispatcher.setRouteAdmission(shouldPrepare);
-    final Future<void> operation = shouldPrepare
+    final WearScannerRuntimeDecision decision =
+        resolveWearScannerRuntimeDecision(
+      sessionAuthorized: WearSession.isAuthorized,
+      routeMatchesLogicalScreen: routeMatches,
+      currentScreenAcceptsBarcode: _flow.currentScreenAcceptsBarcode,
+    );
+    WearDependencies.I.barcodeDispatcher.setRouteAdmission(
+      decision.barcodeAdmissionEnabled,
+    );
+    final Future<void> operation = decision.hardwarePrepared
         ? WearDependencies.I.scannerRuntime.start()
         : WearDependencies.I.scannerRuntime.pause();
     unawaited(
       operation.catchError((Object error, StackTrace stackTrace) => print(
             '[WearModuleApp] scanner runtime sync failed '
-            'screen=${_flow.state.screen} prepare=$shouldPrepare: '
+            'screen=${_flow.state.screen} routeMatches=$routeMatches '
+            'admission=${decision.barcodeAdmissionEnabled} '
+            'prepare=${decision.hardwarePrepared}: '
             '$error\n$stackTrace',
           )),
     );
