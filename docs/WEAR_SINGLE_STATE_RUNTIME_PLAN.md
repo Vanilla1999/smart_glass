@@ -2,7 +2,8 @@
 
 - Статус: активный архитектурный roadmap
 - Целевая ветка интеграции: `experiment/aligned-audio-frontend`
-- Решение: [`decisions/ADR-0001-WEAR_SINGLE_STATE_OWNER.md`](decisions/ADR-0001-WEAR_SINGLE_STATE_OWNER.md)
+- Ownership-решение: [`decisions/ADR-0001-WEAR_SINGLE_STATE_OWNER.md`](decisions/ADR-0001-WEAR_SINGLE_STATE_OWNER.md)
+- Execution-решение: [`decisions/ADR-0002-WEAR_STORE_EXECUTION_ORDER.md`](decisions/ADR-0002-WEAR_STORE_EXECUTION_ORDER.md)
 - Предыдущий этап: MR #1, runtime barcode/scanner stabilization
 - Acceptance предыдущего этапа: [`checklists/WEAR_RUNTIME_STABILIZATION_VALIDATION.md`](checklists/WEAR_RUNTIME_STABILIZATION_VALIDATION.md)
 
@@ -401,8 +402,11 @@ abstract interface class WearRuntimeStore {
   Stream<WearRuntimeState> get states;
 
   Future<WearDispatchResult> dispatch(WearIntent intent);
+  Future<void> dispose();
 }
 ```
+
+`states`, commit/effect/receipt ordering, concurrency effects и terminal semantics `dispose()` определены в ADR-0002 и не могут быть выбраны заново каждым feature MR.
 
 Пример receipt:
 
@@ -424,7 +428,7 @@ class WearDispatchResult {
 
 Семантика:
 
-- Future завершается после reducer-processing данного intent, а не после всех внешних effects;
+- Future завершается после commit/scheduling boundary данного intent, а не после всех внешних effects;
 - `accepted=true` означает, что intent принадлежал текущему state и был обработан/запустил operation;
 - `accepted=false` имеет typed reason: stale screen, terminal, unsupported, duplicate, busy, stale epoch и т.п.;
 - receipt revision — snapshot после обработки intent либо неизменившаяся revision для rejected no-op;
@@ -458,7 +462,22 @@ async print result
 
 Nested dispatch не выполняет reducer re-entrantly: intent ставится в хвост той же очереди. Error одного intent не оставляет очередь навсегда в processing state.
 
-### 7.2 Один intent — несколько snapshots
+### 7.2 Commit, effects и receipt
+
+Нормативный порядок:
+
+```text
+validate/reduce
+-> commit immutable snapshot и expected operation identity
+-> publish snapshot
+-> schedule/register effects
+-> complete dispatch receipt
+-> effects later dispatch success/error intents
+```
+
+Медленный внешний effect не удерживает dispatch queue. Out-of-order completion допускается только при `sessionEpoch + operationId` guards. Exclusive resources получают отдельную mutex/dedupe policy.
+
+### 7.3 Один intent — несколько snapshots
 
 Допустимо:
 
@@ -750,9 +769,11 @@ payload
 Изменения:
 
 - добавить immutable `WearRuntimeState` root envelope;
-- добавить `WearRuntimeStore` и последовательную dispatch queue;
+- добавить `WearRuntimeStore`, replayable current-state contract и идемпотентный `dispose()`;
+- добавить последовательную dispatch queue;
 - добавить `WearIntent`, `WearDispatchResult` и typed reject reasons;
 - добавить `sessionEpoch`, `revision`, operation identity primitives;
+- реализовать ADR-0002 commit/effect/receipt ordering и effect runner boundary;
 - определить no-op, receipt и nested-dispatch semantics;
 - обернуть текущий controller/runtime entry points compatibility facade-ом;
 - публиковать legacy values только как read-only adapted snapshot;
@@ -770,7 +791,7 @@ Shell не должен «синхронизировать» два stores. Он
 
 Почему первым:
 
-Без root/version/queue/receipt contract последующие features будут мигрировать в разные формы и scanner/native adapters не смогут единообразно подтверждать input.
+Без root/version/queue/receipt/execution contract последующие features будут мигрировать в разные формы, а scanner/native adapters не смогут единообразно подтверждать input.
 
 Не входит:
 
@@ -783,14 +804,20 @@ Shell не должен «синхронизировать» два stores. Он
 
 - новый subscriber немедленно получает current snapshot;
 - state и nested collections immutable;
+- stream закрывается после idempotent dispose;
+- dispatch после terminal не мутирует state;
 - revisions строго возрастают только при опубликованном изменении;
 - no-op/rejected intent не увеличивает revision;
 - tuple ordering корректно работает при новом epoch;
 - dispatch receipt содержит accepted/rejected, epoch, revision и typed reason;
-- receipt не ждёт завершения внешнего effect;
+- loading/pending snapshot committed до effect start;
+- effect scheduled до receipt completion;
+- receipt не ждёт завершения blocked external effect;
+- rejected intent не schedules effect;
 - intents выполняются последовательно;
 - nested dispatch ставится в хвост и не re-enter reducer;
-- ошибка intent не блокирует очередь;
+- reducer error не блокирует очередь;
+- terminal intent не ждёт unrelated slow effect;
 - session reset supersede старые operation IDs;
 - result старого epoch игнорируется;
 - duplicate screen ownership отклоняется;
@@ -803,7 +830,8 @@ Stop/revert:
 - если shell требует менять feature behavior, MR нужно разделить;
 - если одновременно существуют два writable roots одного value, MR не готов;
 - если revision увеличивается от повторного чтения/projection, contract нарушен;
-- если barcode adapter не может отличить rejected intent от принятого, receipt contract недостаточен.
+- если barcode adapter не может отличить rejected intent от принятого, receipt contract недостаточен;
+- если slow effect удерживает queue и блокирует terminal intent, ADR-0002 нарушен.
 
 ### MR-S2. Session identity, lifecycle и navigation slices
 
@@ -1025,13 +1053,13 @@ state + intent -> expected state + effects + receipt
 
 ### 16.2 Store serialization tests
 
-Проверять конкурентные inputs, nested result dispatch, очередь после exception, receipt semantics и monotonic versions.
+Проверять конкурентные inputs, nested result dispatch, очередь после exception, receipt semantics, commit/effect order, dispose и monotonic versions.
 
 ### 16.3 Effect-handler tests
 
 Fake repositories, printer, camera, scanner, clock и navigation output.
 
-Success и error используют одинаковую admission function.
+Success и error используют одинаковую admission function. Независимые effects могут завершаться out of order; exclusive resource имеет отдельную policy.
 
 ### 16.4 Projection tests
 
@@ -1042,6 +1070,8 @@ Golden/structural tests для phone view model и glasses payload. Projection r
 - capability означает реальное исполнение;
 - barcode admission означает, что handler готов;
 - dispatch receipt соответствует фактическому принятию intent;
+- effect стартует после commit expected operation identity;
+- slow effect не блокирует terminal queue;
 - каждый screen имеет максимум одного owner;
 - каждый value имеет максимум одного writable owner;
 - read-only mirror совпадает с source owner;
@@ -1087,14 +1117,16 @@ T2151:
 4. Какие intents добавлены?
 5. Каков dispatch receipt для accepted/rejected paths?
 6. Какие effects добавлены?
-7. Как success и error защищены epoch/operationId?
-8. Что происходит при screen change?
-9. Что происходит при logout/detached?
-10. Совпадают ли phone и glasses projection?
-11. Меняется ли revision только от state mutation?
-12. Не попал ли high-frequency transport в aggregate state?
-13. Какие tests доказывают invariant?
-14. Как безопасно откатить MR?
+7. В каком порядке выполняются commit/effect/receipt?
+8. Какова concurrency/exclusive policy effects?
+9. Как success и error защищены epoch/operationId?
+10. Что происходит при screen change?
+11. Что происходит при logout/detached/dispose?
+12. Совпадают ли phone и glasses projection?
+13. Меняется ли revision только от state mutation?
+14. Не попал ли high-frequency transport в aggregate state?
+15. Какие tests доказывают invariant?
+16. Как безопасно откатить MR?
 
 Шаблон: [`checklists/WEAR_SINGLE_STATE_MR_REVIEW.md`](checklists/WEAR_SINGLE_STATE_MR_REVIEW.md).
 
@@ -1112,9 +1144,12 @@ T2151:
 - использует `Object?` там, где это новый cross-layer contract;
 - применяет async success/error без identity;
 - не даёт adapter-у typed accepted/rejected receipt;
+- стартует effect до commit expected operation identity;
+- удерживает dispatch queue до завершения slow external effect;
 - меняет state и отправляет glasses payload двумя независимыми путями;
 - хранит UI effects без bound/ack policy;
 - кладёт PCM chunks/audio level/native objects в aggregate state;
+- не имеет terminal/idempotent dispose contract;
 - переносит business logic в foreground service;
 - смешивает state migration с UAC4/PCM refactoring без необходимости.
 
@@ -1131,8 +1166,10 @@ logicalScreen
 actualPhoneScreen
 operationId
 effectType
+effectScheduled/completed
 result accepted/rejected reason
 owner/source adapter
+terminal/disposed
 ```
 
 Не логировать чувствительные auth payloads или персональные данные пользователя.
@@ -1171,31 +1208,34 @@ acknowledged UI effect
 1. существует один authoritative `WearRuntimeState` на живую сессию;
 2. только `dispatch(WearIntent)` меняет business-state;
 3. dispatch возвращает typed accepted/rejected receipt;
-4. каждый snapshot имеет определённую `(sessionEpoch, revision)` semantics;
-5. state и collections immutable;
-6. no-op intent не создаёт новую revision;
-7. каждый async result имеет epoch/operation identity;
-8. success и error проходят одинаковый stale guard;
-9. logical screen управляет commands, scanner и glasses;
-10. actual phone route является observation;
-11. session, voice, scanner и connectivity control имеют aggregate owners;
-12. PCM/audio transport остаётся вне aggregate state;
-13. phone и glasses строятся из одного snapshot;
-14. feature runtimes не владеют отдельными authoritative streams;
-15. widgets не запускают business flow из lifecycle;
-16. UI-only действия оформлены bounded effects с acknowledgement;
-17. foreground service не владеет Dart state;
-18. logout/detached окончательно закрывают resources/admission;
-19. printer/scan/availability проходят без widget tree;
-20. automated и hardware gates зелёные;
-21. legacy owners и compatibility adapters удалены;
-22. ownership ledger пуст от временных записей;
-23. canonical docs соответствуют коду.
+4. store имеет replayable current state и terminal/idempotent dispose;
+5. commit/effect/receipt order соответствует ADR-0002;
+6. slow effects не блокируют unrelated/terminal intents;
+7. каждый snapshot имеет определённую `(sessionEpoch, revision)` semantics;
+8. state и collections immutable;
+9. no-op intent не создаёт новую revision;
+10. каждый async result имеет epoch/operation identity;
+11. success и error проходят одинаковый stale guard;
+12. logical screen управляет commands, scanner и glasses;
+13. actual phone route является observation;
+14. session, voice, scanner и connectivity control имеют aggregate owners;
+15. PCM/audio transport остаётся вне aggregate state;
+16. phone и glasses строятся из одного snapshot;
+17. feature runtimes не владеют отдельными authoritative streams;
+18. widgets не запускают business flow из lifecycle;
+19. UI-only действия оформлены bounded effects с acknowledgement;
+20. foreground service не владеет Dart state;
+21. logout/detached окончательно закрывают resources/admission;
+22. printer/scan/availability проходят без widget tree;
+23. automated и hardware gates зелёные;
+24. legacy owners и compatibility adapters удалены;
+25. ownership ledger пуст от временных записей;
+26. canonical docs соответствуют коду.
 
 ## 22. Ближайшее действие
 
 После принятия этого документа следующий кодовый MR — **MR-S1: Store shell, immutable snapshot и version contract**.
 
-Он должен быть намеренно небольшим: root envelope, intent/receipt base, serialization, epoch/revision и read-only compatibility adapters без переноса feature behavior.
+Он должен быть намеренно небольшим: root envelope, replayable stream/dispose, intent/receipt base, serialization, commit/effect ordering, epoch/revision и read-only compatibility adapters без переноса feature behavior.
 
-Главное доказательство MR-S1 — не количество новых классов, а отсутствие второго writable owner. Любое legacy value либо остаётся legacy-owned и только отражается read-only, либо передаётся aggregate slice атомарно в отдельном migration MR.
+Главное доказательство MR-S1 — не количество новых классов, а отсутствие второго writable owner и отсутствие блокировки input queue внешними effects. Любое legacy value либо остаётся legacy-owned и только отражается read-only, либо передаётся aggregate slice атомарно в отдельном migration MR.
