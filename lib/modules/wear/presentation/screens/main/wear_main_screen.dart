@@ -35,6 +35,7 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
   @override
   void initState() {
     super.initState();
+    WearSession.beginNewIdentityRuntime();
     final WearFlowController flow = WearDependencies.I.wearFlowController;
     flow.enterScreen(WearScreenId.main);
     _screenActionsRegistration = flow.registerScreenActions(
