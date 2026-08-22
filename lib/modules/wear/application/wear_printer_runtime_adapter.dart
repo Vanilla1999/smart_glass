@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:smart_glasses/modules/wear/application/wear_background_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/available_printer.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
@@ -56,22 +57,17 @@ class WearPrinterRuntimeState {
   }
 }
 
-/// Compatibility facade for existing controller/widgets.
-///
-/// It has no mutable printer fields. Aggregate `WearPrinterTaskSlice` is the
-/// only writable owner; this adapter translates old calls and projections.
 class WearPrinterRuntime implements WearBackgroundRuntime {
   WearPrinterRuntime({
     required WearPrinterLoader loadPrinters,
     required WearPrinterNavigation navigate,
     WearRuntimeAuthority? authority,
-  }) : _authority = authority ?? WearRuntimeAuthority() {
-    _authority.registerEffectExecutor(
-      WearPrinterEffectExecutor(
-        loadPrinters: loadPrinters,
-        navigate: navigate,
-      ),
+  }) : _authority = authority ?? WearSession.identityAuthority {
+    _effectExecutor = WearPrinterEffectExecutor(
+      loadPrinters: loadPrinters,
+      navigate: navigate,
     );
+    _authority.registerEffectExecutor(_effectExecutor);
     _lastTask = _authority.printerTask;
     _stateSubscription = _authority.states.listen(_onRuntimeState);
   }
@@ -79,6 +75,7 @@ class WearPrinterRuntime implements WearBackgroundRuntime {
   static const int _visibleItemCount = 4;
 
   final WearRuntimeAuthority _authority;
+  late final WearPrinterEffectExecutor _effectExecutor;
   final StreamController<WearBackgroundScreenUpdate> _updates =
       StreamController<WearBackgroundScreenUpdate>.broadcast();
   final StreamController<WearPrinterRuntimeState> _states =
@@ -318,6 +315,8 @@ class WearPrinterRuntime implements WearBackgroundRuntime {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    await _authority.resetPrinterTask();
+    _effectExecutor.deactivate();
     await _stateSubscription.cancel();
     await _states.close();
     await _updates.close();
