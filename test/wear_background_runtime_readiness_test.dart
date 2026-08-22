@@ -76,8 +76,7 @@ void main() {
     await staleEntry;
   });
 
-  test('a non-runtime overlay keeps the ready source list available',
-      () async {
+  test('an overlay preserves only source item selection', () async {
     final _BlockingRuntime child = _BlockingRuntime(
       handledScreens: <WearScreenId>{WearScreenId.availabilityProduct},
     );
@@ -104,6 +103,41 @@ void main() {
       isTrue,
     );
     expect(child.dynamicSelections, <String>['product-1']);
+
+    expect(
+      runtime.acceptsBarcode(WearScreenId.availabilityProduct),
+      isFalse,
+    );
+    expect(
+      runtime.supportsCommand(
+        WearScreenId.availabilityProduct,
+        WearVoiceCommand.select,
+      ),
+      isFalse,
+    );
+    expect(
+      await runtime.handleBarcode(
+        WearScreenId.availabilityProduct,
+        'stale-barcode',
+      ),
+      isFalse,
+    );
+    expect(
+      await runtime.handlePhrase(
+        WearScreenId.availabilityProduct,
+        'первый товар',
+      ),
+      isFalse,
+    );
+    expect(
+      await runtime.handleCommand(
+        WearScreenId.availabilityProduct,
+        WearVoiceCommand.select,
+      ),
+      isFalse,
+    );
+    expect(child.barcodes, isEmpty);
+    expect(child.commands, isEmpty);
   });
 
   test('runtime-owned commands wait but global navigation does not', () async {
