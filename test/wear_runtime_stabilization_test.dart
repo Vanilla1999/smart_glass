@@ -44,7 +44,9 @@ void main() {
       var legacyCalls = 0;
       controller.registerScreenActions(
         WearScreenId.availabilityFill,
-        WearScreenActionHandler(onBarcode: (_) => legacyCalls++),
+        WearScreenActionHandler(onBarcode: (_) {
+          legacyCalls++;
+        }),
       );
 
       expect(await controller.handleBarcode(' 4600000000001 '), isTrue);
@@ -66,7 +68,9 @@ void main() {
       controller.registerScreenActions(
         WearScreenId.main,
         WearScreenActionHandler(
-          onBarcode: (String barcode) => received = barcode,
+          onBarcode: (String barcode) {
+            received = barcode;
+          },
           barcodeEnabled: () => true,
         ),
       );
@@ -174,7 +178,9 @@ void main() {
       var resetCalls = 0;
       final WearAvailabilityRuntime runtime = _availabilityRuntime(
         repository: _DuplicateAvailabilityRepository(),
-        fillReset: () async => resetCalls++,
+        fillReset: () async {
+          resetCalls++;
+        },
       );
       addTearDown(runtime.dispose);
       await runtime.enterScreen(WearScreenId.availabilityFill);
