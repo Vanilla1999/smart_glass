@@ -23,6 +23,9 @@ class WearPrinterEffectExecutor implements WearEffectExecutor {
   final WearPrinterEffectNavigation _navigate;
 
   @override
+  String get registrationKey => 'printer';
+
+  @override
   bool handles(WearEffect effect) {
     return effect is WearLoadPrintersEffect ||
         effect is WearNavigateAfterPrinterSelectionEffect;
