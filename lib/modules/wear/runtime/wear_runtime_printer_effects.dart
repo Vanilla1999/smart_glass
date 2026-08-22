@@ -12,8 +12,9 @@ typedef WearPrinterEffectNavigation = Future<void> Function(
   bool replaceCurrent,
 });
 
-class WearPrinterEffectExecutor implements WearEffectExecutor {
-  const WearPrinterEffectExecutor({
+class WearPrinterEffectExecutor
+    implements WearEffectExecutor, WearEffectExecutorLease {
+  WearPrinterEffectExecutor({
     required WearPrinterEffectLoader loadPrinters,
     required WearPrinterEffectNavigation navigate,
   })  : _loadPrinters = loadPrinters,
@@ -21,9 +22,18 @@ class WearPrinterEffectExecutor implements WearEffectExecutor {
 
   final WearPrinterEffectLoader _loadPrinters;
   final WearPrinterEffectNavigation _navigate;
+  bool _active = true;
 
   @override
   String get registrationKey => 'printer';
+
+  @override
+  bool get isActive => _active;
+
+  @override
+  void deactivate() {
+    _active = false;
+  }
 
   @override
   bool handles(WearEffect effect) {
@@ -33,6 +43,9 @@ class WearPrinterEffectExecutor implements WearEffectExecutor {
 
   @override
   Future<WearIntent?> execute(WearEffect effect) async {
+    if (!_active) {
+      throw StateError('Printer effect executor is inactive');
+    }
     if (effect is WearLoadPrintersEffect) {
       try {
         final List<AvailablePrinter> available = await _loadPrinters();
