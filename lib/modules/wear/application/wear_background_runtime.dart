@@ -105,9 +105,15 @@ class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
     if (!previous.isCompleted) previous.complete();
   }
 
-  Future<bool> _waitUntilReady(WearScreenId screen) async {
+  Future<bool> _waitUntilReady(
+    WearScreenId screen, {
+    bool allowPreservedSource = false,
+  }) async {
     while (true) {
-      if (_isReadyFor(screen)) return true;
+      if (_isReadyFor(screen) &&
+          (_entryTargetScreen == screen || allowPreservedSource)) {
+        return true;
+      }
       if (_entryTargetScreen != screen) return false;
 
       final Future<void> operation = _entryOperation;
@@ -119,7 +125,10 @@ class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
         return false;
       }
 
-      if (_isReadyFor(screen)) return true;
+      if (_isReadyFor(screen) &&
+          (_entryTargetScreen == screen || allowPreservedSource)) {
+        return true;
+      }
       if (_entryTargetScreen != screen) return false;
       if (identical(operation, _entryOperation)) return false;
     }
@@ -133,13 +142,13 @@ class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
 
   @override
   bool acceptsBarcode(WearScreenId screen) {
-    if (!_isReadyFor(screen)) return false;
+    if (!_isReadyFor(screen) || _entryTargetScreen != screen) return false;
     return _for(screen)?.acceptsBarcode(screen) ?? false;
   }
 
   @override
   bool supportsCommand(WearScreenId screen, WearVoiceCommand command) {
-    if (!_isReadyFor(screen)) return false;
+    if (!_isReadyFor(screen) || _entryTargetScreen != screen) return false;
     return _for(screen)?.supportsCommand(screen, command) ?? false;
   }
 
@@ -149,7 +158,8 @@ class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
     final WearBackgroundRuntime? runtime = _for(screen);
     if (runtime == null) {
       // Non-runtime overlays (for example voice clarification) supersede an
-      // older pending entry, but keep an already-ready source state available.
+      // older pending entry, but keep an already-ready source state available
+      // only for selecting a clarification candidate.
       _entryTargetScreen = null;
       _entryOperation = Future<void>.value();
       _signalEntryChanged();
@@ -212,7 +222,10 @@ class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
   @override
   Future<bool> handleDynamicItem(WearScreenId screen, String itemId) async {
     final WearBackgroundRuntime? runtime = _for(screen);
-    if (runtime == null || !await _waitUntilReady(screen)) return false;
+    if (runtime == null ||
+        !await _waitUntilReady(screen, allowPreservedSource: true)) {
+      return false;
+    }
     return runtime.handleDynamicItem(screen, itemId);
   }
 
