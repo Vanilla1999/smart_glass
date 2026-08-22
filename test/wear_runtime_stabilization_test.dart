@@ -117,8 +117,10 @@ void main() {
 
   group('availability runtime stabilization', () {
     test('duplicate barcode publishes the duplicate list to glasses', () async {
+      final _DuplicateAvailabilityRepository repository =
+          _DuplicateAvailabilityRepository();
       final WearAvailabilityRuntime runtime = _availabilityRuntime(
-        repository: _DuplicateAvailabilityRepository(),
+        repository: repository,
       );
       addTearDown(runtime.dispose);
       final List<WearBackgroundScreenUpdate> updates =
@@ -147,6 +149,14 @@ void main() {
         ),
         isTrue,
       );
+      expect(
+        await runtime.handleBarcode(
+          WearScreenId.availabilityDirectScan,
+          '4600000000099',
+        ),
+        isFalse,
+      );
+      expect(repository.barcodeCalls, 1);
     });
 
     test('direct scan does not advertise list commands before duplicates',
@@ -168,6 +178,29 @@ void main() {
         runtime.supportsCommand(
           WearScreenId.availabilityDirectScan,
           WearVoiceCommand.down,
+        ),
+        isFalse,
+      );
+    });
+
+    test('empty lists neither advertise nor consume list commands', () async {
+      final WearAvailabilityRuntime runtime = _availabilityRuntime(
+        repository: _DuplicateAvailabilityRepository(),
+      );
+      addTearDown(runtime.dispose);
+      await runtime.enterScreen(WearScreenId.availabilityGroup);
+
+      expect(
+        runtime.supportsCommand(
+          WearScreenId.availabilityGroup,
+          WearVoiceCommand.select,
+        ),
+        isFalse,
+      );
+      expect(
+        await runtime.handleCommand(
+          WearScreenId.availabilityGroup,
+          WearVoiceCommand.select,
         ),
         isFalse,
       );
@@ -406,6 +439,8 @@ class _DuplicateAvailabilityRepository
     priceTagActual: true,
   );
 
+  int barcodeCalls = 0;
+
   @override
   Future<void> completeProduct(int productId) async {}
 
@@ -413,6 +448,7 @@ class _DuplicateAvailabilityRepository
   Future<List<WearAvailabilityProduct>> findProductsByBarcode(
     String barcode,
   ) async {
+    barcodeCalls++;
     return const <WearAvailabilityProduct>[first, second];
   }
 
