@@ -211,6 +211,10 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
   }) async {
     final int generation = _generation;
     if (!_isCurrent(generation, requestRevision: requestRevision)) return;
+    if (_screen != screen) {
+      _lastBarcode = null;
+      _lastBarcodeStep = null;
+    }
     _screen = screen;
     _focusedIndex = 0;
     _loading = false;
