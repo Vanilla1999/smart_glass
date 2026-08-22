@@ -8,26 +8,43 @@
 - [ ] MR не смешивает state ownership, UAC4/PCM и UI redesign без доказанной необходимости.
 - [ ] Перечислены изменяемые owners до и после MR.
 - [ ] Указано, какой compatibility adapter остаётся временно.
-- [ ] Указан следующий шаг удаления adapter.
+- [ ] Указан следующий шаг и срок удаления adapter.
+- [ ] Явно перечислено, какие business values MR не мигрирует.
 
 ## 2. Единственный owner
 
-- [ ] Для каждого изменённого business-поля существует ровно один writable owner.
+- [ ] Для каждого изменённого business value существует ровно один writable owner.
 - [ ] Не добавлен mutable singleton.
 - [ ] Не добавлен второй authoritative feature stream.
 - [ ] Widget, route и glasses payload не считаются источником business-state.
 - [ ] `WearSession` не получает новую mutable business-копию.
 - [ ] Один logical screen обслуживается максимум одним runtime/reducer.
+- [ ] Нет dual write в legacy owner и aggregate slice.
+- [ ] Read-only mirror нельзя изменить через public/internal API.
+- [ ] Adapter не хранит самостоятельную mutable копию.
 
-### Таблица ownership
+### Ownership ledger
 
 Заполнить в PR:
 
-| Business value | Owner до MR | Owner после MR | Удалённая/временная копия |
-|---|---|---|---|
-| | | | |
+| Business value | Owner до MR | Owner после MR | Read-only compatibility view | Этап удаления |
+|---|---|---|---|---|
+| | | | | |
 
-## 3. Intent boundary
+Блокирующая ошибка: один value указан writable одновременно в двух колонках/компонентах.
+
+## 3. Version contract
+
+- [ ] `sessionEpoch` имеет однозначный lifecycle scope.
+- [ ] `revision` монотонна внутри epoch.
+- [ ] Ordering сравнивается по `(sessionEpoch, revision)`, а не только по revision.
+- [ ] Новый epoch не принимает payload/result старого epoch.
+- [ ] No-op intent не публикует snapshot и не увеличивает revision.
+- [ ] Регистрация pending operation/effect увеличивает revision как реальная state mutation.
+- [ ] Projection/read не увеличивает revision.
+- [ ] Process restart semantics явно не обещают больше Variant A.
+
+## 4. Intent boundary
 
 - [ ] Touch, voice, hardware button и scanner используют semantic intents, если относятся к одному действию.
 - [ ] Input adapter не меняет state напрямую.
@@ -35,17 +52,27 @@
 - [ ] Команда старого logical screen не применяется к новому screen.
 - [ ] Повторный input имеет явную dedupe/exactly-once семантику.
 - [ ] Capability и фактическое исполнение команды совпадают.
+- [ ] Legacy entry point либо делегирует единственному owner, либо помечен к удалению.
 
-## 4. Reducer/state transition
+## 5. Store queue
+
+- [ ] Intents обрабатываются последовательно.
+- [ ] Nested dispatch ставится в хвост и не re-enter reducer.
+- [ ] Ошибка одного intent не оставляет очередь навсегда в processing state.
+- [ ] Queue ordering зафиксирован тестами.
+- [ ] После terminal/reset ожидающие inputs не продолжают mutation.
+
+## 6. Reducer/state transition
 
 - [ ] Transition атомарен.
 - [ ] Невозможные состояния исключены типами или явными invariants.
-- [ ] Новый snapshot получает следующую revision.
+- [ ] Новый snapshot получает следующую revision только при изменении.
 - [ ] Reducer не вызывает repository, native API, navigation или timer напрямую.
 - [ ] Loading/success/error представлены согласованно.
 - [ ] Reset/logout не оставляет feature state от старой сессии.
+- [ ] Status/overlay не дублируется в task и widget timer.
 
-## 5. Async effects
+## 7. Async effects
 
 Для каждого effect заполнить:
 
@@ -59,11 +86,13 @@
 - [ ] Проверяется ожидаемая task phase.
 - [ ] Screen change делает старый result неприменимым, где это требуется.
 - [ ] Logout/detached делает старый result неприменимым.
-- [ ] Error path защищён теми же guards, что success path.
+- [ ] Error path проходит ту же admission function, что success path.
 - [ ] Невозможность физически отменить Future не позволяет stale mutation.
 - [ ] Exactly-once effects не запускаются повторно от двойного select/tap.
+- [ ] Rejected stale result имеет различимую причину в diagnostics.
+- [ ] Pending operation ID очищается/заменяется атомарно.
 
-## 6. Lifecycle
+## 8. Lifecycle
 
 - [ ] `paused`/`hidden` не завершают Wear runtime без причины.
 - [ ] `detached`, logout и dispose закрывают input admission.
@@ -71,8 +100,9 @@
 - [ ] Foreground service не становится владельцем business-state.
 - [ ] Scanner hardware lifecycle отделён от barcode admission.
 - [ ] Resource cleanup идемпотентен.
+- [ ] Epoch/reset policy одинакова для success и error paths.
 
-## 7. Navigation
+## 9. Navigation
 
 - [ ] Business decision использует logical screen.
 - [ ] Actual phone route используется только как observation/admission при активном UI.
@@ -81,32 +111,48 @@
 - [ ] Resume доставляет latest актуальный route.
 - [ ] Widget construction не повторяет business entry.
 - [ ] Screen-off flow не зависит от нового Flutter frame.
+- [ ] Route observer не запускает feature load напрямую.
 
-## 8. UI effects
+## 10. UI effects
 
 - [ ] `BuildContext` не передаётся в runtime/reducer.
 - [ ] Manual input, system settings и dialogs оформлены как UI-only effects либо остаются явно локальными до своего migration slice.
 - [ ] UI effect имеет `effectId` и `sessionEpoch`.
-- [ ] Effect доставляется не более одного раза.
+- [ ] Pending effects являются bounded state, а не append-only history.
+- [ ] Определён maximum/one-per-kind policy.
+- [ ] Rebuild/reconnect не создаёт второй semantic effect.
+- [ ] Acknowledgement удаляет effect атомарно.
 - [ ] Result старого effect отклоняется.
+- [ ] Reset удаляет effects старого epoch.
 - [ ] Поведение при inactive phone UI определено явно: defer, alternative или reject.
 
-## 9. Phone/glasses projection
+## 11. Phone/glasses projection
 
-- [ ] Phone и glasses читают один aggregate snapshot.
+- [ ] Phone и glasses читают один aggregate snapshot либо один read-only adapter текущего owner на переходном этапе.
 - [ ] Focus/item/status совпадают.
 - [ ] Projection не мутирует store.
 - [ ] Projection детерминирована.
-- [ ] Envelope/revision не позволяет старому payload перезаписать новый.
+- [ ] Envelope сравнивает `(sessionEpoch, revision)`.
+- [ ] Младший payload не перезаписывает старший.
 - [ ] Transient overlay не откатывает base screen.
 - [ ] Reconnect получает latest full snapshot.
+- [ ] Legacy projection adapter не принимает business decisions.
+- [ ] Projection read не увеличивает revision.
 
-## 10. Тесты
+## 12. Тесты
+
+### Ownership/compatibility
+
+- [ ] Read-only mirror совпадает с текущим legacy owner.
+- [ ] Mirror нельзя изменить.
+- [ ] Ownership transfer удаляет/замораживает legacy writer.
+- [ ] Duplicate screen owner отклоняется.
 
 ### Reducer
 
 - [ ] Happy path.
 - [ ] Invalid intent.
+- [ ] No-op intent.
 - [ ] Stale screen.
 - [ ] Stale epoch.
 - [ ] Stale operation ID.
@@ -116,24 +162,34 @@
 ### Store/queue
 
 - [ ] Последовательность конкурентных intents.
-- [ ] Nested dispatch.
+- [ ] Nested dispatch в хвост.
+- [ ] Queue recovery после exception.
 - [ ] Revision monotonicity.
+- [ ] No-op не меняет revision.
 - [ ] Новый subscriber получает current snapshot.
 
 ### Effects
 
 - [ ] Success.
-- [ ] Error.
+- [ ] Error через тот же guard.
 - [ ] Result после screen change.
 - [ ] Result после logout/detached.
 - [ ] Exactly-once operation.
+
+### UI effects
+
+- [ ] Rebuild/reconnect не дублирует effect.
+- [ ] Ack удаляет effect.
+- [ ] Stale ack/result отклоняется.
+- [ ] Queue bound соблюдается.
 
 ### Projection
 
 - [ ] Phone selector.
 - [ ] Glasses payload.
 - [ ] Parity одного snapshot.
-- [ ] Stale revision rejection.
+- [ ] Stale tuple rejection.
+- [ ] Projection не меняет revision.
 
 ### Integration
 
@@ -142,7 +198,7 @@
 - [ ] Resume синхронизирует телефон.
 - [ ] Resource teardown не допускает restart.
 
-## 11. Статическая проверка diff
+## 13. Статическая проверка diff
 
 - [ ] Нет нового `Object?` в cross-layer contract без обоснования.
 - [ ] Нет нового `!` на optional runtime dependency без construction invariant.
@@ -152,32 +208,40 @@
 - [ ] Broadcast stream не используется как replayable state без current snapshot.
 - [ ] Нет зависимости business load от `initState()`/`build()`.
 - [ ] Нет отдельного формирования business payload из widget state.
+- [ ] Нет dual-write «для совместимости».
+- [ ] Нет unbounded pending event/effect collection.
+- [ ] Read-only adapter действительно не содержит setter/mutation path.
 
-## 12. Документация
+## 14. Документация
 
 - [ ] Обновлён ownership contract, если решение изменилось.
+- [ ] Обновлён ownership ledger.
 - [ ] Обновлён migration plan/status.
 - [ ] Добавлен или обновлён acceptance checklist.
 - [ ] Явно указано, что реально запускалось.
 - [ ] Непроверенные hardware assumptions отмечены как риски.
 
-## 13. Rollback
+## 15. Rollback
 
 - [ ] Описан безопасный rollback.
 - [ ] Rollback не создаёт третий state holder.
 - [ ] Repository/native protocol не изменён без необходимости.
 - [ ] Compatibility adapter можно вернуть независимо от других slices.
+- [ ] Ownership ledger после rollback остаётся однозначным.
 
-## 14. Финальный review verdict
+## 16. Финальный review verdict
 
 PR нельзя считать готовым, если выполняется хотя бы одно:
 
 - существует два writable owner одного business value;
-- async error path не имеет stale guard;
+- read-only mirror можно изменять;
+- async error path не имеет того же stale guard, что success;
 - actual route управляет screen-off business logic;
 - widget lifecycle запускает единственный business load;
-- phone и glasses строятся из разных state sources;
+- phone и glasses строятся из независимых mutable sources;
 - terminal lifecycle допускает поздний restart;
+- no-op intent беспричинно увеличивает revision;
+- UI effects хранятся без bound/ack policy;
 - тест проверяет только mock callback, но не state invariant;
 - в PR не указано, что не было запущено.
 
@@ -186,6 +250,8 @@ PR нельзя считать готовым, если выполняется �
 ```text
 Exact HEAD:
 Проверенные файлы:
+Ownership transfers:
+Read-only adapters:
 Найденные blocking issues:
 Исправленные issues:
 Не запущено:
