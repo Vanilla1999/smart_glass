@@ -51,21 +51,87 @@ abstract interface class WearBackgroundRuntime {
 class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
   CompositeWearBackgroundRuntime(this._runtimes) {
     for (final WearBackgroundRuntime runtime in _runtimes) {
-      _subscriptions.add(runtime.updates.listen(_updates.add));
+      _subscriptions.add(runtime.updates.listen(_forwardUpdate));
     }
   }
+
+  static const Set<WearVoiceCommand> _runtimeOwnedCommands =
+      <WearVoiceCommand>{
+    WearVoiceCommand.up,
+    WearVoiceCommand.down,
+    WearVoiceCommand.select,
+    WearVoiceCommand.yes,
+    WearVoiceCommand.no,
+    WearVoiceCommand.print,
+    WearVoiceCommand.takePhoto,
+    WearVoiceCommand.backToList,
+    WearVoiceCommand.clear,
+    WearVoiceCommand.finish,
+    WearVoiceCommand.nextPage,
+    WearVoiceCommand.previousPage,
+  };
 
   final List<WearBackgroundRuntime> _runtimes;
   final StreamController<WearBackgroundScreenUpdate> _updates =
       StreamController<WearBackgroundScreenUpdate>.broadcast();
   final List<StreamSubscription<WearBackgroundScreenUpdate>> _subscriptions =
       <StreamSubscription<WearBackgroundScreenUpdate>>[];
+  final Map<WearScreenId, WearBackgroundScreenUpdate> _lastUpdates =
+      <WearScreenId, WearBackgroundScreenUpdate>{};
+
+  Future<void> _entryOperation = Future<void>.value();
+  Completer<void> _entryChanged = Completer<void>();
+  WearScreenId? _entryTargetScreen;
+  WearScreenId? _readyScreen;
+  int _entryGeneration = 0;
 
   WearBackgroundRuntime? _for(WearScreenId screen) {
     for (final WearBackgroundRuntime runtime in _runtimes) {
       if (runtime.handles(screen)) return runtime;
     }
     return null;
+  }
+
+  void _forwardUpdate(WearBackgroundScreenUpdate update) {
+    _lastUpdates[update.screen] = update;
+    if (!_updates.isClosed) _updates.add(update);
+  }
+
+  bool _isReadyFor(WearScreenId screen) => _readyScreen == screen;
+
+  void _signalEntryChanged() {
+    final Completer<void> previous = _entryChanged;
+    _entryChanged = Completer<void>();
+    if (!previous.isCompleted) previous.complete();
+  }
+
+  Future<bool> _waitUntilReady(
+    WearScreenId screen, {
+    bool allowPreservedSource = false,
+  }) async {
+    while (true) {
+      if (_isReadyFor(screen) &&
+          (_entryTargetScreen == screen || allowPreservedSource)) {
+        return true;
+      }
+      if (_entryTargetScreen != screen) return false;
+
+      final Future<void> operation = _entryOperation;
+      final Future<void> changed = _entryChanged.future;
+      try {
+        await Future.any<void>(<Future<void>>[operation, changed]);
+      } catch (_) {
+        if (!identical(operation, _entryOperation)) continue;
+        return false;
+      }
+
+      if (_isReadyFor(screen) &&
+          (_entryTargetScreen == screen || allowPreservedSource)) {
+        return true;
+      }
+      if (_entryTargetScreen != screen) return false;
+      if (identical(operation, _entryOperation)) return false;
+    }
   }
 
   @override
@@ -76,17 +142,61 @@ class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
 
   @override
   bool acceptsBarcode(WearScreenId screen) {
+    if (!_isReadyFor(screen) || _entryTargetScreen != screen) return false;
     return _for(screen)?.acceptsBarcode(screen) ?? false;
   }
 
   @override
   bool supportsCommand(WearScreenId screen, WearVoiceCommand command) {
+    if (!_isReadyFor(screen) || _entryTargetScreen != screen) return false;
     return _for(screen)?.supportsCommand(screen, command) ?? false;
   }
 
   @override
   Future<void> enterScreen(WearScreenId screen, {Object? extra}) async {
-    await _for(screen)?.enterScreen(screen, extra: extra);
+    final int generation = ++_entryGeneration;
+    final WearBackgroundRuntime? runtime = _for(screen);
+    if (runtime == null) {
+      // Non-runtime overlays (for example voice clarification) supersede an
+      // older pending entry, but keep an already-ready source state available
+      // only for selecting a clarification candidate.
+      _entryTargetScreen = null;
+      _entryOperation = Future<void>.value();
+      _signalEntryChanged();
+      return;
+    }
+
+    _entryTargetScreen = screen;
+    _readyScreen = null;
+    _lastUpdates.remove(screen);
+    final Future<void> operation = _enterRuntime(
+      runtime,
+      screen,
+      extra: extra,
+      generation: generation,
+    );
+    _entryOperation = operation;
+    _signalEntryChanged();
+    await operation;
+  }
+
+  Future<void> _enterRuntime(
+    WearBackgroundRuntime runtime,
+    WearScreenId screen, {
+    required Object? extra,
+    required int generation,
+  }) async {
+    await runtime.enterScreen(screen, extra: extra);
+    if (generation != _entryGeneration || _entryTargetScreen != screen) return;
+
+    _readyScreen = screen;
+    final WearBackgroundScreenUpdate? lastUpdate = _lastUpdates[screen];
+    if (lastUpdate != null && !_updates.isClosed) {
+      // Child streams are asynchronous. If their final update was delivered
+      // before enterScreen completed, resend it after readiness changes so
+      // scanner admission and voice grammar are recomputed from ready state.
+      _updates.add(lastUpdate);
+    }
   }
 
   @override
@@ -94,26 +204,42 @@ class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
     WearScreenId screen,
     WearVoiceCommand command,
   ) async {
-    return await _for(screen)?.handleCommand(screen, command) ?? false;
+    final WearBackgroundRuntime? runtime = _for(screen);
+    if (runtime == null || !_runtimeOwnedCommands.contains(command)) {
+      return false;
+    }
+    if (!await _waitUntilReady(screen)) return false;
+    return runtime.handleCommand(screen, command);
   }
 
   @override
   Future<bool> handlePhrase(WearScreenId screen, String phrase) async {
-    return await _for(screen)?.handlePhrase(screen, phrase) ?? false;
+    final WearBackgroundRuntime? runtime = _for(screen);
+    if (runtime == null || !await _waitUntilReady(screen)) return false;
+    return runtime.handlePhrase(screen, phrase);
   }
 
   @override
   Future<bool> handleDynamicItem(WearScreenId screen, String itemId) async {
-    return await _for(screen)?.handleDynamicItem(screen, itemId) ?? false;
+    final WearBackgroundRuntime? runtime = _for(screen);
+    if (runtime == null ||
+        !await _waitUntilReady(screen, allowPreservedSource: true)) {
+      return false;
+    }
+    return runtime.handleDynamicItem(screen, itemId);
   }
 
   @override
   Future<bool> handleBarcode(WearScreenId screen, String barcode) async {
-    return await _for(screen)?.handleBarcode(screen, barcode) ?? false;
+    final WearBackgroundRuntime? runtime = _for(screen);
+    if (runtime == null || !await _waitUntilReady(screen)) return false;
+    if (!runtime.acceptsBarcode(screen)) return false;
+    return runtime.handleBarcode(screen, barcode);
   }
 
   @override
   VoiceDynamicItemsSnapshot dynamicVoiceItemsFor(WearScreenId screen) {
+    if (!_isReadyFor(screen)) return VoiceDynamicItemsSnapshot.empty;
     return _for(screen)?.dynamicVoiceItemsFor(screen) ??
         VoiceDynamicItemsSnapshot.empty;
   }
@@ -130,6 +256,17 @@ class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
 
   @override
   Future<void> reset() async {
+    _entryGeneration += 1;
+    _entryTargetScreen = null;
+    _readyScreen = null;
+    _lastUpdates.clear();
+    final Future<void> operation = _resetRuntimes();
+    _entryOperation = operation;
+    _signalEntryChanged();
+    await operation;
+  }
+
+  Future<void> _resetRuntimes() async {
     for (final WearBackgroundRuntime runtime in _runtimes) {
       await runtime.reset();
     }
@@ -137,6 +274,12 @@ class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
 
   @override
   Future<void> dispose() async {
+    _entryGeneration += 1;
+    _entryTargetScreen = null;
+    _readyScreen = null;
+    _lastUpdates.clear();
+    _entryOperation = Future<void>.value();
+    _signalEntryChanged();
     for (final StreamSubscription<WearBackgroundScreenUpdate> subscription
         in _subscriptions) {
       await subscription.cancel();

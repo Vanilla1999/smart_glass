@@ -140,18 +140,33 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
 
   @override
   bool supportsCommand(WearScreenId screen, WearVoiceCommand command) {
-    if (!handles(screen)) return false;
-    if (screen == WearScreenId.availabilityCheck) {
-      return <WearVoiceCommand>{
-        WearVoiceCommand.yes,
-        WearVoiceCommand.no,
-        WearVoiceCommand.print,
-        WearVoiceCommand.takePhoto,
-        WearVoiceCommand.finish,
-        WearVoiceCommand.select,
-        WearVoiceCommand.backToList,
-      }.contains(command);
+    if (!handles(screen) || _loading) return false;
+    if (screen == WearScreenId.availabilityFill) {
+      return command == WearVoiceCommand.down ||
+          command == WearVoiceCommand.clear;
     }
+    if (screen == WearScreenId.availabilityCheck) {
+      if (command == WearVoiceCommand.backToList) return true;
+      return switch (_flow?.step) {
+        WearAvailabilityFlowStep.productQuestion =>
+          command == WearVoiceCommand.yes || command == WearVoiceCommand.no,
+        WearAvailabilityFlowStep.priceTagOutdated =>
+          command == WearVoiceCommand.print,
+        WearAvailabilityFlowStep.photoCapture =>
+          command == WearVoiceCommand.takePhoto,
+        WearAvailabilityFlowStep.readyToComplete ||
+        WearAvailabilityFlowStep.manualInventoryRequired =>
+          command == WearVoiceCommand.finish ||
+              command == WearVoiceCommand.select,
+        _ => false,
+      };
+    }
+    if (screen != WearScreenId.availabilityGroup &&
+        screen != WearScreenId.availabilityProduct &&
+        !_isDuplicateSelection) {
+      return false;
+    }
+    if (_listValues.isEmpty) return false;
     return <WearVoiceCommand>{
       WearVoiceCommand.up,
       WearVoiceCommand.down,
@@ -196,6 +211,10 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
   }) async {
     final int generation = _generation;
     if (!_isCurrent(generation, requestRevision: requestRevision)) return;
+    if (_screen != screen) {
+      _lastBarcode = null;
+      _lastBarcodeStep = null;
+    }
     _screen = screen;
     _focusedIndex = 0;
     _loading = false;
@@ -288,9 +307,18 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     WearVoiceCommand command,
   ) async {
     if (!handles(screen) || _loading) return false;
-    if (screen == WearScreenId.availabilityGroup ||
+    if (screen == WearScreenId.availabilityFill) {
+      if (command != WearVoiceCommand.down &&
+          command != WearVoiceCommand.clear) {
+        return false;
+      }
+      await resetFill();
+      return true;
+    }
+    final bool listScreen = screen == WearScreenId.availabilityGroup ||
         screen == WearScreenId.availabilityProduct ||
-        _isDuplicateSelection) {
+        _isDuplicateSelection;
+    if (listScreen && _listValues.isNotEmpty) {
       switch (command) {
         case WearVoiceCommand.up:
           _move(-1);
@@ -312,19 +340,26 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
       }
     }
     if (screen != WearScreenId.availabilityCheck) return false;
+    final WearAvailabilityFlowStep? step = _flow?.step;
     switch (command) {
       case WearVoiceCommand.yes:
         return _answerAvailable(true);
       case WearVoiceCommand.no:
         return _answerAvailable(false);
       case WearVoiceCommand.print:
+        if (step != WearAvailabilityFlowStep.priceTagOutdated) return false;
         await _print();
         return true;
       case WearVoiceCommand.takePhoto:
+        if (step != WearAvailabilityFlowStep.photoCapture) return false;
         await _takePhoto();
         return true;
       case WearVoiceCommand.finish:
       case WearVoiceCommand.select:
+        if (step != WearAvailabilityFlowStep.readyToComplete &&
+            step != WearAvailabilityFlowStep.manualInventoryRequired) {
+          return false;
+        }
         await _complete();
         return true;
       case WearVoiceCommand.backToList:
@@ -363,7 +398,7 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
 
   @override
   Future<bool> handleBarcode(WearScreenId screen, String barcode) async {
-    if (!handles(screen) || _loading) return false;
+    if (!handles(screen) || !acceptsBarcode(screen)) return false;
     final String value = barcode.trim();
     if (value.isEmpty) return false;
     final WearAvailabilityFlowState flow = _flow ??
@@ -374,17 +409,29 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     _lastBarcode = value;
     _lastBarcodeStep = flow.step;
     if (screen == WearScreenId.availabilityFill) {
+      final int generation = _generation;
+      final int requestRevision = _requestRevision;
       try {
-        await _runLoading((int operationGeneration) async {
-          final List<WearAvailabilityProduct> products = await _fillAdd(value);
-          if (_isCurrent(operationGeneration)) {
-            _savedCount += products.length;
-            _message = products.length == 1
-                ? 'Добавлено: ${products.first.name}'
-                : 'Добавлено позиций: ${products.length}';
-          }
-        });
+        await _runLoading(
+          (int operationGeneration) async {
+            final List<WearAvailabilityProduct> products =
+                await _fillAdd(value);
+            if (_isCurrent(
+              operationGeneration,
+              requestRevision: requestRevision,
+            )) {
+              _savedCount += products.length;
+              _message = products.length == 1
+                  ? 'Добавлено: ${products.first.name}'
+                  : 'Добавлено позиций: ${products.length}';
+            }
+          },
+          requestRevision: requestRevision,
+        );
       } catch (error) {
+        if (!_isCurrent(generation, requestRevision: requestRevision)) {
+          return true;
+        }
         _lastBarcode = null;
         _lastBarcodeStep = null;
         _error = _messageFor(error);
@@ -474,14 +521,33 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
   Future<void> complete() => _complete();
 
   Future<void> resetFill() async {
-    if (_loading) return;
-    await _fillReset();
-    _savedCount = 0;
-    _lastBarcode = null;
-    _lastBarcodeStep = null;
-    _message = 'База сканированной полки очищена';
-    _error = null;
-    _publish();
+    if (_loading || _screen != WearScreenId.availabilityFill) return;
+    final int generation = _generation;
+    final int requestRevision = _requestRevision;
+    try {
+      await _runLoading(
+        (int operationGeneration) async {
+          await _fillReset();
+          if (_isCurrent(
+            operationGeneration,
+            requestRevision: requestRevision,
+          )) {
+            _savedCount = 0;
+            _lastBarcode = null;
+            _lastBarcodeStep = null;
+            _message = 'База сканированной полки очищена';
+            _error = null;
+          }
+        },
+        requestRevision: requestRevision,
+      );
+    } catch (error) {
+      if (!_isCurrent(generation, requestRevision: requestRevision)) return;
+      _error = _messageFor(error);
+      _message = _error;
+      _loading = false;
+      _publish();
+    }
   }
 
   Future<void> _print() async {
@@ -513,18 +579,23 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     if (flow == null || flow.step != WearAvailabilityFlowStep.photoCapture) {
       return;
     }
+    final int generation = _generation;
     final int requestRevision = _requestRevision;
     try {
       await _runLoading(
-        (int generation) async {
+        (int operationGeneration) async {
           await _capturePhoto();
-          if (_isCurrent(generation, requestRevision: requestRevision)) {
+          if (_isCurrent(
+            operationGeneration,
+            requestRevision: requestRevision,
+          )) {
             _flow = _flowUseCase.capturePhoto(flow);
           }
         },
         requestRevision: requestRevision,
       );
     } catch (error) {
+      if (!_isCurrent(generation, requestRevision: requestRevision)) return;
       _error = _messageFor(error);
       _loading = false;
       _publish();
@@ -687,22 +758,27 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
         message: _error,
       );
     }
+    final WearAvailabilityFlowState? flow = _flow;
+    if (_isDuplicateSelection && flow != null) {
+      return WearAvailabilityGlassesPayloads.duplicates(
+        flow.duplicateProducts,
+        selectedIndex: _focusedIndex,
+      );
+    }
     if (_screen == WearScreenId.availabilityDirectScan) {
       return WearAvailabilityGlassesPayloads.directScanWaiting(
-        statusText: _flow?.message ?? 'Поиск ШК...',
+        statusText: flow?.message ?? 'Поиск ШК...',
       );
     }
     if (_screen == WearScreenId.availabilityFill) {
       return WearGlassesPayload(
         screenType: WearGlassesScreenType.availability,
-        phase: _loading ? WearGlassesPhase.loading : WearGlassesPhase.idle,
+        phase: WearGlassesPhase.idle,
         title: 'Наполнение базы',
         statusText: _message ?? 'Сканируйте товары с полки',
-        isLoading: _loading,
         bodyLines: <String>['Добавлено: $_savedCount'],
       );
     }
-    final WearAvailabilityFlowState? flow = _flow;
     if (flow == null) {
       return WearAvailabilityGlassesPayloads.loading(title: 'Доступность');
     }
@@ -724,12 +800,6 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
         group: group,
         products: flow.products,
         voiceSnapshot: dynamicVoiceItemsFor(_screen),
-        selectedIndex: _focusedIndex,
-      );
-    }
-    if (_isDuplicateSelection) {
-      return WearAvailabilityGlassesPayloads.duplicates(
-        flow.duplicateProducts,
         selectedIndex: _focusedIndex,
       );
     }
