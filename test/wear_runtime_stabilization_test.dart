@@ -159,6 +159,40 @@ void main() {
       expect(repository.barcodeCalls, 1);
     });
 
+    test('barcode dedupe resets when the runtime screen changes', () async {
+      final _DuplicateAvailabilityRepository repository =
+          _DuplicateAvailabilityRepository();
+      var fillCalls = 0;
+      final WearAvailabilityRuntime runtime = _availabilityRuntime(
+        repository: repository,
+        fillAdd: (String barcode) async {
+          fillCalls++;
+          return const <WearAvailabilityProduct>[
+            _DuplicateAvailabilityRepository.first,
+          ];
+        },
+      );
+      addTearDown(runtime.dispose);
+      await runtime.enterScreen(WearScreenId.availabilityDirectScan);
+      await runtime.handleBarcode(
+        WearScreenId.availabilityDirectScan,
+        _DuplicateAvailabilityRepository.barcode,
+      );
+
+      await runtime.enterScreen(WearScreenId.availabilityFill);
+      expect(
+        await runtime.handleBarcode(
+          WearScreenId.availabilityFill,
+          _DuplicateAvailabilityRepository.barcode,
+        ),
+        isTrue,
+      );
+
+      expect(repository.barcodeCalls, 1);
+      expect(fillCalls, 1);
+      expect(runtime.state.savedCount, 1);
+    });
+
     test('direct scan does not advertise list commands before duplicates',
         () async {
       final WearAvailabilityRuntime runtime = _availabilityRuntime(
@@ -297,6 +331,7 @@ WearFlowController _controller() {
 
 WearAvailabilityRuntime _availabilityRuntime({
   required WearAvailabilityRepository repository,
+  WearAvailabilityFillAdd? fillAdd,
   WearAvailabilityFillReset? fillReset,
 }) {
   return WearAvailabilityRuntime(
@@ -308,6 +343,7 @@ WearAvailabilityRuntime _availabilityRuntime({
     }) async {},
     capturePhoto: () async {},
     printPriceTag: (_) async => 'printer',
+    fillAdd: fillAdd,
     fillReset: fillReset,
   );
 }
