@@ -97,6 +97,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   int _routerObservationRevision = 0;
   int _wearControlServiceRequestGeneration = 0;
   bool _wearControlServiceEnabled = false;
+  bool _runtimeTerminated = false;
   static int _nextVoiceOverlayRevision = 0;
 
   WearFlowController get _flow =>
@@ -230,6 +231,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     });
     _voiceSub = _voiceCommands.listen(
       (_VoiceCommandInput input) {
+        if (_runtimeTerminated) return;
         _observeVoiceDispatch(
           _voiceDispatcher.dispatchCommand(
             input.command,
@@ -244,6 +246,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     );
     _voicePhraseSub = _voicePhrases.listen(
       (_VoicePhraseInput input) {
+        if (_runtimeTerminated) return;
         _observeVoiceDispatch(
           _voiceDispatcher.dispatchPhrase(
             input.phrase,
@@ -258,6 +261,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     );
     _voicePreviewSub = _voicePreviews.listen(
       (WearVoicePreviewEvent event) {
+        if (_runtimeTerminated) return;
         _observeVoiceDispatch(
           _voiceDispatcher.dispatchPreview(event),
           'preview',
@@ -268,6 +272,7 @@ class _WearModuleAppState extends State<WearModuleApp>
       },
     );
     _voiceDelaySub = _voiceDelays.listen((WearVoiceDelayEvent event) {
+      if (_runtimeTerminated) return;
       _observeVoiceDispatch(
         _voiceDispatcher.dispatchDelay(event),
         'delay',
@@ -275,6 +280,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     });
     _voiceReconnectingSub = widget.voiceReconnectingStream?.listen(
       (bool reconnecting) {
+        if (_runtimeTerminated) return;
         _setVoiceState(_voiceState.copyWith(
           phase: reconnecting ? VoicePhase.reconnecting : VoicePhase.ready,
           reason: 'legacy_reconnecting_stream',
@@ -285,6 +291,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     );
     _voiceReconnectErrorSub = widget.voiceReconnectErrorStream?.listen(
       (String? error) {
+        if (_runtimeTerminated) return;
         _setVoiceState(_voiceState.copyWith(
           phase: error == null ? VoicePhase.ready : VoicePhase.unavailable,
           reason: 'legacy_error_stream',
@@ -300,6 +307,7 @@ class _WearModuleAppState extends State<WearModuleApp>
                 : null))
         ?.listen(_onVoiceStateChanged);
     _authorizedSub = WearSession.authorizedStream.listen((_) {
+      if (_runtimeTerminated) return;
       flow.setRuntimeActive(true);
       if (widget.flowController == null) {
         _startWearControlService('authorized');
@@ -311,6 +319,7 @@ class _WearModuleAppState extends State<WearModuleApp>
       }
     });
     _clearedSub = WearSession.clearedStream.listen((_) {
+      if (_runtimeTerminated) return;
       _voiceDispatcher.resetAdmission();
       flow.resetSessionState();
       if (widget.flowController == null) {
@@ -322,8 +331,8 @@ class _WearModuleAppState extends State<WearModuleApp>
     });
     _router.routerDelegate.addListener(_onRouterChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!WearSession.isAuthorized) {
-        print('[WearModuleApp] post-frame voice start skipped: not authorized');
+      if (_runtimeTerminated || !WearSession.isAuthorized) {
+        print('[WearModuleApp] post-frame voice start skipped');
         return;
       }
       _startVoice('post-frame');
@@ -337,6 +346,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     final bool routeMatches = _actualRouteScreen == _flow.state.screen;
     final WearScannerRuntimeDecision decision =
         resolveWearScannerRuntimeDecision(
+      runtimeTerminated: _runtimeTerminated,
       sessionAuthorized: WearSession.isAuthorized,
       phoneUiActive: !_wasActuallyBackgrounded,
       routeMatchesLogicalScreen: routeMatches,
@@ -360,6 +370,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   }
 
   void _observeVoiceDispatch<T>(Future<T> operation, String kind) {
+    if (_runtimeTerminated) return;
     unawaited(operation.then<void>(
       (_) {},
       onError: (Object error, StackTrace stackTrace) {
@@ -373,6 +384,7 @@ class _WearModuleAppState extends State<WearModuleApp>
 
   Future<void> _handleAppMethodCall(MethodCall call) async {
     if (call.method != 'wearButtonCommand' ||
+        _runtimeTerminated ||
         !mounted ||
         !WearSession.isAuthorized ||
         (widget.flowController == null && !_wearControlServiceEnabled)) {
@@ -390,6 +402,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   }
 
   void _onRouterChange() {
+    if (_runtimeTerminated) return;
     final int observationRevision = ++_routerObservationRevision;
     final flow = _flow;
     if (_voiceState.phase == VoicePhase.disabled && WearSession.isAuthorized) {
@@ -440,7 +453,9 @@ class _WearModuleAppState extends State<WearModuleApp>
     }
     if (screenId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || observationRevision != _routerObservationRevision) {
+        if (_runtimeTerminated ||
+            !mounted ||
+            observationRevision != _routerObservationRevision) {
           return;
         }
         final WearScreenId? confirmedScreen =
@@ -462,7 +477,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     WearScreenId screen, {
     bool force = false,
   }) {
-    if (widget.onStartVoice != null) return;
+    if (_runtimeTerminated || widget.onStartVoice != null) return;
     WearVoiceSession.I.configureForScreen(screen, force: force).catchError(
       (Object error, StackTrace stackTrace) {
         print(
@@ -474,7 +489,9 @@ class _WearModuleAppState extends State<WearModuleApp>
   }
 
   void _startVoice(String source) {
-    if (_voiceState.phase != VoicePhase.disabled || _voiceStartRequested) {
+    if (_runtimeTerminated ||
+        _voiceState.phase != VoicePhase.disabled ||
+        _voiceStartRequested) {
       print(
         '[WearModuleApp] voice start skipped source=$source '
         'phase=${_voiceState.phase.name} requested=$_voiceStartRequested',
@@ -483,7 +500,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     }
     _voiceStartRequested = true;
     void start() {
-      if (!mounted || !WearSession.isAuthorized) {
+      if (_runtimeTerminated || !mounted || !WearSession.isAuthorized) {
         _voiceStartRequested = false;
         return;
       }
@@ -555,10 +572,11 @@ class _WearModuleAppState extends State<WearModuleApp>
   }
 
   void _startVoiceHealthTimer() {
-    if (widget.onStartVoice != null) return;
+    if (_runtimeTerminated || widget.onStartVoice != null) return;
     _voiceHealthTimer?.cancel();
     _voiceHealthTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (!mounted ||
+      if (_runtimeTerminated ||
+          !mounted ||
           !WearSession.isAuthorized ||
           _voiceState.phase != VoicePhase.ready) {
         return;
@@ -568,6 +586,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   }
 
   void _ensureVoiceHealthy(String reason) {
+    if (_runtimeTerminated) return;
     unawaited(
       WearVoiceSession.I.ensureHealthy(reason: reason).catchError(
         (Object error, StackTrace stackTrace) {
@@ -581,6 +600,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   }
 
   void _retryMicrophoneAfterReconnect() {
+    if (_runtimeTerminated) return;
     unawaited(
       WearVoiceSession.I
           .start()
@@ -593,6 +613,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   }
 
   void _onVoiceStateChanged(VoiceState state) {
+    if (_runtimeTerminated) return;
     _setVoiceState(state);
   }
 
@@ -620,7 +641,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   }
 
   void _setVoiceCommandsEnabled(bool enabled) {
-    if (_voiceCommandsEnabled == enabled) return;
+    if (_runtimeTerminated || _voiceCommandsEnabled == enabled) return;
     setState(() => _voiceCommandsEnabled = enabled);
     WearStatusIconReporter.I.setVoiceCommandsEnabled(enabled);
     print('[WearModuleApp] voice commands enabled=$enabled');
@@ -656,6 +677,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     Future<void> Function(String reason) restart,
     String reason,
   ) async {
+    if (_runtimeTerminated) return;
     _setVoiceState(VoiceState(
       phase: VoicePhase.reconnecting,
       captureEpoch: _voiceState.captureEpoch + 1,
@@ -665,6 +687,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     ));
     try {
       await restart(reason);
+      if (_runtimeTerminated) return;
       _setVoiceState(VoiceState(
         phase: VoicePhase.ready,
         captureEpoch: _voiceState.captureEpoch,
@@ -673,6 +696,7 @@ class _WearModuleAppState extends State<WearModuleApp>
         lastTransitionAt: DateTime.now().millisecondsSinceEpoch,
       ));
     } catch (error) {
+      if (_runtimeTerminated) return;
       _setVoiceState(VoiceState(
         phase: VoicePhase.unavailable,
         captureEpoch: _voiceState.captureEpoch,
@@ -685,7 +709,8 @@ class _WearModuleAppState extends State<WearModuleApp>
   }
 
   void _startWearControlService(String reason) {
-    if (widget.flowController != null ||
+    if (_runtimeTerminated ||
+        widget.flowController != null ||
         !mounted ||
         !WearSession.isAuthorized) {
       return;
@@ -744,18 +769,26 @@ class _WearModuleAppState extends State<WearModuleApp>
   }
 
   bool _isCurrentVoiceStartup(int? token) {
-    return mounted && token != null && token == _voiceStartupToken;
+    return !_runtimeTerminated &&
+        mounted &&
+        token != null &&
+        token == _voiceStartupToken;
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_runtimeTerminated) return;
     print('[WearModuleApp] lifecycle state=$state');
     if (state == AppLifecycleState.detached) {
+      _runtimeTerminated = true;
       _routerObservationRevision += 1;
       _stopWearControlService('app_lifecycle_detached');
       _wasActuallyBackgrounded = false;
+      _voiceStartRequested = false;
       _voiceHealthTimer?.cancel();
       _voiceHealthTimer = null;
+      WearStatusIconReporter.I.endVoiceStartup(_voiceStartupToken);
+      _voiceStartupToken = null;
       _flow.setUiLifecycle(
         WearUiLifecycle.inactive,
       );
@@ -845,6 +878,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   @override
   void dispose() {
     print('[VOICE-LIFECYCLE] WearModuleApp dispose');
+    _runtimeTerminated = true;
     _routerObservationRevision += 1;
     _stopWearControlService('dispose');
     _flow.setRuntimeActive(false);
@@ -862,6 +896,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     MethodChannelService().setAppMethodCallHandler(null);
     _updateGlassesVoiceOverlay(visible: false);
     WearStatusIconReporter.I.endVoiceStartup(_voiceStartupToken);
+    _voiceStartupToken = null;
     unawaited(
       WearStatusIconReporter.I.stop().catchError(
         (Object error, StackTrace stackTrace) {
