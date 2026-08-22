@@ -48,7 +48,7 @@ void main() {
     expect(updates.length, greaterThanOrEqualTo(2));
   });
 
-  test('a newer non-runtime screen supersedes a pending runtime entry',
+  test('a newer non-runtime screen cancels input waiting on an old entry',
       () async {
     final _BlockingRuntime child = _BlockingRuntime(
       handledScreens: <WearScreenId>{WearScreenId.availabilityFill},
@@ -65,12 +65,15 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     await runtime.enterScreen(WearScreenId.menu);
-    child.completeBlockedEntry();
-    await staleEntry;
 
+    // Superseding the logical screen must release the input immediately. It
+    // must not wait for a slow or hung previous enterScreen operation.
     expect(await staleBarcode, isFalse);
     expect(runtime.acceptsBarcode(WearScreenId.availabilityFill), isFalse);
     expect(child.barcodes, isEmpty);
+
+    child.completeBlockedEntry();
+    await staleEntry;
   });
 
   test('a non-runtime overlay keeps the ready source list available',
