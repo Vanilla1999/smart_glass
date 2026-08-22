@@ -311,9 +311,10 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
       await resetFill();
       return true;
     }
-    if (screen == WearScreenId.availabilityGroup ||
+    final bool listScreen = screen == WearScreenId.availabilityGroup ||
         screen == WearScreenId.availabilityProduct ||
-        _isDuplicateSelection) {
+        _isDuplicateSelection;
+    if (listScreen && _listValues.isNotEmpty) {
       switch (command) {
         case WearVoiceCommand.up:
           _move(-1);
@@ -393,7 +394,7 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
 
   @override
   Future<bool> handleBarcode(WearScreenId screen, String barcode) async {
-    if (!handles(screen) || _loading) return false;
+    if (!handles(screen) || !acceptsBarcode(screen)) return false;
     final String value = barcode.trim();
     if (value.isEmpty) return false;
     final WearAvailabilityFlowState flow = _flow ??
