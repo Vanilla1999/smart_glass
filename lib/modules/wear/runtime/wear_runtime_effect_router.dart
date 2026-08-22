@@ -10,10 +10,6 @@ abstract interface class WearEffectExecutor {
   Future<WearIntent?> execute(WearEffect effect);
 }
 
-/// Mutable wiring registry, not a state owner.
-///
-/// Executors can only perform an effect and return a typed intent. They never
-/// receive a setter or mutable reference to aggregate state.
 class WearRuntimeEffectRouter implements WearEffectHandler {
   final Map<String, WearEffectExecutor> _executors =
       <String, WearEffectExecutor>{};
@@ -22,6 +18,23 @@ class WearRuntimeEffectRouter implements WearEffectHandler {
       UnmodifiableMapView<String, WearEffectExecutor>(_executors);
 
   void register(WearEffectExecutor executor) {
+    final String key = _validatedKey(executor);
+    final WearEffectExecutor? existing = _executors[key];
+    if (identical(existing, executor)) return;
+    if (existing != null) {
+      throw StateError('Effect executor key $key is already registered');
+    }
+    _executors[key] = executor;
+  }
+
+  void unregister(WearEffectExecutor executor) {
+    final String key = _validatedKey(executor);
+    if (identical(_executors[key], executor)) {
+      _executors.remove(key);
+    }
+  }
+
+  String _validatedKey(WearEffectExecutor executor) {
     final String key = executor.registrationKey.trim();
     if (key.isEmpty || key != executor.registrationKey) {
       throw ArgumentError.value(
@@ -30,12 +43,7 @@ class WearRuntimeEffectRouter implements WearEffectHandler {
         'Effect executor key must be non-empty and normalized',
       );
     }
-    final WearEffectExecutor? existing = _executors[key];
-    if (identical(existing, executor)) return;
-    if (existing != null) {
-      throw StateError('Effect executor key $key is already registered');
-    }
-    _executors[key] = executor;
+    return key;
   }
 
   @override
