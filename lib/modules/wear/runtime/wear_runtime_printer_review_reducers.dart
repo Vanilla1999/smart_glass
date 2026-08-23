@@ -90,6 +90,9 @@ class WearPrinterInputValidationReducer implements WearSliceReducer {
   }
 }
 
+/// Handles entry from another logical screen before the normal printer
+/// reducer. Any pending load/navigation identity from the abandoned visit is
+/// superseded atomically with the new printer entry.
 class WearPrinterReentryReducer implements WearSliceReducer {
   const WearPrinterReentryReducer();
 

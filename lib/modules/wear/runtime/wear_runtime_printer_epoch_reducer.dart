@@ -5,8 +5,9 @@ import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
 /// Owns the MR-S4 session/terminal reset shape.
 ///
-/// This reducer supersedes the MR-S3 control-only reset so identity, controls
-/// and printer state cross an epoch boundary in one committed snapshot.
+/// Identity, controls and printer state cross one epoch boundary in one
+/// committed snapshot. Route/request counters remain monotonic so late Flutter
+/// callbacks cannot collide with the first operation of the next session.
 class WearPrinterEpochResetReducer implements WearSliceReducer {
   const WearPrinterEpochResetReducer();
 
@@ -19,10 +20,20 @@ class WearPrinterEpochResetReducer implements WearSliceReducer {
 
     if (intent is WearSessionCleared) {
       if (!aggregate.session.isAuthorized) return WearReduction.accept();
+      final WearNavigationSlice previousNavigation = aggregate.navigation;
+      final WearNavigationSlice resetNavigation = WearNavigationSlice(
+        logicalScreen: WearScreenId.main,
+        actualPhoneScreen: null,
+        pending: null,
+        history: const <WearScreenId>[WearScreenId.main],
+        routeObservationRevision:
+            previousNavigation.routeObservationRevision,
+        nextRequestId: previousNavigation.nextRequestId,
+      );
       final WearAggregatePayload nextPayload = aggregate.copyWith(
         session: const WearSessionSlice.anonymous(),
         lifecycle: aggregate.lifecycle.copyWith(runtimeActive: false),
-        navigation: aggregate.navigation.clearForSession(WearScreenId.main),
+        navigation: resetNavigation,
         controls: aggregate.controls.toTerminalControls(),
         features: rawFeatures.copyWith(
           printer: rawFeatures.printer.reset(),

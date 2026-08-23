@@ -1,7 +1,6 @@
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_core_slices.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_slice.dart';
-import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
 class WearEpochBoundPhoneRouteObserved extends WearIntent {
@@ -46,16 +45,10 @@ class WearSessionNavigationEpochReducer implements WearSliceReducer {
         return WearReduction.reject(WearDispatchRejectReason.busy);
       }
       final WearFeaturePayload rawFeatures = aggregate.features;
-      final WearFeaturePayload nextFeatures;
-      if (rawFeatures is WearRuntimeFeaturePayload &&
-          rawFeatures.scan is WearScanTaskSlice) {
-        nextFeatures = rawFeatures.copyWith(
-          printer: rawFeatures.printer.reset(),
-          scan: (rawFeatures.scan as WearScanTaskSlice).reset(),
-        );
-      } else {
-        nextFeatures = rawFeatures;
-      }
+      final WearFeaturePayload nextFeatures =
+          rawFeatures is WearRuntimeFeaturePayload
+              ? rawFeatures.copyWith(printer: rawFeatures.printer.reset())
+              : rawFeatures;
       return WearReduction.accept(
         nextState: state.beginNextEpoch(
           legacy: WearLegacyRuntimeSnapshot(
