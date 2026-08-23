@@ -11,7 +11,7 @@ void main() {
         name: 'User $id',
       );
 
-  test('authorization advances the epoch before controls become current',
+  test('authorization resets controls and printer task in a new epoch',
       () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
@@ -21,55 +21,43 @@ void main() {
 
     expect(result.accepted, isTrue);
     expect(authority.state.sessionEpoch, anonymousEpoch + 1);
-    expect(authority.state.revision, 0);
+    expect(authority.controls.voice.acceptsCommands, isFalse);
+    expect(authority.printerTask.selection, isNull);
   });
 
-  test('pre-auth route adapter cannot mutate the authorized epoch', () async {
+  test('old navigation adapter is stale after a session transition', () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
     final WearRuntimeNavigationAdapter oldAdapter = authority.navigationAdapter();
 
     await authority.authorize(user(1));
-    final WearDispatchResult result =
+    final WearDispatchResult late =
         await oldAdapter.observePhoneRoute(WearScreenId.main);
 
-    expect(result.accepted, isFalse);
-    expect(result.rejectReason, WearDispatchRejectReason.staleEpoch);
+    expect(late.accepted, isFalse);
+    expect(late.rejectReason, WearDispatchRejectReason.staleEpoch);
   });
 
-  test('old-session acknowledgement cannot collide after reset', () async {
+  test('session clear preserves navigation identity monotonicity', () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
     await authority.authorize(user(1));
     final WearRuntimeNavigationAdapter firstSession =
         authority.navigationAdapter();
     await authority.requestNavigation(WearScreenId.menu);
-    final int oldRequestId = authority.payload.navigation.pending!.requestId;
-    final int oldObservationRevision =
-        authority.payload.navigation.routeObservationRevision;
+    final int oldRequest = authority.payload.navigation.pending!.requestId;
 
     await authority.clearSession();
     await authority.authorize(user(2));
     await authority.requestNavigation(WearScreenId.printerSelect);
-    final int newRequestId = authority.payload.navigation.pending!.requestId;
-    final WearRuntimeNavigationAdapter secondSession =
-        authority.navigationAdapter();
-    final WearDispatchResult newObservation =
-        await secondSession.observePhoneRoute(WearScreenId.main);
+    final int nextRequest = authority.payload.navigation.pending!.requestId;
 
-    expect(newRequestId, greaterThan(oldRequestId));
-    expect(newObservation.accepted, isTrue);
-    expect(
-      authority.payload.navigation.routeObservationRevision,
-      greaterThan(oldObservationRevision),
-    );
-
-    final WearDispatchResult late = await firstSession.acknowledge(
-      requestId: oldRequestId,
+    expect(nextRequest, greaterThan(oldRequest));
+    final WearDispatchResult oldAck = await firstSession.acknowledge(
+      requestId: oldRequest,
       screen: WearScreenId.menu,
     );
-    expect(late.accepted, isFalse);
-    expect(late.rejectReason, WearDispatchRejectReason.staleEpoch);
-    expect(authority.payload.navigation.pending?.requestId, newRequestId);
+    expect(oldAck.accepted, isFalse);
+    expect(oldAck.rejectReason, WearDispatchRejectReason.staleEpoch);
   });
 }

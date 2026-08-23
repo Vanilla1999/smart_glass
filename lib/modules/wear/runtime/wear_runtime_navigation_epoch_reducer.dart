@@ -1,5 +1,6 @@
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_core_slices.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
 class WearEpochBoundPhoneRouteObserved extends WearIntent {
@@ -26,10 +27,6 @@ class WearEpochBoundNavigationAcknowledged extends WearIntent {
   final WearScreenId screen;
 }
 
-/// Runs before the generic core reducer.
-///
-/// It gives authorization and Flutter route callbacks the same epoch semantics
-/// already used by voice/scanner/connectivity observations in MR-S3.
 class WearSessionNavigationEpochReducer implements WearSliceReducer {
   const WearSessionNavigationEpochReducer();
 
@@ -47,6 +44,11 @@ class WearSessionNavigationEpochReducer implements WearSliceReducer {
         }
         return WearReduction.reject(WearDispatchRejectReason.busy);
       }
+      final WearFeaturePayload rawFeatures = aggregate.features;
+      final WearFeaturePayload nextFeatures =
+          rawFeatures is WearRuntimeFeaturePayload
+              ? rawFeatures.copyWith(printer: rawFeatures.printer.reset())
+              : rawFeatures;
       return WearReduction.accept(
         nextState: state.beginNextEpoch(
           legacy: WearLegacyRuntimeSnapshot(
@@ -57,6 +59,7 @@ class WearSessionNavigationEpochReducer implements WearSliceReducer {
             session: nextSession,
             lifecycle: aggregate.lifecycle.copyWith(runtimeActive: true),
             controls: aggregate.controls.toTerminalControls(),
+            features: nextFeatures,
           ),
         ),
       );
@@ -107,14 +110,10 @@ class WearSessionNavigationEpochReducer implements WearSliceReducer {
       );
     }
 
-    // These compatibility intents do not contain a session epoch. Once MR-S3
-    // owns common control admission, accepting them would re-open an unversioned
-    // path around the authority adapters.
     if (intent is WearPhoneRouteObserved ||
         intent is WearNavigationAcknowledged) {
       return WearReduction.reject(WearDispatchRejectReason.unsupported);
     }
-
     return null;
   }
 }

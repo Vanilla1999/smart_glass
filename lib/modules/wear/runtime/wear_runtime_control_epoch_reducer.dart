@@ -2,8 +2,8 @@ import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_core_slices.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
-/// Handles session reset before the generic core reducer so control admission
-/// from the previous epoch cannot survive into the anonymous session.
+/// Handles session reset before feature reducers so no previous-epoch control
+/// or printer admission survives into the anonymous session.
 class WearControlEpochResetReducer implements WearSliceReducer {
   const WearControlEpochResetReducer();
 
