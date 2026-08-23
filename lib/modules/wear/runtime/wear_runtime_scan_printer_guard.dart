@@ -20,8 +20,7 @@ class WearScanPrinterSelectionGuard implements WearSliceReducer {
     }
     final WearScanTaskSlice scan = rawFeatures.scan as WearScanTaskSlice;
 
-    if (intent is WearBarcodeLookupSucceeded &&
-        intent.products.length == 1) {
+    if (intent is WearBarcodeLookupSucceeded && intent.products.length == 1) {
       if (intent.sessionEpoch != state.sessionEpoch) {
         return WearReduction.reject(WearDispatchRejectReason.staleEpoch);
       }

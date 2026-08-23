@@ -30,6 +30,7 @@ import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
+import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_voice_hints.dart';
 
@@ -70,7 +71,8 @@ class WearDependencies {
   late final AudioStreamService audioStreamService;
 
   void _initVoiceServices() {
-    authority = WearRuntimeAuthority(initialScreen: WearScreenId.scannerConnect);
+    authority =
+        WearRuntimeAuthority(initialScreen: WearScreenId.scannerConnect);
     audioStreamService = AudioStreamService(
       recordContinuousWav: voiceCaptureWavDiagnostics,
     );
@@ -96,16 +98,16 @@ class WearDependencies {
       authority: authority,
       lookupBarcode: getBarcodeInfoUseCase().call,
       navigate: navigate,
-      showStatus: (args, completion) => wearFlowController.showStatus(
+      showStatus: (args, {required completion}) =>
+          wearFlowController.showStatus(
         args,
         completion: completion,
       ),
-      printProduct: (BarcodeProductInfo product) async {
-        final selection = authority.features.printer.selection;
+      printProduct: (
+        BarcodeProductInfo product,
+        WearPrinterSelection selection,
+      ) async {
         final user = authority.userOrNull;
-        if (selection == null) {
-          throw StateError('Не выбраны принтеры');
-        }
         if (user == null) {
           throw StateError('Пользователь не авторизован');
         }

@@ -2,8 +2,13 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
+import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/presentation/input/wear_ui_effect_consumer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_effect_router.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_authority.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
 void main() {
@@ -19,7 +24,8 @@ void main() {
         );
         addTearDown(authority.dispose);
 
-        final WearDispatchResult receipt = await authority.dispatchSemanticInput(
+        final WearDispatchResult receipt =
+            await authority.dispatchSemanticInput(
           kind: WearSemanticInputKind.presentationFocus,
           modality: modality,
           expectedScreen: WearScreenId.menu,
@@ -106,7 +112,8 @@ void main() {
         );
         addTearDown(authority.dispose);
 
-        final WearDispatchResult receipt = await authority.dispatchSemanticInput(
+        final WearDispatchResult receipt =
+            await authority.dispatchSemanticInput(
           kind: WearSemanticInputKind.requestUiEffect,
           modality: modality,
           expectedScreen: WearScreenId.availabilityDirectScan,
@@ -143,7 +150,15 @@ void main() {
       final WearRuntimeAuthority authority = WearRuntimeAuthority(
         initialScreen: WearScreenId.scanIdle,
       );
+      final _BlockingScanExecutor executor = _BlockingScanExecutor();
+      authority.registerEffectExecutor(executor);
       addTearDown(authority.dispose);
+      await authority.importPrinterSelection(
+        const WearPrinterSelection(
+          whitePrinter: WearPrinter(id: 'white', name: 'White'),
+          yellowPrinter: WearPrinter(id: 'yellow', name: 'Yellow'),
+        ),
+      );
       await authority.enterScanScreen(WearScreenId.scanIdle);
 
       final WearDispatchResult receipt = await authority.dispatchSemanticInput(
@@ -152,14 +167,17 @@ void main() {
         expectedScreen: WearScreenId.scanIdle,
         value: '4600000000000',
       );
+      await Future<void>.delayed(Duration.zero);
 
       expect(receipt.accepted, isTrue);
       expect(receipt.scheduledEffectCount, 1);
       expect(authority.scanTask.barcode, '4600000000000');
       expect(
-        authority.state.expectedOperationId(WearLookupBarcodeEffect.operationKind),
+        authority.state
+            .expectedOperationId(WearLookupBarcodeEffect.operationKind),
         isNotNull,
       );
+      executor.complete();
     });
 
     test('serialized queue preserves semantic request order', () async {
@@ -215,12 +233,14 @@ void main() {
       expect(authority.payload.uiEffects.effects, hasLength(1));
     });
 
-    test('claim is exactly once and acknowledgement removes atomically', () async {
+    test('claim is exactly once and acknowledgement removes atomically',
+        () async {
       final WearRuntimeAuthority authority = WearRuntimeAuthority(
         initialScreen: WearScreenId.settings,
       );
       addTearDown(authority.dispose);
       await _requestWifi(authority);
+      await authority.setPhoneUiActive(true);
       final WearUiEffect effect = authority.payload.uiEffects.effects.single;
 
       final WearDispatchResult first = await authority.claimUiEffect(effect);
@@ -236,7 +256,8 @@ void main() {
       expect(authority.payload.uiEffects.effects, isEmpty);
     });
 
-    test('one-per-kind bound rejects duplicate but permits other kind', () async {
+    test('one-per-kind bound rejects duplicate but permits other kind',
+        () async {
       final WearRuntimeAuthority authority = WearRuntimeAuthority(
         initialScreen: WearScreenId.settings,
       );
@@ -288,7 +309,8 @@ void main() {
       expect(authority.payload.uiEffects.effects, hasLength(1));
     });
 
-    test('stale epoch result is rejected while current effect remains', () async {
+    test('stale epoch result is rejected while current effect remains',
+        () async {
       final WearRuntimeAuthority authority = WearRuntimeAuthority(
         initialScreen: WearScreenId.settings,
       );
@@ -338,7 +360,8 @@ void main() {
           WearUiEffectStatus.pending);
     });
 
-    test('inactive pending effect is claimed once when phone resumes', () async {
+    test('inactive pending effect is claimed once when phone resumes',
+        () async {
       final WearRuntimeAuthority authority = WearRuntimeAuthority(
         initialScreen: WearScreenId.availabilityDirectScan,
       );
@@ -379,6 +402,24 @@ void main() {
           WearUiEffectStatus.claimed);
     });
   });
+}
+
+class _BlockingScanExecutor implements WearEffectExecutor {
+  final Completer<void> _release = Completer<void>();
+
+  @override
+  String get registrationKey => 'scan';
+
+  @override
+  bool handles(WearEffect effect) => effect is WearLookupBarcodeEffect;
+
+  @override
+  Future<WearIntent?> execute(WearEffect effect) async {
+    await _release.future;
+    return null;
+  }
+
+  void complete() => _release.complete();
 }
 
 Future<WearDispatchResult> _requestWifi(WearRuntimeAuthority authority) {

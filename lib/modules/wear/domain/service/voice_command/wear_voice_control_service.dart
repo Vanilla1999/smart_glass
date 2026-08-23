@@ -112,11 +112,9 @@ class WearVoiceControlService {
       Duration(milliseconds: 300);
   static const Duration _stablePreviewDelay = Duration(milliseconds: 150);
   static const Duration _recognitionPreviewDuration = Duration(seconds: 3);
-  static const Duration _recognizingFeedbackDelay =
-      Duration(milliseconds: 350);
+  static const Duration _recognizingFeedbackDelay = Duration(milliseconds: 350);
   static const Duration _failureFeedbackGrace = Duration(milliseconds: 400);
-  static const Duration _failureFeedbackDuration =
-      Duration(milliseconds: 1400);
+  static const Duration _failureFeedbackDuration = Duration(milliseconds: 1400);
 
   Stream<WearVoiceCommand> get commandStream => _commandController.stream;
   Stream<WearVoiceCommandEvent> get commandEventStream =>

@@ -117,9 +117,11 @@ class WearRuntimeControlAdapter {
       VoicePhase.waitingForAudioRoute =>
         WearVoiceRuntimePhase.starting,
       VoicePhase.ready => WearVoiceRuntimePhase.ready,
-      VoicePhase.suspendedBySystem || VoicePhase.reconnecting =>
+      VoicePhase.suspendedBySystem ||
+      VoicePhase.reconnecting =>
         WearVoiceRuntimePhase.reconnecting,
-      VoicePhase.unavailable || VoicePhase.microphoneReconnectRequired =>
+      VoicePhase.unavailable ||
+      VoicePhase.microphoneReconnectRequired =>
         WearVoiceRuntimePhase.unavailable,
     };
   }

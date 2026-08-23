@@ -364,7 +364,8 @@ class WearCoreSliceReducer implements WearSliceReducer {
 
   @override
   WearReduction? reduceSlice(WearRuntimeState state, WearIntent intent) {
-    final WearAggregatePayload payload = state.payloadAs<WearAggregatePayload>();
+    final WearAggregatePayload payload =
+        state.payloadAs<WearAggregatePayload>();
 
     if (intent is WearSessionAuthorized) {
       final WearSessionSlice nextSession =
@@ -541,7 +542,8 @@ class WearAggregateReducer implements WearRuntimeReducer {
 
   @override
   WearReduction reduce(WearRuntimeState state, WearIntent intent) {
-    final WearAggregatePayload payload = state.payloadAs<WearAggregatePayload>();
+    final WearAggregatePayload payload =
+        state.payloadAs<WearAggregatePayload>();
     if (state.terminal || payload.lifecycle.terminal) {
       return WearReduction.reject(WearDispatchRejectReason.terminal);
     }

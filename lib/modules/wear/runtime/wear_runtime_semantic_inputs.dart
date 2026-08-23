@@ -32,7 +32,11 @@ class WearSemanticInput extends WearIntent {
   final int? focusIndex;
 }
 
-enum WearUiEffectKind { manualBarcodeInput, systemWifiSettings, confirmationDialog }
+enum WearUiEffectKind {
+  manualBarcodeInput,
+  systemWifiSettings,
+  confirmationDialog
+}
 
 enum WearUiEffectStatus { pending, claimed, completed, cancelled }
 
@@ -177,7 +181,8 @@ class WearSemanticInputReducer implements WearSliceReducer {
 
   @override
   WearReduction? reduceSlice(WearRuntimeState state, WearIntent intent) {
-    final WearAggregatePayload aggregate = state.payloadAs<WearAggregatePayload>();
+    final WearAggregatePayload aggregate =
+        state.payloadAs<WearAggregatePayload>();
     if (intent is WearSemanticInput) {
       if (intent.expectedSessionEpoch != state.sessionEpoch) {
         return WearReduction.reject(WearDispatchRejectReason.staleEpoch);
@@ -234,7 +239,8 @@ class WearSemanticInputReducer implements WearSliceReducer {
           }
           return WearReduction.accept(
             nextState: state.withPayload(aggregate.copyWith(
-              presentation: presentation.withFocus(intent.expectedScreen, index),
+              presentation:
+                  presentation.withFocus(intent.expectedScreen, index),
             )),
           );
       }
@@ -242,15 +248,18 @@ class WearSemanticInputReducer implements WearSliceReducer {
 
     if (intent is WearUiEffectClaimed) {
       return _finish(state, aggregate, intent.effectId, intent.sessionEpoch,
-          intent.expectedScreen, claim: true);
+          intent.expectedScreen,
+          claim: true);
     }
     if (intent is WearUiEffectCompleted) {
       return _finish(state, aggregate, intent.effectId, intent.sessionEpoch,
-          intent.expectedScreen, requireClaimed: true);
+          intent.expectedScreen,
+          requireClaimed: true);
     }
     if (intent is WearUiEffectCancelled) {
       return _finish(state, aggregate, intent.effectId, intent.sessionEpoch,
-          intent.expectedScreen, allowScreenChange: true);
+          intent.expectedScreen,
+          allowScreenChange: true);
     }
     return null;
   }

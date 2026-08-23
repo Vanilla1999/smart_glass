@@ -133,26 +133,28 @@ class _WearScalingListViewState extends State<WearScalingListView> {
               animation: widget.controller,
               child: child,
               builder: (BuildContext context, Widget? c) {
-                final double offset =
-                    widget.controller.hasClients ? widget.controller.offset : 0.0;
+                final double offset = widget.controller.hasClients
+                    ? widget.controller.offset
+                    : 0.0;
                 final double viewH = widget.controller.hasClients
                     ? widget.controller.position.viewportDimension
                     : viewport;
 
-                final double itemCenter =
-                    topInset + index * widget.itemExtent + widget.itemExtent / 2;
+                final double itemCenter = topInset +
+                    index * widget.itemExtent +
+                    widget.itemExtent / 2;
                 final double viewportCenter = offset + viewH / 2;
                 final double dist = (itemCenter - viewportCenter).abs();
 
                 final double norm = (dist / (viewH / 2)).clamp(0.0, 1.0);
 
-                final double scale = lerpDouble(1.0, widget.minScale, norm) ?? 1.0;
-                final double opacity = lerpDouble(1.0, widget.minOpacity, norm) ?? 1.0;
+                final double scale =
+                    lerpDouble(1.0, widget.minScale, norm) ?? 1.0;
+                final double opacity =
+                    lerpDouble(1.0, widget.minOpacity, norm) ?? 1.0;
 
-                final double sideInset = lerpDouble(
-                        widget.baseSideInset,
-                        widget.baseSideInset + widget.extraSideInset,
-                        norm) ??
+                final double sideInset = lerpDouble(widget.baseSideInset,
+                        widget.baseSideInset + widget.extraSideInset, norm) ??
                     widget.baseSideInset;
 
                 return Opacity(

@@ -29,7 +29,8 @@ class WearScreenOwnershipRegistry {
         in claims.entries) {
       final String owner = claim.key.trim();
       if (owner.isEmpty) {
-        throw ArgumentError.value(claim.key, 'owner', 'Owner must not be empty');
+        throw ArgumentError.value(
+            claim.key, 'owner', 'Owner must not be empty');
       }
       for (final WearScreenId screen in claim.value) {
         final String? existing = owners[screen];

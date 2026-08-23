@@ -10,7 +10,6 @@ import 'package:smart_glasses/modules/wear/application/ports/wear_navigation_out
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_navigation_entry.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
-import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/application/wear_voice_application_dispatcher.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_admission.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command_event.dart';
@@ -22,6 +21,7 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_se
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 
 import 'support/replay_voice_capture.dart';
+import 'support/wear_runtime_test_helper.dart';
 
 void main() {
   test('replayed PCM performs one ordered production business action',
@@ -48,12 +48,14 @@ void main() {
       speechRecognitionService: speech,
     );
     final _TraceNavigationOutput navigation = _TraceNavigationOutput(trace);
-    final WearFlowController flow = WearFlowController(
+    final WearFlowController flow = createWearFlowController(
+      authority: await createActiveWearRuntimeAuthority(),
       glassesOutput: _NoopGlassesOutput(),
       navigationOutput: navigation,
     );
-    flow.setUiLifecycle(WearUiLifecycle.active);
-    flow.enterScreen(WearScreenId.menu);
+    await flow.requestNavigation(WearScreenId.menu);
+    navigation.goToCalls.clear();
+    trace.clear();
     var commandsEnabled = true;
     final Completer<void> commandHandled = Completer<void>();
     final WearVoiceApplicationDispatcher dispatcher =
@@ -133,6 +135,7 @@ void main() {
       await control.dispose();
       await speech.dispose();
       await capture.dispose();
+      await flow.dispose();
     }
   });
 

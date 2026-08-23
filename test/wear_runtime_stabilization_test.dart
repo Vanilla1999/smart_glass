@@ -13,6 +13,7 @@ import 'package:smart_glasses/modules/wear/application/wear_printer_runtime.dart
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
+import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_flow_state.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_group.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
@@ -22,14 +23,18 @@ import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/availabl
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_authority.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   setUp(() {
     dotenv.testLoad(fileInput: 'WEAR_USE_MOCKS=false');
     WearDependencies.I.authority.clearPrinterSelection();
   });
 
-  tearDown(WearDependencies.I.authority.clearPrinterSelection);
+  tearDown(() => WearDependencies.I.authority.clearPrinterSelection());
 
   group('runtime-owned barcode routing', () {
     test('active UI routes a migrated barcode to runtime exactly once',
@@ -37,11 +42,12 @@ void main() {
       final _RecordingRuntime runtime = _RecordingRuntime(
         handledScreens: <WearScreenId>{WearScreenId.availabilityFill},
       );
-      final WearFlowController controller = _controller();
+      final WearRuntimeAuthority authority = await _activeAuthority();
+      final WearFlowController controller = _controller(authority);
       controller.setBackgroundRuntime(runtime);
       addTearDown(controller.dispose);
       controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.availabilityFill);
+      await controller.requestNavigation(WearScreenId.availabilityFill);
       var legacyCalls = 0;
       controller.registerScreenActions(
         WearScreenId.availabilityFill,
@@ -60,11 +66,12 @@ void main() {
       final _RecordingRuntime runtime = _RecordingRuntime(
         handledScreens: <WearScreenId>{WearScreenId.availabilityFill},
       );
-      final WearFlowController controller = _controller();
+      final WearRuntimeAuthority authority = await _activeAuthority();
+      final WearFlowController controller = _controller(authority);
       controller.setBackgroundRuntime(runtime);
       addTearDown(controller.dispose);
       controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.main);
+      await controller.requestNavigation(WearScreenId.main);
       String? received;
       controller.registerScreenActions(
         WearScreenId.main,
@@ -96,18 +103,22 @@ void main() {
         handledScreens: <WearScreenId>{WearScreenId.availabilityProduct},
         items: items,
       );
-      final WearFlowController controller = _controller();
+      final WearRuntimeAuthority authority = await _activeAuthority();
+      final WearFlowController controller = _controller(authority);
       controller.setBackgroundRuntime(runtime);
       addTearDown(controller.dispose);
       controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.availabilityProduct);
+      await controller.requestNavigation(WearScreenId.availabilityProduct);
       const VoiceClarificationArgs args = VoiceClarificationArgs(
         sourceScreen: WearScreenId.availabilityProduct,
         phrase: 'второй',
         sourceListRevision: 7,
         matches: <VoiceDynamicItem>[item],
       );
-      controller.enterScreen(WearScreenId.voiceClarification, extra: args);
+      await controller.requestNavigation(
+        WearScreenId.voiceClarification,
+        extra: args,
+      );
 
       expect(await controller.selectVoiceClarificationItem(args, '2'), isTrue);
 
@@ -120,9 +131,14 @@ void main() {
     test('duplicate barcode publishes the duplicate list to glasses', () async {
       final _DuplicateAvailabilityRepository repository =
           _DuplicateAvailabilityRepository();
+      final WearRuntimeAuthority authority = WearRuntimeAuthority(
+        initialScreen: WearScreenId.availabilityDirectScan,
+      );
       final WearAvailabilityRuntime runtime = _availabilityRuntime(
         repository: repository,
+        authority: authority,
       );
+      addTearDown(authority.dispose);
       addTearDown(runtime.dispose);
       final List<WearBackgroundScreenUpdate> updates =
           <WearBackgroundScreenUpdate>[];
@@ -138,6 +154,7 @@ void main() {
         ),
         isTrue,
       );
+      await _flush();
 
       final WearGlassesPayload payload = updates.last.payload;
       expect(payload.title, 'Дубль ШК');
@@ -360,24 +377,26 @@ void main() {
 
     test('stale photo error cannot overwrite a newer screen', () async {
       final Completer<void> photo = Completer<void>();
+      final WearRuntimeAuthority authority = WearRuntimeAuthority(
+        initialScreen: WearScreenId.availabilityCheck,
+      );
       final WearAvailabilityRuntime runtime = _availabilityRuntime(
         repository: _DuplicateAvailabilityRepository(),
         capturePhoto: () => photo.future,
+        authority: authority,
       );
+      addTearDown(authority.dispose);
       addTearDown(runtime.dispose);
       await runtime.enterScreen(
         WearScreenId.availabilityCheck,
-        extra: const WearAvailabilityFlowState(
-          step: WearAvailabilityFlowStep.photoCapture,
-          check: WearAvailabilityProductCheck(
-            product: _DuplicateAvailabilityRepository.first,
-            productScanned: true,
-          ),
-        ),
+        extra: _DuplicateAvailabilityRepository.first,
       );
+      await _flush();
+      expect(runtime.answerAvailable(true), isTrue);
+      await _flush();
 
       final Future<void> capture = runtime.takePhoto();
-      await Future<void>.delayed(Duration.zero);
+      await _flush();
       expect(runtime.state.busy, isTrue);
 
       await runtime.enterScreen(WearScreenId.availabilityGroup);
@@ -392,7 +411,9 @@ void main() {
   group('printer reload reconciliation', () {
     test('reload invalidates a disappeared white printer', () async {
       var loadCount = 0;
+      final WearRuntimeAuthority authority = WearRuntimeAuthority();
       final WearPrinterRuntime runtime = WearPrinterRuntime(
+        authority: authority,
         loadPrinters: () async {
           loadCount++;
           if (loadCount == 1) {
@@ -412,23 +433,29 @@ void main() {
           bool replaceCurrent = false,
         }) async {},
       );
+      addTearDown(authority.dispose);
       addTearDown(runtime.dispose);
       await runtime.enterScreen(WearScreenId.printerSelect);
+      await _flush();
       await runtime.selectPrinter(runtime.state.printers.first);
       await runtime.selectPrinter(runtime.state.visiblePrinters.first);
-      expect(WearDependencies.I.authority.features.printer.selection, isNotNull);
+      expect(authority.features.printer.selection, isNotNull);
 
+      await authority.requestNavigation(WearScreenId.printerSelect);
       await runtime.load();
+      await _flush();
 
       expect(runtime.state.whitePrinter, isNull);
       expect(runtime.state.selection, isNull);
       expect(runtime.state.step, WearPrinterRuntimeStep.white);
-      expect(WearDependencies.I.authority.features.printer.selection, isNull);
+      expect(authority.features.printer.selection, isNull);
     });
 
     test('reload keeps a valid pair and refreshes printer models', () async {
       var loadCount = 0;
+      final WearRuntimeAuthority authority = WearRuntimeAuthority();
       final WearPrinterRuntime runtime = WearPrinterRuntime(
+        authority: authority,
         loadPrinters: () async {
           loadCount++;
           return <AvailablePrinter>[
@@ -448,28 +475,33 @@ void main() {
           bool replaceCurrent = false,
         }) async {},
       );
+      addTearDown(authority.dispose);
       addTearDown(runtime.dispose);
       await runtime.enterScreen(WearScreenId.printerSelect);
+      await _flush();
       await runtime.selectPrinter(runtime.state.printers.first);
       await runtime.selectPrinter(runtime.state.visiblePrinters.first);
 
+      await authority.requestNavigation(WearScreenId.printerSelect);
       await runtime.load();
+      await _flush();
 
-      expect(runtime.state.selection?.whitePrinter.name,
-          'Белый A обновлённый');
-      expect(runtime.state.selection?.yellowPrinter.name,
-          'Жёлтый B обновлённый');
+      expect(runtime.state.selection?.whitePrinter.name, 'Белый A обновлённый');
+      expect(
+          runtime.state.selection?.yellowPrinter.name, 'Жёлтый B обновлённый');
       expect(runtime.state.step, WearPrinterRuntimeStep.yellow);
-      expect(WearDependencies.I.authority.features.printer.selection?.whitePrinter.name,
+      expect(authority.features.printer.selection?.whitePrinter.name,
           'Белый A обновлённый');
-      expect(WearDependencies.I.authority.features.printer.selection?.yellowPrinter.name,
+      expect(authority.features.printer.selection?.yellowPrinter.name,
           'Жёлтый B обновлённый');
     });
 
     test('reload keeps white and requests yellow again when yellow disappears',
         () async {
       var loadCount = 0;
+      final WearRuntimeAuthority authority = WearRuntimeAuthority();
       final WearPrinterRuntime runtime = WearPrinterRuntime(
+        authority: authority,
         loadPrinters: () async {
           loadCount++;
           if (loadCount == 1) {
@@ -489,36 +521,54 @@ void main() {
           bool replaceCurrent = false,
         }) async {},
       );
+      addTearDown(authority.dispose);
       addTearDown(runtime.dispose);
       await runtime.enterScreen(WearScreenId.printerSelect);
+      await _flush();
       await runtime.selectPrinter(runtime.state.printers.first);
       await runtime.selectPrinter(runtime.state.visiblePrinters.first);
 
+      await authority.requestNavigation(WearScreenId.printerSelect);
       await runtime.load();
+      await _flush();
 
       expect(runtime.state.whitePrinter?.id, 'a');
       expect(runtime.state.selection, isNull);
       expect(runtime.state.step, WearPrinterRuntimeStep.yellow);
-      expect(WearDependencies.I.authority.features.printer.selection, isNull);
+      expect(authority.features.printer.selection, isNull);
       expect(runtime.state.visiblePrinters.single.id, 'c');
     });
   });
 }
 
-WearFlowController _controller() {
+WearFlowController _controller(WearRuntimeAuthority authority) {
   return WearFlowController(
+    authority: authority,
     glassesOutput: _FakeGlassesOutput(),
     navigationOutput: _FakeNavigationOutput(),
   );
 }
 
+Future<WearRuntimeAuthority> _activeAuthority() async {
+  final WearRuntimeAuthority authority = WearRuntimeAuthority(
+    initialScreen: WearScreenId.scannerConnect,
+  );
+  await authority.authorize(
+    AuthenticatedUser(idUser: 1, idEmployee: 2, name: 'Test User'),
+  );
+  await authority.setRuntimeActive(true);
+  return authority;
+}
+
 WearAvailabilityRuntime _availabilityRuntime({
   required WearAvailabilityRepository repository,
+  WearRuntimeAuthority? authority,
   WearAvailabilityFillAdd? fillAdd,
   WearAvailabilityFillReset? fillReset,
   WearAvailabilityPhotoCapture? capturePhoto,
 }) {
   return WearAvailabilityRuntime(
+    authority: authority,
     flowUseCase: WearAvailabilityFlowUseCase(repository),
     navigate: (
       WearScreenId _, {
@@ -530,6 +580,12 @@ WearAvailabilityRuntime _availabilityRuntime({
     fillAdd: fillAdd,
     fillReset: fillReset,
   );
+}
+
+Future<void> _flush() async {
+  for (int index = 0; index < 6; index++) {
+    await Future<void>.delayed(Duration.zero);
+  }
 }
 
 class _FakeGlassesOutput implements WearGlassesOutput {
@@ -627,8 +683,7 @@ class _RecordingRuntime implements WearBackgroundRuntime {
   bool supportsCommand(WearScreenId screen, WearVoiceCommand command) => false;
 }
 
-class _DuplicateAvailabilityRepository
-    implements WearAvailabilityRepository {
+class _DuplicateAvailabilityRepository implements WearAvailabilityRepository {
   static const String barcode = '4600000000010';
   static const WearAvailabilityProduct first = WearAvailabilityProduct(
     id: 1,
@@ -640,8 +695,8 @@ class _DuplicateAvailabilityRepository
     price: 10,
     rest: 1,
     checkPrice: false,
-    photoControl: false,
-    unpackaged: false,
+    photoControl: true,
+    unpackaged: true,
     priceTagActual: true,
   );
   static const WearAvailabilityProduct second = WearAvailabilityProduct(

@@ -114,7 +114,8 @@ void main() {
     expect(result.version.isNewerThan(oldVersion), isTrue);
   });
 
-  test('snapshot commits before effect starts and receipt does not await effect',
+  test(
+      'snapshot commits before effect starts and receipt does not await effect',
       () async {
     late WearRuntimeStore store;
     final Completer<WearIntent?> effectResult = Completer<WearIntent?>();

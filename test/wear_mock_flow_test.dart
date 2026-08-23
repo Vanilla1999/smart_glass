@@ -13,17 +13,22 @@ import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/cubit/wear_auth_cubit.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_authority.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  late WearRuntimeAuthority authority;
 
-  setUp(() {
+  setUp(() async {
     dotenv.testLoad(fileInput: 'WEAR_USE_MOCKS=true');
-    WearDependencies.I.authority.clearSession();
+    authority = WearRuntimeAuthority();
+    await WearDependencies.I.authority.clearSession();
   });
 
-  tearDown(() {
-    WearDependencies.I.authority.clearSession();
+  tearDown(() async {
+    await authority.dispose();
+    await WearDependencies.I.authority.clearSession();
     dotenv.clean();
   });
 
@@ -56,14 +61,16 @@ void main() {
 
   test('mock printer loading returns mock printers', () async {
     final WearPrinterRuntime runtime = WearPrinterRuntime(
+      authority: authority,
       loadPrinters: () async => throw StateError('mock loader must not run'),
       navigate: (_, {extra, replaceCurrent = false}) async {},
     );
     addTearDown(runtime.dispose);
 
+    await authority.requestNavigation(WearScreenId.printerSelect);
     await runtime.enterScreen(WearScreenId.printerSelect);
 
-    expect(runtime.state.phase, WearPrinterRuntimePhase.idle);
+    expect(runtime.state.phase, WearPrinterRuntimePhase.ready);
     expect(runtime.state.printers, hasLength(3));
     expect(
       runtime.state.printers.map((WearPrinter printer) => printer.name),
@@ -76,10 +83,11 @@ void main() {
   });
 
   test('mock scan with barcode ending 2 opens product selection', () async {
-    WearDependencies.I.authority.authorize(_testUser());
-    WearDependencies.I.authority.importPrinterSelection(_selection());
+    await authority.authorize(_testUser());
+    await authority.importPrinterSelection(_selection());
+    await authority.requestNavigation(WearScreenId.scanIdle);
     WearProductSelectArgs? selection;
-    final WearScanRuntime runtime = _runtime((screen, extra) {
+    final WearScanRuntime runtime = _runtime(authority, (screen, extra) {
       if (screen == WearScreenId.productSelect) {
         selection = extra as WearProductSelectArgs;
       }
@@ -95,10 +103,11 @@ void main() {
   });
 
   test('mock print uses yellow printer for even product id', () async {
-    WearDependencies.I.authority.authorize(_testUser());
-    WearDependencies.I.authority.importPrinterSelection(_selection());
+    await authority.authorize(_testUser());
+    await authority.importPrinterSelection(_selection());
+    await authority.requestNavigation(WearScreenId.productSelect);
     WearStatusScreenArgs? status;
-    final WearScanRuntime runtime = _runtime((screen, extra) {
+    final WearScanRuntime runtime = _runtime(authority, (screen, extra) {
       if (screen == WearScreenId.status) {
         status = extra as WearStatusScreenArgs;
       }
@@ -120,17 +129,19 @@ void main() {
 
     expect(runtime.state.phase, WearScanRuntimePhase.status);
     expect(status?.kind, WearStatusKind.success);
-    expect(status?.details, 'MOCK Желтый 1');
+    expect(status?.message, 'MOCK Желтый 1');
   });
 }
 
 WearScanRuntime _runtime(
+  WearRuntimeAuthority authority,
   void Function(WearScreenId screen, Object? extra) onNavigate,
 ) {
   return WearScanRuntime(
+    authority: authority,
     lookupBarcode: (_) async => const <BarcodeProductInfo>[],
-    printProduct: (_) async => 'unused',
-    showStatus: (args, completion) async {
+    printProduct: (_, __) async => 'unused',
+    showStatus: (args, {required completion}) async {
       onNavigate(WearScreenId.status, args);
     },
     navigate: (screen, {extra, replaceCurrent = false}) async {

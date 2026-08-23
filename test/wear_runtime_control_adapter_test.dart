@@ -44,7 +44,8 @@ void main() {
     expect(authority.controls.voice.acceptsCommands, isTrue);
   });
 
-  test('voice adapter reports aggregate command admission explicitly', () async {
+  test('voice adapter reports aggregate command admission explicitly',
+      () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     final WearRuntimeControlAdapter adapter =
         WearRuntimeControlAdapter(authority);
@@ -69,12 +70,14 @@ void main() {
   test('aggregate scanner selector preserves stabilized route semantics',
       () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
-    final WearRuntimeControlAdapter adapter =
-        WearRuntimeControlAdapter(authority);
     addTearDown(authority.dispose);
     await authority.authorize(user());
+    await authority.setRuntimeActive(true);
+    final WearRuntimeControlAdapter adapter =
+        WearRuntimeControlAdapter(authority);
     await adapter.observeScannerPrepared();
-    await authority.observePhoneRoute(
+    await authority.observePhoneRouteAtEpoch(
+      sessionEpoch: authority.state.sessionEpoch,
       screen: WearScreenId.menu,
       observationRevision: 1,
     );

@@ -151,7 +151,8 @@ class _State extends State<WearAvailabilityCheckScreen> {
   Future<void> _executeManualInput(WearUiEffect effect) async {
     final WearRuntimeAuthority authority = _flow.authority;
     if (!mounted) return;
-    final String? code = await context.push<String>(WearPrintCodeInputScreen.route);
+    final String? code =
+        await context.push<String>(WearPrintCodeInputScreen.route);
     final String value = code?.trim() ?? '';
     if (value.isEmpty) {
       await authority.cancelUiEffect(effect);

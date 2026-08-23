@@ -18,8 +18,7 @@ class WearControlInputValidationReducer implements WearSliceReducer {
         intent.observationRevision <= 0) {
       return WearReduction.reject(WearDispatchRejectReason.unsupported);
     }
-    if (intent is WearConnectivityObserved &&
-        intent.observationRevision <= 0) {
+    if (intent is WearConnectivityObserved && intent.observationRevision <= 0) {
       return WearReduction.reject(WearDispatchRejectReason.unsupported);
     }
     return null;

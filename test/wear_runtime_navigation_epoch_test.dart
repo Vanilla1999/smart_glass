@@ -28,7 +28,8 @@ void main() {
   test('old navigation adapter is stale after a session transition', () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
-    final WearRuntimeNavigationAdapter oldAdapter = authority.navigationAdapter();
+    final WearRuntimeNavigationAdapter oldAdapter =
+        authority.navigationAdapter();
 
     await authority.authorize(user(1));
     final WearDispatchResult late =

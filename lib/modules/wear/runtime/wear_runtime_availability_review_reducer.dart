@@ -63,8 +63,7 @@ class WearReviewedAvailabilitySliceReducer implements WearSliceReducer {
     }
     if (intent.screen == WearScreenId.availabilityProduct &&
         intent.extra is WearAvailabilityGroup) {
-      final WearAvailabilityGroup group =
-          intent.extra as WearAvailabilityGroup;
+      final WearAvailabilityGroup group = intent.extra as WearAvailabilityGroup;
       return task.flow.selectedGroup?.id != group.id ||
           task.flow.products.isEmpty;
     }

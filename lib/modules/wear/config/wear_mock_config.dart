@@ -21,6 +21,7 @@ class WearMockConfig {
       }
     }
 
+    if (!dotenv.isInitialized) return false;
     final String? value = dotenv.env[key];
     if (value == null) {
       return false;

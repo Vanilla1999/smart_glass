@@ -1,4 +1,5 @@
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
 import 'package:smart_glasses/modules/wear/application/wear_status_state.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
@@ -77,7 +78,9 @@ class WearScanEffectExecutor
 
     if (effect is WearLookupBarcodeEffect) {
       try {
-        final List<BarcodeProductInfo> products = await _lookup(effect.barcode);
+        final List<BarcodeProductInfo> products = WearMockConfig.isEnabled
+            ? _mockProducts(effect.barcode)
+            : await _lookup(effect.barcode);
         return WearBarcodeLookupSucceeded(
           sessionEpoch: effect.sessionEpoch,
           operationId: effect.operationId,
@@ -94,10 +97,11 @@ class WearScanEffectExecutor
 
     if (effect is WearPrintPriceTagEffect) {
       try {
-        final String productName = await _print(
-          effect.product,
-          effect.selection,
-        );
+        final String productName = WearMockConfig.isEnabled
+            ? (effect.product.id.isEven
+                ? effect.selection.yellowPrinter.name
+                : effect.selection.whitePrinter.name)
+            : await _print(effect.product, effect.selection);
         return WearPriceTagPrintSucceeded(
           sessionEpoch: effect.sessionEpoch,
           operationId: effect.operationId,
@@ -170,6 +174,30 @@ class WearScanEffectExecutor
     }
 
     throw StateError('Unsupported scan effect ${effect.runtimeType}');
+  }
+
+  static List<BarcodeProductInfo> _mockProducts(String barcode) {
+    if (barcode.endsWith('2')) {
+      return <BarcodeProductInfo>[
+        BarcodeProductInfo(
+          id: 1002001,
+          name: 'MOCK Молоко 2,5% 930 мл',
+          articleRest: 24,
+        ),
+        BarcodeProductInfo(
+          id: 1002002,
+          name: 'MOCK Молоко 3,2% 930 мл',
+          articleRest: 16,
+        ),
+      ];
+    }
+    return <BarcodeProductInfo>[
+      BarcodeProductInfo(
+        id: 1001001,
+        name: 'MOCK Товар $barcode',
+        articleRest: 42,
+      ),
+    ];
   }
 
   String _messageFor(Object error) {

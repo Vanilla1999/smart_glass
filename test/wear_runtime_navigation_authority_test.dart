@@ -7,7 +7,8 @@ void main() {
   test('logical screen leads while actual phone route lags', () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
-    await authority.observePhoneRoute(
+    await authority.observePhoneRouteAtEpoch(
+      sessionEpoch: authority.state.sessionEpoch,
       screen: WearScreenId.main,
       observationRevision: 1,
     );
@@ -24,12 +25,14 @@ void main() {
   test('stale route observation cannot roll actual route backwards', () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
-    await authority.observePhoneRoute(
+    await authority.observePhoneRouteAtEpoch(
+      sessionEpoch: authority.state.sessionEpoch,
       screen: WearScreenId.menu,
       observationRevision: 2,
     );
 
-    final WearDispatchResult stale = await authority.observePhoneRoute(
+    final WearDispatchResult stale = await authority.observePhoneRouteAtEpoch(
+      sessionEpoch: authority.state.sessionEpoch,
       screen: WearScreenId.main,
       observationRevision: 1,
     );
@@ -46,11 +49,15 @@ void main() {
     await authority.requestNavigation(WearScreenId.menu);
     final WearPendingNavigation current = authority.payload.navigation.pending!;
 
-    final WearDispatchResult stale = await authority.acknowledgeNavigation(
+    final WearDispatchResult stale =
+        await authority.acknowledgeNavigationAtEpoch(
+      sessionEpoch: authority.state.sessionEpoch,
       requestId: current.requestId + 1,
       screen: current.screen,
     );
-    final WearDispatchResult accepted = await authority.acknowledgeNavigation(
+    final WearDispatchResult accepted =
+        await authority.acknowledgeNavigationAtEpoch(
+      sessionEpoch: authority.state.sessionEpoch,
       requestId: current.requestId,
       screen: current.screen,
     );
@@ -80,12 +87,14 @@ void main() {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
     await authority.requestNavigation(WearScreenId.menu);
-    await authority.acknowledgeNavigation(
+    await authority.acknowledgeNavigationAtEpoch(
+      sessionEpoch: authority.state.sessionEpoch,
       requestId: authority.payload.navigation.pending!.requestId,
       screen: WearScreenId.menu,
     );
     await authority.requestNavigation(WearScreenId.printerSelect);
-    await authority.acknowledgeNavigation(
+    await authority.acknowledgeNavigationAtEpoch(
+      sessionEpoch: authority.state.sessionEpoch,
       requestId: authority.payload.navigation.pending!.requestId,
       screen: WearScreenId.printerSelect,
     );
@@ -120,7 +129,9 @@ void main() {
     final WearPendingNavigation latest = authority.payload.navigation.pending!;
     expect(latest.requestId, greaterThan(firstRequest));
     expect(latest.screen, WearScreenId.scanIdle);
-    final WearDispatchResult oldAck = await authority.acknowledgeNavigation(
+    final WearDispatchResult oldAck =
+        await authority.acknowledgeNavigationAtEpoch(
+      sessionEpoch: authority.state.sessionEpoch,
       requestId: firstRequest,
       screen: WearScreenId.printerSelect,
     );

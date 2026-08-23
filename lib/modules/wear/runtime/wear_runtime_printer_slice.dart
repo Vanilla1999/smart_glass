@@ -260,7 +260,8 @@ class WearPrinterSliceReducer implements WearSliceReducer {
     final WearPrinterTaskSlice printer = features.printer;
 
     if (intent is WearPrinterEntered) {
-      WearRuntimeState nextState = _ensurePrinterLogicalScreen(state, aggregate);
+      WearRuntimeState nextState =
+          _ensurePrinterLogicalScreen(state, aggregate);
       final WearAggregatePayload nextAggregate =
           nextState.payloadAs<WearAggregatePayload>();
       final WearRuntimeFeaturePayload nextFeatures =
@@ -447,7 +448,8 @@ class WearPrinterSliceReducer implements WearSliceReducer {
           )
           .withPayload(navigatedAggregate)
           .expectOperation(
-            kind: WearNavigateAfterPrinterSelectionEffect.navigationOperationKind,
+            kind:
+                WearNavigateAfterPrinterSelectionEffect.navigationOperationKind,
             operationId: intent.navigationOperationId,
           );
       return WearReduction.accept(

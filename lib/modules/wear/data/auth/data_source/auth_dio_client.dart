@@ -41,7 +41,8 @@ class AuthDioClient {
           );
           handler.next(options);
         },
-        onResponse: (Response<dynamic> response, ResponseInterceptorHandler handler) {
+        onResponse:
+            (Response<dynamic> response, ResponseInterceptorHandler handler) {
           log(
             'response ${response.statusCode} ${response.requestOptions.uri} data=${response.data}',
             name: 'AuthDioClient',

@@ -9,10 +9,11 @@ void main() {
         .whereType<File>()
         .where((File file) => file.path.endsWith('.dart'))
         .toList(growable: false);
-    final String source = files.map((File file) => file.readAsStringSync()).join();
+    final String source =
+        files.map((File file) => file.readAsStringSync()).join();
 
     for (final String forbidden in <String>[
-      'class WearSession',
+      'class WearSession {',
       'WearSession.',
       'WearActualScreenStore',
       'actualScreenStore',

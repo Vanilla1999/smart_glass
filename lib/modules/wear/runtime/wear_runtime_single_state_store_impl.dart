@@ -147,7 +147,8 @@ class WearRuntimeState {
     required int operationId,
   }) {
     if (kind.trim().isEmpty || kind != kind.trim()) {
-      throw ArgumentError.value(kind, 'kind', 'Operation kind is not normalized');
+      throw ArgumentError.value(
+          kind, 'kind', 'Operation kind is not normalized');
     }
     if (operationId <= 0) {
       throw ArgumentError.value(operationId, 'operationId');
@@ -205,8 +206,7 @@ class WearRuntimeState {
       terminal: terminal,
       legacy: legacy ?? this.legacy,
       payload: payload ?? this.payload,
-      expectedOperationIds:
-          expectedOperationIds ?? this.expectedOperationIds,
+      expectedOperationIds: expectedOperationIds ?? this.expectedOperationIds,
     );
   }
 
@@ -504,7 +504,8 @@ class WearRuntimeStore {
       while (_queue.isNotEmpty && !_terminalBarrier) {
         final _QueuedWearIntent queued = _queue.removeFirst();
         try {
-          final WearReduction reduction = _reducer.reduce(_state, queued.intent);
+          final WearReduction reduction =
+              _reducer.reduce(_state, queued.intent);
           if (!reduction.accepted) {
             queued.complete(_rejected(
               reduction.rejectReason ?? WearDispatchRejectReason.internalError,
@@ -513,9 +514,8 @@ class WearRuntimeStore {
           }
 
           final bool changed = reduction.nextState != null;
-          final WearRuntimeState candidate = changed
-              ? _prepareCommit(reduction.nextState!)
-              : _state;
+          final WearRuntimeState candidate =
+              changed ? _prepareCommit(reduction.nextState!) : _state;
           _validateEffects(reduction.effects, candidate);
           if (changed) _publish(candidate);
           final WearRuntimeVersion receiptVersion = _state.version;
@@ -612,8 +612,8 @@ class WearRuntimeStore {
     if (!_state.terminal) _publish(_prepareCommit(_state.asTerminal()));
     while (_queue.isNotEmpty) {
       _queue.removeFirst().complete(_rejected(
-        WearDispatchRejectReason.terminal,
-      ));
+            WearDispatchRejectReason.terminal,
+          ));
     }
     unawaited(Future<void>.sync(() async {
       if (!_events.isClosed) await _events.close();

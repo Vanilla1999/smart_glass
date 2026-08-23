@@ -55,8 +55,7 @@ class CompositeWearBackgroundRuntime implements WearBackgroundRuntime {
     }
   }
 
-  static const Set<WearVoiceCommand> _runtimeOwnedCommands =
-      <WearVoiceCommand>{
+  static const Set<WearVoiceCommand> _runtimeOwnedCommands = <WearVoiceCommand>{
     WearVoiceCommand.up,
     WearVoiceCommand.down,
     WearVoiceCommand.select,

@@ -6,7 +6,6 @@ import 'package:smart_glasses/modules/wear/application/ports/wear_navigation_out
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_navigation_entry.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
-import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/application/wear_voice_application_dispatcher.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
@@ -17,6 +16,8 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voi
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_preview_event.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 
+import 'support/wear_runtime_test_helper.dart';
+
 void main() {
   late _NoopGlassesOutput glasses;
   late _RecordingNavigationOutput navigation;
@@ -26,15 +27,16 @@ void main() {
   late bool acceptsCommands;
   late WearVoiceApplicationDispatcher dispatcher;
 
-  setUp(() {
+  setUp(() async {
     glasses = _NoopGlassesOutput();
     navigation = _RecordingNavigationOutput();
-    flow = WearFlowController(
+    flow = createWearFlowController(
+      authority: await createActiveWearRuntimeAuthority(),
       glassesOutput: glasses,
       navigationOutput: navigation,
-    )
-      ..setUiLifecycle(WearUiLifecycle.active)
-      ..enterScreen(WearScreenId.menu);
+    );
+    addTearDown(flow.dispose);
+    await flow.requestNavigation(WearScreenId.menu);
     revisions = (
       captureEpoch: 1,
       recognitionContextId: 1,
@@ -152,15 +154,14 @@ void main() {
       ],
     );
     final List<String> selections = <String>[];
-    flow
-      ..enterScreen(WearScreenId.printerSelect)
-      ..registerScreenActions(
-        WearScreenId.printerSelect,
-        WearScreenActionHandler(
-          dynamicVoiceItems: () => items,
-          onDynamicItem: selections.add,
-        ),
-      );
+    await flow.requestNavigation(WearScreenId.printerSelect);
+    flow.registerScreenActions(
+      WearScreenId.printerSelect,
+      WearScreenActionHandler(
+        dynamicVoiceItems: () => items,
+        onDynamicItem: selections.add,
+      ),
+    );
     final WearVoicePhraseEvent event = _phraseEvent(
       screen: WearScreenId.printerSelect,
       listRevision: items.revision,
@@ -185,15 +186,14 @@ void main() {
       ],
     );
     final List<String> selections = <String>[];
-    flow
-      ..enterScreen(WearScreenId.printerSelect)
-      ..registerScreenActions(
-        WearScreenId.printerSelect,
-        WearScreenActionHandler(
-          dynamicVoiceItems: () => items,
-          onDynamicItem: selections.add,
-        ),
-      );
+    await flow.requestNavigation(WearScreenId.printerSelect);
+    flow.registerScreenActions(
+      WearScreenId.printerSelect,
+      WearScreenActionHandler(
+        dynamicVoiceItems: () => items,
+        onDynamicItem: selections.add,
+      ),
+    );
     final WearVoicePhraseEvent event = _phraseEvent(
       screen: WearScreenId.printerSelect,
       listRevision: 9,
@@ -214,15 +214,14 @@ void main() {
       ],
     );
     final List<String> selections = <String>[];
-    flow
-      ..enterScreen(WearScreenId.printerSelect)
-      ..registerScreenActions(
-        WearScreenId.printerSelect,
-        WearScreenActionHandler(
-          dynamicVoiceItems: () => items,
-          onDynamicItem: selections.add,
-        ),
-      );
+    await flow.requestNavigation(WearScreenId.printerSelect);
+    flow.registerScreenActions(
+      WearScreenId.printerSelect,
+      WearScreenActionHandler(
+        dynamicVoiceItems: () => items,
+        onDynamicItem: selections.add,
+      ),
+    );
     final WearVoicePhraseEvent event = _phraseEvent(
       screen: WearScreenId.printerSelect,
       listRevision: items.revision,
@@ -246,18 +245,17 @@ void main() {
     );
     var partialCalls = 0;
     var usefulCalls = 0;
-    flow
-      ..enterScreen(WearScreenId.printerSelect)
-      ..registerScreenActions(
-        WearScreenId.printerSelect,
-        WearScreenActionHandler(
-          dynamicVoiceItems: () => items,
-          onPartialPhrase: (_) {
-            partialCalls++;
-            return true;
-          },
-        ),
-      );
+    await flow.requestNavigation(WearScreenId.printerSelect);
+    flow.registerScreenActions(
+      WearScreenId.printerSelect,
+      WearScreenActionHandler(
+        dynamicVoiceItems: () => items,
+        onPartialPhrase: (_) {
+          partialCalls++;
+          return true;
+        },
+      ),
+    );
     dispatcher = WearVoiceApplicationDispatcher(
       flowController: flow,
       revisionSnapshotProvider: () => revisions,

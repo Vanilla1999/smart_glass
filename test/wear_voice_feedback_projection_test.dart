@@ -6,23 +6,24 @@ import 'package:smart_glasses/modules/wear/application/ports/wear_navigation_out
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_navigation_entry.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
-import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/application/wear_voice_application_dispatcher.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_replay_feedback_controller.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_replay_ownership.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 
+import 'support/wear_runtime_test_helper.dart';
+
 void main() {
   test('replay feedback reaches the glasses payload and clears in order',
       () async {
     final _RecordingGlassesOutput glasses = _RecordingGlassesOutput();
-    final WearFlowController flow = WearFlowController(
+    final WearFlowController flow = createWearFlowController(
+      authority: await createActiveWearRuntimeAuthority(),
       glassesOutput: glasses,
       navigationOutput: _NoopNavigationOutput(),
-    )
-      ..setUiLifecycle(WearUiLifecycle.active)
-      ..enterScreen(WearScreenId.menu);
-    await Future<void>.delayed(Duration.zero);
+    );
+    addTearDown(flow.dispose);
+    await flow.requestNavigation(WearScreenId.menu);
 
     var commandsEnabled = true;
     final WearVoiceApplicationDispatcher dispatcher =

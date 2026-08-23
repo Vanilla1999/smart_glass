@@ -73,7 +73,7 @@ void main() {
 
     expect(authority.printerTask.phase, WearPrinterTaskPhase.error);
     expect(authority.printerTask.printers, isEmpty);
-    expect(authority.printerTask.error, contains('повторяющийся ID'));
+    expect(authority.printerTask.error, contains('повторяющийся элемент'));
     expect(
       authority.state.expectedOperationId(
         WearLoadPrintersEffect.loadOperationKind,

@@ -33,7 +33,8 @@ class WearRuntimeFeatureEpochReducer implements WearSliceReducer {
     final WearRuntimeControlPayload controls = rawControls;
 
     if (intent is WearSessionAuthorized) {
-      final WearSessionSlice requested = WearSessionSlice.authorized(intent.user);
+      final WearSessionSlice requested =
+          WearSessionSlice.authorized(intent.user);
       if (aggregate.session.isAuthorized) {
         if (aggregate.session.sameIdentityAs(requested)) {
           return WearReduction.accept();

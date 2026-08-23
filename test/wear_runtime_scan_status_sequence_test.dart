@@ -107,6 +107,7 @@ void main() {
     final WearRuntimeAuthority authority = await preparedAuthority();
     addTearDown(authority.dispose);
     final Completer<String> print = Completer<String>();
+    final Completer<void> statusDelay = Completer<void>();
     authority.registerEffectExecutor(
       WearScanEffectExecutor(
         lookup: (_) async => <BarcodeProductInfo>[
@@ -115,7 +116,7 @@ void main() {
         print: (_, __) => print.future,
         navigate: (_, {extra, replaceCurrent = false}) async {},
         presentStatus: (_, {required completion}) async {},
-        delay: (_) async {},
+        delay: (_) => statusDelay.future,
       ),
     );
 
@@ -133,7 +134,8 @@ void main() {
     expect(attachment.accepted, isTrue);
     expect(attachment.stateChanged, isFalse);
     expect(
-      authority.state.expectedOperationId(WearPrintPriceTagEffect.operationKind),
+      authority.state
+          .expectedOperationId(WearPrintPriceTagEffect.operationKind),
       printOperation,
     );
     expect(authority.scanTask.phase, WearScanTaskPhase.printing);
@@ -141,6 +143,7 @@ void main() {
     print.complete('Product');
     await _flush();
     expect(authority.scanTask.phase, WearScanTaskPhase.status);
+    statusDelay.complete();
   });
 }
 

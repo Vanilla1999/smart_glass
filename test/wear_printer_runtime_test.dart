@@ -7,18 +7,26 @@ import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/available_printer.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_authority.dart';
 
 void main() {
-  setUp(() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  late WearRuntimeAuthority authority;
+
+  setUp(() async {
     dotenv.testLoad(fileInput: 'WEAR_USE_MOCKS=false');
+    authority = WearRuntimeAuthority();
+    await authority.requestNavigation(WearScreenId.printerSelect);
   });
 
-  tearDown(WearDependencies.I.authority.clearPrinterSelection);
+  tearDown(() => authority.dispose());
 
   test('loads and selects printers without a widget tree', () async {
     WearScreenId? target;
     Object? capturedExtra;
     final WearPrinterRuntime runtime = WearPrinterRuntime(
+      authority: authority,
       loadPrinters: () async => <AvailablePrinter>[
         AvailablePrinter(number: '1', name: 'Белый один'),
         AvailablePrinter(number: '2', name: 'Жёлтый два'),
@@ -53,13 +61,14 @@ void main() {
     );
 
     expect(target, WearScreenId.scanIdle);
-    expect(WearDependencies.I.authority.features.printer.selection?.whitePrinter.id, '1');
-    expect(WearDependencies.I.authority.features.printer.selection?.yellowPrinter.id, '2');
+    expect(authority.features.printer.selection?.whitePrinter.id, '1');
+    expect(authority.features.printer.selection?.yellowPrinter.id, '2');
     expect(capturedExtra, isNotNull);
   });
 
   test('voice item selection works while no printer screen exists', () async {
     final WearPrinterRuntime runtime = WearPrinterRuntime(
+      authority: authority,
       loadPrinters: () async => <AvailablePrinter>[
         AvailablePrinter(number: '1', name: 'Принтер белый'),
         AvailablePrinter(number: '2', name: 'Принтер жёлтый'),
@@ -85,13 +94,14 @@ void main() {
       isTrue,
     );
 
-    expect(WearDependencies.I.authority.features.printer.selection?.whitePrinter.id, '1');
-    expect(WearDependencies.I.authority.features.printer.selection?.yellowPrinter.id, '2');
+    expect(authority.features.printer.selection?.whitePrinter.id, '1');
+    expect(authority.features.printer.selection?.yellowPrinter.id, '2');
   });
 
   test('pause and resume preserve step and load printers once', () async {
     int loadCount = 0;
     final WearPrinterRuntime runtime = WearPrinterRuntime(
+      authority: authority,
       loadPrinters: () async {
         loadCount++;
         return <AvailablePrinter>[
@@ -121,6 +131,7 @@ void main() {
 
   test('touch and voice update the same state stream', () async {
     final WearPrinterRuntime runtime = WearPrinterRuntime(
+      authority: authority,
       loadPrinters: () async => <AvailablePrinter>[
         AvailablePrinter(number: '1', name: 'Белый'),
         AvailablePrinter(number: '2', name: 'Жёлтый'),
@@ -145,6 +156,7 @@ void main() {
     int navigationCount = 0;
     final Completer<void> navigation = Completer<void>();
     final WearPrinterRuntime runtime = WearPrinterRuntime(
+      authority: authority,
       loadPrinters: () async => <AvailablePrinter>[
         AvailablePrinter(number: '1', name: 'Белый'),
         AvailablePrinter(number: '2', name: 'Жёлтый'),

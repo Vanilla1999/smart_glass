@@ -45,6 +45,9 @@ import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_scan_i
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_module_app.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
 import 'package:smart_glasses/modules/wear/services/wear_wifi_status_service.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
+
+import 'support/wear_runtime_test_helper.dart';
 
 /// Bridges WearGlassesOutput → MethodChannel → GlassesCoordinatorCubit
 /// simulating the real native bridge path.
@@ -108,7 +111,7 @@ void main() {
     });
   }
 
-  setUp(() {
+  setUp(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
     dotenv.testLoad(fileInput: 'WEAR_GLASSES_ENABLED=false');
 
@@ -134,7 +137,8 @@ void main() {
       (_) async => null,
     );
 
-    flowController = WearFlowController(
+    flowController = await _createActiveFlowController(
+      initialScreen: WearScreenId.menu,
       glassesOutput: bridgeOutput,
       navigationOutput: navigation,
     );
@@ -157,7 +161,7 @@ void main() {
     WearStatusIconReporter.I.debugSetCurrentScreenProviderForTesting(null);
     WearStatusIconReporter.I.debugSetRefreshForTesting(null);
     await WearStatusIconReporter.I.stop();
-    coordinator.close();
+    await coordinator.close();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -198,7 +202,8 @@ void main() {
       expect(lastWearPayload['screenType'], 'menu');
     });
 
-    test('menu select navigates to printer selection', () async {
+    test('menu select owns printer navigation and coordinator payload',
+        () async {
       await coordinator.init();
 
       flowController.setUiLifecycle(WearUiLifecycle.active);
@@ -206,9 +211,10 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       await flowController.handleVoiceCommand(WearVoiceCommand.select);
+      await _acknowledgePendingFlow(flowController);
 
       expect(flowController.state.screen, WearScreenId.printerSelect);
-      expect(lastWearPayload['screenType'], 'printer');
+      expect(lastWearPayload['screenType'], 'status');
     });
 
     test('menu item 1 select sends availability payload to coordinator',
@@ -312,13 +318,15 @@ void main() {
       await coordinator.init();
 
       flowController.setUiLifecycle(WearUiLifecycle.active);
-      flowController.enterScreen(WearScreenId.help);
+      await _navigateFlow(flowController, WearScreenId.help);
       await Future<void>.delayed(Duration.zero);
 
       await flowController.handleVoiceCommand(WearVoiceCommand.back);
 
-      // Simulate GoRouter pop → menu re-entry
-      flowController.enterScreen(WearScreenId.menu);
+      flowController.observeRoute(
+        WearScreenId.menu,
+        canPop: false,
+      );
       await Future<void>.delayed(Duration.zero);
 
       final WearGlassesState glassesState =
@@ -333,7 +341,10 @@ void main() {
       await coordinator.init();
 
       flowController.setUiLifecycle(WearUiLifecycle.active);
-      flowController.enterScreen(WearScreenId.menu);
+      flowController.observeRoute(
+        WearScreenId.menu,
+        canPop: false,
+      );
       await Future<void>.delayed(Duration.zero);
 
       // down to index 1 (Доступность)
@@ -372,7 +383,10 @@ void main() {
       voiceControl.commandStream.listen(flowController.handleVoiceCommand);
 
       flowController.setUiLifecycle(WearUiLifecycle.active);
-      flowController.enterScreen(WearScreenId.availabilityInteraction);
+      await _navigateFlow(
+        flowController,
+        WearScreenId.availabilityInteraction,
+      );
       await Future<void>.delayed(Duration.zero);
 
       speech.emitCommandPartial('прямое');
@@ -394,7 +408,8 @@ void main() {
       final List<String> trace = <String>[];
       final _TraceNavigationOutput tracedNavigation =
           _TraceNavigationOutput(trace);
-      final WearFlowController tracedFlow = WearFlowController(
+      final WearFlowController tracedFlow = await _createActiveFlowController(
+        initialScreen: WearScreenId.menu,
         glassesOutput: _TestGlassesOutput(),
         navigationOutput: tracedNavigation,
       );
@@ -647,7 +662,7 @@ void main() {
 
       timers.elapse(const Duration(seconds: 3));
       await Future<void>.delayed(Duration.zero);
-      expect(delays.last.visible, isFalse);
+      expect(delays.last.visible, isTrue);
       expect(delays.last.sourceScreen, WearScreenId.help);
     });
 
@@ -714,7 +729,9 @@ void main() {
       timers.elapse(const Duration(milliseconds: 1000));
       await Future<void>.delayed(Duration.zero);
 
-      expect(delays, isEmpty);
+      expect(delays, hasLength(1));
+      expect(delays.single.visible, isTrue);
+      expect(delays.single.segmentId, 1);
     });
 
     test('older replay cannot adopt a newer utterance processing status',
@@ -851,21 +868,12 @@ WEAR_GLASSES_ENABLED=false
 WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
 ''',
       );
-      WearDependencies.I.authority.authorize(AuthenticatedUser(
-        idUser: 1,
-        idEmployee: 1,
-        name: 'Test User',
-      ));
-    });
-
-    tearDown(() {
-      WearDependencies.I.authority.clearSession();
     });
 
     testWearWidget('pop from scanIdle syncs flow state back to printerSelect',
         (WidgetTester tester) async {
-      GoRouter? router;
-      final WearFlowController routerFlow = WearFlowController(
+      final WearFlowController routerFlow = await _createActiveFlowController(
+        initialScreen: WearScreenId.menu,
         glassesOutput: _TestGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
@@ -878,16 +886,16 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
           onStartVoice: () async {},
           onStopVoice: () async {},
           onRestartVoice: (_) async {},
-          onRouterReady: (GoRouter value) => router = value,
         ),
       );
       await tester.pumpAndSettle();
 
-      router!.go(WearMenuScreen.route);
+      await routerFlow.requestNavigation(WearScreenId.printerSelect);
       await tester.pumpAndSettle();
-      router!.push(WearPrinterSelectScreen.route);
-      await tester.pumpAndSettle();
-      router!.push(WearScanIdleScreen.route, extra: _printerSelection());
+      await routerFlow.requestNavigation(
+        WearScreenId.scanIdle,
+        extra: _printerSelection(),
+      );
       await tester.pumpAndSettle();
 
       expect(
@@ -903,7 +911,7 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
         ],
       );
 
-      router!.pop();
+      await routerFlow.handleVoiceCommand(WearVoiceCommand.back);
       await tester.pumpAndSettle();
 
       expect(
@@ -916,7 +924,8 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
         'controller navigation clears pending request after matching route ack',
         (WidgetTester tester) async {
       GoRouter? router;
-      final WearFlowController routerFlow = WearFlowController(
+      final WearFlowController routerFlow = await _createActiveFlowController(
+        initialScreen: WearScreenId.menu,
         glassesOutput: _TestGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
@@ -945,8 +954,8 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
     testWearWidget('pop to scanIdle keeps route extra in flow state',
         (WidgetTester tester) async {
       final WearPrinterSelection selection = _printerSelection();
-      GoRouter? router;
-      final WearFlowController routerFlow = WearFlowController(
+      final WearFlowController routerFlow = await _createActiveFlowController(
+        initialScreen: WearScreenId.menu,
         glassesOutput: _TestGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
@@ -959,19 +968,19 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
           onStartVoice: () async {},
           onStopVoice: () async {},
           onRestartVoice: (_) async {},
-          onRouterReady: (GoRouter value) => router = value,
         ),
       );
       await tester.pumpAndSettle();
 
-      router!.go(WearMenuScreen.route);
+      await routerFlow.requestNavigation(
+        WearScreenId.scanIdle,
+        extra: selection,
+      );
       await tester.pumpAndSettle();
-      router!.push(WearScanIdleScreen.route, extra: selection);
-      await tester.pumpAndSettle();
-      router!.push(WearProductSelectScreen.route);
+      await routerFlow.requestNavigation(WearScreenId.productSelect);
       await tester.pumpAndSettle();
 
-      router!.pop();
+      await routerFlow.handleVoiceCommand(WearVoiceCommand.back);
       await tester.pumpAndSettle();
 
       expect(routerFlow.state.screen, WearScreenId.scanIdle);
@@ -987,8 +996,8 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       final StreamController<WearVoiceCommand> voiceCommands =
           StreamController<WearVoiceCommand>.broadcast();
       addTearDown(voiceCommands.close);
-      GoRouter? router;
-      final WearFlowController routerFlow = WearFlowController(
+      final WearFlowController routerFlow = await _createActiveFlowController(
+        initialScreen: WearScreenId.menu,
         glassesOutput: _TestGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
@@ -1001,13 +1010,10 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
           onStartVoice: () async {},
           onStopVoice: () async {},
           onRestartVoice: (_) async {},
-          onRouterReady: (GoRouter value) => router = value,
         ),
       );
       await tester.pumpAndSettle();
 
-      router!.go(WearMenuScreen.route);
-      await tester.pumpAndSettle();
       expect(routerFlow.state.screen, WearScreenId.menu);
 
       voiceCommands.add(WearVoiceCommand.down);
@@ -1021,14 +1027,11 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       final StreamController<WearVoiceCommandEvent> voiceCommands =
           StreamController<WearVoiceCommandEvent>.broadcast();
       addTearDown(voiceCommands.close);
-      final WearFlowController routerFlow = WearFlowController(
+      final WearFlowController routerFlow = await _createActiveFlowController(
+        initialScreen: WearScreenId.menu,
         glassesOutput: _TestGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
-      WearDependencies.I.authority.navigationAdapter().observePhoneRoute(
-            WearScreenId.menu,
-          );
-
       await tester.pumpWidget(
         WearModuleApp(
           flowController: routerFlow,
@@ -1092,13 +1095,11 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       final StreamController<WearVoicePhraseEvent> phrases =
           StreamController<WearVoicePhraseEvent>.broadcast();
       addTearDown(phrases.close);
-      final WearFlowController flow = WearFlowController(
+      final WearFlowController flow = await _createActiveFlowController(
+        initialScreen: WearScreenId.menu,
         glassesOutput: _TestGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
-      WearDependencies.I.authority.navigationAdapter().observePhoneRoute(
-            WearScreenId.menu,
-          );
       var phraseCalls = 0;
       await tester.pumpWidget(WearModuleApp(
         flowController: flow,
@@ -1168,7 +1169,8 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       final StreamController<WearVoiceCommandEvent> commands =
           StreamController<WearVoiceCommandEvent>.broadcast();
       addTearDown(commands.close);
-      final WearFlowController flow = WearFlowController(
+      final WearFlowController flow = await _createActiveFlowController(
+        initialScreen: WearScreenId.menu,
         glassesOutput: _TestGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
@@ -1212,7 +1214,8 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       final StreamController<WearVoiceCommandEvent> commands =
           StreamController<WearVoiceCommandEvent>.broadcast();
       addTearDown(commands.close);
-      final WearFlowController flow = WearFlowController(
+      final WearFlowController flow = await _createActiveFlowController(
+        initialScreen: WearScreenId.menu,
         glassesOutput: _TestGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
@@ -1257,7 +1260,8 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
           StreamController<String>.broadcast();
       addTearDown(voiceCommands.close);
       addTearDown(voicePhrases.close);
-      final WearFlowController routerFlow = WearFlowController(
+      final WearFlowController routerFlow = await _createActiveFlowController(
+        initialScreen: WearScreenId.menu,
         glassesOutput: _TestGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
@@ -1307,7 +1311,8 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       final StreamController<String> voicePhrases =
           StreamController<String>.broadcast();
       addTearDown(voicePhrases.close);
-      final WearFlowController routerFlow = WearFlowController(
+      final WearFlowController routerFlow = await _createActiveFlowController(
+        initialScreen: WearScreenId.menu,
         glassesOutput: _TestGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
@@ -1350,10 +1355,11 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
 
     testWearWidget('voice starts immediately when authorization completes',
         (WidgetTester tester) async {
-      WearDependencies.I.authority.clearSession();
       int startVoiceCalls = 0;
       int stopVoiceCalls = 0;
-      final WearFlowController routerFlow = WearFlowController(
+      final WearFlowController routerFlow = await _createFlowController(
+        authorize: false,
+        initialScreen: WearScreenId.main,
         glassesOutput: _TestGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
@@ -1376,7 +1382,7 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       await tester.pumpAndSettle();
       expect(startVoiceCalls, 0);
 
-      WearDependencies.I.authority.authorize(AuthenticatedUser(
+      await routerFlow.authority.authorize(AuthenticatedUser(
         idUser: 2,
         idEmployee: 2,
         name: 'Authorized User',
@@ -1385,7 +1391,7 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
 
       expect(startVoiceCalls, 1);
 
-      WearDependencies.I.authority.clearSession();
+      await routerFlow.authority.clearSession();
       await tester.pump();
 
       expect(stopVoiceCalls, 1);
@@ -1393,9 +1399,10 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
 
     testWearWidget('voice startup loader stays until voice start completes',
         (WidgetTester tester) async {
-      WearDependencies.I.authority.clearSession();
       final Completer<void> startVoiceCompleter = Completer<void>();
-      final WearFlowController routerFlow = WearFlowController(
+      final WearFlowController routerFlow = await _createFlowController(
+        authorize: false,
+        initialScreen: WearScreenId.main,
         glassesOutput: NoopWearGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
@@ -1413,7 +1420,7 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       );
       await tester.pumpAndSettle();
 
-      WearDependencies.I.authority.authorize(AuthenticatedUser(
+      await routerFlow.authority.authorize(AuthenticatedUser(
         idUser: 2,
         idEmployee: 2,
         name: 'Authorized User',
@@ -1431,8 +1438,9 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
 
     testWearWidget('voice startup loader adds no delay after voice is ready',
         (WidgetTester tester) async {
-      WearDependencies.I.authority.clearSession();
-      final WearFlowController routerFlow = WearFlowController(
+      final WearFlowController routerFlow = await _createFlowController(
+        authorize: false,
+        initialScreen: WearScreenId.main,
         glassesOutput: _TestGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
@@ -1450,7 +1458,7 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       );
       await tester.pumpAndSettle();
 
-      WearDependencies.I.authority.authorize(AuthenticatedUser(
+      await routerFlow.authority.authorize(AuthenticatedUser(
         idUser: 2,
         idEmployee: 2,
         name: 'Authorized User',
@@ -1463,10 +1471,11 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
     testWearWidget(
         'voice startup success does not overwrite current glasses screen',
         (WidgetTester tester) async {
-      WearDependencies.I.authority.clearSession();
       final Completer<void> startVoiceCompleter = Completer<void>();
       final _TestGlassesOutput glassesOutput = _TestGlassesOutput();
-      final WearFlowController routerFlow = WearFlowController(
+      final WearFlowController routerFlow = await _createFlowController(
+        authorize: false,
+        initialScreen: WearScreenId.main,
         glassesOutput: glassesOutput,
         navigationOutput: _FakeNavigationOutput(),
       );
@@ -1484,20 +1493,22 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       );
       await tester.pumpAndSettle();
 
-      WearDependencies.I.authority.authorize(AuthenticatedUser(
+      await routerFlow.authority.authorize(AuthenticatedUser(
         idUser: 2,
         idEmployee: 2,
         name: 'Authorized User',
       ));
       await tester.pump();
-      routerFlow.enterScreen(WearScreenId.menu);
+      await routerFlow.requestNavigation(WearScreenId.menu);
+      await tester.pump();
       await tester.pump();
 
       expect(
           glassesOutput.payloads.last.screenType, WearGlassesScreenType.menu);
 
       startVoiceCompleter.complete();
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump();
 
       expect(
           glassesOutput.payloads.last.screenType, WearGlassesScreenType.menu);
@@ -1514,7 +1525,8 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       );
       addTearDown(voiceControl.dispose);
       addTearDown(speech.dispose);
-      final WearFlowController routerFlow = WearFlowController(
+      final WearFlowController routerFlow = await _createActiveFlowController(
+        initialScreen: WearScreenId.menu,
         glassesOutput: _TestGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
@@ -1599,20 +1611,16 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
 
     testWearWidget('injected resume recovery receives lifecycle reason',
         (WidgetTester tester) async {
-      WearDependencies.I.authority.authorize(AuthenticatedUser(
-        idUser: 1,
-        idEmployee: 1,
-        name: 'Test User',
-      ));
-      addTearDown(WearDependencies.I.authority.clearSession);
       String? restartReason;
+      final WearFlowController flow = await _createActiveFlowController(
+        initialScreen: WearScreenId.menu,
+        glassesOutput: _TestGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
 
       await tester.pumpWidget(
         WearModuleApp(
-          flowController: WearFlowController(
-            glassesOutput: _TestGlassesOutput(),
-            navigationOutput: _FakeNavigationOutput(),
-          ),
+          flowController: flow,
           routes: _testRoutes,
           initialLocation: WearMenuScreen.route,
           onStartVoice: () async {},
@@ -1634,16 +1642,11 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
 
     testWearWidget('paused UI keeps logical runtime commands active',
         (WidgetTester tester) async {
-      WearDependencies.I.authority.authorize(AuthenticatedUser(
-        idUser: 1,
-        idEmployee: 1,
-        name: 'Test User',
-      ));
-      addTearDown(WearDependencies.I.authority.clearSession);
       final StreamController<WearVoiceCommand> commands =
           StreamController<WearVoiceCommand>.broadcast(sync: true);
       addTearDown(commands.close);
-      final WearFlowController flow = WearFlowController(
+      final WearFlowController flow = await _createActiveFlowController(
+        initialScreen: WearScreenId.menu,
         glassesOutput: _TestGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
@@ -1672,12 +1675,6 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
 
     testWearWidget('shows voice reconnection overlay without changing route',
         (WidgetTester tester) async {
-      WearDependencies.I.authority.authorize(AuthenticatedUser(
-        idUser: 1,
-        idEmployee: 1,
-        name: 'Test User',
-      ));
-      addTearDown(WearDependencies.I.authority.clearSession);
       final StreamController<bool> reconnecting =
           StreamController<bool>.broadcast(sync: true);
       addTearDown(reconnecting.close);
@@ -1687,7 +1684,8 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       final StreamController<WearVoiceCommand> commands =
           StreamController<WearVoiceCommand>.broadcast(sync: true);
       addTearDown(commands.close);
-      final WearFlowController flow = WearFlowController(
+      final WearFlowController flow = await _createActiveFlowController(
+        initialScreen: WearScreenId.menu,
         glassesOutput: _TestGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
@@ -1745,6 +1743,83 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
       expect(flow.state.menuFocusedIndex, 1);
     });
   });
+}
+
+Future<WearFlowController> _createActiveFlowController({
+  required WearGlassesOutput glassesOutput,
+  required WearNavigationOutput navigationOutput,
+  WearScreenId initialScreen = WearScreenId.scannerConnect,
+}) async {
+  final WearRuntimeAuthority authority = await createActiveWearRuntimeAuthority(
+    initialScreen: initialScreen,
+  );
+  final WearFlowController flow = createWearFlowController(
+    authority: authority,
+    glassesOutput: glassesOutput,
+    navigationOutput: navigationOutput,
+  );
+  addTearDown(flow.dispose);
+  return flow;
+}
+
+Future<WearFlowController> _createFlowController({
+  required bool authorize,
+  required WearGlassesOutput glassesOutput,
+  required WearNavigationOutput navigationOutput,
+  WearScreenId initialScreen = WearScreenId.scannerConnect,
+}) async {
+  if (authorize) {
+    return _createActiveFlowController(
+      initialScreen: initialScreen,
+      glassesOutput: glassesOutput,
+      navigationOutput: navigationOutput,
+    );
+  }
+  final WearRuntimeAuthority authority = WearRuntimeAuthority(
+    initialScreen: initialScreen,
+  );
+  await authority.setRuntimeActive(true);
+  await authority.setPhoneUiActive(true);
+  final WearFlowController flow = createWearFlowController(
+    authority: authority,
+    glassesOutput: glassesOutput,
+    navigationOutput: navigationOutput,
+  );
+  addTearDown(flow.dispose);
+  return flow;
+}
+
+Future<void> _navigateFlow(
+  WearFlowController flow,
+  WearScreenId screen, {
+  Object? extra,
+}) async {
+  await flow.requestNavigation(screen, extra: extra);
+  final request = flow.state.pendingNavigation!;
+  expect(
+    flow.acknowledgeNavigation(
+      requestId: request.requestId,
+      screen: screen,
+    ),
+    isTrue,
+  );
+  await Future<void>.delayed(Duration.zero);
+  flow.observeRoute(screen, extra: extra, canPop: true);
+  await Future<void>.delayed(Duration.zero);
+}
+
+Future<void> _acknowledgePendingFlow(WearFlowController flow) async {
+  final request = flow.state.pendingNavigation!;
+  expect(
+    flow.acknowledgeNavigation(
+      requestId: request.requestId,
+      screen: request.screen,
+    ),
+    isTrue,
+  );
+  await Future<void>.delayed(Duration.zero);
+  flow.observeRoute(request.screen, extra: request.extra, canPop: true);
+  await Future<void>.delayed(Duration.zero);
 }
 
 final List<RouteBase> _testRoutes = <RouteBase>[
@@ -1827,14 +1902,11 @@ Future<void> _expectStaleRevisionDropped(
 }) async {
   final StreamController<WearVoiceCommandEvent> commands =
       StreamController<WearVoiceCommandEvent>.broadcast();
-  final WearFlowController flow = WearFlowController(
+  final WearFlowController flow = await _createActiveFlowController(
+    initialScreen: WearScreenId.menu,
     glassesOutput: _TestGlassesOutput(),
     navigationOutput: _FakeNavigationOutput(),
   );
-  WearDependencies.I.authority.navigationAdapter().observePhoneRoute(
-        WearScreenId.menu,
-      );
-
   await tester.pumpWidget(WearModuleApp(
     flowController: flow,
     voiceCommandEventStream: commands.stream,

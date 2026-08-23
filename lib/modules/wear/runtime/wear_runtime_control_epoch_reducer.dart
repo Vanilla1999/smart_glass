@@ -20,8 +20,7 @@ class WearControlEpochResetReducer implements WearSliceReducer {
       actualPhoneScreen: null,
       pending: null,
       history: const <WearScreenId>[WearScreenId.main],
-      routeObservationRevision:
-          previousNavigation.routeObservationRevision,
+      routeObservationRevision: previousNavigation.routeObservationRevision,
       nextRequestId: previousNavigation.nextRequestId,
     );
     final WearAggregatePayload nextPayload = aggregate.copyWith(

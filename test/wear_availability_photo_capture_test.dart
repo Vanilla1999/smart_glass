@@ -26,9 +26,23 @@ void main() {
     addTearDown(runtime.dispose);
     await runtime.enterScreen(WearScreenId.availabilityCheck,
         extra: _photoProduct);
-    runtime.answerAvailable(true);
+    await _waitForState(
+      runtime,
+      (state) => state.flow.step == WearAvailabilityFlowStep.productQuestion,
+    );
+    expect(runtime.answerAvailable(true), isTrue);
+    await _waitForState(
+      runtime,
+      (state) => state.flow.step == WearAvailabilityFlowStep.photoCapture,
+    );
 
     await runtime.takePhoto();
+    await _waitForState(
+      runtime,
+      (state) =>
+          state.flow.check?.photoCaptured == true &&
+          state.flow.step == WearAvailabilityFlowStep.readyToComplete,
+    );
 
     expect(calls, 1);
     expect(runtime.state.flow.check?.photoCaptured, isTrue);
@@ -42,14 +56,38 @@ void main() {
     addTearDown(runtime.dispose);
     await runtime.enterScreen(WearScreenId.availabilityCheck,
         extra: _photoProduct);
-    runtime.answerAvailable(true);
+    await _waitForState(
+      runtime,
+      (state) => state.flow.step == WearAvailabilityFlowStep.productQuestion,
+    );
+    expect(runtime.answerAvailable(true), isTrue);
+    await _waitForState(
+      runtime,
+      (state) => state.flow.step == WearAvailabilityFlowStep.photoCapture,
+    );
 
     await runtime.takePhoto();
+    await _waitForState(
+      runtime,
+      (state) =>
+          state.flow.step == WearAvailabilityFlowStep.photoCapture &&
+          state.flow.check?.photoCaptured == false &&
+          state.error == 'camera unavailable',
+    );
 
     expect(runtime.state.flow.step, WearAvailabilityFlowStep.photoCapture);
     expect(runtime.state.flow.check?.photoCaptured, isFalse);
     expect(runtime.state.error, 'camera unavailable');
   });
+}
+
+Future<WearAvailabilityRuntimeState> _waitForState(
+  WearAvailabilityRuntime runtime,
+  bool Function(WearAvailabilityRuntimeState state) predicate,
+) {
+  final WearAvailabilityRuntimeState current = runtime.state;
+  if (predicate(current)) return Future.value(current);
+  return runtime.stateStream.firstWhere(predicate);
 }
 
 WearAvailabilityRuntime _runtime(Future<void> Function() capture) {

@@ -11,7 +11,8 @@ extension WearRuntimeAvailabilityAuthority on WearRuntimeAuthority {
     WearScreenId screen, {
     Object? extra,
   }) {
-    return store.dispatch(WearAvailabilityEntered(screen: screen, extra: extra));
+    return store
+        .dispatch(WearAvailabilityEntered(screen: screen, extra: extra));
   }
 
   Future<WearDispatchResult> focusAvailabilityItem(int index) {

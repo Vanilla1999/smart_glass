@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
 class WearUiEffectConsumer {
   WearUiEffectConsumer({

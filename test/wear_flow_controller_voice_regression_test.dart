@@ -5,17 +5,18 @@ import 'package:smart_glasses/modules/wear/application/voice_clarification_args.
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_navigation_entry.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
-import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 
+import 'support/wear_runtime_test_helper.dart';
+
 void main() {
   group('voice regression hardening', () {
     test('stopword-only phrase does not open clarification', () async {
-      final WearFlowController controller = _controller();
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.availabilityProduct);
+      final WearFlowController controller = await _controller();
+      addTearDown(controller.dispose);
+      await controller.requestNavigation(WearScreenId.availabilityProduct);
       controller.registerScreenActions(
         WearScreenId.availabilityProduct,
         WearScreenActionHandler(
@@ -32,14 +33,20 @@ void main() {
       await controller.handleVoicePhrase('и');
 
       expect(controller.state.screen, WearScreenId.availabilityProduct);
-      expect(controller.state.pendingNavigation, isNull);
+      expect(
+        controller.state.pendingNavigation?.screen,
+        WearScreenId.availabilityProduct,
+      );
     });
 
     test('inactive clarification owns down and page navigation', () async {
-      final WearFlowController controller = _controller();
+      final WearFlowController controller = await _controller();
+      addTearDown(controller.dispose);
       final VoiceClarificationArgs args = _clarificationArgs();
-      controller.setUiLifecycle(WearUiLifecycle.inactive);
-      controller.enterScreen(WearScreenId.voiceClarification, extra: args);
+      await controller.requestNavigation(
+        WearScreenId.voiceClarification,
+        extra: args,
+      );
 
       expect(
         controller.canHandleVoiceCommand(
@@ -61,10 +68,13 @@ void main() {
 
     test('active pending clarification handles down before widget mounts',
         () async {
-      final WearFlowController controller = _controller();
+      final WearFlowController controller = await _controller();
+      addTearDown(controller.dispose);
       final VoiceClarificationArgs args = _clarificationArgs();
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.voiceClarification, extra: args);
+      await controller.requestNavigation(
+        WearScreenId.voiceClarification,
+        extra: args,
+      );
 
       await controller.handleVoiceCommand(WearVoiceCommand.down);
 
@@ -74,14 +84,20 @@ void main() {
 
     test('mounting the same clarification preserves background focus',
         () async {
-      final WearFlowController controller = _controller();
+      final WearFlowController controller = await _controller();
+      addTearDown(controller.dispose);
       final VoiceClarificationArgs args = _clarificationArgs();
-      controller.setUiLifecycle(WearUiLifecycle.inactive);
-      controller.enterScreen(WearScreenId.voiceClarification, extra: args);
+      await controller.requestNavigation(
+        WearScreenId.voiceClarification,
+        extra: args,
+      );
       await controller.handleVoiceCommand(WearVoiceCommand.down);
       await controller.handleVoiceCommand(WearVoiceCommand.down);
 
-      controller.enterScreen(WearScreenId.voiceClarification, extra: args);
+      await controller.requestNavigation(
+        WearScreenId.voiceClarification,
+        extra: args,
+      );
 
       expect(controller.state.voiceClarificationFocusedIndex, 2);
       expect(controller.state.focusedIndex, 2);
@@ -89,9 +105,9 @@ void main() {
 
     test('home goes directly to menu while UI is inactive', () async {
       final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = _controller(navigation);
-      controller.setUiLifecycle(WearUiLifecycle.inactive);
-      controller.enterScreen(WearScreenId.printerSelect);
+      final WearFlowController controller = await _controller(navigation);
+      addTearDown(controller.dispose);
+      await controller.requestNavigation(WearScreenId.printerSelect);
 
       await controller.handleVoiceCommand(WearVoiceCommand.home);
 
@@ -117,8 +133,11 @@ VoiceClarificationArgs _clarificationArgs() {
   );
 }
 
-WearFlowController _controller([_FakeNavigationOutput? navigation]) {
-  return WearFlowController(
+Future<WearFlowController> _controller([
+  _FakeNavigationOutput? navigation,
+]) async {
+  return createWearFlowController(
+    authority: await createActiveWearRuntimeAuthority(),
     glassesOutput: _FakeGlassesOutput(),
     navigationOutput: navigation ?? _FakeNavigationOutput(),
   );

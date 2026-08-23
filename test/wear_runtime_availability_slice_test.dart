@@ -10,6 +10,7 @@ import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availa
 import 'package:smart_glasses/modules/wear/domain/availability/repository/wear_availability_repository.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/use_case/wear_availability_flow_use_case.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_availability_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_slice.dart';
 
@@ -40,10 +41,11 @@ void main() {
     expect(authority.availabilityTask.flow.groups.single.name, 'Молоко');
   });
 
-  test('direct barcode with duplicates keeps one authoritative list',
-      () async {
+  test('direct barcode with duplicates keeps one authoritative list', () async {
     final WearAvailabilityProduct first = product(10, 'Первый');
-    final WearAvailabilityProduct second = product(11, 'Второй');
+    final WearAvailabilityProduct second = product(11, 'Второй').copyWith(
+      barcodes: <String>['4600000000010'],
+    );
     final _AvailabilityRepository repository = _AvailabilityRepository(
       barcodeProducts: <WearAvailabilityProduct>[first, second],
     );
@@ -65,10 +67,12 @@ void main() {
 
     final WearAvailabilityTaskSlice task = authority.availabilityTask;
     expect(task.flow.step, WearAvailabilityFlowStep.duplicateSelection);
-    expect(task.flow.duplicateProducts, <WearAvailabilityProduct>[first, second]);
+    expect(
+        task.flow.duplicateProducts, <WearAvailabilityProduct>[first, second]);
     expect(task.listValues.length, 2);
     expect(runtime.state.duplicateProducts.length, 2);
-    expect(runtime.acceptsBarcode(WearScreenId.availabilityDirectScan), isFalse);
+    expect(
+        runtime.acceptsBarcode(WearScreenId.availabilityDirectScan), isFalse);
   });
 
   test('screen change supersedes an older availability operation', () async {

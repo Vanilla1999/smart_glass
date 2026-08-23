@@ -1,22 +1,36 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/application/ports/wear_glasses_output.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
-import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_delay_event.dart';
+import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_navigation_output.dart';
+import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
+import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_effects.dart';
+
+import 'support/wear_runtime_test_helper.dart';
 
 void main() {
   test('voice status survives rerenders and restores the newest payload',
       () async {
     final _RecordingGlassesOutput glasses = _RecordingGlassesOutput();
-    final WearFlowController flow = WearFlowController(
+    final WearRuntimeAuthority authority =
+        await createActiveWearRuntimeAuthority();
+    final WearFlowController flow = createWearFlowController(
+      authority: authority,
       glassesOutput: glasses,
       navigationOutput: NoopWearNavigationOutput(),
     );
-    flow.setUiLifecycle(WearUiLifecycle.active);
-    flow.enterScreen(WearScreenId.menu);
+    addTearDown(() async {
+      await flow.dispose();
+      await authority.dispose();
+    });
+    await flow.requestNavigation(WearScreenId.menu);
     await flow.renderCurrentGlasses();
 
     await flow.setRecognitionDelayVisible(
@@ -57,18 +71,22 @@ void main() {
     );
     expect(glasses.last.selectedIndex, 2);
     expect(glasses.last.statusText, isNull);
-
-    await flow.dispose();
   });
 
   test('voice status is cleared when the logical screen changes', () async {
     final _RecordingGlassesOutput glasses = _RecordingGlassesOutput();
-    final WearFlowController flow = WearFlowController(
+    final WearRuntimeAuthority authority =
+        await createActiveWearRuntimeAuthority();
+    final WearFlowController flow = createWearFlowController(
+      authority: authority,
       glassesOutput: glasses,
       navigationOutput: NoopWearNavigationOutput(),
     );
-    flow.setUiLifecycle(WearUiLifecycle.active);
-    flow.enterScreen(WearScreenId.menu);
+    addTearDown(() async {
+      await flow.dispose();
+      await authority.dispose();
+    });
+    await flow.requestNavigation(WearScreenId.menu);
 
     await flow.setRecognitionDelayVisible(
       WearScreenId.menu,
@@ -79,25 +97,47 @@ void main() {
     );
     expect(glasses.last.statusText, 'Распознаю...');
 
-    flow.enterScreen(WearScreenId.help);
+    await flow.requestNavigation(WearScreenId.help);
     await flow.renderCurrentGlasses();
 
     expect(glasses.last.statusText, isNull);
-    await flow.dispose();
   });
 
   test('voice feedback preserves scan loading base payload', () async {
     final _RecordingGlassesOutput glasses = _RecordingGlassesOutput();
-    final WearFlowController flow = WearFlowController(
+    final WearRuntimeAuthority authority =
+        await createActiveWearRuntimeAuthority();
+    final WearFlowController flow = createWearFlowController(
+      authority: authority,
       glassesOutput: glasses,
       navigationOutput: NoopWearNavigationOutput(),
     );
-    flow.setUiLifecycle(WearUiLifecycle.active);
-    flow.enterScreen(WearScreenId.scanIdle);
-    await flow.publishScreenPayload(
-      WearScreenId.scanIdle,
-      WearGlassesPayload.scanLoading(),
+    addTearDown(() async {
+      await flow.dispose();
+      await authority.dispose();
+    });
+    await authority.importPrinterSelection(
+      const WearPrinterSelection(
+        whitePrinter: WearPrinter(id: 'white', name: 'White'),
+        yellowPrinter: WearPrinter(id: 'yellow', name: 'Yellow'),
+      ),
     );
+    final Completer<List<BarcodeProductInfo>> lookup =
+        Completer<List<BarcodeProductInfo>>();
+    authority.registerEffectExecutor(
+      WearScanEffectExecutor(
+        lookup: (_) => lookup.future,
+        print: (_, __) async => 'unused',
+        navigate: (_, {extra, replaceCurrent = false}) async {},
+        presentStatus: (_, {required completion}) async {},
+        delay: (_) async {},
+      ),
+    );
+    await flow.requestNavigation(WearScreenId.scanIdle);
+    await authority.enterScanScreen(WearScreenId.scanIdle);
+    await authority.submitScanBarcode('4600000000001');
+    await _flushEffects();
+    await flow.renderCurrentGlasses();
 
     await flow.setRecognitionDelayVisible(
       WearScreenId.scanIdle,
@@ -127,23 +167,45 @@ void main() {
       glasses.last,
       statusText: 'ШК отсканирован, распознаю...',
     );
-    expect(flow.basePayloadRevision, 1);
-
-    await flow.dispose();
+    expect(authority.scanTask.phase, WearScanTaskPhase.lookingUp);
+    lookup.complete(const <BarcodeProductInfo>[]);
   });
 
   test('voice feedback preserves printing base payload', () async {
     final _RecordingGlassesOutput glasses = _RecordingGlassesOutput();
-    final WearFlowController flow = WearFlowController(
+    final WearRuntimeAuthority authority =
+        await createActiveWearRuntimeAuthority();
+    final WearFlowController flow = createWearFlowController(
+      authority: authority,
       glassesOutput: glasses,
       navigationOutput: NoopWearNavigationOutput(),
     );
-    flow.setUiLifecycle(WearUiLifecycle.active);
-    flow.enterScreen(WearScreenId.scanIdle);
-    await flow.publishScreenPayload(
-      WearScreenId.scanIdle,
-      WearGlassesPayload.printing(productName: 'Молоко'),
+    addTearDown(() async {
+      await flow.dispose();
+      await authority.dispose();
+    });
+    await authority.importPrinterSelection(
+      const WearPrinterSelection(
+        whitePrinter: WearPrinter(id: 'white', name: 'White'),
+        yellowPrinter: WearPrinter(id: 'yellow', name: 'Yellow'),
+      ),
     );
+    final Completer<String> print = Completer<String>();
+    authority.registerEffectExecutor(
+      WearScanEffectExecutor(
+        lookup: (_) async => <BarcodeProductInfo>[
+          BarcodeProductInfo(id: 1, name: 'Молоко'),
+        ],
+        print: (_, __) => print.future,
+        navigate: (_, {extra, replaceCurrent = false}) async {},
+        presentStatus: (_, {required completion}) async {},
+        delay: (_) async {},
+      ),
+    );
+    await flow.requestNavigation(WearScreenId.scanIdle);
+    await authority.enterScanScreen(WearScreenId.scanIdle);
+    await authority.submitScanBarcode('4600000000002');
+    await _flushEffects();
 
     await flow.setRecognitionDelayVisible(
       WearScreenId.scanIdle,
@@ -158,23 +220,26 @@ void main() {
     expect(glasses.last.isLoading, isTrue);
     expect(glasses.last.title, 'Печать ценника');
     expect(glasses.last.statusText, 'Распознаю...');
-    await flow.dispose();
+    print.complete('Молоко');
   });
 
   test('transient payload restores canonical base without becoming state',
       () async {
     final _RecordingGlassesOutput glasses = _RecordingGlassesOutput();
-    final WearFlowController flow = WearFlowController(
+    final WearRuntimeAuthority authority =
+        await createActiveWearRuntimeAuthority();
+    final WearFlowController flow = createWearFlowController(
+      authority: authority,
       glassesOutput: glasses,
       navigationOutput: NoopWearNavigationOutput(),
     );
-    flow.setUiLifecycle(WearUiLifecycle.active);
-    flow.enterScreen(WearScreenId.menu);
+    addTearDown(() async {
+      await flow.dispose();
+      await authority.dispose();
+    });
+    await flow.requestNavigation(WearScreenId.menu);
     flow.setMenuFocusedIndex(2);
-    await flow.publishScreenPayload(
-      WearScreenId.menu,
-      WearGlassesPayload.menu(selectedIndex: 2),
-    );
+    await flow.renderCurrentGlasses();
     final int revision = flow.basePayloadRevision;
 
     await flow.publishTransientStatusText(
@@ -188,50 +253,49 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 20));
     expect(glasses.last.statusText, isNull);
     expect(glasses.last.selectedIndex, 2);
-    await flow.dispose();
   });
 
-  test('main and availability fill render their canonical payloads', () async {
+  test('main and availability fill render aggregate projections', () async {
     final _RecordingGlassesOutput glasses = _RecordingGlassesOutput();
-    final WearFlowController flow = WearFlowController(
+    final WearRuntimeAuthority authority =
+        await createActiveWearRuntimeAuthority();
+    final WearFlowController flow = createWearFlowController(
+      authority: authority,
       glassesOutput: glasses,
       navigationOutput: NoopWearNavigationOutput(),
     );
-    flow.setUiLifecycle(WearUiLifecycle.active);
+    addTearDown(() async {
+      await flow.dispose();
+      await authority.dispose();
+    });
 
-    flow.enterScreen(WearScreenId.main);
-    await flow.publishScreenPayload(
-      WearScreenId.main,
-      WearGlassesPayload.authLoading(),
-    );
-    expect(glasses.last.phase, WearGlassesPhase.loading);
-    expect(glasses.last.statusText, 'Авторизуемся...');
+    await flow.requestNavigation(WearScreenId.main);
+    await flow.renderCurrentGlasses();
+    expect(glasses.last.phase, WearGlassesPhase.scanning);
+    expect(glasses.last.statusText, 'Поиск ШК...');
 
-    flow.enterScreen(WearScreenId.availabilityFill);
-    await flow.publishScreenPayload(
-      WearScreenId.availabilityFill,
-      const WearGlassesPayload(
-        screenType: WearGlassesScreenType.availability,
-        phase: WearGlassesPhase.idle,
-        title: 'Наполнение базы',
-        statusText: 'Добавлено',
-        bodyLines: <String>['Добавлено: 3'],
-      ),
-    );
-    expect(glasses.last.statusText, 'Добавлено');
-    expect(glasses.last.bodyLines, <String>['Добавлено: 3']);
-    await flow.dispose();
+    await authority.enterAvailabilityScreen(WearScreenId.availabilityFill);
+    await flow.requestNavigation(WearScreenId.availabilityFill);
+    await flow.renderCurrentGlasses();
+    expect(glasses.last.statusText, 'Сканируйте товары с полки');
+    expect(glasses.last.bodyLines, <String>['Добавлено: 0']);
   });
 
   test('production transient output is separate from canonical output',
       () async {
     final _SplitRecordingGlassesOutput glasses = _SplitRecordingGlassesOutput();
-    final WearFlowController flow = WearFlowController(
+    final WearRuntimeAuthority authority =
+        await createActiveWearRuntimeAuthority();
+    final WearFlowController flow = createWearFlowController(
+      authority: authority,
       glassesOutput: glasses,
       navigationOutput: NoopWearNavigationOutput(),
     );
-    flow.setUiLifecycle(WearUiLifecycle.active);
-    flow.enterScreen(WearScreenId.menu);
+    addTearDown(() async {
+      await flow.dispose();
+      await authority.dispose();
+    });
+    await flow.requestNavigation(WearScreenId.menu);
     await flow.renderCurrentGlasses();
     final int canonicalCount = glasses.canonical.length;
 
@@ -248,8 +312,13 @@ void main() {
     expect(glasses.transient, hasLength(2));
     await Future<void>.delayed(const Duration(milliseconds: 20));
     expect(glasses.canonical.last.statusText, isNull);
-    await flow.dispose();
   });
+}
+
+Future<void> _flushEffects() async {
+  for (int index = 0; index < 4; index++) {
+    await Future<void>.delayed(Duration.zero);
+  }
 }
 
 void _expectScanLoading(
@@ -259,7 +328,7 @@ void _expectScanLoading(
   expect(payload.screenType, WearGlassesScreenType.scan);
   expect(payload.phase, WearGlassesPhase.loading);
   expect(payload.isLoading, isTrue);
-  expect(payload.title, 'Сканирование');
+  expect(payload.title, 'Сканирование товара');
   expect(payload.statusText, statusText);
 }
 

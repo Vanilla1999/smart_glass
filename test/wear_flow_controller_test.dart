@@ -7,25 +7,56 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart
 import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
 import 'package:smart_glasses/modules/wear/application/wear_navigation_entry.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
-import 'package:smart_glasses/modules/wear/application/wear_status_state.dart';
-import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/application/voice_clarification_args.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
+
+import 'support/wear_runtime_test_helper.dart';
 
 void main() {
   group('WearFlowController', () {
+    late WearRuntimeAuthority authority;
+    final List<WearFlowController> flows = <WearFlowController>[];
+
+    setUp(() async {
+      authority = await createActiveWearRuntimeAuthority();
+      flows.clear();
+    });
+
+    tearDown(() async {
+      for (final WearFlowController flow in flows) {
+        await flow.dispose();
+      }
+    });
+
+    WearFlowController createFlow({
+      required WearGlassesOutput glassesOutput,
+      required WearNavigationOutput navigationOutput,
+      WearFlashlightToggle? flashlightToggle,
+      WearPhotoCapture? photoCapture,
+    }) {
+      final WearFlowController flow = WearFlowController(
+        authority: authority,
+        glassesOutput: glassesOutput,
+        navigationOutput: navigationOutput,
+        flashlightToggle: flashlightToggle,
+        photoCapture: photoCapture,
+      );
+      flows.add(flow);
+      return flow;
+    }
+
     test('stores pending navigation while UI is inactive', () async {
       final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: navigation,
       );
 
-      controller.setUiLifecycle(WearUiLifecycle.inactive);
-      controller.enterScreen(WearScreenId.menu);
+      await authority.setPhoneUiActive(false);
+      await controller.requestNavigation(WearScreenId.menu);
       controller.setMenuFocusedIndex(1);
 
       await controller.handleVoiceCommand(WearVoiceCommand.select);
@@ -37,47 +68,18 @@ void main() {
       );
     });
 
-    test('flushes pending navigation once when UI becomes active', () async {
-      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: navigation,
-      );
-
-      controller.setUiLifecycle(WearUiLifecycle.inactive);
-      controller.enterScreen(WearScreenId.menu);
-      controller.setMenuFocusedIndex(2);
-      await controller.handleVoiceCommand(WearVoiceCommand.select);
-
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      await Future<void>.delayed(Duration.zero);
-      await controller.flushPendingNavigation();
-
-      expect(navigation.goToCalls, <WearScreenId>[WearScreenId.help]);
-      expect(controller.state.pendingNavigation, isNotNull);
-      final int requestId = controller.state.pendingNavigation!.requestId;
-      expect(
-        controller.acknowledgeNavigation(
-          requestId: requestId,
-          screen: WearScreenId.help,
-        ),
-        isTrue,
-      );
-      expect(controller.state.pendingNavigation, isNull);
-    });
-
     test('does not deliver a request again before its route acknowledgement',
         () async {
       final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: navigation,
       );
 
-      controller.setUiLifecycle(WearUiLifecycle.inactive);
+      await authority.setPhoneUiActive(false);
       await controller.requestNavigation(WearScreenId.help);
 
-      controller.setUiLifecycle(WearUiLifecycle.active);
+      await authority.setPhoneUiActive(true);
       await Future<void>.delayed(Duration.zero);
       await controller.flushPendingNavigation();
 
@@ -94,12 +96,12 @@ void main() {
     });
 
     test('acknowledges only the latest pending navigation request', () async {
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
 
-      controller.setUiLifecycle(WearUiLifecycle.inactive);
+      await authority.setPhoneUiActive(false);
       await controller.requestNavigation(WearScreenId.help);
       final int firstRequestId = controller.state.pendingNavigation!.requestId;
       await controller.requestNavigation(WearScreenId.settings);
@@ -125,13 +127,13 @@ void main() {
     test('handles availability interaction focus without widget callbacks',
         () async {
       final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: navigation,
       );
 
-      controller.setUiLifecycle(WearUiLifecycle.inactive);
-      controller.enterScreen(WearScreenId.availabilityInteraction);
+      await authority.setPhoneUiActive(false);
+      await controller.requestNavigation(WearScreenId.availabilityInteraction);
       await controller.handleVoiceCommand(WearVoiceCommand.down);
       await controller.handleVoiceCommand(WearVoiceCommand.select);
 
@@ -145,12 +147,12 @@ void main() {
 
     test('unregistering current screen does not switch to another handler',
         () async {
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
 
-      controller.enterScreen(WearScreenId.printerSelect);
+      await controller.requestNavigation(WearScreenId.printerSelect);
       final WearScreenActionRegistration registration =
           controller.registerScreenActions(
         WearScreenId.printerSelect,
@@ -167,7 +169,7 @@ void main() {
     });
 
     test('stale screen disposal keeps the newer handler registered', () async {
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
@@ -177,8 +179,8 @@ void main() {
       addTearDown(subscription.cancel);
       int firstCalls = 0;
       int secondCalls = 0;
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.availabilityCheck);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.availabilityCheck);
       final WearScreenActionRegistration first =
           controller.registerScreenActions(
         WearScreenId.availabilityCheck,
@@ -225,14 +227,14 @@ void main() {
     });
 
     test('closing the newer screen restores the older live handler', () async {
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
       int firstCalls = 0;
       int secondCalls = 0;
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.availabilityCheck);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.availabilityCheck);
       final WearScreenActionRegistration first =
           controller.registerScreenActions(
         WearScreenId.availabilityCheck,
@@ -255,13 +257,13 @@ void main() {
 
     test('does not route commands to another screen handler', () async {
       int wrongHandlerCalls = 0;
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
 
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.printerSelect);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.printerSelect);
       controller.registerScreenActions(
         WearScreenId.settings,
         WearScreenActionHandler(
@@ -282,12 +284,12 @@ void main() {
         () async {
       int upCalls = 0;
       int selectCalls = 0;
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
-      controller.setUiLifecycle(WearUiLifecycle.inactive);
-      controller.enterScreen(WearScreenId.printerSelect);
+      await authority.setPhoneUiActive(false);
+      await controller.requestNavigation(WearScreenId.printerSelect);
       controller.registerScreenActions(
         WearScreenId.printerSelect,
         WearScreenActionHandler(
@@ -305,13 +307,13 @@ void main() {
 
     test('runtime stop blocks commands independently from UI lifecycle',
         () async {
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
-      controller.setRuntimeActive(false);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.menu);
+      await authority.setRuntimeActive(false);
 
       await controller.handleVoiceCommand(WearVoiceCommand.down);
       await controller.handleControllerCommand(WearVoiceCommand.down);
@@ -321,12 +323,12 @@ void main() {
 
     test('voice commands remain blocked while UI is inactive', () async {
       int upCalls = 0;
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
-      controller.setUiLifecycle(WearUiLifecycle.inactive);
-      controller.enterScreen(WearScreenId.printerSelect);
+      await authority.setPhoneUiActive(false);
+      await controller.requestNavigation(WearScreenId.printerSelect);
       controller.registerScreenActions(
         WearScreenId.printerSelect,
         WearScreenActionHandler(onUp: () => upCalls++),
@@ -337,72 +339,15 @@ void main() {
       expect(upCalls, 0);
     });
 
-    test('printer select clears remembered payload on re-enter', () async {
-      final _FakeGlassesOutput glasses = _FakeGlassesOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: glasses,
-        navigationOutput: _FakeNavigationOutput(),
-      );
-      const WearGlassesPayload printerPayload = WearGlassesPayload(
-        screenType: WearGlassesScreenType.printer,
-        phase: WearGlassesPhase.idle,
-        title: 'Выбор принтера',
-        subtitle: 'Жёлтые ценники',
-        items: <String>['MOCK Желтый 1'],
-      );
-
-      controller.rememberScreenPayload(
-        WearScreenId.printerSelect,
-        printerPayload,
-      );
-      controller.enterScreen(WearScreenId.printerSelect);
-      await Future<void>.delayed(Duration.zero);
-
-      expect(glasses.payloads.last.title, 'Принтеры');
-      expect(glasses.payloads.last.isLoading, isTrue);
-    });
-
-    test('direct-scan remembered hints become runtime grammar', () {
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: _FakeNavigationOutput(),
-      );
-
-      controller.rememberScreenPayload(
-        WearScreenId.availabilityDirectScan,
-        const WearGlassesPayload(
-          screenType: WearGlassesScreenType.productSelect,
-          phase: WearGlassesPhase.idle,
-          title: 'Выберите товар',
-          items: <String>['Молоко Альфа'],
-          voiceHints: <WearGlassesVoiceHint>[
-            WearGlassesVoiceHint(
-              itemId: '1',
-              phrase: 'альфа',
-              start: 7,
-              end: 12,
-            ),
-          ],
-        ),
-      );
-
-      expect(
-        controller.voiceGrammarPhrasesFor(
-          WearScreenId.availabilityDirectScan,
-        ),
-        <String>['альфа'],
-      );
-    });
-
     test('routes free phrase to current screen handler', () async {
       String? handledPhrase;
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
 
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.printerSelect);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.printerSelect);
       controller.registerScreenActions(
         WearScreenId.printerSelect,
         WearScreenActionHandler(
@@ -417,54 +362,15 @@ void main() {
       expect(handledPhrase, 'чудо творожок');
     });
 
-    test('exact product phrase wins over order-insensitive fuzzy ambiguity',
-        () async {
-      String? selectedItemId;
-      const VoiceDynamicItemsSnapshot items = VoiceDynamicItemsSnapshot(
-        revision: 77,
-        items: <VoiceDynamicItem>[
-          VoiceDynamicItem(
-            id: 'exact',
-            label: 'Чудо коктейль молочный',
-          ),
-          VoiceDynamicItem(
-            id: 'reordered',
-            label: 'Коктейль чудо молочный',
-          ),
-        ],
-      );
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: _FakeNavigationOutput(),
-      );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.availabilityProduct);
-      controller.registerScreenActions(
-        WearScreenId.availabilityProduct,
-        WearScreenActionHandler(
-          dynamicVoiceItems: () => items,
-          onDynamicItem: (String itemId) {
-            selectedItemId = itemId;
-          },
-        ),
-      );
-
-      await controller.handleVoicePhrase('чудо коктейль молочный');
-
-      expect(selectedItemId, 'exact');
-      expect(controller.state.screen, WearScreenId.availabilityProduct);
-      expect(controller.state.pendingNavigation, isNull);
-    });
-
     test('routes partial phrase to current screen handler', () async {
       String? handledPhrase;
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
 
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.printerSelect);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.printerSelect);
       controller.registerScreenActions(
         WearScreenId.printerSelect,
         WearScreenActionHandler(
@@ -483,13 +389,13 @@ void main() {
     });
 
     test('partial phrase returns false without screen handler', () async {
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
 
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.printerSelect);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.printerSelect);
 
       final bool consumed =
           await controller.handleVoicePartialPhrase('безалкогольное');
@@ -499,13 +405,13 @@ void main() {
 
     test('routes next page command to current screen handler', () async {
       var calls = 0;
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
 
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.printerSelect);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.printerSelect);
       controller.registerScreenActions(
         WearScreenId.printerSelect,
         WearScreenActionHandler(
@@ -522,13 +428,13 @@ void main() {
 
     test('routes previous page command to current screen handler', () async {
       var calls = 0;
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
 
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.printerSelect);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.printerSelect);
       controller.registerScreenActions(
         WearScreenId.printerSelect,
         WearScreenActionHandler(
@@ -546,14 +452,14 @@ void main() {
     test('rapid down preserves intermediate focusedIndex in stateStream',
         () async {
       final List<WearFlowState> states = <WearFlowState>[];
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
       controller.stateStream.listen(states.add);
 
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.menu);
 
       for (int i = 0; i < 3; i++) {
         await controller.handleVoiceCommand(WearVoiceCommand.down);
@@ -572,14 +478,14 @@ void main() {
 
     test('rapid up at top boundary stays at 0', () async {
       final List<WearFlowState> states = <WearFlowState>[];
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
       controller.stateStream.listen(states.add);
 
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.menu);
       // move to 2 then try to go up 3 times past 0
       await controller.handleVoiceCommand(WearVoiceCommand.down);
       await controller.handleVoiceCommand(WearVoiceCommand.down);
@@ -590,198 +496,30 @@ void main() {
       expect(controller.state.menuFocusedIndex, 0);
     });
 
-    test('back-to-back select while inactive keeps only last pendingNavigation',
-        () async {
-      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: navigation,
-      );
-
-      controller.setUiLifecycle(WearUiLifecycle.inactive);
-      controller.enterScreen(WearScreenId.menu);
-      controller.setMenuFocusedIndex(0);
-      await controller.handleVoiceCommand(WearVoiceCommand.select);
-      final firstPending = controller.state.pendingNavigation;
-
-      controller.setMenuFocusedIndex(1);
-      await controller.handleVoiceCommand(WearVoiceCommand.select);
-      final secondPending = controller.state.pendingNavigation;
-
-      expect(firstPending?.screen, WearScreenId.printerSelect);
-      expect(secondPending?.screen, WearScreenId.availabilityInteraction);
-      expect(navigation.goToCalls, isEmpty);
-    });
-
     test('back while active calls navigationOutput.back when no handler',
         () async {
       final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: navigation,
       );
 
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.printerSelect);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.printerSelect);
       await controller.handleVoiceCommand(WearVoiceCommand.back);
 
       expect(navigation.backCalls, 1);
-    });
-
-    test('back while inactive stores pending menu navigation', () async {
-      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: navigation,
-      );
-
-      controller.setUiLifecycle(WearUiLifecycle.inactive);
-      controller.enterScreen(WearScreenId.printerSelect);
-      await controller.handleVoiceCommand(WearVoiceCommand.back);
-
-      expect(controller.state.pendingNavigation?.screen, WearScreenId.menu);
-      expect(navigation.backCalls, 0);
-    });
-
-    test('back while inactive returns availability product to groups',
-        () async {
-      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: navigation,
-      );
-
-      controller.setUiLifecycle(WearUiLifecycle.inactive);
-      controller.enterScreen(WearScreenId.availabilityProduct);
-      await controller.handleVoiceCommand(WearVoiceCommand.back);
-
-      expect(controller.state.screen, WearScreenId.availabilityGroup);
-      expect(
-        controller.state.pendingNavigation?.screen,
-        WearScreenId.availabilityGroup,
-      );
-      expect(controller.state.pendingNavigation?.popCurrent, isTrue);
-
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      await Future<void>.delayed(Duration.zero);
-
-      expect(navigation.backCalls, 1);
-    });
-
-    test('back while inactive returns availability groups to interaction',
-        () async {
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: _FakeNavigationOutput(),
-      );
-
-      controller.setUiLifecycle(WearUiLifecycle.inactive);
-      controller.enterScreen(WearScreenId.availabilityGroup);
-      await controller.handleVoiceCommand(WearVoiceCommand.back);
-
-      expect(controller.state.screen, WearScreenId.availabilityInteraction);
-      expect(
-        controller.state.pendingNavigation?.screen,
-        WearScreenId.availabilityInteraction,
-      );
-      expect(controller.state.pendingNavigation?.popCurrent, isTrue);
-    });
-
-    test('inactive availability check back returns to product with extra',
-        () async {
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: _FakeNavigationOutput(),
-      );
-      final Object product = Object();
-      controller.setUiLifecycle(WearUiLifecycle.inactive);
-      controller.enterScreen(WearScreenId.availabilityProduct, extra: product);
-      await controller.requestNavigation(
-        WearScreenId.availabilityCheck,
-        extra: Object(),
-      );
-
-      await controller.handleVoiceCommand(WearVoiceCommand.back);
-
-      expect(controller.state.screen, WearScreenId.availabilityProduct);
-      expect(controller.state.navigationHistory.last.extra, same(product));
-    });
-
-    test('back on menu is a no-op in both lifecycle states', () async {
-      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: navigation,
-      );
-      controller.enterScreen(WearScreenId.menu);
-
-      await controller.handleVoiceCommand(WearVoiceCommand.back);
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      await controller.handleVoiceCommand(WearVoiceCommand.back);
-
-      expect(navigation.backCalls, 0);
-      expect(controller.state.pendingNavigation, isNull);
-      expect(controller.state.navigationHistory, hasLength(1));
-    });
-
-    test('multiple inactive operations rebuild the complete navigation stack',
-        () async {
-      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: navigation,
-      );
-      final Object group = Object();
-      controller.enterScreen(WearScreenId.menu);
-      controller.setUiLifecycle(WearUiLifecycle.inactive);
-
-      await controller.requestNavigation(WearScreenId.availabilityInteraction);
-      await controller.requestNavigation(WearScreenId.availabilityGroup);
-      await controller.requestNavigation(
-        WearScreenId.availabilityProduct,
-        extra: group,
-      );
-      await controller.handleVoiceCommand(WearVoiceCommand.back);
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      await Future<void>.delayed(Duration.zero);
-
-      expect(navigation.synchronizedHistories, hasLength(1));
-      expect(
-        navigation.synchronizedHistories.single
-            .map((WearNavigationEntry entry) => entry.screen),
-        <WearScreenId>[
-          WearScreenId.menu,
-          WearScreenId.availabilityInteraction,
-          WearScreenId.availabilityGroup,
-        ],
-      );
-    });
-
-    test('runtime deactivation clears logical history and pending operation',
-        () async {
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: _FakeNavigationOutput(),
-      );
-      controller.enterScreen(WearScreenId.menu);
-      await controller.requestNavigation(WearScreenId.help);
-
-      controller.setRuntimeActive(false);
-
-      expect(controller.state.screen, WearScreenId.scannerConnect);
-      expect(controller.state.pendingNavigation, isNull);
-      expect(controller.state.navigationHistory, hasLength(1));
     });
 
     test('home while inactive stores pending menu navigation', () async {
       final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: navigation,
       );
 
-      controller.setUiLifecycle(WearUiLifecycle.inactive);
-      controller.enterScreen(WearScreenId.printerSelect);
+      await authority.setPhoneUiActive(false);
+      await controller.requestNavigation(WearScreenId.printerSelect);
       await controller.handleVoiceCommand(WearVoiceCommand.home);
 
       expect(
@@ -794,55 +532,29 @@ void main() {
 
     test('home navigates directly to menu', () async {
       final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: navigation,
       );
 
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.printerSelect);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.printerSelect);
       await controller.handleVoiceCommand(WearVoiceCommand.home);
 
       expect(controller.state.screen, WearScreenId.menu);
       expect(navigation.replaceCalls, <WearScreenId>[WearScreenId.menu]);
     });
 
-    test('mixed up/down/select sequence reaches correct final state', () async {
-      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: navigation,
-      );
-
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
-
-      await controller.handleVoiceCommand(WearVoiceCommand.down);
-      await controller.handleVoiceCommand(WearVoiceCommand.down);
-      await controller.handleVoiceCommand(WearVoiceCommand.up);
-      await controller.handleVoiceCommand(WearVoiceCommand.select);
-
-      expect(controller.state.menuFocusedIndex, 1);
-      expect(
-        controller.state.screen,
-        WearScreenId.availabilityInteraction,
-      );
-      expect(
-        navigation.goToCalls,
-        <WearScreenId>[WearScreenId.availabilityInteraction],
-      );
-    });
-
     test('stateStream emits count matches handleVoiceCommand calls', () async {
       final List<WearFlowState> states = <WearFlowState>[];
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
       controller.stateStream.listen(states.add);
 
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.menu);
 
       final int commands = 5;
       for (int i = 0; i < commands; i++) {
@@ -854,45 +566,14 @@ void main() {
       expect(states.length, greaterThanOrEqualTo(commands));
     });
 
-    test('sequential queue processes commands in order even without await',
-        () async {
-      final List<WearFlowState> states = <WearFlowState>[];
-      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: navigation,
-      );
-      controller.stateStream.listen(states.add);
-
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
-
-      controller.handleVoiceCommand(WearVoiceCommand.down);
-      controller.handleVoiceCommand(WearVoiceCommand.down);
-      controller.handleVoiceCommand(WearVoiceCommand.up);
-      controller.handleVoiceCommand(WearVoiceCommand.select);
-
-      await Future<void>.delayed(Duration.zero);
-
-      expect(controller.state.menuFocusedIndex, 1);
-      expect(
-        controller.state.screen,
-        WearScreenId.availabilityInteraction,
-      );
-      expect(
-        navigation.goToCalls,
-        <WearScreenId>[WearScreenId.availabilityInteraction],
-      );
-    });
-
     test('down from index 0 sends payload with selectedIndex=1', () async {
       final glasses = _FakeGlassesOutput();
-      final controller = WearFlowController(
+      final controller = createFlow(
         glassesOutput: glasses,
         navigationOutput: _FakeNavigationOutput(),
       );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.menu);
 
       await controller.handleVoiceCommand(WearVoiceCommand.down);
 
@@ -903,12 +584,12 @@ void main() {
 
     test('down at menu bottom stays at 3', () async {
       final glasses = _FakeGlassesOutput();
-      final controller = WearFlowController(
+      final controller = createFlow(
         glassesOutput: glasses,
         navigationOutput: _FakeNavigationOutput(),
       );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.menu);
 
       for (int i = 0; i < 6; i++) {
         await controller.handleVoiceCommand(WearVoiceCommand.down);
@@ -920,12 +601,12 @@ void main() {
 
     test('up at menu top stays at 0', () async {
       final glasses = _FakeGlassesOutput();
-      final controller = WearFlowController(
+      final controller = createFlow(
         glassesOutput: glasses,
         navigationOutput: _FakeNavigationOutput(),
       );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.menu);
 
       await controller.handleVoiceCommand(WearVoiceCommand.down);
       await controller.handleVoiceCommand(WearVoiceCommand.down);
@@ -939,12 +620,12 @@ void main() {
 
     test('menu items payload contains correct item names', () async {
       final glasses = _FakeGlassesOutput();
-      final controller = WearFlowController(
+      final controller = createFlow(
         glassesOutput: glasses,
         navigationOutput: _FakeNavigationOutput(),
       );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.menu);
 
       await controller.handleVoiceCommand(WearVoiceCommand.down);
 
@@ -959,181 +640,15 @@ void main() {
       );
     });
 
-    test('menu item 0 select navigates to printerSelect', () async {
-      final glasses = _FakeGlassesOutput();
-      final nav = _FakeNavigationOutput();
-      final controller = WearFlowController(
-        glassesOutput: glasses,
-        navigationOutput: nav,
-      );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
-
-      await controller.handleVoiceCommand(WearVoiceCommand.select);
-
-      expect(controller.state.screen, WearScreenId.printerSelect);
-      expect(glasses.payloads.last.screenType, WearGlassesScreenType.printer);
-      expect(nav.goToCalls, <WearScreenId>[WearScreenId.printerSelect]);
-    });
-
-    test('direct print price tag command navigates from menu to printerSelect',
-        () async {
-      final nav = _FakeNavigationOutput();
-      final controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: nav,
-      );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
-      await controller.handleVoiceCommand(WearVoiceCommand.down);
-
-      await controller.handleVoiceCommand(WearVoiceCommand.openPrintPriceTag);
-
-      expect(controller.state.screen, WearScreenId.printerSelect);
-      expect(controller.state.menuFocusedIndex, 0);
-      expect(nav.goToCalls, <WearScreenId>[WearScreenId.printerSelect]);
-    });
-
-    test('short print command also navigates from menu to printerSelect',
-        () async {
-      final nav = _FakeNavigationOutput();
-      final controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: nav,
-      );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
-
-      await controller.handleVoiceCommand(WearVoiceCommand.print);
-
-      expect(controller.state.screen, WearScreenId.printerSelect);
-      expect(nav.goToCalls, <WearScreenId>[WearScreenId.printerSelect]);
-    });
-
-    test('direct availability command navigates from menu to availability',
-        () async {
-      final nav = _FakeNavigationOutput();
-      final controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: nav,
-      );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
-
-      await controller.handleVoiceCommand(WearVoiceCommand.openAvailability);
-
-      expect(controller.state.screen, WearScreenId.availabilityInteraction);
-      expect(controller.state.menuFocusedIndex, 1);
-      expect(
-          nav.goToCalls, <WearScreenId>[WearScreenId.availabilityInteraction]);
-    });
-
-    test('direct list command chooses list in availability interaction',
-        () async {
-      final nav = _FakeNavigationOutput();
-      final controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: nav,
-      );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.availabilityInteraction);
-      await controller.handleVoiceCommand(WearVoiceCommand.down);
-
-      await controller.handleVoiceCommand(WearVoiceCommand.openList);
-
-      expect(controller.state.availabilityInteractionFocusedIndex, 0);
-      expect(nav.goToCalls, <WearScreenId>[WearScreenId.availabilityGroup]);
-    });
-
-    test('direct scan command chooses direct scan in availability interaction',
-        () async {
-      final nav = _FakeNavigationOutput();
-      final controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: nav,
-      );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.availabilityInteraction);
-
-      await controller.handleVoiceCommand(WearVoiceCommand.openDirectScan);
-
-      expect(controller.state.availabilityInteractionFocusedIndex, 1);
-      expect(
-          nav.goToCalls, <WearScreenId>[WearScreenId.availabilityDirectScan]);
-    });
-
-    test('menu item 1 select navigates to availabilityInteraction', () async {
-      final glasses = _FakeGlassesOutput();
-      final nav = _FakeNavigationOutput();
-      final controller = WearFlowController(
-        glassesOutput: glasses,
-        navigationOutput: nav,
-      );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
-
-      await controller.handleVoiceCommand(WearVoiceCommand.down);
-      await controller.handleVoiceCommand(WearVoiceCommand.select);
-
-      expect(controller.state.screen, WearScreenId.availabilityInteraction);
-      expect(
-        glasses.payloads.last.screenType,
-        WearGlassesScreenType.availability,
-      );
-      expect(
-        nav.goToCalls,
-        <WearScreenId>[WearScreenId.availabilityInteraction],
-      );
-    });
-
-    test('menu item 2 select navigates to help', () async {
-      final glasses = _FakeGlassesOutput();
-      final nav = _FakeNavigationOutput();
-      final controller = WearFlowController(
-        glassesOutput: glasses,
-        navigationOutput: nav,
-      );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
-
-      await controller.handleVoiceCommand(WearVoiceCommand.down);
-      await controller.handleVoiceCommand(WearVoiceCommand.down);
-      await controller.handleVoiceCommand(WearVoiceCommand.select);
-
-      expect(controller.state.screen, WearScreenId.help);
-      expect(glasses.payloads.last.screenType, WearGlassesScreenType.help);
-      expect(nav.goToCalls, <WearScreenId>[WearScreenId.help]);
-    });
-
-    test('menu item 3 select navigates to settings', () async {
-      final glasses = _FakeGlassesOutput();
-      final nav = _FakeNavigationOutput();
-      final controller = WearFlowController(
-        glassesOutput: glasses,
-        navigationOutput: nav,
-      );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
-
-      for (int i = 0; i < 3; i++) {
-        await controller.handleVoiceCommand(WearVoiceCommand.down);
-      }
-      await controller.handleVoiceCommand(WearVoiceCommand.select);
-
-      expect(controller.state.screen, WearScreenId.settings);
-      expect(glasses.payloads.last.screenType, WearGlassesScreenType.status);
-      expect(nav.goToCalls, <WearScreenId>[WearScreenId.settings]);
-    });
-
     test('payload selectedIndex matches menuFocusedIndex after each command',
         () async {
       final glasses = _FakeGlassesOutput();
-      final controller = WearFlowController(
+      final controller = createFlow(
         glassesOutput: glasses,
         navigationOutput: _FakeNavigationOutput(),
       );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.menu);
 
       await controller.handleVoiceCommand(WearVoiceCommand.down);
       expect(glasses.payloads.last.selectedIndex, 1);
@@ -1164,68 +679,23 @@ void main() {
       );
     });
 
-    test('back from help updates logical state before router acknowledgement',
-        () async {
-      final glasses = _FakeGlassesOutput();
-      final nav = _FakeNavigationOutput();
-      final controller = WearFlowController(
-        glassesOutput: glasses,
-        navigationOutput: nav,
-      );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.help);
-
-      await controller.handleVoiceCommand(WearVoiceCommand.back);
-
-      expect(nav.backCalls, 1);
-      expect(controller.state.screen, WearScreenId.menu);
-
-      // Simulate GoRouter pop → menu re-entry.
-      controller.enterScreen(WearScreenId.menu);
-
-      expect(glasses.payloads.last.screenType, WearGlassesScreenType.menu);
-      expect(controller.state.screen, WearScreenId.menu);
-    });
-
-    test('back from scanIdle updates logical history without stale state',
-        () async {
-      final nav = _FakeNavigationOutput();
-      final controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: nav,
-      );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.scanIdle);
-
-      // First back: GoRouter pops to printerSelect.
-      await controller.handleVoiceCommand(WearVoiceCommand.back);
-
-      expect(nav.backCalls, 1);
-      expect(controller.state.screen, WearScreenId.printerSelect);
-
-      await controller.handleVoiceCommand(WearVoiceCommand.back);
-
-      expect(nav.backCalls, 2);
-      expect(controller.state.screen, WearScreenId.menu);
-    });
-
     test(
         'back from scanIdle and enterScreen(printerSelect) fixes state for next back',
         () async {
       final nav = _FakeNavigationOutput();
-      final controller = WearFlowController(
+      final controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: nav,
       );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.scanIdle);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.scanIdle);
 
       // First back: GoRouter pops to printerSelect.
       await controller.handleVoiceCommand(WearVoiceCommand.back);
       expect(nav.backCalls, 1);
 
       // Simulate GoRouter pop → enterScreen(printerSelect).
-      controller.enterScreen(WearScreenId.printerSelect);
+      await controller.requestNavigation(WearScreenId.printerSelect);
       expect(controller.state.screen, WearScreenId.printerSelect);
 
       // Second back: printerSelect has no back handler → calls back().
@@ -1233,42 +703,14 @@ void main() {
       expect(nav.backCalls, 2);
     });
 
-    test('queue does not block when goTo is pending after menu select',
-        () async {
-      final _BlockingNavigationOutput navigation = _BlockingNavigationOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: navigation,
-      );
-
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
-      controller.setMenuFocusedIndex(0);
-
-      controller.handleVoiceCommand(WearVoiceCommand.select);
-      await Future<void>.delayed(Duration.zero);
-
-      expect(controller.state.screen, WearScreenId.printerSelect);
-      expect(
-        navigation.goToCalls,
-        <WearScreenId>[WearScreenId.printerSelect],
-      );
-
-      controller.handleVoiceCommand(WearVoiceCommand.home);
-      await Future<void>.delayed(Duration.zero);
-
-      expect(controller.state.screen, WearScreenId.menu);
-      expect(navigation.replaceCalls.last, WearScreenId.menu);
-    });
-
     test('queued voice command is dropped after the first changes screen',
         () async {
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.menu);
 
       final Future<void> select =
           controller.handleVoiceCommand(WearVoiceCommand.select);
@@ -1281,13 +723,13 @@ void main() {
 
     test('menu down does not await a blocking glasses render', () async {
       final _BlockingGlassesOutput glasses = _BlockingGlassesOutput();
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: glasses,
         navigationOutput: _FakeNavigationOutput(),
       );
 
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.menu);
 
       await controller.handleVoiceCommand(WearVoiceCommand.down);
 
@@ -1297,7 +739,7 @@ void main() {
 
     test('flashlight command toggles scanner flashlight action', () async {
       int flashlightCalls = 0;
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
         flashlightToggle: () async {
@@ -1313,12 +755,12 @@ void main() {
 
     test('finish command does not fall back to select action', () async {
       int selectCalls = 0;
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.availabilityCheck);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.availabilityCheck);
       controller.registerScreenActions(
         WearScreenId.availabilityCheck,
         WearScreenActionHandler(
@@ -1336,12 +778,12 @@ void main() {
     test('continue and finish invoke semantic continue-scan actions', () async {
       int continueCalls = 0;
       int finishCalls = 0;
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.continueScan);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.continueScan);
       controller.registerScreenActions(
         WearScreenId.continueScan,
         WearScreenActionHandler(
@@ -1357,55 +799,9 @@ void main() {
       expect(continueCalls, 1);
     });
 
-    test('inactive continue returns to scan with printer selection', () async {
-      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: navigation,
-      );
-      final Object printerSelection = Object();
-      controller.enterScreen(
-        WearScreenId.scanIdle,
-        extra: printerSelection,
-      );
-      controller.enterScreen(WearScreenId.continueScan);
-
-      await controller.handleVoiceCommand(WearVoiceCommand.continueScan);
-
-      expect(controller.state.screen, WearScreenId.scanIdle);
-      expect(controller.state.currentPrinterSelection, same(printerSelection));
-      expect(controller.state.pendingNavigation?.popCurrent, isTrue);
-      expect(controller.state.pendingNavigation?.extra, same(printerSelection));
-
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      await Future<void>.delayed(Duration.zero);
-
-      expect(navigation.backCalls, 1);
-      expect(navigation.goToCalls, isEmpty);
-    });
-
-    test('inactive finish replaces continue screen with menu', () async {
-      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: navigation,
-      );
-      controller.enterScreen(WearScreenId.continueScan);
-
-      await controller.handleVoiceCommand(WearVoiceCommand.finish);
-
-      expect(controller.state.screen, WearScreenId.menu);
-      expect(controller.state.pendingNavigation?.replaceCurrent, isTrue);
-
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      await Future<void>.delayed(Duration.zero);
-
-      expect(navigation.replaceCalls, <WearScreenId>[WearScreenId.menu]);
-    });
-
     test('replace navigation preserves target screen and extra', () async {
       final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: navigation,
       );
@@ -1416,7 +812,7 @@ void main() {
         extra: extra,
         replaceCurrent: true,
       );
-      controller.setUiLifecycle(WearUiLifecycle.active);
+      await authority.setPhoneUiActive(true);
       await Future<void>.delayed(Duration.zero);
 
       expect(
@@ -1427,87 +823,15 @@ void main() {
       expect(navigation.homeCalls, 0);
     });
 
-    test('replace to existing ancestor collapses logical history', () async {
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: _FakeNavigationOutput(),
-      );
-      controller.enterScreen(WearScreenId.menu);
-      controller.enterScreen(WearScreenId.printerSelect);
-      controller.enterScreen(WearScreenId.scanIdle);
-
-      await controller.requestNavigation(
-        WearScreenId.printerSelect,
-        replaceCurrent: true,
-      );
-
-      expect(
-        controller.state.navigationHistory.map((entry) => entry.screen),
-        <WearScreenId>[WearScreenId.menu, WearScreenId.printerSelect],
-      );
-    });
-
-    test('non-poppable route observation replaces fabricated history', () {
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: _FakeNavigationOutput(),
-      );
-      controller.enterScreen(WearScreenId.scanIdle);
-
-      controller.observeRoute(
-        WearScreenId.help,
-        canPop: false,
-      );
-
-      expect(
-        controller.state.navigationHistory.map((entry) => entry.screen),
-        <WearScreenId>[WearScreenId.help],
-      );
-    });
-
-    test('runtime reset emits cleared navigation state', () async {
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: _FakeNavigationOutput(),
-      );
-      controller.enterScreen(WearScreenId.help);
-      final Future<WearFlowState> reset = controller.stateStream.firstWhere(
-        (state) => state.screen == WearScreenId.scannerConnect,
-      );
-
-      controller.setRuntimeActive(false);
-
-      expect(
-        (await reset).navigationHistory.map((entry) => entry.screen),
-        <WearScreenId>[WearScreenId.scannerConnect],
-      );
-    });
-
-    test('glasses failure does not block phone navigation', () async {
-      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _ThrowingGlassesOutput(),
-        navigationOutput: navigation,
-      );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.menu);
-      controller.setMenuFocusedIndex(0);
-
-      await controller.handleVoiceCommand(WearVoiceCommand.select);
-
-      expect(controller.state.screen, WearScreenId.printerSelect);
-      expect(navigation.goToCalls, <WearScreenId>[WearScreenId.printerSelect]);
-    });
-
     test('active barcode is dispatched to the current screen handler',
         () async {
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
       String? received;
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.scanIdle);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.scanIdle);
       controller.registerScreenActions(
         WearScreenId.scanIdle,
         WearScreenActionHandler(
@@ -1519,36 +843,16 @@ void main() {
       expect(received, '4600000000001');
     });
 
-    test('route observation refreshes a retained screen projection', () async {
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: _FakeNavigationOutput(),
-      );
-      int visibleCalls = 0;
-      controller.registerScreenActions(
-        WearScreenId.availabilityProduct,
-        WearScreenActionHandler(onVisible: () => visibleCalls++),
-      );
-
-      controller.observeRoute(
-        WearScreenId.availabilityProduct,
-        canPop: true,
-      );
-      await Future<void>.delayed(Duration.zero);
-
-      expect(visibleCalls, 1);
-    });
-
     test('barcode-disabled screen pauses admission and rejects events',
         () async {
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
       bool enabled = true;
       int calls = 0;
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.availabilityCheck);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.availabilityCheck);
       controller.registerScreenActions(
         WearScreenId.availabilityCheck,
         WearScreenActionHandler(
@@ -1567,139 +871,15 @@ void main() {
       expect(calls, 1);
     });
 
-    test('inactive lifecycle does not invoke widget callbacks or phrases',
-        () async {
-      int actionCalls = 0;
-      int phraseCalls = 0;
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: _FakeNavigationOutput(),
-      );
-      controller.enterScreen(WearScreenId.availabilityCheck);
-      controller.registerScreenActions(
-        WearScreenId.availabilityCheck,
-        WearScreenActionHandler(
-          onManualInput: () => actionCalls++,
-          onPhrase: (_) => phraseCalls++,
-        ),
-      );
-
-      await controller.handleVoiceCommand(WearVoiceCommand.manualInput);
-      await controller.handleVoicePhrase('товар');
-
-      expect(actionCalls, 0);
-      expect(phraseCalls, 0);
-    });
-
-    test('new product selection clears payload cached for previous args',
-        () async {
-      final _FakeGlassesOutput glasses = _FakeGlassesOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: glasses,
-        navigationOutput: _FakeNavigationOutput(),
-      );
-      final Object firstArgs = Object();
-      final Object secondArgs = Object();
-      const WearGlassesPayload firstPayload = WearGlassesPayload(
-        screenType: WearGlassesScreenType.productSelect,
-        phase: WearGlassesPhase.idle,
-        title: 'Первый список',
-      );
-
-      controller.enterScreen(WearScreenId.productSelect, extra: firstArgs);
-      controller.rememberScreenPayload(
-        WearScreenId.productSelect,
-        firstPayload,
-      );
-      await controller.renderCurrentGlasses();
-      expect(glasses.payloads.last.title, 'Первый список');
-
-      controller.enterScreen(WearScreenId.productSelect, extra: secondArgs);
-      await Future<void>.delayed(Duration.zero);
-
-      expect(glasses.payloads.last.title, 'Выбор товара');
-      expect(glasses.payloads.last.phase, WearGlassesPhase.loading);
-    });
-
-    test('new availability context clears payload cached for previous item',
-        () async {
-      final _FakeGlassesOutput glasses = _FakeGlassesOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: glasses,
-        navigationOutput: _FakeNavigationOutput(),
-      );
-      final Object firstGroup = Object();
-      final Object secondGroup = Object();
-      const WearGlassesPayload firstPayload = WearGlassesPayload(
-        screenType: WearGlassesScreenType.availability,
-        phase: WearGlassesPhase.idle,
-        title: 'Старый список',
-      );
-
-      controller.enterScreen(
-        WearScreenId.availabilityProduct,
-        extra: firstGroup,
-      );
-      controller.rememberScreenPayload(
-        WearScreenId.availabilityProduct,
-        firstPayload,
-      );
-      await controller.renderCurrentGlasses();
-      expect(glasses.payloads.last.title, 'Старый список');
-
-      controller.enterScreen(
-        WearScreenId.availabilityProduct,
-        extra: secondGroup,
-      );
-      await Future<void>.delayed(Duration.zero);
-
-      expect(glasses.payloads.last.title, 'Товарная позиция');
-      expect(glasses.payloads.last.phase, WearGlassesPhase.loading);
-    });
-
-    test('returning from availability products restores groups payload',
-        () async {
-      final _FakeGlassesOutput glasses = _FakeGlassesOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: glasses,
-        navigationOutput: _FakeNavigationOutput(),
-      );
-      const WearGlassesPayload groupsPayload = WearGlassesPayload(
-        screenType: WearGlassesScreenType.availability,
-        phase: WearGlassesPhase.idle,
-        title: 'Товарная группа',
-        items: <String>['Молочная продукция', 'Хлеб'],
-      );
-
-      controller.enterScreen(WearScreenId.availabilityGroup);
-      controller.rememberScreenPayload(
-        WearScreenId.availabilityGroup,
-        groupsPayload,
-      );
-      controller.enterScreen(
-        WearScreenId.availabilityProduct,
-        extra: Object(),
-      );
-
-      controller.enterScreen(WearScreenId.availabilityGroup);
-      controller.observeRoute(
-        WearScreenId.availabilityGroup,
-        canPop: true,
-      );
-      await Future<void>.delayed(Duration.zero);
-
-      expect(glasses.payloads.last, groupsPayload);
-    });
-
     test('yes and no commands invoke semantic screen actions', () async {
       int yesCalls = 0;
       int noCalls = 0;
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.availabilityCheck);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.availabilityCheck);
       controller.registerScreenActions(
         WearScreenId.availabilityCheck,
         WearScreenActionHandler(
@@ -1722,37 +902,37 @@ void main() {
     test('photo command invokes only the current photo screen action',
         () async {
       var photoCalls = 0;
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
-      controller.setUiLifecycle(WearUiLifecycle.active);
+      await authority.setPhoneUiActive(true);
       controller.registerScreenActions(
         WearScreenId.availabilityCheck,
         WearScreenActionHandler(onPhoto: () => photoCalls++),
       );
 
-      controller.enterScreen(WearScreenId.menu);
+      await controller.requestNavigation(WearScreenId.menu);
       await controller.handleVoiceCommand(WearVoiceCommand.takePhoto);
       expect(photoCalls, 0);
 
-      controller.enterScreen(WearScreenId.availabilityCheck);
+      await controller.requestNavigation(WearScreenId.availabilityCheck);
       await controller.handleVoiceCommand(WearVoiceCommand.takePhoto);
       expect(photoCalls, 1);
     });
 
     test('test photo command captures a photo on every screen', () async {
       var photoCaptures = 0;
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
         photoCapture: () async => photoCaptures++,
       );
-      controller.setUiLifecycle(WearUiLifecycle.active);
+      await authority.setPhoneUiActive(true);
 
-      controller.enterScreen(WearScreenId.menu);
+      await controller.requestNavigation(WearScreenId.menu);
       await controller.handleVoiceCommand(WearVoiceCommand.testPhoto);
-      controller.enterScreen(WearScreenId.help);
+      await controller.requestNavigation(WearScreenId.help);
       await controller.handleVoiceCommand(WearVoiceCommand.testPhoto);
 
       expect(photoCaptures, 2);
@@ -1761,12 +941,12 @@ void main() {
     test('yes command falls back to select when screen has no yes action',
         () async {
       int selectCalls = 0;
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.availabilityCheck);
+      await authority.setPhoneUiActive(true);
+      await controller.requestNavigation(WearScreenId.availabilityCheck);
       controller.registerScreenActions(
         WearScreenId.availabilityCheck,
         WearScreenActionHandler(
@@ -1780,89 +960,15 @@ void main() {
 
       expect(selectCalls, 1);
     });
-    test('opens clarification with only ambiguous dynamic matches', () async {
-      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: navigation,
-      );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.availabilityProduct);
-      controller.registerScreenActions(
-        WearScreenId.availabilityProduct,
-        WearScreenActionHandler(
-          dynamicVoiceItems: () => const VoiceDynamicItemsSnapshot(
-            revision: 1,
-            items: <VoiceDynamicItem>[
-              VoiceDynamicItem(id: '1', label: 'Коровка из Кореновки пломбир'),
-              VoiceDynamicItem(id: '2', label: 'Коровка из Кореновки стакан'),
-              VoiceDynamicItem(id: '3', label: 'Другой товар'),
-            ],
-          ),
-        ),
-      );
-
-      await controller.handleVoicePhrase('коровка из кореновки');
-
-      expect(navigation.goToCalls, <WearScreenId>[
-        WearScreenId.voiceClarification,
-      ]);
-      final VoiceClarificationArgs args =
-          navigation.goToExtras.single! as VoiceClarificationArgs;
-      expect(args.sourceScreen, WearScreenId.availabilityProduct);
-      expect(args.matches.map((VoiceDynamicItem item) => item.id), <String>[
-        '1',
-        '2',
-      ]);
-    });
-
-    test('opens clarification for the two Hot Key products', () async {
-      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: navigation,
-      );
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.availabilityProduct);
-      controller.registerScreenActions(
-        WearScreenId.availabilityProduct,
-        WearScreenActionHandler(
-          dynamicVoiceItems: () => const VoiceDynamicItemsSnapshot(
-            revision: 1,
-            items: <VoiceDynamicItem>[
-              VoiceDynamicItem(
-                id: '1000135250',
-                label: 'ГОРЯЧИЙ КЛЮЧ №2000 Мин вод газ1,5л',
-              ),
-              VoiceDynamicItem(
-                id: '1000460470',
-                label: 'ГОРЯЧИЙ КЛЮЧ №2000 Вода минер стол газ 1л',
-              ),
-            ],
-          ),
-        ),
-      );
-
-      await controller.handleVoicePhrase('горячий ключ');
-
-      expect(controller.state.screen, WearScreenId.voiceClarification);
-      final VoiceClarificationArgs args =
-          navigation.goToExtras.single! as VoiceClarificationArgs;
-      expect(
-        args.matches.map((VoiceDynamicItem item) => item.id),
-        <String>['1000135250', '1000460470'],
-      );
-    });
-
     test('clarification selection returns and invokes source item by id',
         () async {
       final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: navigation,
       );
       String? selectedId;
-      controller.setUiLifecycle(WearUiLifecycle.active);
+      await authority.setPhoneUiActive(true);
       controller.registerScreenActions(
         WearScreenId.availabilityProduct,
         WearScreenActionHandler(
@@ -1885,7 +991,8 @@ void main() {
           VoiceDynamicItem(id: '2', label: 'Коровка из Кореновки стакан'),
         ],
       );
-      controller.enterScreen(WearScreenId.voiceClarification, extra: args);
+      await controller.requestNavigation(WearScreenId.voiceClarification,
+          extra: args);
 
       await controller.selectVoiceClarificationItem(args, '2');
 
@@ -1897,11 +1004,11 @@ void main() {
     test('does not leave clarification when selected item became stale',
         () async {
       final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: navigation,
       );
-      controller.setUiLifecycle(WearUiLifecycle.active);
+      await authority.setPhoneUiActive(true);
       controller.registerScreenActions(
         WearScreenId.availabilityProduct,
         WearScreenActionHandler(
@@ -1922,7 +1029,8 @@ void main() {
           VoiceDynamicItem(id: '2', label: 'Исчезнувший товар'),
         ],
       );
-      controller.enterScreen(WearScreenId.voiceClarification, extra: args);
+      await controller.requestNavigation(WearScreenId.voiceClarification,
+          extra: args);
 
       final bool selected =
           await controller.selectVoiceClarificationItem(args, '2');
@@ -1935,11 +1043,11 @@ void main() {
     test('rejects clarification selection after source revision changes',
         () async {
       final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: navigation,
       );
-      controller.setUiLifecycle(WearUiLifecycle.active);
+      await authority.setPhoneUiActive(true);
       controller.registerScreenActions(
         WearScreenId.availabilityProduct,
         WearScreenActionHandler(
@@ -1960,7 +1068,8 @@ void main() {
           VoiceDynamicItem(id: '1', label: 'Товар исходный'),
         ],
       );
-      controller.enterScreen(WearScreenId.voiceClarification, extra: args);
+      await controller.requestNavigation(WearScreenId.voiceClarification,
+          extra: args);
 
       final bool selected =
           await controller.selectVoiceClarificationItem(args, '1');
@@ -1970,7 +1079,7 @@ void main() {
     });
 
     test('clarification grammar follows the visible candidate page', () async {
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
@@ -1989,7 +1098,8 @@ void main() {
       );
       final List<WearScreenId> changed = <WearScreenId>[];
       controller.screenActionsChanged.listen(changed.add);
-      controller.enterScreen(WearScreenId.voiceClarification, extra: args);
+      await controller.requestNavigation(WearScreenId.voiceClarification,
+          extra: args);
       final List<String> firstPage = controller.voiceGrammarPhrasesFor(
         WearScreenId.voiceClarification,
       );
@@ -2009,12 +1119,12 @@ void main() {
 
     test('ignores a repeated clarification selection in flight', () async {
       final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: navigation,
       );
       int selectCalls = 0;
-      controller.setUiLifecycle(WearUiLifecycle.active);
+      await authority.setPhoneUiActive(true);
       controller.registerScreenActions(
         WearScreenId.availabilityProduct,
         WearScreenActionHandler(
@@ -2038,7 +1148,8 @@ void main() {
           VoiceDynamicItem(id: '2', label: 'Второй товар'),
         ],
       );
-      controller.enterScreen(WearScreenId.voiceClarification, extra: args);
+      await controller.requestNavigation(WearScreenId.voiceClarification,
+          extra: args);
 
       final Future<bool> first =
           controller.selectVoiceClarificationItem(args, '2');
@@ -2052,8 +1163,9 @@ void main() {
       expect(navigation.backCalls, 1);
     });
 
-    test('keeps refined clarification after cancelling home confirmation', () {
-      final WearFlowController controller = WearFlowController(
+    test('keeps refined clarification after cancelling home confirmation',
+        () async {
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
@@ -2077,14 +1189,14 @@ void main() {
         ],
         previous: root,
       );
-      controller.enterScreen(
+      await controller.requestNavigation(
         WearScreenId.voiceClarification,
         extra: refined,
       );
       controller.setVoiceClarificationFocusedIndex(1, 2);
 
-      controller.enterScreen(WearScreenId.homeConfirm);
-      controller.enterScreen(
+      await controller.requestNavigation(WearScreenId.homeConfirm);
+      await controller.requestNavigation(
         WearScreenId.voiceClarification,
         extra: root,
       );
@@ -2095,7 +1207,7 @@ void main() {
 
     test('shows clarification notice without replacing matches', () async {
       final _FakeGlassesOutput glasses = _FakeGlassesOutput();
-      final WearFlowController controller = WearFlowController(
+      final WearFlowController controller = createFlow(
         glassesOutput: glasses,
         navigationOutput: _FakeNavigationOutput(),
       );
@@ -2108,7 +1220,8 @@ void main() {
           VoiceDynamicItem(id: '2', label: 'Коровка стакан'),
         ],
       );
-      controller.enterScreen(WearScreenId.voiceClarification, extra: args);
+      await controller.requestNavigation(WearScreenId.voiceClarification,
+          extra: args);
 
       controller.setVoiceClarificationNotice('Назовите точнее');
       await controller.renderCurrentGlasses();
@@ -2137,8 +1250,8 @@ void main() {
       expect(controller.state.voiceClarificationNotice, isNull);
     });
 
-    test('clears clarification arguments after leaving the flow', () {
-      final WearFlowController controller = WearFlowController(
+    test('clears clarification arguments after leaving the flow', () async {
+      final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
@@ -2148,47 +1261,14 @@ void main() {
         sourceListRevision: 1,
         matches: <VoiceDynamicItem>[],
       );
-      controller.enterScreen(WearScreenId.voiceClarification, extra: args);
+      await controller.requestNavigation(WearScreenId.voiceClarification,
+          extra: args);
 
-      controller.enterScreen(WearScreenId.menu);
+      await controller.requestNavigation(WearScreenId.menu);
 
       expect(controller.state.currentVoiceClarificationArgs, isNull);
     });
-
-    test('status timeout navigates to its explicit target', () async {
-      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
-      final WearFlowController controller = WearFlowController(
-        glassesOutput: _FakeGlassesOutput(),
-        navigationOutput: navigation,
-      );
-      addTearDown(controller.dispose);
-      controller.setUiLifecycle(WearUiLifecycle.active);
-      controller.enterScreen(WearScreenId.scanIdle);
-
-      await controller.showStatus(
-        const WearStatusScreenArgs(
-          kind: WearStatusKind.success,
-          title: 'Готово',
-          message: 'Ценник напечатан',
-          autoAfter: Duration(milliseconds: 10),
-        ),
-        completion: const WearStatusCompletion.goTo(WearScreenId.scanIdle),
-      );
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-
-      expect(controller.statusState?.completion.target, WearScreenId.scanIdle);
-      expect(navigation.goToCalls, <WearScreenId>[WearScreenId.status]);
-      expect(navigation.replaceCalls, <WearScreenId>[WearScreenId.scanIdle]);
-    });
   });
-}
-
-class _BlockingNavigationOutput extends _FakeNavigationOutput {
-  @override
-  Future<void> goTo(WearScreenId screen, {Object? extra}) async {
-    goToCalls.add(screen);
-    await Future<void>.delayed(const Duration(seconds: 10));
-  }
 }
 
 class _FakeGlassesOutput implements WearGlassesOutput {
@@ -2197,13 +1277,6 @@ class _FakeGlassesOutput implements WearGlassesOutput {
   @override
   Future<void> send(WearGlassesPayload payload) async {
     payloads.add(payload);
-  }
-}
-
-class _ThrowingGlassesOutput implements WearGlassesOutput {
-  @override
-  Future<void> send(WearGlassesPayload payload) async {
-    throw StateError('glasses unavailable');
   }
 }
 

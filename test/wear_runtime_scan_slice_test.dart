@@ -63,7 +63,8 @@ void main() {
     expect(printCalls, 1);
     expect(authority.scanTask.phase, WearScanTaskPhase.printing);
     expect(
-      authority.state.expectedOperationId(WearPrintPriceTagEffect.operationKind),
+      authority.state
+          .expectedOperationId(WearPrintPriceTagEffect.operationKind),
       isNotNull,
     );
 
@@ -97,7 +98,8 @@ void main() {
 
     expect(authority.scanTask.phase, WearScanTaskPhase.selecting);
     expect(authority.scanTask.screen, WearScreenId.productSelect);
-    expect(authority.payload.navigation.logicalScreen, WearScreenId.productSelect);
+    expect(
+        authority.payload.navigation.logicalScreen, WearScreenId.productSelect);
     expect(authority.scanTask.products.map((item) => item.id), <int>[10, 11]);
     expect(navigation, <WearScreenId>[WearScreenId.productSelect]);
     expect(
@@ -208,9 +210,9 @@ void main() {
     final WearScanRuntime oldRuntime = WearScanRuntime(
       authority: authority,
       lookupBarcode: (_) => oldLookup.future,
-      printProduct: (_) async => 'unused',
+      printProduct: (_, __) async => 'unused',
       navigate: (_, {extra, replaceCurrent = false}) async {},
-      showStatus: (_, __) async {},
+      showStatus: (_, {required completion}) async {},
       delay: (_) async {},
     );
 
@@ -223,13 +225,14 @@ void main() {
 
     final Completer<List<BarcodeProductInfo>> replacementLookup =
         Completer<List<BarcodeProductInfo>>();
+    final Completer<void> replacementDelay = Completer<void>();
     final WearScanRuntime replacementRuntime = WearScanRuntime(
       authority: authority,
       lookupBarcode: (_) => replacementLookup.future,
-      printProduct: (_) async => 'unused',
+      printProduct: (_, __) async => 'unused',
       navigate: (_, {extra, replaceCurrent = false}) async {},
-      showStatus: (_, __) async {},
-      delay: (_) async {},
+      showStatus: (_, {required completion}) async {},
+      delay: (_) => replacementDelay.future,
     );
     addTearDown(replacementRuntime.dispose);
     await replacementRuntime.enterScreen(WearScreenId.scanIdle);
@@ -275,6 +278,7 @@ void main() {
     await _flush();
     expect(authority.scanTask.phase, WearScanTaskPhase.status);
     expect(authority.scanTask.status?.title, 'Товар не найден');
+    replacementDelay.complete();
   });
 }
 

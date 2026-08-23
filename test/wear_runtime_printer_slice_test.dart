@@ -103,8 +103,7 @@ void main() {
     expect(authority.payload.navigation.logicalScreen, WearScreenId.scanIdle);
     expect(navigations, <WearScreenId>[WearScreenId.scanIdle]);
 
-    final WearDispatchResult duplicate =
-        await authority.selectPrinterById('b');
+    final WearDispatchResult duplicate = await authority.selectPrinterById('b');
     expect(duplicate.accepted, isFalse);
     expect(navigations, hasLength(1));
   });
@@ -136,7 +135,8 @@ void main() {
     await _flush();
 
     expect(authority.printerTask.selection, isNotNull);
-    expect(authority.payload.navigation.logicalScreen, WearScreenId.printerSelect);
+    expect(
+        authority.payload.navigation.logicalScreen, WearScreenId.printerSelect);
     expect(navigationCalls, 0);
   });
 
@@ -258,7 +258,8 @@ void main() {
     expect(authority.printerTask.selection, isNull);
   });
 
-  test('session clear removes aggregate printer selection atomically', () async {
+  test('session clear removes aggregate printer selection atomically',
+      () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     await authority.authorize(user());
     final WearPrinterRuntime runtime = WearPrinterRuntime(

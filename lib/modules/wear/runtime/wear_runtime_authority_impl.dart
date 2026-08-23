@@ -88,6 +88,13 @@ class WearRuntimeAuthority {
 
   Stream<WearRuntimeState> get states => _store.states;
 
+  Stream<AuthenticatedUser> get authorizedStream => states
+      .map((WearRuntimeState state) =>
+          state.payloadAs<WearAggregatePayload>().session.user)
+      .where((AuthenticatedUser? user) => user != null)
+      .cast<AuthenticatedUser>()
+      .distinct();
+
   bool get isAuthorized => payload.session.isAuthorized;
 
   AuthenticatedUser? get userOrNull => payload.session.user;
@@ -236,7 +243,6 @@ class WearRuntimeAuthority {
     );
     return completer.future;
   }
-
 }
 
 class WearRuntimeNavigationAdapter {

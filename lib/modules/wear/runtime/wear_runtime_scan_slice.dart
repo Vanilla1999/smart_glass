@@ -80,7 +80,9 @@ class WearScanTaskSlice implements WearScanFeaturePayload {
       phase: phase ?? this.phase,
       screen: screen ?? this.screen,
       barcode: clearBarcode ? null : barcode ?? this.barcode,
-      products: clearProducts ? const <BarcodeProductInfo>[] : products ?? this.products,
+      products: clearProducts
+          ? const <BarcodeProductInfo>[]
+          : products ?? this.products,
       focusedIndex: focusedIndex ?? this.focusedIndex,
       productName: clearProductName ? null : productName ?? this.productName,
       status: clearStatus ? null : status ?? this.status,
@@ -325,7 +327,8 @@ class WearScanSliceReducer implements WearSliceReducer {
           clearLastAcceptedBarcode: true,
         );
       } else if (intent.extra is WearProductSelectArgs) {
-        final WearProductSelectArgs args = intent.extra as WearProductSelectArgs;
+        final WearProductSelectArgs args =
+            intent.extra as WearProductSelectArgs;
         entered = scan.copyWith(
           phase: WearScanTaskPhase.selecting,
           screen: WearScreenId.productSelect,

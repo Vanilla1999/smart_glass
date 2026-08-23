@@ -73,7 +73,8 @@ class WearRuntimeEffectRouter implements WearEffectHandler {
       matched = executor;
     }
     if (matched == null) {
-      throw StateError('No active executor registered for ${effect.runtimeType}');
+      throw StateError(
+          'No active executor registered for ${effect.runtimeType}');
     }
     return matched.execute(effect);
   }

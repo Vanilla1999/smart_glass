@@ -154,9 +154,7 @@ class WearPrinterReentryReducer implements WearSliceReducer {
     nextAggregate = nextAggregate.copyWith(
       features: rawFeatures.copyWith(printer: loading),
     );
-    nextState = nextState
-        .withPayload(nextAggregate)
-        .expectOperation(
+    nextState = nextState.withPayload(nextAggregate).expectOperation(
           kind: WearLoadPrintersEffect.loadOperationKind,
           operationId: intent.loadOperationId,
         );

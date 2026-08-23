@@ -21,15 +21,16 @@ void main() {
 
     final Future<void> first =
         runtime.enterScreen(WearScreenId.availabilityGroup);
+    await _waitForState(runtime, (state) => state.busy);
     final Future<void> second =
         runtime.enterScreen(WearScreenId.availabilityGroup);
-    await Future<void>.delayed(Duration.zero);
 
     expect(repository.groupCalls, 1);
     repository.groups.complete(
       const <WearAvailabilityGroup>[_AvailabilityRepository.group],
     );
     await Future.wait(<Future<void>>[first, second]);
+    await _waitForState(runtime, (state) => state.groups.isNotEmpty);
   });
 
   test('reset starts a fresh availability flow', () async {
@@ -38,8 +39,10 @@ void main() {
     addTearDown(runtime.dispose);
 
     await runtime.enterScreen(WearScreenId.availabilityGroup);
+    await _waitForState(runtime, (state) => state.groups.isNotEmpty);
     await runtime.reset();
     await runtime.enterScreen(WearScreenId.availabilityGroup);
+    await _waitForState(runtime, (state) => state.groups.isNotEmpty);
 
     expect(repository.groupCalls, 2);
   });
@@ -64,11 +67,12 @@ void main() {
     addTearDown(runtime.dispose);
 
     await runtime.enterScreen(WearScreenId.availabilityGroup);
+    await _waitForState(runtime, (state) => state.groups.isNotEmpty);
     final Future<bool> selection = runtime.handleCommand(
       WearScreenId.availabilityGroup,
       WearVoiceCommand.select,
     );
-    await Future<void>.delayed(Duration.zero);
+    await _waitForState(runtime, (state) => state.busy);
     await runtime.reset();
     repository.products.complete(
       const <WearAvailabilityProduct>[_AvailabilityRepository.product],
@@ -98,11 +102,12 @@ void main() {
     addTearDown(runtime.dispose);
 
     await runtime.enterScreen(WearScreenId.availabilityGroup);
+    await _waitForState(runtime, (state) => state.groups.isNotEmpty);
     final Future<bool> selection = runtime.handleCommand(
       WearScreenId.availabilityGroup,
       WearVoiceCommand.select,
     );
-    await Future<void>.delayed(Duration.zero);
+    await _waitForState(runtime, (state) => state.busy);
     await runtime.enterScreen(WearScreenId.availabilityDirectScan);
     repository.products.complete(
       const <WearAvailabilityProduct>[_AvailabilityRepository.product],
@@ -115,28 +120,26 @@ void main() {
   test('presentation handoff invalidates an older screen load', () async {
     final _BlockingAvailabilityRepository repository =
         _BlockingAvailabilityRepository();
-    final WearAvailabilityFlowUseCase useCase =
-        WearAvailabilityFlowUseCase(repository);
     final WearAvailabilityRuntime runtime = _runtime(repository);
     addTearDown(runtime.dispose);
 
     final Future<void> oldLoad =
         runtime.enterScreen(WearScreenId.availabilityGroup);
-    await Future<void>.delayed(Duration.zero);
-    final WearAvailabilityFlowState activeFlow = useCase.selectProduct(
-      state: const WearAvailabilityFlowState(
-        step: WearAvailabilityFlowStep.productSelection,
-      ),
-      product: _AvailabilityRepository.product,
-    );
+    await _waitForState(runtime, (state) => state.busy);
     await runtime.enterScreen(
       WearScreenId.availabilityCheck,
-      extra: activeFlow,
+      extra: _AvailabilityRepository.product,
     );
     repository.groups.complete(
       const <WearAvailabilityGroup>[_AvailabilityRepository.group],
     );
     await oldLoad;
+    await _waitForState(
+      runtime,
+      (state) =>
+          state.flow.selectedProduct == _AvailabilityRepository.product &&
+          !state.busy,
+    );
 
     final WearAvailabilityRuntimeState restored = runtime.state;
     expect(restored.flow.selectedProduct, _AvailabilityRepository.product);
@@ -149,6 +152,12 @@ void main() {
     final WearAvailabilityRuntime runtime = _runtime(repository);
     addTearDown(runtime.dispose);
     await runtime.enterScreen(WearScreenId.availabilityDirectScan);
+    await _waitForState(
+      runtime,
+      (state) =>
+          runtime.acceptsBarcode(WearScreenId.availabilityDirectScan) &&
+          !state.busy,
+    );
 
     expect(
       await runtime.handleBarcode(
@@ -157,12 +166,17 @@ void main() {
       ),
       isTrue,
     );
+    await _waitForState(runtime, (state) => state.error != null);
     expect(
       await runtime.handleBarcode(
         WearScreenId.availabilityDirectScan,
         _AvailabilityRepository.product.code,
       ),
       isTrue,
+    );
+    await _waitForState(
+      runtime,
+      (state) => state.flow.selectedProduct == _AvailabilityRepository.product,
     );
 
     expect(repository.barcodeCalls, 2);
@@ -172,17 +186,22 @@ void main() {
       () async {
     final WearAvailabilityRuntime runtime = _runtime(_AvailabilityRepository());
     addTearDown(runtime.dispose);
-    final List<WearBackgroundScreenUpdate> updates =
-        <WearBackgroundScreenUpdate>[];
-    final StreamSubscription<WearBackgroundScreenUpdate> subscription =
-        runtime.updates.listen(updates.add);
-    addTearDown(subscription.cancel);
+    final Future<WearBackgroundScreenUpdate> scanningUpdate = runtime.updates
+        .firstWhere(
+          (update) => update.payload.phase == WearGlassesPhase.scanning,
+        )
+        .timeout(const Duration(seconds: 1));
 
     await runtime.enterScreen(WearScreenId.availabilityDirectScan);
+    await _waitForState(
+      runtime,
+      (state) =>
+          runtime.acceptsBarcode(WearScreenId.availabilityDirectScan) &&
+          !state.busy,
+    );
+    final WearBackgroundScreenUpdate update = await scanningUpdate;
 
-    expect(updates, isNotEmpty);
-    expect(updates.last.payload.phase, WearGlassesPhase.scanning);
-    expect(updates.last.payload.statusText, 'Поиск ШК...');
+    expect(update.payload.statusText, 'Поиск ШК...');
   });
 
   test('loads groups and products without providers or widgets', () async {
@@ -203,6 +222,7 @@ void main() {
     addTearDown(runtime.dispose);
 
     await runtime.enterScreen(WearScreenId.availabilityGroup);
+    await _waitForState(runtime, (state) => state.groups.isNotEmpty);
     expect(
       runtime
           .dynamicVoiceItemsFor(WearScreenId.availabilityGroup)
@@ -215,6 +235,13 @@ void main() {
     await runtime.handleCommand(
       WearScreenId.availabilityGroup,
       WearVoiceCommand.select,
+    );
+    await _waitForState(
+      runtime,
+      (state) =>
+          state.flow.selectedGroup == _AvailabilityRepository.group &&
+          state.products.isNotEmpty &&
+          !state.busy,
     );
     await runtime.enterScreen(
       WearScreenId.availabilityProduct,
@@ -253,9 +280,14 @@ void main() {
     addTearDown(runtime.dispose);
 
     await runtime.enterScreen(WearScreenId.availabilityGroup);
+    await _waitForState(runtime, (state) => state.groups.isNotEmpty);
     await runtime.handleCommand(
       WearScreenId.availabilityGroup,
       WearVoiceCommand.select,
+    );
+    await _waitForState(
+      runtime,
+      (state) => state.products.isNotEmpty && !state.busy,
     );
     await runtime.enterScreen(
       WearScreenId.availabilityProduct,
@@ -265,6 +297,12 @@ void main() {
       WearScreenId.availabilityProduct,
       WearVoiceCommand.select,
     );
+    await _waitForState(
+      runtime,
+      (state) =>
+          state.flow.selectedProduct == _AvailabilityRepository.product &&
+          !state.busy,
+    );
     await runtime.enterScreen(
       WearScreenId.availabilityCheck,
       extra: _AvailabilityRepository.product,
@@ -273,13 +311,27 @@ void main() {
       WearScreenId.availabilityCheck,
       WearVoiceCommand.yes,
     );
+    await _waitForState(
+      runtime,
+      (state) => state.flow.step == WearAvailabilityFlowStep.photoCapture,
+    );
     await runtime.handleCommand(
       WearScreenId.availabilityCheck,
       WearVoiceCommand.takePhoto,
     );
+    await _waitForState(
+      runtime,
+      (state) => state.flow.step == WearAvailabilityFlowStep.readyToComplete,
+    );
     await runtime.handleCommand(
       WearScreenId.availabilityCheck,
       WearVoiceCommand.finish,
+    );
+    await _waitForState(
+      runtime,
+      (state) =>
+          state.flow.step == WearAvailabilityFlowStep.groupSelection &&
+          !state.busy,
     );
 
     expect(photoCalls, 1);
@@ -289,24 +341,27 @@ void main() {
 
   test('screen-off handoff continues availability question state', () async {
     final _AvailabilityRepository repository = _AvailabilityRepository();
-    final WearAvailabilityFlowUseCase useCase =
-        WearAvailabilityFlowUseCase(repository);
     final WearAvailabilityRuntime runtime = _runtime(repository);
     addTearDown(runtime.dispose);
-    final WearAvailabilityFlowState activeFlow = useCase.selectProduct(
-      state: const WearAvailabilityFlowState(
-        step: WearAvailabilityFlowStep.productSelection,
-      ),
-      product: _AvailabilityRepository.product,
-    );
 
     await runtime.enterScreen(
       WearScreenId.availabilityCheck,
-      extra: activeFlow,
+      extra: _AvailabilityRepository.product,
+    );
+    await _waitForState(
+      runtime,
+      (state) =>
+          state.flow.selectedProduct == _AvailabilityRepository.product &&
+          !state.busy,
     );
     await runtime.handleCommand(
       WearScreenId.availabilityCheck,
       WearVoiceCommand.no,
+    );
+    await _waitForState(
+      runtime,
+      (state) =>
+          state.flow.step == WearAvailabilityFlowStep.manualInventoryRequired,
     );
     final WearAvailabilityRuntimeState restored = runtime.state;
 
@@ -316,6 +371,17 @@ void main() {
     );
     expect(restored.flow.selectedProduct, _AvailabilityRepository.product);
   });
+}
+
+Future<WearAvailabilityRuntimeState> _waitForState(
+  WearAvailabilityRuntime runtime,
+  bool Function(WearAvailabilityRuntimeState state) predicate,
+) async {
+  final WearAvailabilityRuntimeState current = runtime.state;
+  if (predicate(current)) return current;
+  return runtime.stateStream
+      .firstWhere(predicate)
+      .timeout(const Duration(seconds: 1));
 }
 
 WearAvailabilityRuntime _runtime(WearAvailabilityRepository repository) {

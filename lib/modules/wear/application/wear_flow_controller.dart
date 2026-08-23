@@ -121,9 +121,10 @@ class WearFlowController {
     WearRuntimeAuthority? authority,
     WearFlashlightToggle? flashlightToggle,
     WearPhotoCapture? photoCapture,
-  })  : _authority = authority ?? WearRuntimeAuthority(
-          initialScreen: WearScreenId.scannerConnect,
-        ),
+  })  : _authority = authority ??
+            WearRuntimeAuthority(
+              initialScreen: WearScreenId.scannerConnect,
+            ),
         _glassesOutput = glassesOutput,
         _navigationOutput = navigationOutput,
         _flashlightToggle = flashlightToggle ?? _toggleScannerFlashlight,
@@ -141,10 +142,9 @@ class WearFlowController {
   WearGlassesOutput _glassesOutput;
   WearNavigationOutput _navigationOutput;
   final WearRuntimeAuthority _authority;
-  WearUiLifecycle get _uiLifecycle =>
-      _authority.payload.lifecycle.phoneUiActive
-          ? WearUiLifecycle.active
-          : WearUiLifecycle.inactive;
+  WearUiLifecycle get _uiLifecycle => _authority.payload.lifecycle.phoneUiActive
+      ? WearUiLifecycle.active
+      : WearUiLifecycle.inactive;
   bool get _runtimeActive => _authority.payload.lifecycle.runtimeActive;
   late WearFlowState _state;
   final StreamController<WearFlowState> _stateController =
@@ -418,7 +418,6 @@ class WearFlowController {
       logicalScreen,
       extra: extra,
     ));
-    _clearContextPayload(screen, extra);
     final WearFlowAction? onVisible = _screenActions[screen]?.onVisible;
     if (onVisible != null) {
       unawaited(Future<void>.sync(onVisible));
@@ -1146,10 +1145,13 @@ class WearFlowController {
     print('[WearFlowController] navigation acknowledged request=$request');
     _deliveredNavigationRequestId = null;
     _inactiveNavigationCount = 0;
-    unawaited(_authority.acknowledgeNavigation(
-      requestId: requestId,
-      screen: screen,
-    ).then<void>((_) => _setState(_state)));
+    unawaited(_authority
+        .navigationAdapter()
+        .acknowledge(
+          requestId: requestId,
+          screen: screen,
+        )
+        .then<void>((_) => _setState(_state)));
     return true;
   }
 
@@ -1446,7 +1448,7 @@ class WearFlowController {
       replaceCurrent: replaceCurrent,
       popCurrent: popCurrent,
     );
-    _clearContextPayload(target, extra);
+    _clearTransientPayloadOnScreenChange(target);
     _setState(
       _stateForEnteredScreen(target, extra: extra).copyWith(
         pendingNavigation: request,
@@ -2066,6 +2068,14 @@ class WearFlowController {
     };
   }
 
+  static bool _sameStrings(List<String> left, List<String> right) {
+    if (left.length != right.length) return false;
+    for (int index = 0; index < left.length; index++) {
+      if (left[index] != right[index]) return false;
+    }
+    return true;
+  }
+
   WearFlowState _withAuthoritativeNavigation(WearFlowState value) {
     final navigation = _authority.payload.navigation;
     final WearPendingNavigation? pending = navigation.pending;
@@ -2084,8 +2094,7 @@ class WearFlowController {
               extra: value.pendingNavigation?.screen == pending.screen
                   ? value.pendingNavigation?.extra
                   : null,
-              replaceCurrent:
-                  pending.kind == WearPendingNavigationKind.replace,
+              replaceCurrent: pending.kind == WearPendingNavigationKind.replace,
               popCurrent: pending.kind == WearPendingNavigationKind.pop,
             ),
       clearPendingNavigation: pending == null,

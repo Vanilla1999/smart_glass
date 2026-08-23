@@ -110,14 +110,16 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
   @override
   bool acceptsBarcode(WearScreenId screen) {
     return _authority.availabilityTask.acceptsBarcode(
-      _authority.payload.navigation.logicalScreen,
-    ) && _authority.availabilityTask.screen == screen;
+          _authority.payload.navigation.logicalScreen,
+        ) &&
+        _authority.availabilityTask.screen == screen;
   }
 
   @override
   bool supportsCommand(WearScreenId screen, WearVoiceCommand command) {
     final WearAvailabilityTaskSlice task = _authority.availabilityTask;
-    if (task.isBusy || task.screen != screen ||
+    if (task.isBusy ||
+        task.screen != screen ||
         _authority.payload.navigation.logicalScreen != screen) {
       return false;
     }

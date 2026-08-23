@@ -11,37 +11,45 @@ import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_authority.dart';
 
 void main() {
-  setUp(() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  late WearRuntimeAuthority authority;
+
+  setUp(() async {
     dotenv.testLoad(fileInput: 'WEAR_USE_MOCKS=false');
-    WearDependencies.I.authority.authorize(AuthenticatedUser(
+    authority = WearRuntimeAuthority();
+    await authority.authorize(AuthenticatedUser(
       idUser: 1,
       idEmployee: 2,
       name: 'Test User',
     ));
-    WearDependencies.I.authority.importPrinterSelection(
+    await authority.importPrinterSelection(
       const WearPrinterSelection(
         whitePrinter: WearPrinter(id: '1', name: 'white'),
         yellowPrinter: WearPrinter(id: '2', name: 'yellow'),
       ),
     );
+    await authority.requestNavigation(WearScreenId.scanIdle);
   });
 
-  tearDown(WearDependencies.I.authority.clearSession);
+  tearDown(() => authority.dispose());
 
   test('barcode lookup and print run without scan widgets', () async {
     final List<WearScreenId> navigation = <WearScreenId>[];
     var printCalls = 0;
     final WearScanRuntime runtime = WearScanRuntime(
+      authority: authority,
       lookupBarcode: (_) async => <BarcodeProductInfo>[
         BarcodeProductInfo(id: 10, name: 'Товар', articleRest: 4),
       ],
-      printProduct: (BarcodeProductInfo product) async {
+      printProduct: (BarcodeProductInfo product, _) async {
         printCalls++;
         return 'white';
       },
-      showStatus: (args, completion) async {
+      showStatus: (args, {required completion}) async {
         navigation.add(WearScreenId.status);
       },
       navigate: (
@@ -58,6 +66,7 @@ void main() {
       await runtime.handleBarcode(WearScreenId.scanIdle, '4600000000001'),
       isTrue,
     );
+    await _flush();
 
     expect(printCalls, 1);
     expect(navigation, <WearScreenId>[WearScreenId.status]);
@@ -66,12 +75,13 @@ void main() {
 
   test('duplicate lookup exposes runtime voice items', () async {
     final WearScanRuntime runtime = WearScanRuntime(
+      authority: authority,
       lookupBarcode: (_) async => <BarcodeProductInfo>[
         BarcodeProductInfo(id: 10, name: 'Товар первый'),
         BarcodeProductInfo(id: 11, name: 'Товар второй'),
       ],
-      printProduct: (_) async => 'white',
-      showStatus: (args, completion) async {},
+      printProduct: (_, __) async => 'white',
+      showStatus: (args, {required completion}) async {},
       navigate: (
         WearScreenId _, {
         Object? extra,
@@ -97,11 +107,12 @@ void main() {
     final Completer<String> printResult = Completer<String>();
     final List<WearScreenId> navigation = <WearScreenId>[];
     final WearScanRuntime runtime = WearScanRuntime(
+      authority: authority,
       lookupBarcode: (_) async => <BarcodeProductInfo>[
         BarcodeProductInfo(id: 10, name: 'Товар', articleRest: 4),
       ],
-      printProduct: (_) => printResult.future,
-      showStatus: (args, completion) async {
+      printProduct: (_, __) => printResult.future,
+      showStatus: (args, {required completion}) async {
         navigation.add(WearScreenId.status);
       },
       navigate: (
@@ -128,11 +139,12 @@ void main() {
   test('print status declares an explicit scan completion target', () async {
     WearStatusCompletion? statusCompletion;
     final WearScanRuntime runtime = WearScanRuntime(
+      authority: authority,
       lookupBarcode: (_) async => <BarcodeProductInfo>[
         BarcodeProductInfo(id: 10, name: 'Товар', articleRest: 4),
       ],
-      printProduct: (_) async => 'white',
-      showStatus: (args, completion) async {
+      printProduct: (_, __) async => 'white',
+      showStatus: (args, {required completion}) async {
         statusCompletion = completion;
       },
       navigate: (
@@ -145,8 +157,9 @@ void main() {
 
     await runtime.enterScreen(WearScreenId.scanIdle);
     await runtime.handleBarcode(WearScreenId.scanIdle, '4600000000004');
-    expect(statusCompletion?.kind, WearStatusCompletionKind.goTo);
-    expect(statusCompletion?.target, WearScreenId.scanIdle);
+    await _flush();
+    expect(statusCompletion?.kind, WearStatusCompletionKind.stay);
+    expect(statusCompletion?.target, isNull);
   });
 
   test('repeated barcode during lookup starts one request', () async {
@@ -154,12 +167,13 @@ void main() {
         Completer<List<BarcodeProductInfo>>();
     var lookupCalls = 0;
     final WearScanRuntime runtime = WearScanRuntime(
+      authority: authority,
       lookupBarcode: (_) {
         lookupCalls++;
         return lookup.future;
       },
-      printProduct: (_) async => 'white',
-      showStatus: (args, completion) async {},
+      printProduct: (_, __) async => 'white',
+      showStatus: (args, {required completion}) async {},
       navigate: (_, {extra, replaceCurrent = false}) async {},
     );
     addTearDown(runtime.dispose);
@@ -173,7 +187,7 @@ void main() {
 
     expect(second, isFalse);
     expect(lookupCalls, 1);
-    expect(runtime.state.phase, WearScanRuntimePhase.lookup);
+    expect(runtime.state.phase, WearScanRuntimePhase.loading);
     expect(runtime.state.lastAcceptedBarcode, '4600000000006');
 
     lookup.complete(const <BarcodeProductInfo>[]);
@@ -182,12 +196,13 @@ void main() {
 
   test('state stream exposes selection focus and products', () async {
     final WearScanRuntime runtime = WearScanRuntime(
+      authority: authority,
       lookupBarcode: (_) async => <BarcodeProductInfo>[
         BarcodeProductInfo(id: 10, name: 'Первый'),
         BarcodeProductInfo(id: 11, name: 'Второй'),
       ],
-      printProduct: (_) async => 'white',
-      showStatus: (args, completion) async {},
+      printProduct: (_, __) async => 'white',
+      showStatus: (args, {required completion}) async {},
       navigate: (_, {extra, replaceCurrent = false}) async {},
     );
     addTearDown(runtime.dispose);
@@ -208,4 +223,10 @@ void main() {
     expect(runtime.state.products.map((product) => product.name),
         <String>['Первый', 'Второй']);
   });
+}
+
+Future<void> _flush() async {
+  for (int index = 0; index < 6; index++) {
+    await Future<void>.delayed(Duration.zero);
+  }
 }

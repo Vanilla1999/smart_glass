@@ -12,6 +12,7 @@ import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availa
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_input_screen.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_authority.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_check_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/printers/wear_printer_select_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
@@ -117,9 +118,13 @@ void main() {
       await tester.tap(find.text('MOCK Желтый 1'));
       await _pumpUntilFound(tester, find.text('Завершение проверки'));
 
-      expect(WearDependencies.I.authority.features.printer.selection?.whitePrinter.name,
+      expect(
+          WearDependencies
+              .I.authority.features.printer.selection?.whitePrinter.name,
           'MOCK Белый 1');
-      expect(WearDependencies.I.authority.features.printer.selection?.yellowPrinter.name,
+      expect(
+          WearDependencies
+              .I.authority.features.printer.selection?.yellowPrinter.name,
           'MOCK Желтый 1');
       expect(find.text('Завершение проверки'), findsWidgets);
       expect(find.text('Завершить'), findsWidgets);

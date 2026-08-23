@@ -108,8 +108,9 @@ class WearScannerControlSlice {
           ? null
           : expectedLogicalScreen ?? this.expectedLogicalScreen,
       observationRevision: observationRevision ?? this.observationRevision,
-      lastAcceptedDeliveryId:
-          clearDelivery ? null : lastAcceptedDeliveryId ?? this.lastAcceptedDeliveryId,
+      lastAcceptedDeliveryId: clearDelivery
+          ? null
+          : lastAcceptedDeliveryId ?? this.lastAcceptedDeliveryId,
       lastError: clearError ? null : lastError ?? this.lastError,
     );
   }

@@ -39,8 +39,9 @@ class WearRuntimeGlassesSender {
   }
 
   Future<void> reconnect() {
-    final WearGlassesEnvelope envelope = _latest ??
+    final WearGlassesEnvelope envelope =
         WearRuntimeProjection.projectGlasses(_store.state);
+    _acceptedVersion = envelope.version;
     _latest = envelope;
     return _enqueue(envelope, reconnect: true);
   }

@@ -140,9 +140,8 @@ class WearAvailabilityTaskSlice implements WearAvailabilityFeaturePayload {
       lastAcceptedBarcode: clearBarcodeDedupe
           ? null
           : lastAcceptedBarcode ?? this.lastAcceptedBarcode,
-      lastAcceptedStep: clearBarcodeDedupe
-          ? null
-          : lastAcceptedStep ?? this.lastAcceptedStep,
+      lastAcceptedStep:
+          clearBarcodeDedupe ? null : lastAcceptedStep ?? this.lastAcceptedStep,
       nextOperationId: nextOperationId ?? this.nextOperationId,
     );
   }
@@ -223,7 +222,7 @@ class WearAvailabilityTaskReset extends WearIntent {
 }
 
 class WearAvailabilityOperationEffect extends WearEffect {
-  const WearAvailabilityOperationEffect({
+  WearAvailabilityOperationEffect({
     required super.sessionEpoch,
     required super.operationId,
     required this.operation,
@@ -519,8 +518,7 @@ class WearAvailabilitySliceReducer implements WearSliceReducer {
     }
     if (intent.screen == WearScreenId.availabilityProduct &&
         intent.extra is WearAvailabilityGroup) {
-      final WearAvailabilityGroup group =
-          intent.extra as WearAvailabilityGroup;
+      final WearAvailabilityGroup group = intent.extra as WearAvailabilityGroup;
       if (next.flow.selectedGroup?.id != group.id ||
           next.flow.products.isEmpty) {
         return _startEffectFromState(
@@ -771,15 +769,17 @@ class WearAvailabilitySliceReducer implements WearSliceReducer {
       nextAggregate,
       features,
       busy,
-    ).withLegacy(
-      WearLegacyRuntimeSnapshot(
-        logicalScreen: target,
-        sourceRevision: state.legacy.sourceRevision + 1,
-      ),
-    ).expectOperation(
-      kind: WearAvailabilityOperation.navigate.operationKind,
-      operationId: allocation.operationId,
-    );
+    )
+        .withLegacy(
+          WearLegacyRuntimeSnapshot(
+            logicalScreen: target,
+            sourceRevision: state.legacy.sourceRevision + 1,
+          ),
+        )
+        .expectOperation(
+          kind: WearAvailabilityOperation.navigate.operationKind,
+          operationId: allocation.operationId,
+        );
     return WearReduction.accept(
       nextState: next,
       effects: <WearEffect>[
@@ -807,8 +807,7 @@ class WearAvailabilitySliceReducer implements WearSliceReducer {
     if (intent.sessionEpoch != state.sessionEpoch) {
       return WearReduction.reject(WearDispatchRejectReason.staleEpoch);
     }
-    if (state.expectedOperationId(kind) != intent.operationId ||
-        !task.isBusy) {
+    if (state.expectedOperationId(kind) != intent.operationId || !task.isBusy) {
       return WearReduction.reject(WearDispatchRejectReason.staleOperation);
     }
     WearRuntimeState cleared = state.clearExpectedOperation(kind);
@@ -902,8 +901,7 @@ class WearAvailabilitySliceReducer implements WearSliceReducer {
     if (intent.sessionEpoch != state.sessionEpoch) {
       return WearReduction.reject(WearDispatchRejectReason.staleEpoch);
     }
-    if (state.expectedOperationId(kind) != intent.operationId ||
-        !task.isBusy) {
+    if (state.expectedOperationId(kind) != intent.operationId || !task.isBusy) {
       return WearReduction.reject(WearDispatchRejectReason.staleOperation);
     }
     final WearAvailabilityTaskSlice failed = task.copyWith(

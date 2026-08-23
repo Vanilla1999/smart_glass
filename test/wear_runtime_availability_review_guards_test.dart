@@ -10,7 +10,8 @@ import 'package:smart_glasses/modules/wear/domain/availability/use_case/wear_ava
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
 
 void main() {
-  test('single direct-scan result navigates with product route extra', () async {
+  test('single direct-scan result navigates with product route extra',
+      () async {
     final WearAvailabilityProduct expected = _product(10, 'Товар');
     final _Repository repository = _Repository(
       find: (_) async => <WearAvailabilityProduct>[expected],
@@ -84,7 +85,8 @@ void main() {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     final WearAvailabilityRuntime runtime = _runtime(authority, repository);
     addTearDown(() async {
-      if (!lookup.isCompleted) lookup.complete(const <WearAvailabilityProduct>[]);
+      if (!lookup.isCompleted)
+        lookup.complete(const <WearAvailabilityProduct>[]);
       await runtime.dispose();
       await authority.dispose();
     });
@@ -162,13 +164,15 @@ void main() {
       authority.availabilityTask.nextOperationId,
       greaterThan(oldOperationId),
     );
-    expect(authority.availabilityTask.flow.selectedProduct, same(currentProduct));
+    expect(
+        authority.availabilityTask.flow.selectedProduct, same(currentProduct));
 
     oldLookup.complete(<WearAvailabilityProduct>[oldProduct]);
     await Future<void>.delayed(Duration.zero);
     await Future<void>.delayed(Duration.zero);
 
-    expect(authority.availabilityTask.flow.selectedProduct, same(currentProduct));
+    expect(
+        authority.availabilityTask.flow.selectedProduct, same(currentProduct));
   });
 }
 

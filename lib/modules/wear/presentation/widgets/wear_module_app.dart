@@ -24,6 +24,7 @@ import 'package:smart_glasses/modules/wear/navigation/wear_routes.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_adapter.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 import 'package:smart_glasses/modules/wear/services/wear_scanner_runtime_policy.dart';
 import 'package:smart_glasses/modules/wear/services/wear_voice_session.dart';
 import 'package:smart_glasses/modules/wear/services/voice_state.dart';
@@ -216,16 +217,13 @@ class _WearModuleAppState extends State<WearModuleApp>
     );
     bool wasAuthorized = flow.authority.isAuthorized;
     _controlStateSub = flow.authority.states.listen((WearRuntimeState state) {
-      final controls = state
-          .payloadAs<WearAggregatePayload>()
-          .controls as WearRuntimeControlPayload;
+      final controls = state.payloadAs<WearAggregatePayload>().controls
+          as WearRuntimeControlPayload;
       WearStatusIconReporter.I.setVoiceCommandsEnabled(
         controls.voice.commandsEnabled,
       );
-      final bool isAuthorized = state
-          .payloadAs<WearAggregatePayload>()
-          .session
-          .isAuthorized;
+      final bool isAuthorized =
+          state.payloadAs<WearAggregatePayload>().session.isAuthorized;
       if (isAuthorized == wasAuthorized) return;
       wasAuthorized = isAuthorized;
       if (isAuthorized) {
@@ -244,8 +242,7 @@ class _WearModuleAppState extends State<WearModuleApp>
       WearDependencies.I.barcodeDispatcher.start();
       _syncScannerForCurrentScreen();
     }
-    _screenActionsSub =
-        flow.screenActionsChanged.listen((WearScreenId screen) {
+    _screenActionsSub = flow.screenActionsChanged.listen((WearScreenId screen) {
       if (screen == flow.state.screen) {
         _syncScannerForCurrentScreen();
         if (widget.onStartVoice == null) {
@@ -466,7 +463,8 @@ class _WearModuleAppState extends State<WearModuleApp>
     if (_runtimeTerminated) return;
     final int observationRevision = ++_routerObservationRevision;
     final flow = _flow;
-    if (_voiceState.phase == VoicePhase.disabled && _flow.authority.isAuthorized) {
+    if (_voiceState.phase == VoicePhase.disabled &&
+        _flow.authority.isAuthorized) {
       _startVoice('router');
     }
     // Use _router.state.matchedLocation instead of
@@ -492,7 +490,8 @@ class _WearModuleAppState extends State<WearModuleApp>
     if (screenId != null) {
       _syncScannerForCurrentScreen(routeScreen: screenId);
       if (widget.onStartVoice == null) {
-        unawaited(_flow.authority.navigationAdapter().observePhoneRoute(screenId));
+        unawaited(
+            _flow.authority.navigationAdapter().observePhoneRoute(screenId));
       }
       if (screenId == flow.state.screen) {
         _configureVoiceForScreen(screenId);
@@ -710,7 +709,6 @@ class _WearModuleAppState extends State<WearModuleApp>
       );
     });
   }
-
 
   Future<void> _restartVoice(
     Future<void> Function(String reason) restart,

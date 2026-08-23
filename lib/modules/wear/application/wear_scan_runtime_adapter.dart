@@ -111,6 +111,17 @@ class WearScanRuntime implements WearBackgroundRuntime {
 
   WearScanRuntimeState get state => _mapState(_authority.scanTask);
 
+  Future<bool> setFocusedIndex(int index) async {
+    final WearDispatchResult result = await _authority.focusScanProduct(index);
+    return result.accepted;
+  }
+
+  Future<bool> selectProduct(BarcodeProductInfo product) async {
+    final WearDispatchResult result =
+        await _authority.selectScanProduct(product.id);
+    return result.accepted;
+  }
+
   @override
   bool handles(WearScreenId screen) {
     return screen == WearScreenId.scanIdle ||
@@ -320,8 +331,7 @@ class WearScanRuntime implements WearBackgroundRuntime {
         }
         final int selected =
             task.focusedIndex.clamp(0, task.products.length - 1);
-        final int pageStart =
-            selected ~/ _visibleItemCount * _visibleItemCount;
+        final int pageStart = selected ~/ _visibleItemCount * _visibleItemCount;
         final List<BarcodeProductInfo> visible = task.products
             .skip(pageStart)
             .take(_visibleItemCount)

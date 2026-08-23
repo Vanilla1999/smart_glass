@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
@@ -12,6 +13,7 @@ import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 void main() {
   test('late navigation failure cannot write printer error on another screen',
       () async {
+    dotenv.testLoad(fileInput: 'WEAR_USE_MOCKS=false');
     final Completer<void> navigation = Completer<void>();
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
@@ -28,9 +30,9 @@ void main() {
       AuthenticatedUser(idUser: 1, idEmployee: 2, name: 'User'),
     );
     await authority.enterPrinterScreen();
-    await Future<void>.delayed(Duration.zero);
-    await authority.selectPrinterById('white');
-    await authority.selectPrinterById('yellow');
+    await _flush();
+    await authority.selectPrinter(authority.printerTask.visiblePrinters.first);
+    await authority.selectPrinter(authority.printerTask.visiblePrinters.last);
     final int operationId = authority.state.expectedOperationId(
       WearNavigateAfterPrinterSelectionEffect.navigationOperationKind,
     )!;
@@ -49,4 +51,10 @@ void main() {
     expect(authority.printerTask.error, isNull);
     navigation.complete();
   });
+}
+
+Future<void> _flush() async {
+  for (int index = 0; index < 6; index++) {
+    await Future<void>.delayed(Duration.zero);
+  }
 }

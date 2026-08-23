@@ -148,9 +148,10 @@ class WearPrinterRuntime implements WearBackgroundRuntime {
         result = await _authority.movePrinterFocus(1);
         break;
       case WearVoiceCommand.select:
-        final List<WearPrinter> visible = _authority.printerTask.visiblePrinters;
-        final int index = _authority.printerTask.focusedIndex
-            .clamp(0, visible.length - 1);
+        final List<WearPrinter> visible =
+            _authority.printerTask.visiblePrinters;
+        final int index =
+            _authority.printerTask.focusedIndex.clamp(0, visible.length - 1);
         result = await _authority.selectPrinter(visible[index]);
         break;
       case WearVoiceCommand.nextPage:
@@ -198,8 +199,7 @@ class WearPrinterRuntime implements WearBackgroundRuntime {
   @override
   VoiceDynamicItemsSnapshot dynamicVoiceItemsFor(WearScreenId screen) {
     if (!handles(screen)) return VoiceDynamicItemsSnapshot.empty;
-    final List<VoiceDynamicItem> items = _authority
-        .printerTask.visiblePrinters
+    final List<VoiceDynamicItem> items = _authority.printerTask.visiblePrinters
         .map(
           (WearPrinter item) => VoiceDynamicItem(
             id: item.id,
@@ -298,7 +298,8 @@ class WearPrinterRuntime implements WearBackgroundRuntime {
       subtitle: task.step == WearPrinterTaskStep.yellow
           ? 'Жёлтые ценники'
           : 'Белые ценники',
-      items: visible.map((WearPrinter item) => item.name).toList(growable: false),
+      items:
+          visible.map((WearPrinter item) => item.name).toList(growable: false),
       voiceHints: WearGlassesVoiceHints.forVisibleItems(
         screen: WearScreenId.printerSelect,
         snapshot: snapshot,

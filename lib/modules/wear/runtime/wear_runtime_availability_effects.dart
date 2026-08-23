@@ -15,8 +15,8 @@ typedef WearAvailabilityEffectPhotoCapture = Future<void> Function();
 typedef WearAvailabilityEffectPrint = Future<String> Function(
   WearAvailabilityProduct product,
 );
-typedef WearAvailabilityEffectFillAdd =
-    Future<List<WearAvailabilityProduct>> Function(String barcode);
+typedef WearAvailabilityEffectFillAdd = Future<List<WearAvailabilityProduct>>
+    Function(String barcode);
 typedef WearAvailabilityEffectFillReset = Future<void> Function();
 
 class WearAvailabilityEffectExecutor
@@ -157,7 +157,8 @@ class WearAvailabilityEffectExecutor
           if (barcode == null || barcode.isEmpty) {
             throw StateError('Пустой штрихкод наполнения');
           }
-          final List<WearAvailabilityProduct> products = await _fillAdd(barcode);
+          final List<WearAvailabilityProduct> products =
+              await _fillAdd(barcode);
           addedCount = products.length;
           message = products.length == 1
               ? 'Добавлено: ${products.first.name}'

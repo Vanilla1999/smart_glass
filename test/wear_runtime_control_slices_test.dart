@@ -100,7 +100,8 @@ void main() {
     expect(authority.controls.scanner.barcodeAdmissionEnabled, isTrue);
   });
 
-  test('active route drift blocks barcode while background logical route admits',
+  test(
+      'active route drift blocks barcode while background logical route admits',
       () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
@@ -111,7 +112,8 @@ void main() {
       observationRevision: 1,
       phase: WearScannerHardwarePhase.prepared,
     );
-    final WearRuntimeNavigationAdapter navigation = authority.navigationAdapter();
+    final WearRuntimeNavigationAdapter navigation =
+        authority.navigationAdapter();
     await navigation.observePhoneRoute(WearScreenId.menu);
     await authority.requestNavigation(WearScreenId.scanIdle);
     await authority.setPhoneUiActive(true);

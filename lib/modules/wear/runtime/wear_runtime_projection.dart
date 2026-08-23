@@ -113,12 +113,10 @@ class WearRuntimeProjection {
       visible: visible,
       phase: voice.phase.name,
       message: switch (voice.phase) {
-        WearVoiceRuntimePhase.starting =>
-          'Подготовка\nголосового управления',
+        WearVoiceRuntimePhase.starting => 'Подготовка\nголосового управления',
         WearVoiceRuntimePhase.reconnecting =>
           'Переподключаем\nголосовое управление',
-        WearVoiceRuntimePhase.unavailable =>
-          'Голосовое управление недоступно',
+        WearVoiceRuntimePhase.unavailable => 'Голосовое управление недоступно',
         WearVoiceRuntimePhase.disabled || WearVoiceRuntimePhase.ready => null,
       },
     );
@@ -138,14 +136,14 @@ class WearRuntimeProjection {
         aggregate.presentation as WearPresentationFocusSlice;
     final WearGlassesPayload base = switch (screen) {
       WearScreenId.menu => WearGlassesPayload.menu(
-          selectedIndex: presentation.focusFor(screen),
+          selectedIndex: presentation.focusFor(screen) ?? 0,
         ),
       WearScreenId.homeConfirm => WearGlassesPayload.homeConfirm(
-          selectedIndex: presentation.focusFor(screen),
+          selectedIndex: presentation.focusFor(screen) ?? 0,
         ),
       WearScreenId.help => WearGlassesPayload.help(),
       WearScreenId.continueScan => WearGlassesPayload.continueScan(
-          selectedIndex: presentation.focusFor(screen),
+          selectedIndex: presentation.focusFor(screen) ?? 0,
         ),
       WearScreenId.printerSelect => _printer(features.printer),
       WearScreenId.scanIdle ||
@@ -154,7 +152,7 @@ class WearRuntimeProjection {
         _scan(features.scan as WearScanTaskSlice),
       WearScreenId.availabilityInteraction =>
         WearAvailabilityGlassesPayloads.interactionTypes(
-          selectedIndex: presentation.focusFor(screen),
+          selectedIndex: presentation.focusFor(screen) ?? 0,
         ),
       WearScreenId.availabilityGroup ||
       WearScreenId.availabilityProduct ||
@@ -324,7 +322,8 @@ class WearRuntimeProjection {
           message: 'Не выбрана товарная группа',
         );
       }
-      return _availabilityProducts(group, task.flow.products, task.focusedIndex);
+      return _availabilityProducts(
+          group, task.flow.products, task.focusedIndex);
     }
     return WearAvailabilityGlassesPayloads.fromFlow(task.flow);
   }

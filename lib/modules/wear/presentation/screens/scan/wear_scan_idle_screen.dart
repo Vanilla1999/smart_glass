@@ -98,7 +98,7 @@ class _WearScanIdleScreenState extends State<WearScanIdleScreen>
               ),
             ),
           ),
-          if (_state.busy)
+          if (_state.isLoading)
             Positioned.fill(
               child: _ScanLoadingView(
                 statusText: _state.loadingText,
