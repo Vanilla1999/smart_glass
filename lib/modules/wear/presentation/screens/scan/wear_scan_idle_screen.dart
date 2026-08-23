@@ -17,7 +17,7 @@ import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
 class WearScanIdleScreen extends StatefulWidget {
-  const WearScanIdleScreen({super.key});
+  const WearScanIdleScreen({super.key, Object? printers});
 
   static const String route = '/wear_scan_idle';
 
