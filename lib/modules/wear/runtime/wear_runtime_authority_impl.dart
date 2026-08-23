@@ -48,7 +48,7 @@ class WearRuntimeAuthority {
                 availability: WearAvailabilityTaskSlice.initial(),
               ),
               controls: const WearRuntimeControlPayload.initial(),
-              presentation: const WearLegacyPresentationPayload(),
+              presentation: WearPresentationFocusSlice(),
               uiEffects: WearUiEffectSlice(),
             ),
           ),
@@ -108,6 +108,8 @@ class WearRuntimeAuthority {
     required WearScreenId expectedScreen,
     String? value,
     WearUiEffectKind? uiEffectKind,
+    int? focusIndex,
+    int? expectedSessionEpoch,
   }) {
     return _store.dispatch(WearSemanticInput(
       kind: kind,
@@ -115,6 +117,8 @@ class WearRuntimeAuthority {
       expectedScreen: expectedScreen,
       value: value,
       uiEffectKind: uiEffectKind,
+      focusIndex: focusIndex,
+      expectedSessionEpoch: expectedSessionEpoch ?? _store.state.sessionEpoch,
     ));
   }
 

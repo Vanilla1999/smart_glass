@@ -24,8 +24,22 @@ class WearLegacyControlPayload implements WearControlPayload {
 
 abstract interface class WearPresentationPayload {}
 
-class WearLegacyPresentationPayload implements WearPresentationPayload {
-  const WearLegacyPresentationPayload();
+class WearPresentationFocusSlice implements WearPresentationPayload {
+  WearPresentationFocusSlice({
+    Map<WearScreenId, int> focusedIndices = const <WearScreenId, int>{},
+  }) : focusedIndices = UnmodifiableMapView<WearScreenId, int>(
+          Map<WearScreenId, int>.unmodifiable(focusedIndices),
+        );
+
+  final UnmodifiableMapView<WearScreenId, int> focusedIndices;
+
+  int? focusFor(WearScreenId screen) => focusedIndices[screen];
+
+  WearPresentationFocusSlice withFocus(WearScreenId screen, int index) {
+    return WearPresentationFocusSlice(
+      focusedIndices: <WearScreenId, int>{...focusedIndices, screen: index},
+    );
+  }
 }
 
 class WearSessionSlice {
@@ -228,7 +242,7 @@ class WearAggregatePayload implements WearRuntimePayload {
       navigation: WearNavigationSlice.initial(screen: initialScreen),
       features: const WearLegacyFeaturePayload(),
       controls: controls,
-      presentation: const WearLegacyPresentationPayload(),
+      presentation: WearPresentationFocusSlice(),
       uiEffects: WearUiEffectSlice(),
     );
   }

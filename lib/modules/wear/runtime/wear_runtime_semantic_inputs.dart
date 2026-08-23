@@ -10,22 +10,26 @@ import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
 enum WearInputModality { touch, voice, button, barcode, manual }
 
-enum WearSemanticInputKind { barcode, requestUiEffect }
+enum WearSemanticInputKind { barcode, requestUiEffect, presentationFocus }
 
 class WearSemanticInput extends WearIntent {
   const WearSemanticInput({
     required this.kind,
     required this.modality,
     required this.expectedScreen,
+    required this.expectedSessionEpoch,
     this.value,
     this.uiEffectKind,
+    this.focusIndex,
   });
 
   final WearSemanticInputKind kind;
   final WearInputModality modality;
   final WearScreenId expectedScreen;
+  final int expectedSessionEpoch;
   final String? value;
   final WearUiEffectKind? uiEffectKind;
+  final int? focusIndex;
 }
 
 enum WearUiEffectKind { manualBarcodeInput, systemWifiSettings, confirmationDialog }
@@ -175,6 +179,9 @@ class WearSemanticInputReducer implements WearSliceReducer {
   WearReduction? reduceSlice(WearRuntimeState state, WearIntent intent) {
     final WearAggregatePayload aggregate = state.payloadAs<WearAggregatePayload>();
     if (intent is WearSemanticInput) {
+      if (intent.expectedSessionEpoch != state.sessionEpoch) {
+        return WearReduction.reject(WearDispatchRejectReason.staleEpoch);
+      }
       if (intent.expectedScreen != aggregate.navigation.logicalScreen) {
         return WearReduction.reject(WearDispatchRejectReason.staleScreen);
       }
@@ -211,6 +218,23 @@ class WearSemanticInputReducer implements WearSliceReducer {
                 expectedScreen: intent.expectedScreen,
                 createdRevision: state.revision + 1,
               ),
+            )),
+          );
+        case WearSemanticInputKind.presentationFocus:
+          final int? index = intent.focusIndex;
+          if (index == null ||
+              index < 0 ||
+              !_ownsPresentationFocus(intent.expectedScreen)) {
+            return WearReduction.reject(WearDispatchRejectReason.unsupported);
+          }
+          final WearPresentationFocusSlice presentation =
+              aggregate.presentation as WearPresentationFocusSlice;
+          if (presentation.focusFor(intent.expectedScreen) == index) {
+            return WearReduction.accept();
+          }
+          return WearReduction.accept(
+            nextState: state.withPayload(aggregate.copyWith(
+              presentation: presentation.withFocus(intent.expectedScreen, index),
             )),
           );
       }
@@ -272,5 +296,12 @@ class WearSemanticInputReducer implements WearSliceReducer {
     return WearReduction.accept(
       nextState: state.withPayload(aggregate.copyWith(uiEffects: next)),
     );
+  }
+
+  bool _ownsPresentationFocus(WearScreenId screen) {
+    return screen == WearScreenId.menu ||
+        screen == WearScreenId.homeConfirm ||
+        screen == WearScreenId.continueScan ||
+        screen == WearScreenId.availabilityInteraction;
   }
 }
