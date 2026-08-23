@@ -53,5 +53,15 @@ help-select regressions. Они повторно проверены в полн�
 - anonymous fallback существует только для badge auth на `main`;
 - физический `WearFlowState`/status/clarification cleanup честно остаётся MR-S12.
 
+## Non-blocking compatibility debt
+
+`WearFlowController._clearTransientPayloadOnScreenChange()` всё ещё относится к
+legacy transient pipeline и сравнивает target после aggregate navigation commit.
+В production canonical glasses output уже отправляет
+`WearRuntimeGlassesSender` из committed aggregate snapshot, а controller output
+остаётся `NoopWearGlassesOutput`; поэтому этот путь не является production
+business/projection owner в MR-S11. Тем не менее legacy transient timers/payload
+обязаны быть физически удалены в MR-S12 и не могут пережить final ownership gate.
+
 Validation остаётся статической: Flutter, analyzer, Gradle, build и device tests
 не запускались.
