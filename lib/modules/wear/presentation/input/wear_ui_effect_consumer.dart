@@ -63,7 +63,11 @@ class WearUiEffectConsumer {
         await authority.cancelUiEffect(effect);
         return;
       }
-      await execute(effect);
+      try {
+        await execute(effect);
+      } on Object {
+        await authority.cancelUiEffect(effect);
+      }
     } finally {
       _consuming = false;
     }

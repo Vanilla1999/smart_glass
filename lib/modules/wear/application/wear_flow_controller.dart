@@ -413,11 +413,11 @@ class WearFlowController {
     unawaited(_authority.navigationAdapter().observePhoneRoute(screen));
     final WearScreenId logicalScreen =
         _authority.payload.navigation.logicalScreen;
+    if (screen != logicalScreen) return;
     _setState(_stateForEnteredScreen(
       logicalScreen,
       extra: extra,
     ));
-    if (screen != logicalScreen) return;
     _clearContextPayload(screen, extra);
     final WearFlowAction? onVisible = _screenActions[screen]?.onVisible;
     if (onVisible != null) {
