@@ -7,30 +7,29 @@
 MR-S11 отделяет authoritative logical navigation от Flutter route attachment и
 переводит module orchestration на committed `WearRuntimeState`.
 
+- PR: [#16](https://github.com/Vanilla1999/smart_glass/pull/16).
 - Base branch: `experiment/aligned-audio-frontend`.
 - Base commit: `7f9e0deafc4633c51ee4b77f70794044fe44e4cc`.
 - Work branch: `refactor/wear-runtime-route-observation`.
 - Plan: [`docs/audits/WEAR_MR_S11_ROUTE_OBSERVATION_PLAN.md`](../audits/WEAR_MR_S11_ROUTE_OBSERVATION_PLAN.md).
+- Review record: [`docs/audits/WEAR_MR_S11_REVIEW_FINDINGS.md`](../audits/WEAR_MR_S11_REVIEW_FINDINGS.md).
 
 ## 2. Ownership result
 
 | Value/decision | Authoritative owner after MR | Retained compatibility |
 |---|---|---|
-| Logical business screen | Aggregate `WearNavigationSlice.logicalScreen` | `WearFlowState.screen` remains derived/temporary until MR-S12 |
-| Actual Flutter route | Aggregate `actualPhoneScreen` through epoch-bound observation | local route string/screen cache is host diagnostics only |
-| Barcode source screen | Captured aggregate logical screen | unsupported semantic barcode may call guarded legacy handler until auth migration in MR-S12 |
-| Barcode source epoch | Captured aggregate `sessionEpoch` | none |
-| Voice screen provider | Aggregate logical screen | screen action registry remains capability wiring |
-| Scanner orchestration | Aggregate snapshot + handler/runtime capability | base controller capability getter is compatibility-only |
-| Widget attachment | Observation/rendering and UI action registration | no business `enterScreen()` under `lib/modules/wear/presentation` |
+| Logical business screen | Aggregate `WearNavigationSlice.logicalScreen` | `WearFlowState.screen` remains a temporary derived mirror until MR-S12 |
+| Actual Flutter route | Aggregate `actualPhoneScreen` through epoch-bound observation | local route cache is host diagnostics only |
+| Barcode source screen/epoch | One captured aggregate snapshot | guarded anonymous-main fallback only |
+| Voice screen/admission | Aggregate logical screen | screen action registry remains capability wiring |
+| Scanner orchestration | Aggregate snapshot + capability valid for the same logical screen | facade fails closed on mirror drift |
+| Widget attachment | Observation/rendering and UI action registration | no business `.enterScreen(` under production presentation |
 | Canonical glasses payload | `WearRuntimeProjection.projectGlasses()` | transient compatibility overlay remains until MR-S12 |
 
 ## 3. Route observation contract
 
 `WearModuleApp` no longer subscribes to `WearFlowController.stateStream` and does
-not read `flow.state.screen`.
-
-Router changes follow this order:
+not read controller screen for business attribution.
 
 ```text
 Flutter route change
@@ -41,158 +40,107 @@ Flutter route change
   -> matching pending request acknowledgement
 ```
 
-The router does not call `flow.observeRoute()` and cannot invoke feature entry,
-load, print, photo, selection reset or logical navigation.
+The router does not call feature entry. A route may lag aggregate logical state;
+scanner and voice are configured from the aggregate transition independently of
+widget construction.
 
-A phone route may lag aggregate logical state. Voice grammar and screen-off
-scanner orchestration are updated on aggregate logical transitions independently
-of widget construction.
+## 4. Barcode, voice and scanner boundary
 
-## 4. Barcode boundary
+`WearBarcodeDispatcher` captures `sessionEpoch + logicalScreen` from one committed
+snapshot. Delivery receipt and semantic barcode dispatch use exactly this pair.
+Queued input cannot be re-labelled as belonging to a newer session or screen.
 
-`WearBarcodeDispatcher` receives `WearRuntimeAuthority` directly.
+Fallback after `unsupported` is accepted only when all are true:
 
-At admission it captures from one committed snapshot:
+- runtime remains anonymous;
+- captured/current screen is `WearScreenId.main`;
+- epoch and screen are still current;
+- rejection is `unsupported`, never stale/duplicate/busy/terminal.
 
-- `sessionEpoch`;
-- `logicalScreen`;
-- epoch-bound `WearRuntimeControlAdapter`;
-- monotonic delivery ID.
+`WearVoiceApplicationDispatcher` uses aggregate logical navigation for command,
+phrase, preview, delay and admission context. It no longer reads
+`_flow.state.screen`.
 
-Both scanner delivery acceptance and semantic barcode dispatch use that same
-captured epoch/screen. A queued callback cannot be re-labelled as input for a
-newer session or screen.
+The temporary production facade rejects barcode, voice, phrase and hardware
+callbacks whenever retained controller screen differs from aggregate logical
+screen. This is fail-closed protection until MR-S12 physically removes the mirror.
 
-The unsupported semantic fallback is deliberately bounded:
+## 5. Pre-auth and logout contract
 
-- only `WearDispatchRejectReason.unsupported` may fall back;
-- current epoch and logical screen must still equal the captured values;
-- stale, duplicate, busy and terminal receipts never bypass aggregate admission;
-- production uses it for the still-legacy pre-auth badge handler;
-- MR-S12 replaces it with aggregate-owned auth effect/state.
+Badge scanner before authorization is the only anonymous runtime exception:
 
-## 5. Pre-auth scanner repair
+- logical and actual screens must both be `main`;
+- phone UI and bounded runtime must be active;
+- scanner hardware must be prepared;
+- registered main capability must accept barcode.
 
-The previous aggregate control policy accidentally made badge authorization
-impossible before a session existed, despite the retained product contract and
-legacy policy tests.
-
-MR-S11 adds two narrow reducers:
-
-- `WearPreAuthLifecycleReducer`: anonymous runtime may become active only on
-  logical `main`;
-- `WearPreAuthScannerAdmissionReducer`: scanner admission is allowed only when
-  logical and actual screens are both `main`, phone UI is active, hardware is
-  prepared and the registered screen capability accepts barcode.
-
-Anonymous runtime activation on `scannerConnect`, settings or any other screen
-remains rejected.
-
-Authorization advances the epoch and resets scanner controls through the existing
-feature-epoch reducer. Old route/scanner adapters are then stale by construction.
+Logout advances epoch, resets feature/control state, publishes pending
+replace-to-main navigation and keeps the bounded pre-auth runtime active.
+Compatibility reset explicitly reprojects aggregate `main`; it cannot revert the
+business screen to the old controller initial value.
 
 ## 6. Widget lifecycle cleanup
 
-Production files under `lib/modules/wear/presentation` no longer call
-`.enterScreen(`.
-
-Removed lifecycle business entry from:
-
-- main/auth;
-- menu;
-- home confirmation;
-- continue scan;
-- availability interaction;
-- help;
-- status;
-- settings;
-- DB settings;
-- Wi-Fi settings;
-- printer settings;
-- voice clarification attachment.
-
-The widgets may still register UI action callbacks, subscribe to aggregate
-projection, create local controllers and execute UI-only work.
+Production files under `lib/modules/wear/presentation` no longer invoke business
+`.enterScreen(`. Widgets may subscribe, register UI actions and execute UI-only
+work, but cannot start feature load/print/photo/navigation merely because they
+were built.
 
 Help, status and auth widgets no longer publish canonical glasses payloads.
-
-Voice clarification still uses a bounded compatibility bridge when its nested
-argument/history context changes after a semantic clarification action. Initial
-widget attachment does not invoke the bridge. Ownership of clarification
-arguments/focus/notice moves in MR-S12.
+Voice clarification retains only a bounded argument/focus/notice bridge after an
+actual semantic clarification action; attachment itself is observation-only.
 
 ## 7. Regression specifications
 
-Added:
-
 - `test/wear_runtime_route_observation_boundary_test.dart`;
-- `test/wear_pre_auth_runtime_contract_test.dart`.
+- `test/wear_pre_auth_runtime_contract_test.dart`;
+- `test/wear_business_navigation_source_gate_test.dart`.
 
-They specify:
+They specify route/logical separation, old-epoch rejection, bounded pre-auth
+scanner, widget lifecycle restrictions, aggregate route sources, direct-route
+prohibitions, logout pending navigation and source-level voice/barcode guards.
 
-- route observation cannot change logical screen;
-- route/scanner adapters from an old epoch are rejected;
-- pre-auth matching `main` route prepares and admits badge scanner;
-- route drift closes pre-auth admission;
-- anonymous runtime activation is allowed only on `main`;
-- presentation Dart sources cannot call `.enterScreen(`;
-- module orchestration cannot read controller screen/state stream or call
-  `flow.observeRoute()`;
-- barcode/voice production wiring captures aggregate screen and epoch;
-- help/status/auth widgets cannot publish canonical glasses payload.
+## 8. Review record
 
-Existing `test/wear_scanner_runtime_policy_test.dart` remains the behavioral
-contract for pre-auth, active-route, background and terminal decisions.
+Initial reviewed HEAD:
 
-## 8. Static review gates
+`4afebb0eac50ca4311c9afe18821889d00d55075`.
 
-Review must verify on the exact PR HEAD:
+Initial verdict: `REQUEST CHANGES`.
 
-- no source under `lib/modules/wear/presentation` contains `.enterScreen(`;
-- `WearModuleApp` has one aggregate state subscription and no flow-state
-  subscription;
-- route observation and ACK use an epoch-bound adapter;
-- route observation never calls feature/runtime entry;
-- scanner and voice synchronize on aggregate logical transitions;
-- barcode delivery and semantic dispatch share captured epoch/screen;
-- only unsupported semantic barcode can reach compatibility fallback;
-- pre-auth scanner requires logical=actual=`main`;
-- non-main anonymous activation remains rejected;
-- help/status/auth glasses payloads come from aggregate projection;
-- no UAC4/PCM/native protocol/repository changes are present;
-- S12 work is not falsely claimed complete.
+Blocking findings and review-fix commits are recorded in
+`WEAR_MR_S11_REVIEW_FINDINGS.md`. Final review is anchored to the exact final HEAD
+in the PR discussion before merge.
 
-## 9. Validation performed
+## 9. Remaining compatibility boundary
+
+MR-S11 does **not** claim physical deletion of:
+
+- `WearFlowController._state` / `WearFlowState`;
+- status/transient timers and payload compatibility;
+- clarification args/focus/notice compatibility;
+- temporary aggregate presentation facade;
+- guarded pre-auth auth handler.
+
+Those are MR-S12. Final ownership gates and canonical audit are MR-S13.
+
+## 10. Validation performed
 
 Performed:
 
-- complete changed-file and call-graph inspection;
-- source/type/signature consistency review by reading;
-- logical/actual route ordering analysis;
-- epoch and queued-barcode analysis;
+- full changed-file and call-graph inspection;
+- exact-head route/scanner/barcode/voice ordering review;
+- epoch and queued-input analysis;
 - widget lifecycle repository audit;
-- regression specification review.
+- source/type/signature review by reading;
+- review-fix and second full-diff review.
 
 Not performed by explicit owner constraint:
 
-- `flutter test`;
-- `flutter analyze` / `dart analyze`;
-- Gradle;
-- APK/build;
+- Flutter tests or analyzer;
+- Dart analyzer;
+- Gradle/APK/build;
 - emulator/device/hardware validation.
 
-This is static review evidence. Executed tests and device acceptance remain
-release gates.
-
-## 10. Follow-up boundary
-
-MR-S12 must remove the remaining writable compatibility business state:
-
-- `WearFlowState` focus/clarification/navigation/task/status copies;
-- temporary `WearAggregatePresentationFlowController` focus mirror;
-- controller status/transient business timers and payload path;
-- legacy auth barcode fallback;
-- clarification argument/focus/notice ownership;
-- remaining controller screen decisions.
-
-Final repository gates and canonical audit update follow in MR-S13.
+This is static review evidence; executed host/device validation remains a release
+gate.
