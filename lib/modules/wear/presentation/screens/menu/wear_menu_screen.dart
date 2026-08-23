@@ -36,7 +36,6 @@ class _WearMenuScreenState extends State<WearMenuScreen>
   @override
   void initState() {
     super.initState();
-    _flow.enterScreen(WearScreenId.menu);
     _focusedIndex = _projectedFocus(_authority.state);
     _runtimeSub = _authority.states.listen(_onRuntimeState);
     WidgetsBinding.instance.addPostFrameCallback((_) {

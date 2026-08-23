@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/services/wear_wifi_status_service.dart';
 
 class WearWifiSettingsScreen extends StatefulWidget {
@@ -16,16 +16,14 @@ class WearWifiSettingsScreen extends StatefulWidget {
 
 class _WearWifiSettingsScreenState extends State<WearWifiSettingsScreen> {
   final WearWifiStatusService _statusService = const WearWifiStatusService();
+  final WearFlowController _flow = WearDependencies.I.wearFlowController;
   late final WearScreenActionRegistration _screenActionsRegistration;
   bool _checking = false;
 
   @override
   void initState() {
     super.initState();
-    WearDependencies.I.wearFlowController
-        .enterScreen(WearScreenId.wifiSettings);
-    _screenActionsRegistration =
-        WearDependencies.I.wearFlowController.registerScreenActions(
+    _screenActionsRegistration = _flow.registerScreenActions(
       WearScreenId.wifiSettings,
       WearScreenActionHandler(onSelect: _refresh),
     );
@@ -34,8 +32,7 @@ class _WearWifiSettingsScreenState extends State<WearWifiSettingsScreen> {
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController
-        .unregisterScreenActions(_screenActionsRegistration);
+    _flow.unregisterScreenActions(_screenActionsRegistration);
     super.dispose();
   }
 
@@ -45,8 +42,8 @@ class _WearWifiSettingsScreenState extends State<WearWifiSettingsScreen> {
     final WearWifiStatus status = await _statusService.getStatus();
     if (!mounted) return;
     setState(() => _checking = false);
-    if (status.isAvailable && context.canPop()) {
-      context.pop();
+    if (status.isAvailable) {
+      await _flow.handleControllerCommand(WearVoiceCommand.back);
     }
   }
 

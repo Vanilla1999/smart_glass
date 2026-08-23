@@ -1,11 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/menu/wear_menu_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_svg_icon.dart';
@@ -38,7 +36,6 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _flow.enterScreen(WearScreenId.continueScan);
     _selectedButtonIndex = _projectedFocus(_authority.state);
     _screenActionsRegistration = _flow.registerScreenActions(
       WearScreenId.continueScan,
@@ -154,11 +151,15 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen>
       WearScreenId.continueScan,
       0,
     );
-    if (!accepted || !mounted) {
+    if (!accepted) {
       _isActionInProgress = false;
       return;
     }
-    context.pop(true);
+    await _flow.requestNavigation(
+      WearScreenId.scanIdle,
+      extra: _authority.features.printer.selection,
+      replaceCurrent: true,
+    );
   }
 
   Future<void> _finishScanning() async {
@@ -168,12 +169,14 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen>
       WearScreenId.continueScan,
       1,
     );
-    if (!accepted || !mounted) {
+    if (!accepted) {
       _isActionInProgress = false;
       return;
     }
-    _flow.enterScreen(WearScreenId.menu);
-    context.go(WearMenuScreen.route);
+    await _flow.requestNavigation(
+      WearScreenId.menu,
+      replaceCurrent: true,
+    );
   }
 
   void _setFocusedButton(int index) {

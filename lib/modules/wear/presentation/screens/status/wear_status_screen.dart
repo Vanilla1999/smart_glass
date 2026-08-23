@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
-import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
-import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
@@ -26,33 +23,6 @@ class WearStatusScreen extends StatefulWidget {
 
 class _WearStatusScreenState extends State<WearStatusScreen>
     with ScreenLifecycleLogging<WearStatusScreen> {
-  @override
-  void initState() {
-    super.initState();
-    WearDependencies.I.wearFlowController.enterScreen(
-      WearScreenId.status,
-      extra: widget.args,
-    );
-
-    final WearStatusScreenArgs? a = widget.args;
-    if (a == null) return;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      WearDependencies.I.wearFlowController.publishScreenPayload(
-        WearScreenId.status,
-        WearGlassesPayload.status(
-          isError: a.kind == WearStatusKind.error,
-          title: a.title,
-          subtitle: a.message,
-          statusText: a.kind == WearStatusKind.error
-              ? (a.glassesStatusText ?? 'Ошибка')
-              : 'Успешно',
-          statusIcon: a.glassesStatusIcon ?? _statusIconFor(a),
-        ),
-      );
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final WearStatusScreenArgs args = widget.args ??

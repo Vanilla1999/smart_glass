@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:smart_glasses/modules/wear/data/auth/data_source/auth_data_source.dart';
 import 'package:smart_glasses/modules/wear/data/auth/data_source/auth_dio_client.dart';
@@ -70,9 +72,23 @@ class WearDependencies {
   /// Shared audio stream — один на оба голосовых сервиса.
   late final AudioStreamService audioStreamService;
 
+  static String? _env(String key) {
+    return dotenv.isInitialized ? dotenv.env[key] : null;
+  }
+
   void _initVoiceServices() {
-    authority =
-        WearRuntimeAuthority(initialScreen: WearScreenId.scannerConnect);
+    final WearScreenId initialScreen =
+        _env('WEAR_SKIP_SCANNER_CONNECT_SCREEN') == 'true'
+            ? WearScreenId.main
+            : WearScreenId.scannerConnect;
+    authority = WearRuntimeAuthority(initialScreen: initialScreen);
+
+    // The host chooses both initial values from the same configuration. This is
+    // an initial route observation, not a route-to-business mutation.
+    unawaited(
+      authority.navigationAdapter().observePhoneRoute(initialScreen),
+    );
+
     audioStreamService = AudioStreamService(
       recordContinuousWav: voiceCaptureWavDiagnostics,
     );
@@ -159,7 +175,8 @@ class WearDependencies {
       ]),
     );
     barcodeDispatcher = WearBarcodeDispatcher(
-      flowController: wearFlowController,
+      authority: authority,
+      unsupportedHandler: wearFlowController.handleBarcode,
     );
     voiceActionCatalog = VoiceActionCatalog(
       includeUnknown: const bool.fromEnvironment(
@@ -180,12 +197,12 @@ class WearDependencies {
       dynamicItemsProvider: wearFlowController.dynamicVoiceItemsFor,
       voiceHintIndexCache: voiceHintIndexCache,
       freeTextPipelineMode: FreeTextPipelineMode.parse(
-        dotenv.env['WEAR_FREE_TEXT_PIPELINE_MODE'],
+        _env('WEAR_FREE_TEXT_PIPELINE_MODE'),
       ),
     );
     voiceControlService = WearVoiceControlService(
       speechRecognitionService: speechRecognitionService,
-      screenProvider: () => wearFlowController.state.screen,
+      screenProvider: () => authority.payload.navigation.logicalScreen,
       actionCatalog: voiceActionCatalog,
     );
     voiceTypingService = VoiceTypingService(
@@ -194,7 +211,7 @@ class WearDependencies {
       resolvedPhrases: voiceControlService.phraseEventStream,
     );
     print(
-      '[VoiceRuntime] freeTextMode=${dotenv.env['WEAR_FREE_TEXT_PIPELINE_MODE']} '
+      '[VoiceRuntime] freeTextMode=${_env('WEAR_FREE_TEXT_PIPELINE_MODE')} '
       'mocks=${WearMockConfig.isEnabled} '
       'wavDiagnostics=$voiceCaptureWavDiagnostics '
       'deviceProfile=${audioStreamService.deviceProfile.id} '

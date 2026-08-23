@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_fill_screen.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/main/wear_main_screen.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/settings/db_settings_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
@@ -24,6 +20,7 @@ class WearSettingsScreen extends ConsumerStatefulWidget {
 
 class _WearSettingsScreenState extends ConsumerState<WearSettingsScreen> {
   final ScrollController _scroll = ScrollController();
+  final WearFlowController _flow = WearDependencies.I.wearFlowController;
   late final WearScreenActionRegistration _screenActionsRegistration;
   int _focusedIndex = 0;
   static const int _itemCount = 4;
@@ -31,9 +28,7 @@ class _WearSettingsScreenState extends ConsumerState<WearSettingsScreen> {
   @override
   void initState() {
     super.initState();
-    WearDependencies.I.wearFlowController.enterScreen(WearScreenId.settings);
-    _screenActionsRegistration =
-        WearDependencies.I.wearFlowController.registerScreenActions(
+    _screenActionsRegistration = _flow.registerScreenActions(
       WearScreenId.settings,
       WearScreenActionHandler(
         onUp: _onVoiceUp,
@@ -49,8 +44,7 @@ class _WearSettingsScreenState extends ConsumerState<WearSettingsScreen> {
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController
-        .unregisterScreenActions(_screenActionsRegistration);
+    _flow.unregisterScreenActions(_screenActionsRegistration);
     _scroll.dispose();
     super.dispose();
   }
@@ -98,19 +92,18 @@ class _WearSettingsScreenState extends ConsumerState<WearSettingsScreen> {
   }
 
   Future<void> _switchUser() async {
-    await WearDependencies.I.authority.clearSession();
-    if (!mounted) return;
-    context.go(WearMainScreen.route);
+    final result = await WearDependencies.I.authority.clearSession();
+    if (result.accepted) {
+      await _flow.flushPendingNavigation();
+    }
   }
 
-  Future<void> _switchDB() async {
-    if (!mounted) return;
-    context.go(DBSettingsScreen.route);
+  Future<void> _switchDB() {
+    return _flow.requestNavigation(WearScreenId.dbSettings);
   }
 
-  Future<void> _openAvailabilityFill() async {
-    if (!mounted) return;
-    context.push(WearAvailabilityFillScreen.route);
+  Future<void> _openAvailabilityFill() {
+    return _flow.requestNavigation(WearScreenId.availabilityFill);
   }
 
   void _connectRingScanner() {

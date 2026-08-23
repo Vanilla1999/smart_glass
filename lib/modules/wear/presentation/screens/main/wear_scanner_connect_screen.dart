@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:multi_scanner/multi_scanner.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/main/wear_main_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
@@ -21,40 +18,14 @@ class WearScannerConnectScreen extends ConsumerStatefulWidget {
 class _WearScannerConnectScreenState
     extends ConsumerState<WearScannerConnectScreen> {
   bool _isConnecting = false;
-  bool _didRedirect = false;
-
-  @override
-  void initState() {
-    super.initState();
-  }
 
   Future<void> _connectScanner() async {
-    // TODO: remove stub dep
+    // TODO: replace the scanner connection stub with a typed aggregate UI effect.
     // ref.read(bluetoothNotifierProvider.notifier).showBluetoothDialog();
   }
 
   @override
   Widget build(BuildContext context) {
-    // final bool alreadyConnected =
-    //     ref.watch(connectedBTStateProvider).value != null;
-
-    // if (alreadyConnected && !_didRedirect) {
-    //   _didRedirect = true;
-    //   WidgetsBinding.instance.addPostFrameCallback((_) {
-    //     if (mounted) {
-    //       context.go(WearMainScreen.route);
-    //     }
-    //   });
-    // }
-
-    // ref.listen(connectedBTStateProvider, (previous, next) {
-    //   final bool isConnected = next.value != null;
-    //   if (isConnected && !_didRedirect) {
-    //     _didRedirect = true;
-    //     context.go(WearMainScreen.route);
-    //   }
-    // });
-
     return WearScreenScaffold(
       child: Stack(
         children: <Widget>[

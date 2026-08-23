@@ -112,7 +112,6 @@ class _WearSettingsScreenState extends ConsumerState<DBSettingsScreen> {
   @override
   void initState() {
     super.initState();
-    WearDependencies.I.wearFlowController.enterScreen(WearScreenId.dbSettings);
     _screenActionsRegistration =
         WearDependencies.I.wearFlowController.registerScreenActions(
       WearScreenId.dbSettings,

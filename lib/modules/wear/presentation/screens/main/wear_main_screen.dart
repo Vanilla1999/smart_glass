@@ -1,14 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_status_state.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
-import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/cubit/wear_auth_cubit.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/menu/wear_menu_screen.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/settings/db_settings_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scanner_status_indicator.dart';
@@ -29,39 +27,27 @@ class WearMainScreen extends ConsumerStatefulWidget {
 }
 
 class _WearMainScreenState extends ConsumerState<WearMainScreen> {
+  final WearFlowController _flow = WearDependencies.I.wearFlowController;
   late final WearScreenActionRegistration _screenActionsRegistration;
 
   @override
   void initState() {
     super.initState();
-    final WearFlowController flow = WearDependencies.I.wearFlowController;
-    flow.enterScreen(WearScreenId.main);
-    _screenActionsRegistration = flow.registerScreenActions(
+    _screenActionsRegistration = _flow.registerScreenActions(
       WearScreenId.main,
       WearScreenActionHandler(
         onBarcode: (String barcode) =>
             ref.read(wearAuthNotifierProvider.notifier).handleBarcode(barcode),
         barcodeEnabled: () =>
-            !flow.authority.isAuthorized &&
+            !_flow.authority.isAuthorized &&
             !ref.read(wearAuthNotifierProvider).isLoading,
       ),
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (flow.authority.isAuthorized) {
-        context.go(WearMenuScreen.route);
-        return;
-      }
-      WearDependencies.I.wearFlowController.publishScreenPayload(
-        WearScreenId.main,
-        WearGlassesPayload.authWaitingBarcode(),
-      );
-    });
   }
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController
-        .unregisterScreenActions(_screenActionsRegistration);
+    _flow.unregisterScreenActions(_screenActionsRegistration);
     super.dispose();
   }
 
@@ -70,20 +56,12 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
     ref.listen<WearAuthState>(wearAuthNotifierProvider,
         (WearAuthState? previous, WearAuthState next) {
       if (previous?.phase != next.phase) {
-        WearDependencies.I.wearFlowController
-            .refreshScreenActions(WearScreenId.main);
-      }
-      if (previous?.phase != next.phase &&
-          next.phase == WearAuthPhase.loading) {
-        WearDependencies.I.wearFlowController.publishScreenPayload(
-          WearScreenId.main,
-          WearGlassesPayload.authLoading(),
-        );
+        _flow.refreshScreenActions(WearScreenId.main);
       }
       if (previous?.nav != next.nav && next.nav != null) {
         final WearStatusScreenArgs nav = next.nav!;
         ref.read(wearAuthNotifierProvider.notifier).consumeNavigation();
-        WearDependencies.I.wearFlowController.showStatus(
+        _flow.showStatus(
           nav,
           completion: nav.kind == WearStatusKind.success
               ? const WearStatusCompletion.goTo(WearScreenId.menu)
@@ -180,7 +158,9 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
     return [
       InkWell(
         borderRadius: BorderRadius.circular(999),
-        onTap: () => context.go(DBSettingsScreen.route),
+        onTap: () {
+          unawaited(_flow.requestNavigation(WearScreenId.dbSettings));
+        },
         child: Container(
           width: 32,
           height: 32,

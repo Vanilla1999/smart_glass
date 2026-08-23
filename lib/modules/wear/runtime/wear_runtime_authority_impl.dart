@@ -10,6 +10,8 @@ import 'package:smart_glasses/modules/wear/runtime/wear_runtime_core_slices.dart
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_effect_router.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_feature_epoch_reducer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_navigation_epoch_reducer.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_pre_auth_lifecycle_reducer.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_pre_auth_scanner_reducer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_composite_reducer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_review_reducers.dart';
@@ -58,6 +60,8 @@ class WearRuntimeAuthority {
               WearRuntimeFeatureEpochReducer(),
               WearSemanticInputReducer(),
               WearSessionNavigationEpochReducer(),
+              WearPreAuthLifecycleReducer(),
+              WearPreAuthScannerAdmissionReducer(),
               WearControlSliceReducer(),
               WearReviewedPrinterSliceReducer(),
               WearReviewedScanSliceReducer(),

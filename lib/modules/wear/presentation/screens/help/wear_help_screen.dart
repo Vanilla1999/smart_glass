@@ -1,11 +1,11 @@
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
-import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
@@ -22,35 +22,29 @@ class WearHelpScreen extends StatefulWidget {
 class _WearHelpScreenState extends State<WearHelpScreen>
     with ScreenLifecycleLogging<WearHelpScreen> {
   final ScrollController _scroll = ScrollController();
+  final WearFlowController _flow = WearDependencies.I.wearFlowController;
   late final WearScreenActionRegistration _screenActionsRegistration;
 
   @override
   void initState() {
     super.initState();
-    WearDependencies.I.wearFlowController.enterScreen(WearScreenId.help);
-    _screenActionsRegistration =
-        WearDependencies.I.wearFlowController.registerScreenActions(
+    _screenActionsRegistration = _flow.registerScreenActions(
       WearScreenId.help,
-      WearScreenActionHandler(onSelect: _onVoiceSelect),
+      WearScreenActionHandler(onSelect: _select),
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      WearDependencies.I.wearFlowController.publishScreenPayload(
-        WearScreenId.help,
-        WearGlassesPayload.help(),
-      );
-    });
   }
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController
-        .unregisterScreenActions(_screenActionsRegistration);
+    _flow.unregisterScreenActions(_screenActionsRegistration);
     _scroll.dispose();
     super.dispose();
   }
 
-  void _onVoiceSelect() {
-    context.pop();
+  void _select() {
+    unawaited(
+      _flow.handleControllerCommand(WearVoiceCommand.select),
+    );
   }
 
   @override
@@ -87,9 +81,7 @@ class _WearHelpScreenState extends State<WearHelpScreen>
           const SizedBox(height: 12),
           _OutlinedButton(
             title: 'Начать работу',
-            onTap: () {
-              context.pop();
-            },
+            onTap: _select,
           ),
         ],
       ),

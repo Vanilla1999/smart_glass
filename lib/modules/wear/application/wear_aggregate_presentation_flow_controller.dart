@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:smart_glasses/modules/wear/application/voice_clarification_args.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
@@ -13,7 +14,7 @@ import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 /// controller is updated. The inherited `WearFlowState` fields are therefore a
 /// read-only compatibility mirror, not the source of a focus transition.
 ///
-/// This facade is intentionally stateless with respect to business data. It can
+/// This facade is intentionally stateless with respect to business focus. It can
 /// be removed together with the legacy presentation fields in MR-S12.
 class WearAggregatePresentationFlowController extends WearFlowController {
   WearAggregatePresentationFlowController({
@@ -29,8 +30,28 @@ class WearAggregatePresentationFlowController extends WearFlowController {
   Future<void> _presentationCommandTail = Future<void>.value();
   late final StreamSubscription<WearRuntimeState> _authorityStateSub;
 
+  WearScreenId get _logicalScreen =>
+      authority.payload.navigation.logicalScreen;
+
+  bool get _legacyScreenMatchesLogical =>
+      super.state.screen == _logicalScreen;
+
   @override
   WearFlowState get state => _projectCompatibilityFocus(super.state);
+
+  /// Screen selection is aggregate-owned. The retained controller registry may
+  /// answer only for the exact same logical screen and fails closed on drift.
+  @override
+  bool get currentScreenAcceptsBarcode {
+    if (!_legacyScreenMatchesLogical) return false;
+    return super.currentScreenAcceptsBarcode;
+  }
+
+  @override
+  Future<bool> handleBarcode(String barcode) {
+    if (!_legacyScreenMatchesLogical) return Future<bool>.value(false);
+    return super.handleBarcode(barcode);
+  }
 
   /// Commits focus through the one semantic mutation boundary.
   ///
@@ -42,8 +63,7 @@ class WearAggregatePresentationFlowController extends WearFlowController {
     WearInputModality modality = WearInputModality.touch,
   }) async {
     final int? itemCount = _itemCount(screen);
-    if (itemCount == null ||
-        authority.payload.navigation.logicalScreen != screen) {
+    if (itemCount == null || _logicalScreen != screen) {
       return false;
     }
     final int expectedEpoch = authority.state.sessionEpoch;
@@ -58,7 +78,7 @@ class WearAggregatePresentationFlowController extends WearFlowController {
     if (!receipt.accepted ||
         receipt.sessionEpoch != expectedEpoch ||
         authority.state.sessionEpoch != expectedEpoch ||
-        authority.payload.navigation.logicalScreen != screen ||
+        _logicalScreen != screen ||
         _aggregateFocus(screen) != next) {
       return false;
     }
@@ -68,6 +88,34 @@ class WearAggregatePresentationFlowController extends WearFlowController {
     // the aggregate reducer. Physical removal belongs to MR-S12.
     _mirrorCommittedFocus(screen, next);
     return true;
+  }
+
+  /// Updates the still-legacy clarification context after a semantic
+  /// clarification action. Widget attachment itself never calls `enterScreen`.
+  ///
+  /// The context/focus/notice ownership is intentionally transferred to the
+  /// aggregate presentation slice in MR-S12; this method is the bounded bridge
+  /// for nested clarification and back-history until that transfer.
+  bool updateVoiceClarificationContext(VoiceClarificationArgs args) {
+    if (_logicalScreen != WearScreenId.voiceClarification) {
+      return false;
+    }
+    super.enterScreen(
+      WearScreenId.voiceClarification,
+      extra: args,
+    );
+    return true;
+  }
+
+  /// Clears retained controller resources without letting the legacy initial
+  /// screen override the aggregate logout transition to `main`.
+  @override
+  void resetSessionState() {
+    super.resetSessionState();
+    final WearScreenId screen = _logicalScreen;
+    if (super.state.screen != screen) {
+      super.enterScreen(screen);
+    }
   }
 
   @override
@@ -82,8 +130,10 @@ class WearAggregatePresentationFlowController extends WearFlowController {
     Object? extra,
     required bool canPop,
   }) {
-    _prepareCompatibilityEntry(screen);
-    super.observeRoute(screen, extra: extra, canPop: canPop);
+    // A Flutter route is an observation only. Production WearModuleApp observes
+    // it directly through the epoch-bound navigation adapter. Retained callers
+    // get the same semantics and cannot re-enter a business feature.
+    unawaited(authority.navigationAdapter().observePhoneRoute(screen));
   }
 
   @override
@@ -98,8 +148,7 @@ class WearAggregatePresentationFlowController extends WearFlowController {
       WearScreenId.menu,
       targetIndex,
     );
-    if (!accepted ||
-        _aggregateFocus(WearScreenId.menu) != targetIndex) {
+    if (!accepted || _aggregateFocus(WearScreenId.menu) != targetIndex) {
       return;
     }
     await requestNavigation(_menuTarget(targetIndex));
@@ -142,14 +191,14 @@ class WearAggregatePresentationFlowController extends WearFlowController {
 
   @override
   Future<void> handleVoiceCommand(WearVoiceCommand command) {
-    final WearScreenId expectedScreen =
-        authority.payload.navigation.logicalScreen;
+    final WearScreenId expectedScreen = _logicalScreen;
     if (!_ownsPresentationFocus(expectedScreen) ||
         !_isAggregatePresentationCommand(expectedScreen, command)) {
+      if (!_legacyScreenMatchesLogical) return Future<void>.value();
       return super.handleVoiceCommand(command);
     }
     return _enqueuePresentationCommand(() async {
-      if (authority.payload.navigation.logicalScreen != expectedScreen) return;
+      if (_logicalScreen != expectedScreen) return;
       await _handleAggregatePresentationCommand(
         command,
         expectedScreen,
@@ -160,15 +209,18 @@ class WearAggregatePresentationFlowController extends WearFlowController {
 
   @override
   Future<void> handleControllerCommand(WearVoiceCommand command) {
-    final WearScreenId screen = authority.payload.navigation.logicalScreen;
+    final WearScreenId screen = _logicalScreen;
     if (!_ownsPresentationFocus(screen) ||
         !_isAggregatePresentationCommand(screen, command)) {
+      if (!_legacyScreenMatchesLogical) return Future<void>.value();
       return super.handleControllerCommand(command);
     }
     return _enqueuePresentationCommand(() async {
-      final WearScreenId current = authority.payload.navigation.logicalScreen;
+      final WearScreenId current = _logicalScreen;
       if (!_ownsPresentationFocus(current)) {
-        await super.handleControllerCommand(command);
+        if (_legacyScreenMatchesLogical) {
+          await super.handleControllerCommand(command);
+        }
         return;
       }
       await _handleAggregatePresentationCommand(
@@ -177,6 +229,24 @@ class WearAggregatePresentationFlowController extends WearFlowController {
         WearInputModality.button,
       );
     });
+  }
+
+  @override
+  Future<void> handleVoicePhrase(String phrase) {
+    if (!_legacyScreenMatchesLogical) return Future<void>.value();
+    return super.handleVoicePhrase(phrase);
+  }
+
+  @override
+  Future<bool> handleVoiceDynamicItem(String itemId) {
+    if (!_legacyScreenMatchesLogical) return Future<bool>.value(false);
+    return super.handleVoiceDynamicItem(itemId);
+  }
+
+  @override
+  Future<bool> handleVoicePartialPhrase(String phrase) {
+    if (!_legacyScreenMatchesLogical) return Future<bool>.value(false);
+    return super.handleVoicePartialPhrase(phrase);
   }
 
   Future<void> _handleAggregatePresentationCommand(
@@ -286,6 +356,7 @@ class WearAggregatePresentationFlowController extends WearFlowController {
     WearVoiceCommand command,
     WearInputModality modality,
   ) {
+    if (!_legacyScreenMatchesLogical) return Future<void>.value();
     return modality == WearInputModality.button
         ? super.handleControllerCommand(command)
         : super.handleVoiceCommand(command);
@@ -322,8 +393,7 @@ class WearAggregatePresentationFlowController extends WearFlowController {
   }
 
   void _prepareCompatibilityEntry(WearScreenId screen) {
-    if (authority.payload.navigation.logicalScreen != screen ||
-        !_ownsPresentationFocus(screen)) {
+    if (_logicalScreen != screen || !_ownsPresentationFocus(screen)) {
       return;
     }
     _mirrorCommittedFocus(screen, _aggregateFocus(screen));

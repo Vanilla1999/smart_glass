@@ -146,6 +146,8 @@ class WearFlowController {
       ? WearUiLifecycle.active
       : WearUiLifecycle.inactive;
   bool get _runtimeActive => _authority.payload.lifecycle.runtimeActive;
+  WearScreenId get _logicalScreen =>
+      _authority.payload.navigation.logicalScreen;
   late WearFlowState _state;
   final StreamController<WearFlowState> _stateController =
       StreamController<WearFlowState>.broadcast();
@@ -204,11 +206,12 @@ class WearFlowController {
 
   bool get currentScreenAcceptsBarcode {
     if (!_runtimeActive) return false;
+    final WearScreenId screen = _logicalScreen;
     final WearBackgroundRuntime? runtime = _backgroundRuntime;
-    if (runtime?.handles(_state.screen) == true) {
-      return runtime!.acceptsBarcode(_state.screen);
+    if (runtime?.handles(screen) == true) {
+      return runtime!.acceptsBarcode(screen);
     }
-    final WearScreenActionHandler? handler = _screenActions[_state.screen];
+    final WearScreenActionHandler? handler = _screenActions[screen];
     return handler?.onBarcode != null &&
         (handler?.barcodeEnabled?.call() ?? true);
   }
@@ -224,7 +227,7 @@ class WearFlowController {
 
   List<String> voiceGrammarPhrasesFor(WearScreenId screen) {
     if (screen == WearScreenId.voiceClarification &&
-        _state.screen == WearScreenId.voiceClarification) {
+        _logicalScreen == WearScreenId.voiceClarification) {
       return _voiceClarificationPayload(_state)
           .voiceHints
           .map((WearGlassesVoiceHint hint) => hint.phrase.trim())
@@ -257,7 +260,7 @@ class WearFlowController {
       (WearBackgroundScreenUpdate update) {
         if (_uiLifecycle != WearUiLifecycle.inactive) return;
         rememberScreenPayload(update.screen, update.payload);
-        if (_state.screen == update.screen) {
+        if (_logicalScreen == update.screen) {
           _screenActionsController.add(update.screen);
           unawaited(_renderGlasses());
         }
@@ -308,7 +311,7 @@ class WearFlowController {
     WearVoiceDelayKind kind = WearVoiceDelayKind.preview,
     String? statusText,
   }) async {
-    if (_state.screen != screen) return;
+    if (_logicalScreen != screen) return;
     final String explicitText = statusText?.trim() ?? '';
     final String candidate = previewText?.trim() ?? '';
     final String? nextText = explicitText.isNotEmpty
@@ -335,7 +338,7 @@ class WearFlowController {
 
   void setUiLifecycle(WearUiLifecycle lifecycle) {
     if (_uiLifecycle == lifecycle) return;
-    final WearScreenId screen = _state.screen;
+    final WearScreenId screen = _logicalScreen;
     final WearBackgroundRuntime? runtime = _backgroundRuntime;
     final WearScreenActionHandler? handler = _screenActions[screen];
     if (lifecycle == WearUiLifecycle.inactive &&
@@ -594,7 +597,7 @@ class WearFlowController {
     WearScreenId screen,
     WearGlassesPayload payload,
   ) async {
-    if (_state.screen != screen) return false;
+    if (_logicalScreen != screen) return false;
     _clearTransientPayload();
     await _renderGlasses();
     return true;
@@ -605,7 +608,7 @@ class WearFlowController {
     WearGlassesPayload payload, {
     Duration duration = const Duration(seconds: 3),
   }) async {
-    if (_state.screen != screen) return false;
+    if (_logicalScreen != screen) return false;
     _transientPayloadTimer?.cancel();
     final int generation = ++_transientPayloadGeneration;
     _transientPayload = payload;
@@ -618,11 +621,11 @@ class WearFlowController {
     } else {
       await _sendGlassesPayload(payload);
     }
-    if (_state.screen != screen || generation != _transientPayloadGeneration) {
+    if (_logicalScreen != screen || generation != _transientPayloadGeneration) {
       return false;
     }
     _transientPayloadTimer = Timer(duration, () {
-      if (_state.screen != screen ||
+      if (_logicalScreen != screen ||
           generation != _transientPayloadGeneration) {
         return;
       }
@@ -638,7 +641,7 @@ class WearFlowController {
     String statusText, {
     Duration duration = const Duration(seconds: 3),
   }) {
-    if (_state.screen != screen) return Future<bool>.value(false);
+    if (_logicalScreen != screen) return Future<bool>.value(false);
     return publishTransientPayload(
       screen,
       _payloadForState(_state).copyWithStatusText(statusText),
@@ -655,7 +658,7 @@ class WearFlowController {
 
   void setMenuFocusedIndex(int index) {
     final int next = index.clamp(0, _menuItemCount - 1);
-    if (_state.menuFocusedIndex == next && _state.screen == WearScreenId.menu) {
+    if (_state.menuFocusedIndex == next && _logicalScreen == WearScreenId.menu) {
       return;
     }
     _setState(
@@ -736,7 +739,7 @@ class WearFlowController {
     }
     _statusTimer = Timer(duration, () {
       if (generation != _statusGeneration ||
-          _state.screen != WearScreenId.status) {
+          _logicalScreen != WearScreenId.status) {
         return;
       }
       final WearScreenId? target = completion.target;
@@ -762,7 +765,7 @@ class WearFlowController {
 
   Future<void> handleVoiceCommand(WearVoiceCommand command) async {
     if (!_runtimeActive) return;
-    _commandQueue.add((command: command, expectedScreen: _state.screen));
+    _commandQueue.add((command: command, expectedScreen: _logicalScreen));
     if (!_isProcessingCommand) {
       await _drainCommandQueue();
     }
@@ -770,7 +773,7 @@ class WearFlowController {
 
   Future<void> handleControllerCommand(WearVoiceCommand command) async {
     if (!_runtimeActive) return;
-    _commandQueue.add((command: command, expectedScreen: null));
+    _commandQueue.add((command: command, expectedScreen: _logicalScreen));
     if (!_isProcessingCommand) {
       await _drainCommandQueue();
     }
@@ -779,10 +782,10 @@ class WearFlowController {
   Future<bool> handleBarcode(String barcode) async {
     if (!_runtimeActive) return false;
     final WearBackgroundRuntime? runtime = _backgroundRuntime;
-    final WearScreenId sourceScreen = _state.screen;
+    final WearScreenId sourceScreen = _logicalScreen;
     if (runtime?.handles(sourceScreen) == true) {
       await _runtimeReset.catchError((Object _) {});
-      if (!_runtimeActive || _state.screen != sourceScreen) return false;
+      if (!_runtimeActive || _logicalScreen != sourceScreen) return false;
       return runtime!.handleBarcode(sourceScreen, barcode);
     }
     if (_uiLifecycle != WearUiLifecycle.active) return false;
@@ -796,8 +799,11 @@ class WearFlowController {
   Future<void> handleVoicePhrase(String phrase) async {
     final String trimmed = phrase.trim();
     if (trimmed.isEmpty || !_runtimeActive) return;
-    print('[WearFlowController] phrase="$trimmed" state=$_state');
-    final WearScreenId sourceScreen = _state.screen;
+    final WearScreenId sourceScreen = _logicalScreen;
+    print(
+      '[WearFlowController] phrase="$trimmed" '
+      'logicalScreen=$sourceScreen state=$_state',
+    );
     final VoiceDynamicItemsSnapshot items = dynamicVoiceItemsFor(sourceScreen);
     final bool isDynamicSearch =
         sourceScreen == WearScreenId.voiceClarification ||
@@ -849,17 +855,17 @@ class WearFlowController {
       }
     }
     final WearBackgroundRuntime? runtime = _backgroundRuntime;
-    if (runtime != null && await runtime.handlePhrase(_state.screen, trimmed)) {
+    if (runtime != null && await runtime.handlePhrase(sourceScreen, trimmed)) {
       return;
     }
     if (_uiLifecycle == WearUiLifecycle.active) {
-      await _invokeScreenPhrase(_state.screen, trimmed);
+      await _invokeScreenPhrase(sourceScreen, trimmed);
     }
   }
 
   Future<bool> handleVoiceDynamicItem(String itemId) async {
     if (!_runtimeActive) return false;
-    final WearScreenId screen = _state.screen;
+    final WearScreenId screen = _logicalScreen;
     final VoiceDynamicItemsSnapshot items = dynamicVoiceItemsFor(screen);
     for (final VoiceDynamicItem item in items.items) {
       if (item.id == itemId) {
@@ -874,7 +880,7 @@ class WearFlowController {
   }
 
   void setVoiceClarificationNotice(String? message) {
-    if (_state.screen != WearScreenId.voiceClarification) return;
+    if (_logicalScreen != WearScreenId.voiceClarification) return;
     _setState(
       _state.copyWith(
         voiceClarificationNotice: message,
@@ -889,7 +895,7 @@ class WearFlowController {
     String itemId,
   ) async {
     if (_isVoiceClarificationSelectionInProgress ||
-        _state.screen != WearScreenId.voiceClarification ||
+        _logicalScreen != WearScreenId.voiceClarification ||
         !identical(_state.currentVoiceClarificationArgs, args)) {
       return false;
     }
@@ -949,8 +955,12 @@ class WearFlowController {
         !VoiceSearchPhrasePolicy.isMeaningful(trimmed)) {
       return false;
     }
-    print('[WearFlowController] partial phrase="$trimmed" state=$_state');
-    return _invokeScreenPartialPhrase(_state.screen, trimmed);
+    final WearScreenId screen = _logicalScreen;
+    print(
+      '[WearFlowController] partial phrase="$trimmed" '
+      'logicalScreen=$screen state=$_state',
+    );
+    return _invokeScreenPartialPhrase(screen, trimmed);
   }
 
   Future<void> _drainCommandQueue() async {
@@ -961,19 +971,22 @@ class WearFlowController {
       try {
         await _runtimeReset.catchError((Object _) {});
         if (!_runtimeActive) continue;
-        if (item.expectedScreen != null &&
-            item.expectedScreen != _state.screen) {
+        final WearScreenId screen = _logicalScreen;
+        if (item.expectedScreen != null && item.expectedScreen != screen) {
           print(
             '[WearFlowController] dropped stale queued voice command '
             'command=$command expectedScreen=${item.expectedScreen} '
-            'currentScreen=${_state.screen}',
+            'currentScreen=$screen',
           );
           continue;
         }
-        print('[WearFlowController] command=$command state=$_state');
+        print(
+          '[WearFlowController] command=$command '
+          'logicalScreen=$screen state=$_state',
+        );
         final WearBackgroundRuntime? runtime = _backgroundRuntime;
         if (runtime != null &&
-            await runtime.handleCommand(_state.screen, command)) {
+            await runtime.handleCommand(screen, command)) {
           continue;
         }
         switch (command) {
@@ -1018,25 +1031,25 @@ class WearFlowController {
             break;
           case WearVoiceCommand.connectScanner:
             await _invokeScreenAction(
-              _state.screen,
+              screen,
               (handler) => handler.onConnectScanner,
             );
             break;
           case WearVoiceCommand.switchUser:
             await _invokeScreenAction(
-              _state.screen,
+              screen,
               (handler) => handler.onSwitchUser,
             );
             break;
           case WearVoiceCommand.openDbSettings:
             await _invokeScreenAction(
-              _state.screen,
+              screen,
               (handler) => handler.onOpenDbSettings,
             );
             break;
           case WearVoiceCommand.fillDatabase:
             await _invokeScreenAction(
-              _state.screen,
+              screen,
               (handler) => handler.onFillDatabase,
             );
             break;
@@ -1045,7 +1058,7 @@ class WearFlowController {
             break;
           case WearVoiceCommand.manualInput:
             await _invokeScreenAction(
-              _state.screen,
+              screen,
               (handler) => handler.onManualInput,
             );
             break;
@@ -1054,24 +1067,30 @@ class WearFlowController {
             break;
           case WearVoiceCommand.takePhoto:
             await _invokeScreenAction(
-                _state.screen, (handler) => handler.onPhoto);
+              screen,
+              (handler) => handler.onPhoto,
+            );
             break;
           case WearVoiceCommand.testPhoto:
             await _photoCapture?.call();
             break;
           case WearVoiceCommand.backToList:
             await _invokeScreenAction(
-              _state.screen,
+              screen,
               (handler) => handler.onBackToList,
             );
             break;
           case WearVoiceCommand.clear:
             await _invokeScreenAction(
-                _state.screen, (handler) => handler.onClear);
+              screen,
+              (handler) => handler.onClear,
+            );
             break;
           case WearVoiceCommand.save:
             await _invokeScreenAction(
-                _state.screen, (handler) => handler.onSave);
+              screen,
+              (handler) => handler.onSave,
+            );
             break;
           case WearVoiceCommand.openList:
             await _handleOpenList();
@@ -1101,8 +1120,19 @@ class WearFlowController {
   }
 
   Future<void> flushPendingNavigation() async {
-    final WearNavigationRequest? request = _state.pendingNavigation;
-    if (request == null || _uiLifecycle != WearUiLifecycle.active) return;
+    final WearPendingNavigation? pending =
+        _authority.payload.navigation.pending;
+    if (pending == null || _uiLifecycle != WearUiLifecycle.active) return;
+    final WearNavigationRequest? legacyRequest = _state.pendingNavigation;
+    final WearNavigationRequest request = WearNavigationRequest(
+      requestId: pending.requestId,
+      screen: pending.screen,
+      extra: legacyRequest?.screen == pending.screen
+          ? legacyRequest?.extra
+          : null,
+      replaceCurrent: pending.kind == WearPendingNavigationKind.replace,
+      popCurrent: pending.kind == WearPendingNavigationKind.pop,
+    );
     if (_deliveredNavigationRequestId == request.requestId) return;
     print('[WearFlowController] ui active flush pendingNavigation=$request');
     _deliveredNavigationRequestId = request.requestId;
@@ -1121,7 +1151,7 @@ class WearFlowController {
       }
       await _navigationOutput.goTo(request.screen, extra: request.extra);
     } catch (error, stackTrace) {
-      if (_state.pendingNavigation?.requestId == request.requestId) {
+      if (_authority.payload.navigation.pending?.requestId == request.requestId) {
         _deliveredNavigationRequestId = null;
         _setState(_state.copyWith(error: error.toString()));
       }
@@ -1136,13 +1166,14 @@ class WearFlowController {
     required int requestId,
     required WearScreenId screen,
   }) {
-    final WearNavigationRequest? request = _state.pendingNavigation;
-    if (request == null ||
-        request.requestId != requestId ||
-        request.screen != screen) {
+    final WearPendingNavigation? pending =
+        _authority.payload.navigation.pending;
+    if (pending == null ||
+        pending.requestId != requestId ||
+        pending.screen != screen) {
       return false;
     }
-    print('[WearFlowController] navigation acknowledged request=$request');
+    print('[WearFlowController] navigation acknowledged request=$pending');
     _deliveredNavigationRequestId = null;
     _inactiveNavigationCount = 0;
     unawaited(_authority
@@ -1159,9 +1190,10 @@ class WearFlowController {
     if (_handleControllerUp()) {
       return;
     }
-    if (_state.screen != WearScreenId.menu) {
+    final WearScreenId screen = _logicalScreen;
+    if (screen != WearScreenId.menu) {
       if (_uiLifecycle == WearUiLifecycle.active) {
-        await _invokeScreenAction(_state.screen, (handler) => handler.onUp);
+        await _invokeScreenAction(screen, (handler) => handler.onUp);
       }
       return;
     }
@@ -1174,9 +1206,10 @@ class WearFlowController {
     if (_handleControllerDown()) {
       return;
     }
-    if (_state.screen != WearScreenId.menu) {
+    final WearScreenId screen = _logicalScreen;
+    if (screen != WearScreenId.menu) {
       if (_uiLifecycle == WearUiLifecycle.active) {
-        await _invokeScreenAction(_state.screen, (handler) => handler.onDown);
+        await _invokeScreenAction(screen, (handler) => handler.onDown);
       }
       return;
     }
@@ -1186,7 +1219,8 @@ class WearFlowController {
   }
 
   Future<void> _handleSelect() async {
-    if (_state.screen == WearScreenId.menu) {
+    final WearScreenId screen = _logicalScreen;
+    if (screen == WearScreenId.menu) {
       await _selectFromMenu();
       return;
     }
@@ -1194,17 +1228,18 @@ class WearFlowController {
     if (_uiLifecycle == WearUiLifecycle.inactive) {
       return;
     }
-    await _invokeScreenAction(_state.screen, (handler) => handler.onSelect);
+    await _invokeScreenAction(screen, (handler) => handler.onSelect);
   }
 
   Future<void> _handleYes() async {
-    if (_state.screen == WearScreenId.homeConfirm) {
+    final WearScreenId screen = _logicalScreen;
+    if (screen == WearScreenId.homeConfirm) {
       await _confirmHome();
       return;
     }
     if (_uiLifecycle == WearUiLifecycle.inactive) return;
     final bool handled = await _invokeScreenAction(
-      _state.screen,
+      screen,
       (handler) => handler.onYes,
     );
     if (!handled) {
@@ -1213,12 +1248,13 @@ class WearFlowController {
   }
 
   Future<void> _handleNo() async {
-    if (_state.screen == WearScreenId.homeConfirm) {
+    final WearScreenId screen = _logicalScreen;
+    if (screen == WearScreenId.homeConfirm) {
       await _cancelHomeConfirm();
       return;
     }
     if (_uiLifecycle == WearUiLifecycle.inactive) return;
-    await _invokeScreenAction(_state.screen, (handler) => handler.onNo);
+    await _invokeScreenAction(screen, (handler) => handler.onNo);
   }
 
   Future<void> _selectFromMenu() async {
@@ -1233,22 +1269,22 @@ class WearFlowController {
   }
 
   Future<void> _handleBack() async {
-    if (_state.screen == WearScreenId.homeConfirm) {
+    final WearScreenId screen = _logicalScreen;
+    if (screen == WearScreenId.homeConfirm) {
       await _cancelHomeConfirm();
       return;
     }
-    if (_state.navigationHistory.length <= 1 ||
-        _state.screen == WearScreenId.menu) {
+    final List<WearNavigationEntry> history = _state.navigationHistory;
+    if (history.length <= 1 || screen == WearScreenId.menu) {
       return;
     }
-    final WearNavigationEntry previous =
-        _state.navigationHistory[_state.navigationHistory.length - 2];
+    final WearNavigationEntry previous = history[history.length - 2];
     if (_uiLifecycle == WearUiLifecycle.inactive) {
       await _returnToPreviousScreen(previous.screen, extra: previous.extra);
       return;
     }
     final bool handled = await _invokeScreenAction(
-      _state.screen,
+      screen,
       (handler) => handler.onBack,
     );
     if (handled) return;
@@ -1256,61 +1292,64 @@ class WearFlowController {
   }
 
   Future<void> _handleHome() async {
+    final WearScreenId screen = _logicalScreen;
     if (_uiLifecycle == WearUiLifecycle.active) {
-      await _invokeScreenAction(_state.screen, (handler) => handler.onHome);
+      await _invokeScreenAction(screen, (handler) => handler.onHome);
     }
     await _navigateTo(WearScreenId.menu, replaceCurrent: true);
   }
 
   Future<void> _handleFinish() async {
-    if (_state.screen == WearScreenId.continueScan) {
+    final WearScreenId screen = _logicalScreen;
+    if (screen == WearScreenId.continueScan) {
       if (_uiLifecycle == WearUiLifecycle.inactive) {
         await _navigateTo(WearScreenId.menu, replaceCurrent: true);
         return;
       }
       await _invokeScreenAction(
-        _state.screen,
+        screen,
         (handler) => handler.onFinish,
       );
       return;
     }
-    await _invokeScreenAction(_state.screen, (handler) => handler.onFinish);
+    await _invokeScreenAction(screen, (handler) => handler.onFinish);
   }
 
   Future<void> _handleOpenPrintPriceTag() async {
-    if (_state.screen == WearScreenId.menu) {
+    if (_logicalScreen == WearScreenId.menu) {
       await selectMenuIndex(0);
     }
   }
 
   Future<void> _handlePrint() async {
-    if (_state.screen == WearScreenId.menu) {
+    final WearScreenId screen = _logicalScreen;
+    if (screen == WearScreenId.menu) {
       await selectMenuIndex(0);
       return;
     }
-    await _invokeScreenAction(_state.screen, (handler) => handler.onPrint);
+    await _invokeScreenAction(screen, (handler) => handler.onPrint);
   }
 
   Future<void> _handleOpenAvailability() async {
-    if (_state.screen == WearScreenId.menu) {
+    if (_logicalScreen == WearScreenId.menu) {
       await selectMenuIndex(1);
     }
   }
 
   Future<void> _handleOpenHelp() async {
-    if (_state.screen == WearScreenId.menu) {
+    if (_logicalScreen == WearScreenId.menu) {
       await selectMenuIndex(2);
     }
   }
 
   Future<void> _handleOpenSettings() async {
-    if (_state.screen == WearScreenId.menu) {
+    if (_logicalScreen == WearScreenId.menu) {
       await selectMenuIndex(3);
     }
   }
 
   Future<void> _handleContinueScan() async {
-    if (_state.screen == WearScreenId.continueScan) {
+    if (_logicalScreen == WearScreenId.continueScan) {
       if (_uiLifecycle == WearUiLifecycle.inactive) {
         _setContinueScanFocus(0);
         await _returnToPreviousScreen(
@@ -1320,36 +1359,40 @@ class WearFlowController {
         return;
       }
       await _invokeScreenAction(
-        _state.screen,
+        WearScreenId.continueScan,
         (handler) => handler.onContinue,
       );
     }
   }
 
   Future<void> _handleOpenList() async {
-    if (_state.screen == WearScreenId.availabilityInteraction) {
+    if (_logicalScreen == WearScreenId.availabilityInteraction) {
       await selectAvailabilityInteractionIndex(0);
       return;
     }
-    await _invokeScreenAction(_state.screen, (handler) => handler.onBackToList);
+    await _invokeScreenAction(
+      _logicalScreen,
+      (handler) => handler.onBackToList,
+    );
   }
 
   Future<void> _handleOpenDirectScan() async {
-    if (_state.screen == WearScreenId.availabilityInteraction) {
+    if (_logicalScreen == WearScreenId.availabilityInteraction) {
       await selectAvailabilityInteractionIndex(1);
     }
   }
 
   Future<void> _handleCancel() async {
-    if (_state.screen == WearScreenId.homeConfirm) {
+    final WearScreenId screen = _logicalScreen;
+    if (screen == WearScreenId.homeConfirm) {
       await _cancelHomeConfirm();
       return;
     }
-    await _invokeScreenAction(_state.screen, (handler) => handler.onCancel);
+    await _invokeScreenAction(screen, (handler) => handler.onCancel);
   }
 
   Future<void> _handleNextPage() async {
-    if (_state.screen == WearScreenId.voiceClarification &&
+    if (_logicalScreen == WearScreenId.voiceClarification &&
         (_uiLifecycle == WearUiLifecycle.inactive ||
             _screenActions[WearScreenId.voiceClarification]?.onNextPage ==
                 null)) {
@@ -1365,13 +1408,13 @@ class WearFlowController {
       return;
     }
     await _invokeScreenAction(
-      _state.screen,
+      _logicalScreen,
       (WearScreenActionHandler handler) => handler.onNextPage,
     );
   }
 
   Future<void> _handlePreviousPage() async {
-    if (_state.screen == WearScreenId.voiceClarification &&
+    if (_logicalScreen == WearScreenId.voiceClarification &&
         (_uiLifecycle == WearUiLifecycle.inactive ||
             _screenActions[WearScreenId.voiceClarification]?.onPreviousPage ==
                 null)) {
@@ -1389,7 +1432,7 @@ class WearFlowController {
       return;
     }
     await _invokeScreenAction(
-      _state.screen,
+      _logicalScreen,
       (WearScreenActionHandler handler) => handler.onPreviousPage,
     );
   }
@@ -1560,13 +1603,13 @@ class WearFlowController {
   }
 
   void _clearTransientPayloadOnScreenChange(WearScreenId screen) {
-    if (_state.screen != screen) {
+    if (_logicalScreen != screen) {
       _clearTransientPayload();
     }
   }
 
   bool _handleControllerUp() {
-    switch (_state.screen) {
+    switch (_logicalScreen) {
       case WearScreenId.menu:
         return false;
       case WearScreenId.availabilityInteraction:
@@ -1603,7 +1646,7 @@ class WearFlowController {
   }
 
   bool _handleControllerDown() {
-    switch (_state.screen) {
+    switch (_logicalScreen) {
       case WearScreenId.menu:
         return false;
       case WearScreenId.availabilityInteraction:
@@ -1650,7 +1693,7 @@ class WearFlowController {
   }
 
   Future<bool> _handleControllerSelect() async {
-    switch (_state.screen) {
+    switch (_logicalScreen) {
       case WearScreenId.availabilityInteraction:
         await _selectAvailabilityInteraction();
         return true;
@@ -1872,7 +1915,7 @@ class WearFlowController {
     final WearGlassesPayload payload = _transientPayload ?? contentPayload;
     if (feedbackText != null) {
       print(
-        '[VOICE_FEEDBACK_PAYLOAD] screen=${_state.screen.name} '
+        '[VOICE_FEEDBACK_PAYLOAD] screen=${_logicalScreen.name} '
         'screenType=${payload.screenType.name} phase=${payload.phase.name} '
         'status="${payload.statusText}" items=${payload.items.length} '
         'selectedIndex=${payload.selectedIndex}',
@@ -1917,7 +1960,7 @@ class WearFlowController {
   WearGlassesPayload _payloadForState(WearFlowState state) {
     final WearGlassesPayload aggregatePayload =
         WearRuntimeProjection.projectGlasses(_authority.state).payload;
-    return switch (state.screen) {
+    return switch (_logicalScreen) {
       WearScreenId.menu =>
         WearGlassesPayload.menu(selectedIndex: state.menuFocusedIndex),
       WearScreenId.homeConfirm => WearGlassesPayload.homeConfirm(
@@ -1999,7 +2042,7 @@ class WearFlowController {
             .map((VoiceDynamicItem item) => item.id)
             .toList(growable: false),
         onPrepared: () {
-          if (_state.screen != WearScreenId.voiceClarification) return;
+          if (_logicalScreen != WearScreenId.voiceClarification) return;
           final VoiceClarificationArgs? currentArgs =
               _state.currentVoiceClarificationArgs as VoiceClarificationArgs?;
           final int currentRevision = Object.hashAll(
@@ -2021,10 +2064,10 @@ class WearFlowController {
     final WearFlowState previous = _state;
     next = _withAuthoritativeNavigation(next);
     final List<String> previousClarificationGrammar =
-        _state.screen == WearScreenId.voiceClarification
+        _logicalScreen == WearScreenId.voiceClarification
             ? voiceGrammarPhrasesFor(WearScreenId.voiceClarification)
             : const <String>[];
-    if (next.screen != _state.screen) {
+    if (next.screen != previous.screen) {
       _clearRecognitionFeedback();
     }
     _state = next;
