@@ -43,18 +43,6 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
             !ref.read(wearAuthNotifierProvider).isLoading,
       ),
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_flow.authority.isAuthorized &&
-          _flow.authority.payload.navigation.logicalScreen !=
-              WearScreenId.menu) {
-        unawaited(
-          _flow.requestNavigation(
-            WearScreenId.menu,
-            replaceCurrent: true,
-          ),
-        );
-      }
-    });
   }
 
   @override
