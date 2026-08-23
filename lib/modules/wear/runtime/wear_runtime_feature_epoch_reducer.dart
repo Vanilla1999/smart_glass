@@ -19,15 +19,17 @@ class WearRuntimeFeatureEpochReducer implements WearSliceReducer {
     final WearAggregatePayload aggregate =
         state.payloadAs<WearAggregatePayload>();
     final WearFeaturePayload rawFeatures = aggregate.features;
+    final WearControlPayload rawControls = aggregate.controls;
     if (rawFeatures is! WearRuntimeFeaturePayload ||
         rawFeatures.scan is! WearScanTaskSlice ||
         rawFeatures.availability is! WearAvailabilityTaskSlice ||
-        aggregate.controls is! WearRuntimeControlPayload) {
+        rawControls is! WearRuntimeControlPayload) {
       return null;
     }
     final WearScanTaskSlice scan = rawFeatures.scan as WearScanTaskSlice;
     final WearAvailabilityTaskSlice availability =
         rawFeatures.availability as WearAvailabilityTaskSlice;
+    final WearRuntimeControlPayload controls = rawControls;
 
     if (intent is WearSessionAuthorized) {
       final WearSessionSlice requested = WearSessionSlice.authorized(intent.user);
@@ -46,7 +48,7 @@ class WearRuntimeFeatureEpochReducer implements WearSliceReducer {
           payload: aggregate.copyWith(
             session: requested,
             lifecycle: aggregate.lifecycle.copyWith(runtimeActive: true),
-            controls: aggregate.controls.toTerminalControls(),
+            controls: controls.toTerminalControls(),
             features: rawFeatures.copyWith(
               printer: rawFeatures.printer.reset(),
               scan: scan.reset(),
@@ -78,7 +80,7 @@ class WearRuntimeFeatureEpochReducer implements WearSliceReducer {
             session: const WearSessionSlice.anonymous(),
             lifecycle: aggregate.lifecycle.copyWith(runtimeActive: false),
             navigation: navigation,
-            controls: aggregate.controls.toTerminalControls(),
+            controls: controls.toTerminalControls(),
             features: rawFeatures.copyWith(
               printer: rawFeatures.printer.reset(),
               scan: scan.reset(),
@@ -98,7 +100,7 @@ class WearRuntimeFeatureEpochReducer implements WearSliceReducer {
           terminal: true,
         ),
         navigation: aggregate.navigation.terminalized(),
-        controls: aggregate.controls.toTerminalControls(),
+        controls: controls.toTerminalControls(),
         features: rawFeatures.copyWith(
           printer: rawFeatures.printer.reset(),
           scan: scan.reset(),
