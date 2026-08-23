@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/application/wear_availability_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_flow_state.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_group.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
@@ -10,7 +11,7 @@ import 'package:smart_glasses/modules/wear/domain/availability/repository/wear_a
 import 'package:smart_glasses/modules/wear/domain/availability/use_case/wear_availability_flow_use_case.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_availability_slice.dart';
-import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_slice.dart';
 
 void main() {
   test('group loading snapshot is committed before repository completes',
@@ -118,7 +119,7 @@ void main() {
     addTearDown(authority.dispose);
 
     await runtime.enterScreen(WearScreenId.availabilityFill);
-    final Future<void> clearing = runtime.resetFill();
+    await runtime.resetFill();
     await Future<void>.delayed(Duration.zero);
 
     expect(authority.availabilityTask.isBusy, isTrue);
@@ -129,7 +130,7 @@ void main() {
     expect(addCalls, 0);
 
     reset.complete();
-    await clearing;
+    await Future<void>.delayed(Duration.zero);
     await Future<void>.delayed(Duration.zero);
     expect(authority.availabilityTask.isBusy, isFalse);
   });
@@ -137,23 +138,28 @@ void main() {
   test('authorization epoch resets printer scan and availability together',
       () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
-    addTearDown(authority.dispose);
-    await authority.enterAvailabilityScreen(WearScreenId.availabilityFill);
-    await authority.store.dispatch(
-      const WearAvailabilityOperationSucceeded(
-        sessionEpoch: 0,
-        operationId: 999,
-        operation: WearAvailabilityOperation.fillAdd,
-        flow: WearAvailabilityFlowState(
-          step: WearAvailabilityFlowStep.groupSelection,
-        ),
-        addedCount: 3,
-      ),
+    final WearAvailabilityRuntime runtime = _runtime(
+      authority,
+      _AvailabilityRepository(),
     );
+    addTearDown(runtime.dispose);
+    addTearDown(authority.dispose);
+
+    await runtime.enterScreen(WearScreenId.availabilityFill);
+    expect(
+      await runtime.handleBarcode(
+        WearScreenId.availabilityFill,
+        '4600000000012',
+      ),
+      isTrue,
+    );
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(authority.availabilityTask.savedCount, 1);
 
     final int previousEpoch = authority.state.sessionEpoch;
     final WearDispatchResult result = await authority.authorize(
-      _user(),
+      AuthenticatedUser(idUser: 1, idEmployee: 2, name: 'Test User'),
     );
 
     expect(result.accepted, isTrue);
@@ -161,7 +167,10 @@ void main() {
     expect(authority.availabilityTask.savedCount, 0);
     expect(authority.availabilityTask.phase, WearAvailabilityTaskPhase.idle);
     expect(authority.features.printer.selection, isNull);
-    expect(authority.features.scan.products, isEmpty);
+    expect(
+      (authority.features.scan as WearScanTaskSlice).products,
+      isEmpty,
+    );
   });
 }
 
@@ -196,14 +205,6 @@ WearAvailabilityProduct product(int id, String name) {
     photoControl: false,
     unpackaged: false,
     priceTagActual: true,
-  );
-}
-
-// Avoids a dependency on generated equality in test setup.
-dynamic _user() {
-  // Imported indirectly by the public authority API at compile time.
-  return throw UnimplementedError(
-    'Replace with AuthenticatedUser in owner-run test if generated imports differ',
   );
 }
 
