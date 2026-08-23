@@ -58,6 +58,7 @@ class WearStatusIconReporter {
   final ValueNotifier<bool> _voiceCommandsEnabled = ValueNotifier<bool>(true);
   WearScreenId Function()? _currentScreenForTesting;
   Future<WearStatusIconSnapshot> Function()? _refreshForTesting;
+  Future<void> Function(WearWifiStatus status)? _connectivityObserver;
 
   WearStatusIconSnapshot get snapshot => _snapshot;
   WearGlassesPayload? get lastPayload => _lastDeliveredPayload;
@@ -67,6 +68,12 @@ class WearStatusIconReporter {
   }
 
   ValueListenable<bool> get voiceCommandsEnabled => _voiceCommandsEnabled;
+
+  void setConnectivityObserver(
+    Future<void> Function(WearWifiStatus status)? observer,
+  ) {
+    _connectivityObserver = observer;
+  }
 
   void setVoiceCommandsEnabled(bool enabled) {
     if (_voiceCommandsEnabled.value == enabled) return;
@@ -156,6 +163,10 @@ class WearStatusIconReporter {
       next = await refreshForTesting();
     } else {
       final WearWifiStatus wifi = await _wifiStatusService.getStatus();
+      final connectivityObserver = _connectivityObserver;
+      if (connectivityObserver != null) {
+        unawaited(connectivityObserver(wifi));
+      }
       final bool showPrinter = WearSession.hasPrinterSelection;
       final bool printerAvailable = showPrinter &&
           WearSession.isAuthorized &&
