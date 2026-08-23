@@ -3,6 +3,17 @@ import 'dart:collection';
 
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 
+abstract interface class WearRuntimePayload {
+  WearRuntimePayload toTerminalPayload();
+}
+
+class WearEmptyRuntimePayload implements WearRuntimePayload {
+  const WearEmptyRuntimePayload();
+
+  @override
+  WearRuntimePayload toTerminalPayload() => this;
+}
+
 class WearRuntimeVersion implements Comparable<WearRuntimeVersion> {
   const WearRuntimeVersion({
     required this.sessionEpoch,
@@ -81,6 +92,7 @@ class WearRuntimeState {
     required this.revision,
     required this.terminal,
     required this.legacy,
+    required this.payload,
     required Map<String, int> expectedOperationIds,
   })  : assert(sessionEpoch >= 0),
         assert(revision >= 0),
@@ -90,6 +102,7 @@ class WearRuntimeState {
 
   factory WearRuntimeState.initial({
     required WearLegacyRuntimeSnapshot legacy,
+    WearRuntimePayload payload = const WearEmptyRuntimePayload(),
     int sessionEpoch = 0,
   }) {
     return WearRuntimeState._(
@@ -97,6 +110,7 @@ class WearRuntimeState {
       revision: 0,
       terminal: false,
       legacy: legacy,
+      payload: payload,
       expectedOperationIds: const <String, int>{},
     );
   }
@@ -105,12 +119,23 @@ class WearRuntimeState {
   final int revision;
   final bool terminal;
   final WearLegacyRuntimeSnapshot legacy;
+  final WearRuntimePayload payload;
   final UnmodifiableMapView<String, int> expectedOperationIds;
 
   WearRuntimeVersion get version => WearRuntimeVersion(
         sessionEpoch: sessionEpoch,
         revision: revision,
       );
+
+  T payloadAs<T extends WearRuntimePayload>() {
+    final WearRuntimePayload value = payload;
+    if (value is! T) {
+      throw StateError(
+        'Expected payload $T but current payload is ${value.runtimeType}',
+      );
+    }
+    return value;
+  }
 
   int? expectedOperationId(String kind) => expectedOperationIds[kind];
 
@@ -120,6 +145,19 @@ class WearRuntimeState {
       revision: revision,
       terminal: terminal,
       legacy: snapshot,
+      payload: payload,
+      expectedOperationIds: expectedOperationIds,
+    );
+  }
+
+  WearRuntimeState withPayload(WearRuntimePayload nextPayload) {
+    if (identical(nextPayload, payload)) return this;
+    return WearRuntimeState._(
+      sessionEpoch: sessionEpoch,
+      revision: revision,
+      terminal: terminal,
+      legacy: legacy,
+      payload: nextPayload,
       expectedOperationIds: expectedOperationIds,
     );
   }
@@ -143,6 +181,7 @@ class WearRuntimeState {
       revision: revision,
       terminal: terminal,
       legacy: legacy,
+      payload: payload,
       expectedOperationIds: <String, int>{
         ...expectedOperationIds,
         kind: operationId,
@@ -159,18 +198,22 @@ class WearRuntimeState {
       revision: revision,
       terminal: terminal,
       legacy: legacy,
+      payload: payload,
       expectedOperationIds: next,
     );
   }
 
   WearRuntimeState beginNextEpoch({
     required WearLegacyRuntimeSnapshot legacy,
+    WearRuntimePayload? payload,
+    bool terminal = false,
   }) {
     return WearRuntimeState._(
       sessionEpoch: sessionEpoch + 1,
       revision: 0,
-      terminal: false,
+      terminal: terminal,
       legacy: legacy,
+      payload: payload ?? this.payload,
       expectedOperationIds: const <String, int>{},
     );
   }
@@ -182,6 +225,7 @@ class WearRuntimeState {
       revision: 0,
       terminal: true,
       legacy: legacy,
+      payload: payload.toTerminalPayload(),
       expectedOperationIds: const <String, int>{},
     );
   }
@@ -195,6 +239,7 @@ class WearRuntimeState {
       revision: revision,
       terminal: terminal,
       legacy: legacy,
+      payload: payload,
       expectedOperationIds: expectedOperationIds,
     );
   }
@@ -229,9 +274,15 @@ class WearOperationResult extends WearIntent {
 }
 
 class WearAdvanceSessionEpoch extends WearIntent {
-  const WearAdvanceSessionEpoch({required this.legacy});
+  const WearAdvanceSessionEpoch({
+    required this.legacy,
+    this.payload,
+    this.terminal = false,
+  });
 
   final WearLegacyRuntimeSnapshot legacy;
+  final WearRuntimePayload? payload;
+  final bool terminal;
 }
 
 class WearNoopIntent extends WearIntent {
@@ -389,7 +440,11 @@ class WearRuntimeShellReducer implements WearRuntimeReducer {
     }
     if (intent is WearAdvanceSessionEpoch) {
       return WearReduction.accept(
-        nextState: state.beginNextEpoch(legacy: intent.legacy),
+        nextState: state.beginNextEpoch(
+          legacy: intent.legacy,
+          payload: intent.payload,
+          terminal: intent.terminal,
+        ),
       );
     }
     if (intent is WearNoopIntent) return WearReduction.accept();
@@ -501,9 +556,6 @@ class WearRuntimeStore {
           _validateEffects(reduction.effects, candidate);
           if (changed) _publish(candidate);
 
-          // Capture the version this receipt acknowledges. A synchronously
-          // starting effect is allowed to queue terminal/nested work, but it
-          // must not rewrite the already accepted receipt version.
           final WearRuntimeVersion receiptVersion = _state.version;
           _scheduleEffects(reduction.effects);
 
@@ -621,8 +673,6 @@ class WearRuntimeStore {
       _publish(_prepareCommittedState(_state.asTerminal()));
     }
 
-    // Pending callers observe the committed terminal version, not the stale
-    // pre-dispose tuple.
     while (_queue.isNotEmpty) {
       final _QueuedWearIntent queued = _queue.removeFirst();
       if (!queued.completer.isCompleted) {

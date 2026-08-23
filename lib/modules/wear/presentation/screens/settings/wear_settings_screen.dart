@@ -99,7 +99,7 @@ class _WearSettingsScreenState extends ConsumerState<WearSettingsScreen> {
   }
 
   Future<void> _switchUser() async {
-    WearSession.clear();
+    await WearSession.clear();
     if (!mounted) return;
     context.go(WearMainScreen.route);
   }
@@ -150,9 +150,7 @@ class _WearSettingsScreenState extends ConsumerState<WearSettingsScreen> {
         icon: WearImages.database,
         onTap: _openAvailabilityFill,
       ),
-      const SizedBox(
-        height: 50,
-      )
+      const SizedBox(height: 50),
     ];
 
     return WearScreenScaffold(

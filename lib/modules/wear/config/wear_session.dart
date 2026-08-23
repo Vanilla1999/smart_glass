@@ -2,28 +2,68 @@ import 'dart:async';
 
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
+/// Compatibility facade during the single-state migration.
+///
+/// Session identity is runtime-authority-owned from MR-S2. Printer selection
+/// deliberately remains legacy-owned here until MR-S4.
 class WearSession {
   WearSession._();
 
-  static AuthenticatedUser? _user;
+  static WearRuntimeAuthority? _configuredAuthority;
+  static WearRuntimeAuthority? _lazyAuthority;
   static WearPrinterSelection? _printerSelection;
-  static final StreamController<AuthenticatedUser> _authorizedController =
-      StreamController<AuthenticatedUser>.broadcast();
-  static final StreamController<void> _clearedController =
-      StreamController<void>.broadcast();
+
   static final StreamController<WearPrinterSelection?>
       _printerSelectionController =
       StreamController<WearPrinterSelection?>.broadcast();
 
-  static bool get isAuthorized => _user != null;
+  static WearRuntimeAuthority get identityAuthority {
+    final WearRuntimeAuthority? configured = _configuredAuthority;
+    if (configured != null) return configured;
+    return _lazyAuthority ??= WearRuntimeAuthority();
+  }
 
-  static AuthenticatedUser? get userOrNull => _user;
+  /// Starts a fresh identity runtime only from an explicit module-entry path.
+  ///
+  /// Ordinary getters and late callbacks never recreate a terminal runtime.
+  static WearRuntimeAuthority beginNewIdentityRuntime() {
+    final WearRuntimeAuthority current = identityAuthority;
+    if (!current.state.terminal) return current;
+    if (_configuredAuthority != null) {
+      throw StateError(
+        'A configured terminal authority must be explicitly replaced',
+      );
+    }
+    return _lazyAuthority = WearRuntimeAuthority();
+  }
+
+  static void configureIdentityAuthority(WearRuntimeAuthority authority) {
+    final WearRuntimeAuthority? configured = _configuredAuthority;
+    if (identical(configured, authority)) return;
+    if (configured != null && !configured.state.terminal) {
+      throw StateError('Wear session identity authority is already configured');
+    }
+    final WearRuntimeAuthority? lazy = _lazyAuthority;
+    if (lazy != null && !lazy.state.terminal) {
+      throw StateError(
+        'Lazy Wear identity authority was already created; configure earlier',
+      );
+    }
+    _lazyAuthority = null;
+    _configuredAuthority = authority;
+  }
+
+  static bool get isAuthorized => identityAuthority.isAuthorized;
+
+  static AuthenticatedUser? get userOrNull => identityAuthority.userOrNull;
 
   static Stream<AuthenticatedUser> get authorizedStream =>
-      _authorizedController.stream;
+      identityAuthority.authorizedStream;
 
-  static Stream<void> get clearedStream => _clearedController.stream;
+  static Stream<void> get clearedStream => identityAuthority.clearedStream;
 
   static WearPrinterSelection? get printerSelectionOrNull => _printerSelection;
 
@@ -33,12 +73,14 @@ class WearSession {
       _printerSelectionController.stream;
 
   static AuthenticatedUser get user =>
-      _user ?? (throw StateError('Пользователь не авторизован'));
+      userOrNull ?? (throw StateError('Пользователь не авторизован'));
 
-  static void setUser(AuthenticatedUser user) {
-    _user = user;
-    if (!_authorizedController.isClosed) {
-      _authorizedController.add(user);
+  static Future<void> setUser(AuthenticatedUser user) async {
+    final WearDispatchResult result = await identityAuthority.authorize(user);
+    if (!result.accepted) {
+      throw StateError(
+        'Wear authorization rejected: ${result.rejectReason?.name}',
+      );
     }
   }
 
@@ -56,14 +98,13 @@ class WearSession {
     }
   }
 
-  static void clear() {
-    _user = null;
-    _printerSelection = null;
-    if (!_printerSelectionController.isClosed) {
-      _printerSelectionController.add(null);
-    }
-    if (!_clearedController.isClosed) {
-      _clearedController.add(null);
+  static Future<void> clear() async {
+    clearPrinterSelection();
+    final WearDispatchResult result = await identityAuthority.clearSession();
+    if (!result.accepted) {
+      throw StateError(
+        'Wear session clear rejected: ${result.rejectReason?.name}',
+      );
     }
   }
 }
