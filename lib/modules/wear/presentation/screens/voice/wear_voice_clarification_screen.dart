@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/voice_clarification_args.dart';
 import 'package:smart_glasses/modules/wear/application/wear_aggregate_presentation_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
@@ -10,6 +9,7 @@ import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_search_phrase_policy.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
@@ -59,7 +59,6 @@ class _WearVoiceClarificationScreenState
         onUp: _onUp,
         onDown: _onDown,
         onSelect: _onSelect,
-        onBack: _onBack,
         onNextPage: _onNextPage,
         onPreviousPage: _onPreviousPage,
         onPhrase: _onPhrase,
@@ -141,11 +140,9 @@ class _WearVoiceClarificationScreenState
 
   Widget _withBackHistory(Widget child) {
     return PopScope<Object?>(
-      canPop: _currentArgs?.previous == null,
+      canPop: false,
       onPopInvokedWithResult: (bool didPop, Object? result) {
-        if (!didPop) {
-          _restorePreviousClarification();
-        }
+        if (!didPop) unawaited(_onBack());
       },
       child: Stack(
         children: <Widget>[
@@ -323,9 +320,9 @@ class _WearVoiceClarificationScreenState
     }
   }
 
-  void _onBack() {
+  Future<void> _onBack() async {
     if (_restorePreviousClarification()) return;
-    context.pop();
+    await _flow.handleControllerCommand(WearVoiceCommand.back);
   }
 
   bool _restorePreviousClarification() {
