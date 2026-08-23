@@ -33,7 +33,6 @@ class _WearHomeConfirmScreenState extends State<WearHomeConfirmScreen>
   @override
   void initState() {
     super.initState();
-    _flow.enterScreen(WearScreenId.homeConfirm);
     _focusedIndex = _projectedFocus(_authority.state);
     _screenActionsRegistration = _flow.registerScreenActions(
       WearScreenId.homeConfirm,
