@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/presentation/input/wear_ui_effect_consumer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
@@ -242,6 +245,47 @@ void main() {
       expect(claim.rejectReason, WearDispatchRejectReason.busy);
       expect(authority.payload.uiEffects.effects.single.status,
           WearUiEffectStatus.pending);
+    });
+
+    test('inactive pending effect is claimed once when phone resumes', () async {
+      final WearRuntimeAuthority authority = WearRuntimeAuthority(
+        initialScreen: WearScreenId.availabilityDirectScan,
+      );
+      addTearDown(authority.dispose);
+      await authority.setPhoneUiActive(false);
+      final List<WearUiEffect> executed = <WearUiEffect>[];
+      final Completer<void> execution = Completer<void>();
+      Future<void> execute(WearUiEffect effect) async {
+        executed.add(effect);
+        if (!execution.isCompleted) execution.complete();
+      }
+
+      final WearUiEffectConsumer first = WearUiEffectConsumer(
+        authority: authority,
+        kind: WearUiEffectKind.manualBarcodeInput,
+        expectedScreen: WearScreenId.availabilityDirectScan,
+        execute: execute,
+      );
+      final WearUiEffectConsumer rebuilt = WearUiEffectConsumer(
+        authority: authority,
+        kind: WearUiEffectKind.manualBarcodeInput,
+        expectedScreen: WearScreenId.availabilityDirectScan,
+        execute: execute,
+      );
+      addTearDown(first.dispose);
+      addTearDown(rebuilt.dispose);
+
+      await first.request();
+      final WearUiEffect pending = authority.payload.uiEffects.effects.single;
+      expect(pending.status, WearUiEffectStatus.pending);
+
+      await authority.setPhoneUiActive(true);
+      await execution.future;
+
+      expect(executed, hasLength(1));
+      expect(executed.single.effectId, pending.effectId);
+      expect(authority.payload.uiEffects.effects.single.status,
+          WearUiEffectStatus.claimed);
     });
   });
 }
