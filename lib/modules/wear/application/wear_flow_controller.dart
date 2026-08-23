@@ -1120,8 +1120,19 @@ class WearFlowController {
   }
 
   Future<void> flushPendingNavigation() async {
-    final WearNavigationRequest? request = _state.pendingNavigation;
-    if (request == null || _uiLifecycle != WearUiLifecycle.active) return;
+    final WearPendingNavigation? pending =
+        _authority.payload.navigation.pending;
+    if (pending == null || _uiLifecycle != WearUiLifecycle.active) return;
+    final WearNavigationRequest? legacyRequest = _state.pendingNavigation;
+    final WearNavigationRequest request = WearNavigationRequest(
+      requestId: pending.requestId,
+      screen: pending.screen,
+      extra: legacyRequest?.screen == pending.screen
+          ? legacyRequest?.extra
+          : null,
+      replaceCurrent: pending.kind == WearPendingNavigationKind.replace,
+      popCurrent: pending.kind == WearPendingNavigationKind.pop,
+    );
     if (_deliveredNavigationRequestId == request.requestId) return;
     print('[WearFlowController] ui active flush pendingNavigation=$request');
     _deliveredNavigationRequestId = request.requestId;
@@ -1140,7 +1151,7 @@ class WearFlowController {
       }
       await _navigationOutput.goTo(request.screen, extra: request.extra);
     } catch (error, stackTrace) {
-      if (_state.pendingNavigation?.requestId == request.requestId) {
+      if (_authority.payload.navigation.pending?.requestId == request.requestId) {
         _deliveredNavigationRequestId = null;
         _setState(_state.copyWith(error: error.toString()));
       }
@@ -1155,13 +1166,14 @@ class WearFlowController {
     required int requestId,
     required WearScreenId screen,
   }) {
-    final WearNavigationRequest? request = _state.pendingNavigation;
-    if (request == null ||
-        request.requestId != requestId ||
-        request.screen != screen) {
+    final WearPendingNavigation? pending =
+        _authority.payload.navigation.pending;
+    if (pending == null ||
+        pending.requestId != requestId ||
+        pending.screen != screen) {
       return false;
     }
-    print('[WearFlowController] navigation acknowledged request=$request');
+    print('[WearFlowController] navigation acknowledged request=$pending');
     _deliveredNavigationRequestId = null;
     _inactiveNavigationCount = 0;
     unawaited(_authority
