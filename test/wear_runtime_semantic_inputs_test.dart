@@ -1,10 +1,104 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/presentation/input/wear_ui_effect_consumer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
 void main() {
   group('unified semantic inputs', () {
+    for (final WearInputModality modality in <WearInputModality>[
+      WearInputModality.touch,
+      WearInputModality.voice,
+      WearInputModality.button,
+    ]) {
+      test('${modality.name} creates the same authoritative focus', () async {
+        final WearRuntimeAuthority authority = WearRuntimeAuthority(
+          initialScreen: WearScreenId.menu,
+        );
+        addTearDown(authority.dispose);
+
+        final WearDispatchResult receipt = await authority.dispatchSemanticInput(
+          kind: WearSemanticInputKind.presentationFocus,
+          modality: modality,
+          expectedScreen: WearScreenId.menu,
+          focusIndex: 2,
+        );
+
+        expect(receipt.accepted, isTrue);
+        expect(
+          (authority.payload.presentation as WearPresentationFocusSlice)
+              .focusFor(WearScreenId.menu),
+          2,
+        );
+      });
+    }
+
+    test('unchanged focus is accepted without a revision', () async {
+      final WearRuntimeAuthority authority = WearRuntimeAuthority(
+        initialScreen: WearScreenId.homeConfirm,
+      );
+      addTearDown(authority.dispose);
+      await authority.dispatchSemanticInput(
+        kind: WearSemanticInputKind.presentationFocus,
+        modality: WearInputModality.touch,
+        expectedScreen: WearScreenId.homeConfirm,
+        focusIndex: 1,
+      );
+      final int revision = authority.state.revision;
+
+      final WearDispatchResult receipt = await authority.dispatchSemanticInput(
+        kind: WearSemanticInputKind.presentationFocus,
+        modality: WearInputModality.voice,
+        expectedScreen: WearScreenId.homeConfirm,
+        focusIndex: 1,
+      );
+
+      expect(receipt.accepted, isTrue);
+      expect(receipt.stateChanged, isFalse);
+      expect(authority.state.revision, revision);
+    });
+
+    test('focus from an old logical screen is rejected without mutation',
+        () async {
+      final WearRuntimeAuthority authority = WearRuntimeAuthority(
+        initialScreen: WearScreenId.continueScan,
+      );
+      addTearDown(authority.dispose);
+      final int revision = authority.state.revision;
+
+      final WearDispatchResult receipt = await authority.dispatchSemanticInput(
+        kind: WearSemanticInputKind.presentationFocus,
+        modality: WearInputModality.button,
+        expectedScreen: WearScreenId.menu,
+        focusIndex: 1,
+      );
+
+      expect(receipt.rejectReason, WearDispatchRejectReason.staleScreen);
+      expect(authority.state.revision, revision);
+    });
+
+    test('focus from an old session epoch is rejected without mutation',
+        () async {
+      final WearRuntimeAuthority authority = WearRuntimeAuthority(
+        initialScreen: WearScreenId.availabilityInteraction,
+      );
+      addTearDown(authority.dispose);
+      final int revision = authority.state.revision;
+
+      final WearDispatchResult receipt = await authority.dispatchSemanticInput(
+        kind: WearSemanticInputKind.presentationFocus,
+        modality: WearInputModality.touch,
+        expectedScreen: WearScreenId.availabilityInteraction,
+        expectedSessionEpoch: authority.state.sessionEpoch + 1,
+        focusIndex: 1,
+      );
+
+      expect(receipt.rejectReason, WearDispatchRejectReason.staleEpoch);
+      expect(authority.state.revision, revision);
+    });
+
     for (final WearInputModality modality in WearInputModality.values) {
       test('${modality.name} creates the same manual-input request', () async {
         final WearRuntimeAuthority authority = WearRuntimeAuthority(
@@ -242,6 +336,47 @@ void main() {
       expect(claim.rejectReason, WearDispatchRejectReason.busy);
       expect(authority.payload.uiEffects.effects.single.status,
           WearUiEffectStatus.pending);
+    });
+
+    test('inactive pending effect is claimed once when phone resumes', () async {
+      final WearRuntimeAuthority authority = WearRuntimeAuthority(
+        initialScreen: WearScreenId.availabilityDirectScan,
+      );
+      addTearDown(authority.dispose);
+      await authority.setPhoneUiActive(false);
+      final List<WearUiEffect> executed = <WearUiEffect>[];
+      final Completer<void> execution = Completer<void>();
+      Future<void> execute(WearUiEffect effect) async {
+        executed.add(effect);
+        if (!execution.isCompleted) execution.complete();
+      }
+
+      final WearUiEffectConsumer first = WearUiEffectConsumer(
+        authority: authority,
+        kind: WearUiEffectKind.manualBarcodeInput,
+        expectedScreen: WearScreenId.availabilityDirectScan,
+        execute: execute,
+      );
+      final WearUiEffectConsumer rebuilt = WearUiEffectConsumer(
+        authority: authority,
+        kind: WearUiEffectKind.manualBarcodeInput,
+        expectedScreen: WearScreenId.availabilityDirectScan,
+        execute: execute,
+      );
+      addTearDown(first.dispose);
+      addTearDown(rebuilt.dispose);
+
+      await first.request();
+      final WearUiEffect pending = authority.payload.uiEffects.effects.single;
+      expect(pending.status, WearUiEffectStatus.pending);
+
+      await authority.setPhoneUiActive(true);
+      await execution.future;
+
+      expect(executed, hasLength(1));
+      expect(executed.single.effectId, pending.effectId);
+      expect(authority.payload.uiEffects.effects.single.status,
+          WearUiEffectStatus.claimed);
     });
   });
 }

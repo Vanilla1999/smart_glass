@@ -100,6 +100,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   bool _wasActuallyBackgrounded = false;
   WearScreenId? _actualRouteScreen;
   int _routerObservationRevision = 0;
+  int _scannerSyncGeneration = 0;
   int _wearControlServiceRequestGeneration = 0;
   bool _wearControlServiceEnabled = false;
   bool _runtimeTerminated = false;
@@ -369,6 +370,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     if (routeScreen != null) _actualRouteScreen = routeScreen;
     WearDependencies.I.barcodeDispatcher.resetPending();
     final WearRuntimeControlAdapter callback = _controlAdapter;
+    final int generation = ++_scannerSyncGeneration;
     final WearScreenId logicalScreen = _flow.state.screen;
     final WearScannerRuntimeDecision decision =
         resolveWearScannerDecisionFromState(
@@ -377,6 +379,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     );
     unawaited(_applyScannerDecision(
       callback: callback,
+      generation: generation,
       logicalScreen: logicalScreen,
       screenAcceptsBarcode: _flow.currentScreenAcceptsBarcode,
       decision: decision,
@@ -385,6 +388,7 @@ class _WearModuleAppState extends State<WearModuleApp>
 
   Future<void> _applyScannerDecision({
     required WearRuntimeControlAdapter callback,
+    required int generation,
     required WearScreenId logicalScreen,
     required bool screenAcceptsBarcode,
     required WearScannerRuntimeDecision decision,
@@ -393,17 +397,21 @@ class _WearModuleAppState extends State<WearModuleApp>
       if (decision.hardwarePrepared) {
         await callback.observeScannerPreparing();
         await WearDependencies.I.scannerRuntime.start();
+        if (generation != _scannerSyncGeneration) return;
         await callback.observeScannerPrepared();
       } else {
         await callback.observeScannerPausing();
         await WearDependencies.I.scannerRuntime.pause();
+        if (generation != _scannerSyncGeneration) return;
         await callback.observeScannerReleased();
       }
+      if (generation != _scannerSyncGeneration) return;
       await callback.evaluateScannerAdmission(
         logicalScreen: logicalScreen,
         screenAcceptsBarcode: screenAcceptsBarcode,
       );
     } catch (error, stackTrace) {
+      if (generation != _scannerSyncGeneration) return;
       await callback.observeScannerError(error);
       print(
         '[WearModuleApp] scanner runtime sync failed '
@@ -907,7 +915,6 @@ class _WearModuleAppState extends State<WearModuleApp>
     _routerObservationRevision += 1;
     _stopWearControlService('dispose');
     _flow.setRuntimeActive(false);
-    unawaited(_flow.authority.terminate());
     if (widget.flowController == null) {
       WearDependencies.I.barcodeDispatcher.stop();
       unawaited(

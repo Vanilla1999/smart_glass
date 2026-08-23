@@ -417,12 +417,15 @@ class WearFlowController {
     Object? extra,
     required bool canPop,
   }) {
-    _clearContextPayload(screen, extra);
     unawaited(_authority.navigationAdapter().observePhoneRoute(screen));
+    final WearScreenId logicalScreen =
+        _authority.payload.navigation.logicalScreen;
     _setState(_stateForEnteredScreen(
-      _authority.payload.navigation.logicalScreen,
+      logicalScreen,
       extra: extra,
     ));
+    if (screen != logicalScreen) return;
+    _clearContextPayload(screen, extra);
     final WearFlowAction? onVisible = _screenActions[screen]?.onVisible;
     if (onVisible != null) {
       unawaited(Future<void>.sync(onVisible));
@@ -2113,6 +2116,7 @@ class WearFlowController {
   }
 
   void _setState(WearFlowState next) {
+    final WearFlowState previous = _state;
     next = _withAuthoritativeNavigation(next);
     final List<String> previousClarificationGrammar =
         _state.screen == WearScreenId.voiceClarification
@@ -2122,6 +2126,18 @@ class WearFlowController {
       _clearRecognitionFeedback();
     }
     _state = next;
+    final int? previousFocus = _authoritativeFocus(previous);
+    final int? nextFocus = _authoritativeFocus(next);
+    if (nextFocus != null &&
+        (previous.screen != next.screen || previousFocus != nextFocus)) {
+      unawaited(_authority.dispatchSemanticInput(
+        kind: WearSemanticInputKind.presentationFocus,
+        modality: WearInputModality.manual,
+        expectedScreen: next.screen,
+        expectedSessionEpoch: _authority.state.sessionEpoch,
+        focusIndex: nextFocus,
+      ));
+    }
     print('[WearFlowController] state=$_state');
     if (!_stateController.isClosed) {
       _stateController.add(next);
@@ -2137,6 +2153,17 @@ class WearFlowController {
         )) {
       _screenActionsController.add(WearScreenId.voiceClarification);
     }
+  }
+
+  int? _authoritativeFocus(WearFlowState value) {
+    return switch (value.screen) {
+      WearScreenId.menu => value.menuFocusedIndex,
+      WearScreenId.homeConfirm => value.homeConfirmFocusedIndex,
+      WearScreenId.continueScan => value.continueScanFocusedIndex,
+      WearScreenId.availabilityInteraction =>
+        value.availabilityInteractionFocusedIndex,
+      _ => null,
+    };
   }
 
   WearFlowState _withAuthoritativeNavigation(WearFlowState value) {
