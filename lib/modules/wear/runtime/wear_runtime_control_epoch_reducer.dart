@@ -14,10 +14,20 @@ class WearControlEpochResetReducer implements WearSliceReducer {
         state.payloadAs<WearAggregatePayload>();
     if (!aggregate.session.isAuthorized) return WearReduction.accept();
 
+    final WearNavigationSlice previousNavigation = aggregate.navigation;
+    final WearNavigationSlice resetNavigation = WearNavigationSlice(
+      logicalScreen: WearScreenId.main,
+      actualPhoneScreen: null,
+      pending: null,
+      history: const <WearScreenId>[WearScreenId.main],
+      routeObservationRevision:
+          previousNavigation.routeObservationRevision,
+      nextRequestId: previousNavigation.nextRequestId,
+    );
     final WearAggregatePayload nextPayload = aggregate.copyWith(
       session: const WearSessionSlice.anonymous(),
       lifecycle: aggregate.lifecycle.copyWith(runtimeActive: false),
-      navigation: aggregate.navigation.clearForSession(WearScreenId.main),
+      navigation: resetNavigation,
       controls: aggregate.controls.toTerminalControls(),
     );
     return WearReduction.accept(
