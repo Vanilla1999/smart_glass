@@ -3,13 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
-import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/menu/wear_menu_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_projection.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
 class WearHomeConfirmScreen extends StatefulWidget {
@@ -23,16 +24,17 @@ class WearHomeConfirmScreen extends StatefulWidget {
 
 class _WearHomeConfirmScreenState extends State<WearHomeConfirmScreen>
     with ScreenLifecycleLogging<WearHomeConfirmScreen> {
-  final WearFlowController _flow = WearDependencies.I.wearFlowController;
+  final _flow = WearDependencies.I.wearFlowController;
+  final _authority = WearDependencies.I.authority;
   late final WearScreenActionRegistration _screenActionsRegistration;
-  StreamSubscription<WearFlowState>? _flowSub;
+  StreamSubscription<WearRuntimeState>? _runtimeSub;
   int _focusedIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _focusedIndex = _flow.state.homeConfirmFocusedIndex;
     _flow.enterScreen(WearScreenId.homeConfirm);
+    _focusedIndex = _projectedFocus(_authority.state);
     _screenActionsRegistration = _flow.registerScreenActions(
       WearScreenId.homeConfirm,
       WearScreenActionHandler(
@@ -46,19 +48,21 @@ class _WearHomeConfirmScreenState extends State<WearHomeConfirmScreen>
         onCancel: _cancel,
       ),
     );
-    _flowSub = _flow.stateStream.listen(_onFlowState);
+    _runtimeSub = _authority.states.listen(_onRuntimeState);
   }
 
   @override
   void dispose() {
-    _flowSub?.cancel();
+    _runtimeSub?.cancel();
     _flow.unregisterScreenActions(_screenActionsRegistration);
     super.dispose();
   }
 
-  void _onFlowState(WearFlowState state) {
-    if (state.screen != WearScreenId.homeConfirm) return;
-    final int next = state.homeConfirmFocusedIndex.clamp(0, 1);
+  void _onRuntimeState(WearRuntimeState state) {
+    final WearPhoneProjection projection =
+        WearRuntimeProjection.projectPhone(state);
+    if (projection.logicalScreen != WearScreenId.homeConfirm) return;
+    final int next = projection.focusedIndex.clamp(0, 1);
     if (next == _focusedIndex) return;
     if (mounted) {
       setState(() => _focusedIndex = next);
@@ -67,34 +71,44 @@ class _WearHomeConfirmScreenState extends State<WearHomeConfirmScreen>
     }
   }
 
+  int _projectedFocus(WearRuntimeState state) {
+    final WearPhoneProjection projection =
+        WearRuntimeProjection.projectPhone(state);
+    if (projection.logicalScreen != WearScreenId.homeConfirm) return 0;
+    return projection.focusedIndex.clamp(0, 1);
+  }
+
   void _focusHome() {
-    _setFocus(0);
+    _flow.setHomeConfirmFocusedIndex(0);
   }
 
   void _focusCancel() {
-    _setFocus(1);
+    _flow.setHomeConfirmFocusedIndex(1);
   }
 
-  void _setFocus(int index) {
-    if (_focusedIndex != index) {
-      setState(() => _focusedIndex = index);
-    }
-    _flow.setHomeConfirmFocusedIndex(index);
-  }
-
-  void _selectFocused() {
+  Future<void> _selectFocused() async {
     if (_focusedIndex == 0) {
-      _goHome();
+      await _goHome();
       return;
     }
-    _cancel();
+    await _cancel();
   }
 
-  void _goHome() {
+  Future<void> _goHome() async {
+    final bool accepted = await _flow.commitPresentationFocus(
+      WearScreenId.homeConfirm,
+      0,
+    );
+    if (!accepted || !mounted) return;
     context.go(WearMenuScreen.route);
   }
 
-  void _cancel() {
+  Future<void> _cancel() async {
+    final bool accepted = await _flow.commitPresentationFocus(
+      WearScreenId.homeConfirm,
+      1,
+    );
+    if (!accepted || !mounted) return;
     if (context.canPop()) {
       context.pop();
     }

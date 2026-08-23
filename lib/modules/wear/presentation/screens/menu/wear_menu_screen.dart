@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
@@ -11,6 +10,8 @@ import 'package:smart_glasses/modules/wear/presentation/screens/photo/wear_lates
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_projection.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
@@ -27,16 +28,17 @@ class _WearMenuScreenState extends State<WearMenuScreen>
     with ScreenLifecycleLogging<WearMenuScreen> {
   final ScrollController _scroll = ScrollController();
   final _flow = WearDependencies.I.wearFlowController;
-  StreamSubscription<WearFlowState>? _flowSub;
+  final _authority = WearDependencies.I.authority;
+  StreamSubscription<WearRuntimeState>? _runtimeSub;
   int _focusedIndex = 0;
   static const int _menuItemCount = 4;
 
   @override
   void initState() {
     super.initState();
-    _focusedIndex = _flow.state.menuFocusedIndex;
     _flow.enterScreen(WearScreenId.menu);
-    _flowSub = _flow.stateStream.listen(_onFlowState);
+    _focusedIndex = _projectedFocus(_authority.state);
+    _runtimeSub = _authority.states.listen(_onRuntimeState);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToFocusedIndex(_focusedIndex, animate: false);
     });
@@ -44,14 +46,16 @@ class _WearMenuScreenState extends State<WearMenuScreen>
 
   @override
   void dispose() {
-    _flowSub?.cancel();
+    _runtimeSub?.cancel();
     _scroll.dispose();
     super.dispose();
   }
 
-  void _onFlowState(WearFlowState state) {
-    if (state.screen != WearScreenId.menu) return;
-    final int next = state.menuFocusedIndex.clamp(0, _menuItemCount - 1);
+  void _onRuntimeState(WearRuntimeState state) {
+    final WearPhoneProjection projection =
+        WearRuntimeProjection.projectPhone(state);
+    if (projection.logicalScreen != WearScreenId.menu) return;
+    final int next = projection.focusedIndex.clamp(0, _menuItemCount - 1);
     if (next == _focusedIndex) return;
     if (mounted) {
       setState(() => _focusedIndex = next);
@@ -61,6 +65,13 @@ class _WearMenuScreenState extends State<WearMenuScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToFocusedIndex(next);
     });
+  }
+
+  int _projectedFocus(WearRuntimeState state) {
+    final WearPhoneProjection projection =
+        WearRuntimeProjection.projectPhone(state);
+    if (projection.logicalScreen != WearScreenId.menu) return 0;
+    return projection.focusedIndex.clamp(0, _menuItemCount - 1);
   }
 
   String _getMenuItemName(int index) {
@@ -155,13 +166,10 @@ class _WearMenuScreenState extends State<WearMenuScreen>
             5 => 3,
             _ => null,
           };
-          if (itemIndex == null) return;
+          if (itemIndex == null || _focusedIndex == itemIndex) return;
           print(
             '[MenuScreen] onFocusChanged: itemIndex=$itemIndex => ${_getMenuItemName(itemIndex)}',
           );
-          if (_focusedIndex != itemIndex) {
-            setState(() => _focusedIndex = itemIndex);
-          }
           _flow.setMenuFocusedIndex(itemIndex);
         },
       ),

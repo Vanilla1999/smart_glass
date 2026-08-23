@@ -3,14 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
-import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
-import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/menu/wear_menu_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_svg_icon.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_projection.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 import 'package:smart_glasses/modules/wear/services/wear_voice_session.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
@@ -28,8 +28,9 @@ class WearContinueScanScreen extends StatefulWidget {
 class _WearContinueScanScreenState extends State<WearContinueScanScreen>
     with WidgetsBindingObserver {
   final _flow = WearDependencies.I.wearFlowController;
+  final _authority = WearDependencies.I.authority;
   late final WearScreenActionRegistration _screenActionsRegistration;
-  StreamSubscription<WearFlowState>? _flowSub;
+  StreamSubscription<WearRuntimeState>? _runtimeSub;
   int _selectedButtonIndex = 0;
   bool _isActionInProgress = false;
 
@@ -37,8 +38,8 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _selectedButtonIndex = _flow.state.continueScanFocusedIndex;
     _flow.enterScreen(WearScreenId.continueScan);
+    _selectedButtonIndex = _projectedFocus(_authority.state);
     _screenActionsRegistration = _flow.registerScreenActions(
       WearScreenId.continueScan,
       WearScreenActionHandler(
@@ -49,11 +50,10 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen>
         onFinish: _finishScanning,
       ),
     );
-    _flowSub = _flow.stateStream.listen(_onFlowState);
+    _runtimeSub = _authority.states.listen(_onRuntimeState);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _sendGlassesState();
       unawaited(
         WearVoiceSession.I
             .ensureHealthy(reason: 'continue_scan_enter')
@@ -76,7 +76,6 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen>
     if (state == AppLifecycleState.resumed) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _sendGlassesState(fast: true);
         unawaited(
           WearVoiceSession.I
               .ensureHealthy(reason: 'continue_scan_resumed')
@@ -92,21 +91,30 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen>
 
   @override
   void dispose() {
-    _flowSub?.cancel();
+    _runtimeSub?.cancel();
     _flow.unregisterScreenActions(_screenActionsRegistration);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
-  void _onFlowState(WearFlowState state) {
-    if (state.screen != WearScreenId.continueScan) return;
-    final int next = state.continueScanFocusedIndex.clamp(0, 1);
+  void _onRuntimeState(WearRuntimeState state) {
+    final WearPhoneProjection projection =
+        WearRuntimeProjection.projectPhone(state);
+    if (projection.logicalScreen != WearScreenId.continueScan) return;
+    final int next = projection.focusedIndex.clamp(0, 1);
     if (next == _selectedButtonIndex) return;
     if (mounted) {
       setState(() => _selectedButtonIndex = next);
     } else {
       _selectedButtonIndex = next;
     }
+  }
+
+  int _projectedFocus(WearRuntimeState state) {
+    final WearPhoneProjection projection =
+        WearRuntimeProjection.projectPhone(state);
+    if (projection.logicalScreen != WearScreenId.continueScan) return 0;
+    return projection.focusedIndex.clamp(0, 1);
   }
 
   void _onVoiceUp() {
@@ -133,21 +141,37 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen>
     );
     if (_isActionInProgress) return;
     if (_selectedButtonIndex == 0) {
-      _continueScanning();
+      unawaited(_continueScanning());
     } else {
-      _finishScanning();
+      unawaited(_finishScanning());
     }
   }
 
-  void _continueScanning() {
+  Future<void> _continueScanning() async {
     if (_isActionInProgress) return;
     _isActionInProgress = true;
+    final bool accepted = await _flow.commitPresentationFocus(
+      WearScreenId.continueScan,
+      0,
+    );
+    if (!accepted || !mounted) {
+      _isActionInProgress = false;
+      return;
+    }
     context.pop(true);
   }
 
-  void _finishScanning() {
+  Future<void> _finishScanning() async {
     if (_isActionInProgress) return;
     _isActionInProgress = true;
+    final bool accepted = await _flow.commitPresentationFocus(
+      WearScreenId.continueScan,
+      1,
+    );
+    if (!accepted || !mounted) {
+      _isActionInProgress = false;
+      return;
+    }
     _flow.enterScreen(WearScreenId.menu);
     context.go(WearMenuScreen.route);
   }
@@ -157,24 +181,8 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen>
       '[ContinueScan] _setFocusedButton index=$index, '
       'current=$_selectedButtonIndex',
     );
-    if (_selectedButtonIndex == index) {
-      _sendGlassesState(fast: true);
-      return;
-    }
+    if (_selectedButtonIndex == index) return;
     _flow.setContinueScanFocusedIndex(index);
-    setState(() => _selectedButtonIndex = index);
-    _sendGlassesState(fast: true);
-  }
-
-  void _sendGlassesState({bool fast = false}) {
-    print(
-      '[ContinueScan] _sendGlassesState selectedIndex=$_selectedButtonIndex, '
-      'fast=$fast mounted=$mounted actionInProgress=$_isActionInProgress',
-    );
-    final WearGlassesPayload payload = WearGlassesPayload.continueScan(
-      selectedIndex: _selectedButtonIndex,
-    );
-    _flow.publishScreenPayload(WearScreenId.continueScan, payload);
   }
 
   @override
