@@ -154,15 +154,17 @@ class WearScanStatusSequencingReducer implements WearSliceReducer {
         requiredScreen: scan.screen,
       );
       if (rejection != null) return WearReduction.reject(rejection);
+      final String productName = scan.productName ?? '';
       return _enterStatus(
         state.clearExpectedOperation(WearPrintPriceTagEffect.operationKind),
         aggregate,
         features,
-        scan.copyWith(productName: intent.productName),
+        scan,
         args: WearStatusScreenArgs(
           kind: WearStatusKind.success,
           title: 'Ценник напечатан',
-          message: intent.productName,
+          message: productName,
+          details: intent.printerName,
           autoAfter: const Duration(seconds: 2),
           autoAction: WearStatusAutoAction.none,
         ),

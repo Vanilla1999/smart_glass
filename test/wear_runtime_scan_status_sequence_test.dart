@@ -111,7 +111,7 @@ void main() {
     authority.registerEffectExecutor(
       WearScanEffectExecutor(
         lookup: (_) async => <BarcodeProductInfo>[
-          BarcodeProductInfo(id: 10, name: 'Product'),
+          BarcodeProductInfo(id: 10, name: 'Молоко'),
         ],
         print: (_, __) => print.future,
         navigate: (_, {extra, replaceCurrent = false}) async {},
@@ -124,6 +124,7 @@ void main() {
     await authority.submitScanBarcode('4600000000003');
     await _flush();
     expect(authority.scanTask.phase, WearScanTaskPhase.printing);
+    expect(authority.scanTask.productName, 'Молоко');
     final int? printOperation = authority.state.expectedOperationId(
       WearPrintPriceTagEffect.operationKind,
     );
@@ -140,9 +141,13 @@ void main() {
     );
     expect(authority.scanTask.phase, WearScanTaskPhase.printing);
 
-    print.complete('Product');
+    print.complete('Белый принтер');
     await _flush();
+
     expect(authority.scanTask.phase, WearScanTaskPhase.status);
+    expect(authority.scanTask.productName, 'Молоко');
+    expect(authority.scanTask.status?.message, 'Молоко');
+    expect(authority.scanTask.status?.details, 'Белый принтер');
     statusDelay.complete();
   });
 }

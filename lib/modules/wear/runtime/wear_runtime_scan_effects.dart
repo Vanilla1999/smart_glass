@@ -97,7 +97,7 @@ class WearScanEffectExecutor
 
     if (effect is WearPrintPriceTagEffect) {
       try {
-        final String productName = WearMockConfig.isEnabled
+        final String printerName = WearMockConfig.isEnabled
             ? (effect.product.id.isEven
                 ? effect.selection.yellowPrinter.name
                 : effect.selection.whitePrinter.name)
@@ -105,7 +105,7 @@ class WearScanEffectExecutor
         return WearPriceTagPrintSucceeded(
           sessionEpoch: effect.sessionEpoch,
           operationId: effect.operationId,
-          productName: productName,
+          printerName: printerName,
         );
       } catch (error) {
         return WearPriceTagPrintFailed(
