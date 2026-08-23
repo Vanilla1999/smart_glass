@@ -34,8 +34,8 @@ class WearAggregatePresentationFlowController extends WearFlowController {
 
   /// Commits focus through the one semantic mutation boundary.
   ///
-  /// Returns false when the session/screen became stale. Navigation callers must
-  /// not continue after a rejected focus receipt.
+  /// Returns false when the session/screen became stale or when a later input
+  /// superseded the requested focus before the caller may continue.
   Future<bool> commitPresentationFocus(
     WearScreenId screen,
     int index, {
@@ -46,23 +46,27 @@ class WearAggregatePresentationFlowController extends WearFlowController {
         authority.payload.navigation.logicalScreen != screen) {
       return false;
     }
+    final int expectedEpoch = authority.state.sessionEpoch;
     final int next = index.clamp(0, itemCount - 1);
     final WearDispatchResult receipt = await authority.dispatchSemanticInput(
       kind: WearSemanticInputKind.presentationFocus,
       modality: modality,
       expectedScreen: screen,
-      expectedSessionEpoch: authority.state.sessionEpoch,
+      expectedSessionEpoch: expectedEpoch,
       focusIndex: next,
     );
     if (!receipt.accepted ||
-        authority.payload.navigation.logicalScreen != screen) {
+        receipt.sessionEpoch != expectedEpoch ||
+        authority.state.sessionEpoch != expectedEpoch ||
+        authority.payload.navigation.logicalScreen != screen ||
+        _aggregateFocus(screen) != next) {
       return false;
     }
 
     // The old controller fields are updated only after the aggregate commit.
     // Its compatibility echo carries the same value and is therefore a no-op at
     // the aggregate reducer. Physical removal belongs to MR-S12.
-    _mirrorCommittedFocus(screen, _aggregateFocus(screen));
+    _mirrorCommittedFocus(screen, next);
     return true;
   }
 
@@ -89,12 +93,16 @@ class WearAggregatePresentationFlowController extends WearFlowController {
 
   @override
   Future<void> selectMenuIndex(int index) async {
+    final int targetIndex = _normalizedFocus(WearScreenId.menu, index);
     final bool accepted = await commitPresentationFocus(
       WearScreenId.menu,
-      index,
+      targetIndex,
     );
-    if (!accepted) return;
-    await requestNavigation(_menuTarget(_aggregateFocus(WearScreenId.menu)));
+    if (!accepted ||
+        _aggregateFocus(WearScreenId.menu) != targetIndex) {
+      return;
+    }
+    await requestNavigation(_menuTarget(targetIndex));
   }
 
   @override
@@ -116,15 +124,19 @@ class WearAggregatePresentationFlowController extends WearFlowController {
 
   @override
   Future<void> selectAvailabilityInteractionIndex(int index) async {
+    final int targetIndex =
+        _normalizedFocus(WearScreenId.availabilityInteraction, index);
     final bool accepted = await commitPresentationFocus(
       WearScreenId.availabilityInteraction,
-      index,
+      targetIndex,
     );
-    if (!accepted) return;
-    final WearScreenId target =
-        _aggregateFocus(WearScreenId.availabilityInteraction) == 0
-            ? WearScreenId.availabilityGroup
-            : WearScreenId.availabilityDirectScan;
+    if (!accepted ||
+        _aggregateFocus(WearScreenId.availabilityInteraction) != targetIndex) {
+      return;
+    }
+    final WearScreenId target = targetIndex == 0
+        ? WearScreenId.availabilityGroup
+        : WearScreenId.availabilityDirectScan;
     await requestNavigation(target);
   }
 
@@ -377,9 +389,12 @@ class WearAggregatePresentationFlowController extends WearFlowController {
   int _aggregateFocus(WearScreenId screen) {
     final WearPresentationFocusSlice presentation =
         authority.payload.presentation as WearPresentationFocusSlice;
-    final int value = presentation.focusFor(screen) ?? 0;
+    return _normalizedFocus(screen, presentation.focusFor(screen) ?? 0);
+  }
+
+  int _normalizedFocus(WearScreenId screen, int index) {
     final int? count = _itemCount(screen);
-    return count == null ? value : value.clamp(0, count - 1);
+    return count == null ? index : index.clamp(0, count - 1);
   }
 
   int? _itemCount(WearScreenId screen) {
