@@ -53,6 +53,7 @@ class WearRuntimeAuthority {
             sliceReducers: const <WearSliceReducer>[
               WearControlInputValidationReducer(),
               WearSessionNavigationEpochReducer(),
+              WearPrinterEpochResetReducer(),
               WearScanEpochResetReducer(),
               WearControlSliceReducer(),
               WearReviewedPrinterSliceReducer(),
