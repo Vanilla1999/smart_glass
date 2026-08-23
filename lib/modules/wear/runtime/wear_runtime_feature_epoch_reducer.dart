@@ -67,13 +67,18 @@ class WearRuntimeFeatureEpochReducer implements WearSliceReducer {
     if (intent is WearSessionCleared) {
       if (!aggregate.session.isAuthorized) return WearReduction.accept();
       final WearNavigationSlice previous = aggregate.navigation;
+      final int requestId = previous.nextRequestId + 1;
       final WearNavigationSlice navigation = WearNavigationSlice(
         logicalScreen: WearScreenId.main,
-        actualPhoneScreen: null,
-        pending: null,
+        actualPhoneScreen: previous.actualPhoneScreen,
+        pending: WearPendingNavigation(
+          requestId: requestId,
+          screen: WearScreenId.main,
+          kind: WearPendingNavigationKind.replace,
+        ),
         history: const <WearScreenId>[WearScreenId.main],
         routeObservationRevision: previous.routeObservationRevision,
-        nextRequestId: previous.nextRequestId,
+        nextRequestId: requestId,
       );
       return WearReduction.accept(
         nextState: state.beginNextEpoch(
