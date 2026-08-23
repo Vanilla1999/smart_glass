@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:smart_glasses/modules/wear/data/auth/data_source/auth_data_source.dart';
 import 'package:smart_glasses/modules/wear/data/auth/data_source/auth_dio_client.dart';
-import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_aggregate_presentation_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_availability_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_background_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_printer_runtime.dart';
@@ -60,7 +60,7 @@ class WearDependencies {
   late final VoiceActionCatalog voiceActionCatalog;
   late final VoiceHintIndexCache voiceHintIndexCache;
 
-  late final WearFlowController wearFlowController;
+  late final WearAggregatePresentationFlowController wearFlowController;
   late final WearBarcodeDispatcher barcodeDispatcher;
   late final WearScanRuntime wearScanRuntime;
   late final WearPrinterRuntime _wearPrinterRuntime;
@@ -76,7 +76,7 @@ class WearDependencies {
     audioStreamService = AudioStreamService(
       recordContinuousWav: voiceCaptureWavDiagnostics,
     );
-    wearFlowController = WearFlowController(
+    wearFlowController = WearAggregatePresentationFlowController(
       glassesOutput: NoopWearGlassesOutput(),
       navigationOutput: NoopWearNavigationOutput(),
       authority: authority,
