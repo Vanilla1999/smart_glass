@@ -1,0 +1,131 @@
+name: Apply Wear S11 logout review fix
+
+on:
+  push:
+    branches:
+      - refactor/wear-runtime-route-observation
+
+permissions:
+  contents: write
+
+jobs:
+  apply-logout-fix:
+    if: github.event.head_commit.message == 'chore(wear): apply S11 logout review fix'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply exact logout transformations
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one marker, found {count}')
+              file.write_text(text.replace(old, new), encoding='utf-8')
+
+          facade = 'lib/modules/wear/application/wear_aggregate_presentation_flow_controller.dart'
+          replace_exact(
+              facade,
+              "  @override\n  void enterScreen(WearScreenId screen, {Object? extra}) {\n",
+              "  @override\n"
+              "  void resetSessionState() {\n"
+              "    super.resetSessionState();\n"
+              "    final WearScreenId screen = _logicalScreen;\n"
+              "    if (super.state.screen != screen) {\n"
+              "      super.enterScreen(screen);\n"
+              "    }\n"
+              "  }\n\n"
+              "  @override\n"
+              "  void enterScreen(WearScreenId screen, {Object? extra}) {\n",
+          )
+
+          module = 'lib/modules/wear/presentation/widgets/wear_module_app.dart'
+          replace_exact(
+              module,
+              "  void _onSessionCleared() {\n"
+              "    if (_runtimeTerminated) return;\n"
+              "    _bindControlAdapter();\n"
+              "    _voiceDispatcher.resetAdmission();\n"
+              "    _flow.resetSessionState();\n"
+              "    if (widget.flowController == null) {\n"
+              "      WearDependencies.I.barcodeDispatcher.stop();\n"
+              "      WearDependencies.I.barcodeDispatcher.start();\n"
+              "      _syncScannerForCurrentScreen();\n"
+              "    }\n"
+              "    _stopVoiceForLogout();\n"
+              "  }\n\n",
+              "  void _onSessionCleared() {\n"
+              "    if (_runtimeTerminated) return;\n"
+              "    _bindControlAdapter();\n"
+              "    _voiceDispatcher.resetAdmission();\n"
+              "    if (widget.flowController == null) {\n"
+              "      WearDependencies.I.barcodeDispatcher.stop();\n"
+              "    }\n"
+              "    _flow.resetSessionState();\n"
+              "    _stopVoiceForLogout();\n"
+              "    final int sessionEpoch = _flow.authority.state.sessionEpoch;\n"
+              "    unawaited(_activatePreAuthAfterLogout(sessionEpoch));\n"
+              "  }\n\n"
+              "  Future<void> _activatePreAuthAfterLogout(int sessionEpoch) async {\n"
+              "    final WearDispatchResult receipt =\n"
+              "        await _flow.authority.setRuntimeActive(true);\n"
+              "    final WearAggregatePayload aggregate = _flow.authority.payload;\n"
+              "    if (!receipt.accepted ||\n"
+              "        receipt.sessionEpoch != sessionEpoch ||\n"
+              "        _flow.authority.state.sessionEpoch != sessionEpoch ||\n"
+              "        aggregate.session.isAuthorized ||\n"
+              "        aggregate.navigation.logicalScreen != WearScreenId.main ||\n"
+              "        _runtimeTerminated ||\n"
+              "        !mounted) {\n"
+              "      return;\n"
+              "    }\n"
+              "    if (widget.flowController == null) {\n"
+              "      WearDependencies.I.barcodeDispatcher.start();\n"
+              "      _syncScannerForCurrentScreen();\n"
+              "    }\n"
+              "  }\n\n",
+          )
+
+          test = 'test/wear_runtime_route_observation_boundary_test.dart'
+          source = Path(test).read_text(encoding='utf-8')
+          marker = "  test('auth widget attachment cannot initiate logical navigation', () {\n"
+          if source.count(marker) != 1:
+              raise SystemExit(f'{test}: auth marker mismatch')
+          addition = """  test('logout reopens only the bounded pre-auth runtime path', () {
+    final String module = File(
+      'lib/modules/wear/presentation/widgets/wear_module_app.dart',
+    ).readAsStringSync();
+    final String facade = File(
+      'lib/modules/wear/application/wear_aggregate_presentation_flow_controller.dart',
+    ).readAsStringSync();
+
+    expect(module, contains('barcodeDispatcher.stop()'));
+    expect(module, contains('_activatePreAuthAfterLogout(sessionEpoch)'));
+    expect(module, contains('await _flow.authority.setRuntimeActive(true)'));
+    expect(module, contains('aggregate.navigation.logicalScreen != WearScreenId.main'));
+    expect(module, contains('barcodeDispatcher.start()'));
+    expect(facade, contains('void resetSessionState()'));
+    expect(facade, contains('super.enterScreen(screen)'));
+  });
+
+"""
+          Path(test).write_text(source.replace(marker, addition + marker), encoding='utf-8')
+          PY
+      - name: Commit fix and remove temporary workflow
+        shell: bash
+        run: |
+          git rm .github/workflows/apply-wear-s11-logout-fix.yml
+          git config user.name "Vanilla1999"
+          git config user.email "41183994+Vanilla1999@users.noreply.github.com"
+          git add lib/modules/wear/application/wear_aggregate_presentation_flow_controller.dart \
+                  lib/modules/wear/presentation/widgets/wear_module_app.dart \
+                  test/wear_runtime_route_observation_boundary_test.dart
+          git commit -m "fix(wear): restore bounded pre-auth runtime after logout"
+          git push origin HEAD:refactor/wear-runtime-route-observation
