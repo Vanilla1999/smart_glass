@@ -5,7 +5,6 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
-import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
@@ -27,18 +26,11 @@ class _WearHelpScreenState extends State<WearHelpScreen>
   @override
   void initState() {
     super.initState();
-    WearDependencies.I.wearFlowController.enterScreen(WearScreenId.help);
     _screenActionsRegistration =
         WearDependencies.I.wearFlowController.registerScreenActions(
       WearScreenId.help,
       WearScreenActionHandler(onSelect: _onVoiceSelect),
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      WearDependencies.I.wearFlowController.publishScreenPayload(
-        WearScreenId.help,
-        WearGlassesPayload.help(),
-      );
-    });
   }
 
   @override
