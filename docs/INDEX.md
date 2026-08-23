@@ -14,9 +14,10 @@ This file indexes canonical, reviewable documentation for the `smart_glasses` pr
 - [WEAR_STACK_REVIEW_FIX_PLAN.md](audits/WEAR_STACK_REVIEW_FIX_PLAN.md) — Bounded plan for print-success contract and audit-evidence corrections after the final stack review
 - [WEAR_MR_S10_PHONE_AGGREGATE_PROJECTION_PLAN.md](audits/WEAR_MR_S10_PHONE_AGGREGATE_PROJECTION_PLAN.md) — Plan-first ownership transfer for menu, home-confirm, continue-scan and availability-interaction phone focus
 - [WEAR_MR_S11_ROUTE_OBSERVATION_PLAN.md](audits/WEAR_MR_S11_ROUTE_OBSERVATION_PLAN.md) — Plan-first cutover from widget/controller screen lifecycle to aggregate logical navigation and epoch-bound phone-route observation
+- [WEAR_MR_S12_FEATURE_PHONE_UI_EFFECTS_PLAN.md](audits/WEAR_MR_S12_FEATURE_PHONE_UI_EFFECTS_PLAN.md) — Plan-first migration of scan phone rendering and manual barcode input to aggregate projection and bounded UI effects
 - [ADR-0001-WEAR_SINGLE_STATE_OWNER.md](decisions/ADR-0001-WEAR_SINGLE_STATE_OWNER.md) — Accepted decision: one authoritative aggregate Wear state and one writable owner per value during migration
 - [ADR-0002-WEAR_STORE_EXECUTION_ORDER.md](decisions/ADR-0002-WEAR_STORE_EXECUTION_ORDER.md) — Accepted dispatch queue, commit/effect/receipt ordering, effect concurrency and terminal dispose contract
-- [WEAR_SINGLE_STATE_RUNTIME_PLAN.md](WEAR_SINGLE_STATE_RUNTIME_PLAN.md) — Target migration roadmap from transitional controller/feature runtimes to `WearRuntimeStore`; aggregate business slices and route observation are migrated, while physical compatibility-state cleanup remains open
+- [WEAR_SINGLE_STATE_RUNTIME_PLAN.md](WEAR_SINGLE_STATE_RUNTIME_PLAN.md) — Target migration roadmap from transitional controller/feature runtimes to `WearRuntimeStore`; aggregate business slices, route observation and scan phone projection are migrated, while clarification/transient and physical compatibility-state cleanup remain open
 - [WEAR_BACKGROUND_RUNTIME_PLAN.md](WEAR_BACKGROUND_RUNTIME_PLAN.md) — Variant A screen-off/runtime implementation history and hardware constraints; the single-state documents above are authoritative for future state ownership
 
 ## Modules
@@ -33,6 +34,7 @@ This file indexes canonical, reviewable documentation for the `smart_glasses` pr
 - [WEAR_MR_S9_LEGACY_CLEANUP_VALIDATION.md](checklists/WEAR_MR_S9_LEGACY_CLEANUP_VALIDATION.md) — MR-S9 migrated writable-owner cleanup, static repository gates and explicitly retained compatibility adapters
 - [WEAR_MR_S10_PHONE_AGGREGATE_PROJECTION_VALIDATION.md](checklists/WEAR_MR_S10_PHONE_AGGREGATE_PROJECTION_VALIDATION.md) — Static ownership, input parity, compatibility boundary and unexecuted regression specification for the four aggregate-projected phone screens
 - [WEAR_MR_S11_ROUTE_OBSERVATION_VALIDATION.md](checklists/WEAR_MR_S11_ROUTE_OBSERVATION_VALIDATION.md) — Aggregate logical-screen, epoch-bound route/scanner/barcode and widget-lifecycle static validation record
+- [WEAR_MR_S12_FEATURE_PHONE_UI_EFFECTS_VALIDATION.md](checklists/WEAR_MR_S12_FEATURE_PHONE_UI_EFFECTS_VALIDATION.md) — Aggregate scan phone projection, bounded manual-input effect and scan-status precedence validation record
 
 ## Non-canonical notes
 
@@ -42,5 +44,5 @@ This file indexes canonical, reviewable documentation for the `smart_glasses` pr
 
 ## Roadmap
 
-- [WEAR_SINGLE_STATE_RUNTIME_PLAN.md](WEAR_SINGLE_STATE_RUNTIME_PLAN.md) — Target Wear state-ownership roadmap through the remaining physical compatibility-state cleanup and final ownership gates
+- [WEAR_SINGLE_STATE_RUNTIME_PLAN.md](WEAR_SINGLE_STATE_RUNTIME_PLAN.md) — Target Wear state-ownership roadmap through clarification/transient migration, physical compatibility-state cleanup and final ownership gates
 - [NATIVE_UAC4_VOICE_MIGRATION_PLAN.md](NATIVE_UAC4_VOICE_MIGRATION_PLAN.md) — Active native UAC4/SSP audio roadmap. Keep audio transport work separate from Wear state-ownership MRs unless a dependency is explicitly proven

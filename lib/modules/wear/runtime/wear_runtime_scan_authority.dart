@@ -10,7 +10,9 @@ extension WearRuntimeScanAuthority on WearRuntimeAuthority {
     WearScreenId screen, {
     Object? extra,
   }) {
-    return store.dispatch(WearScanEntered(screen: screen, extra: extra));
+    // Route/widget snapshots are never allowed to rehydrate aggregate scan
+    // business state. The parameter remains source-compatible until MR-S14.
+    return store.dispatch(WearScanEntered(screen: screen));
   }
 
   Future<WearDispatchResult> submitScanBarcode(String barcode) {

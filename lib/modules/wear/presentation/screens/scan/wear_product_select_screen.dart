@@ -1,28 +1,24 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
-import 'package:smart_glasses/modules/wear/application/wear_product_select_args.dart';
-import 'package:smart_glasses/modules/wear/application/wear_scan_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
-import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
-import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
-import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_phone_feature_projection.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_slice.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
 class WearProductSelectScreen extends StatefulWidget {
-  const WearProductSelectScreen({super.key, required this.args});
+  const WearProductSelectScreen({super.key, Object? args});
 
   static const String route = '/wear_product_select';
-
-  final WearProductSelectArgs? args;
 
   @override
   State<WearProductSelectScreen> createState() =>
@@ -32,237 +28,89 @@ class WearProductSelectScreen extends StatefulWidget {
 class _WearProductSelectScreenState extends State<WearProductSelectScreen>
     with ScreenLifecycleLogging<WearProductSelectScreen> {
   final ScrollController _scroll = ScrollController();
-  late final StreamSubscription<WearScanRuntimeState> _stateSubscription;
-  int _focusedIndex = 0;
-  bool _isProductDialogOpen = false;
+  final WearRuntimeAuthority _authority = WearDependencies.I.authority;
+  StreamSubscription<WearRuntimeState>? _runtimeSub;
+  late WearScanPhoneProjection _projection;
 
   @override
   void initState() {
     super.initState();
-    _focusedIndex = WearDependencies.I.wearScanRuntime.state.focusedIndex;
-    _stateSubscription =
-        WearDependencies.I.wearScanRuntime.stateStream.listen((state) {
-      if (!mounted || state.screen != WearScreenId.productSelect) return;
-      final int previous = _focusedIndex;
-      setState(() => _focusedIndex = state.focusedIndex);
-      if (previous != _focusedIndex) _scrollToFocused();
-    });
+    _projection = WearScanPhoneProjection.fromState(_authority.state);
+    _runtimeSub = _authority.states.listen(_onRuntimeState);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _sendGlassesFocus();
+      if (mounted) _scrollToFocused(animate: false);
     });
   }
 
   @override
   void dispose() {
-    unawaited(_stateSubscription.cancel());
+    unawaited(_runtimeSub?.cancel());
     _scroll.dispose();
     super.dispose();
   }
 
-  void _sendGlassesFocus() {
-    WearDependencies.I.wearScanRuntime.setFocusedIndex(_focusedIndex);
+  void _onRuntimeState(WearRuntimeState state) {
+    final WearScanPhoneProjection next =
+        WearScanPhoneProjection.fromState(state);
+    final int previousFocus = _projection.focusedIndex;
+    if (mounted) {
+      setState(() => _projection = next);
+    } else {
+      _projection = next;
+    }
+    if (next.logicalScreen == WearScreenId.productSelect &&
+        previousFocus != next.focusedIndex) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scrollToFocused();
+      });
+    }
   }
 
-  void _onVoiceUp() {
-    final List<BarcodeProductInfo> products =
-        widget.args?.products ?? <BarcodeProductInfo>[];
-    if (products.isEmpty) return;
-    _focusedIndex = _focusedIndex.clamp(0, products.length - 1);
-    if (_focusedIndex <= 0) return;
-    _focusedIndex = _focusedIndex - 1;
-    final double target = ((_focusedIndex + 1) * 56.0).clamp(
+  void _requestFocus(int index) {
+    if (_projection.logicalScreen != WearScreenId.productSelect ||
+        _projection.phase != WearScanTaskPhase.selecting ||
+        _projection.products.isEmpty) {
+      return;
+    }
+    final int normalized = index.clamp(0, _projection.products.length - 1);
+    unawaited(_authority.focusScanProduct(normalized));
+  }
+
+  Future<void> _selectProduct(BarcodeProductInfo candidate) async {
+    final WearScanPhoneProjection current =
+        WearScanPhoneProjection.fromState(_authority.state);
+    if (current.logicalScreen != WearScreenId.productSelect ||
+        current.phase != WearScanTaskPhase.selecting) {
+      return;
+    }
+    final BarcodeProductInfo? product = current.productById(candidate.id);
+    if (product == null) return;
+    await _authority.selectScanProduct(product.id);
+  }
+
+  void _scrollToFocused({bool animate = true}) {
+    if (!_scroll.hasClients || _projection.products.isEmpty) return;
+    final double target = ((_projection.focusedIndex + 1) * 56.0).clamp(
       0.0,
       _scroll.position.maxScrollExtent,
     );
-    _scroll.animateTo(target,
-        duration: const Duration(milliseconds: 150), curve: Curves.easeOut);
-    _sendGlassesFocus();
-  }
-
-  void _onVoiceDown() {
-    final List<BarcodeProductInfo> products =
-        widget.args?.products ?? <BarcodeProductInfo>[];
-    if (products.isEmpty) return;
-    _focusedIndex = _focusedIndex.clamp(0, products.length - 1);
-    if (_focusedIndex >= products.length - 1) return;
-    _focusedIndex = _focusedIndex + 1;
-    final double target = ((_focusedIndex + 1) * 56.0).clamp(
-      0.0,
-      _scroll.position.maxScrollExtent,
-    );
-    _scroll.animateTo(target,
-        duration: const Duration(milliseconds: 150), curve: Curves.easeOut);
-    _sendGlassesFocus();
-  }
-
-  void _onVoiceSelect() {
-    final List<BarcodeProductInfo> products =
-        widget.args?.products ?? <BarcodeProductInfo>[];
-    if (products.isEmpty) return;
-    final int productIndex = _focusedIndex.clamp(0, products.length - 1);
-    WearDependencies.I.wearScanRuntime.selectProduct(products[productIndex]);
-  }
-
-  void _onVoiceNextPage() {
-    final List<BarcodeProductInfo> products =
-        widget.args?.products ?? <BarcodeProductInfo>[];
-    if (products.isEmpty) return;
-    final int currentPage = _focusedIndex ~/ _visibleGlassesItemCount;
-    final int nextIndex = (currentPage + 1) * _visibleGlassesItemCount;
-    if (nextIndex >= products.length) {
-      _showVoiceSearchMessage('Это последняя страница');
-      return;
-    }
-    _focusedIndex = nextIndex.clamp(0, products.length - 1);
-    _scrollToFocused();
-    _sendGlassesFocus();
-  }
-
-  void _onVoicePreviousPage() {
-    final List<BarcodeProductInfo> products =
-        widget.args?.products ?? <BarcodeProductInfo>[];
-    if (products.isEmpty) return;
-    final int currentPage = _focusedIndex ~/ _visibleGlassesItemCount;
-    if (currentPage == 0) {
-      _showVoiceSearchMessage('Это первая страница');
-      return;
-    }
-    final int previousIndex = (currentPage - 1) * _visibleGlassesItemCount;
-    _focusedIndex = previousIndex.clamp(0, products.length - 1);
-    _scrollToFocused();
-    _sendGlassesFocus();
-  }
-
-  VoiceDynamicItemsSnapshot _dynamicVoiceItems() {
-    final List<BarcodeProductInfo> products =
-        widget.args?.products ?? <BarcodeProductInfo>[];
-    final List<VoiceDynamicItem> items = products
-        .map((BarcodeProductInfo item) => VoiceDynamicItem(
-              id: item.id.toString(),
-              label: item.name,
-            ))
-        .toList(growable: false);
-    return VoiceDynamicItemsSnapshot(
-      revision: Object.hashAll(
-        items.map((VoiceDynamicItem item) => item.revisionHash),
-      ),
-      items: items,
-    );
-  }
-
-  void _onVoicePhrase(String phrase) {
-    final List<BarcodeProductInfo> products =
-        widget.args?.products ?? <BarcodeProductInfo>[];
-    if (products.isEmpty) return;
-    final VoiceListMatch<BarcodeProductInfo> match = VoiceListMatcher.match(
-      phrase,
-      products,
-      (BarcodeProductInfo product) => product.name,
-    );
-    switch (match.type) {
-      case VoiceListMatchType.none:
-        WearDependencies.I.wearFlowController.publishTransientStatusText(
-            WearScreenId.productSelect, 'Ничего не найдено');
-        break;
-      case VoiceListMatchType.ambiguous:
-        WearDependencies.I.wearFlowController.publishTransientStatusText(
-            WearScreenId.productSelect, 'Назовите точнее');
-        break;
-      case VoiceListMatchType.unique:
-        final BarcodeProductInfo product = match.item!;
-        final int index = products.indexOf(product);
-        if (index >= 0) {
-          _focusedIndex = index;
-          _scrollToFocused();
-          _sendGlassesFocus();
-        }
-        WearDependencies.I.wearScanRuntime.selectProduct(product);
-        break;
+    if (animate) {
+      _scroll.animateTo(
+        target,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+      );
+    } else {
+      _scroll.jumpTo(target);
     }
   }
-
-  void _onVoiceDynamicItem(String itemId) {
-    final List<BarcodeProductInfo> products =
-        widget.args?.products ?? <BarcodeProductInfo>[];
-    for (final BarcodeProductInfo product in products) {
-      if (product.id.toString() != itemId) continue;
-      final int index = products.indexOf(product);
-      if (index >= 0) {
-        _focusedIndex = index;
-        _scrollToFocused();
-        _sendGlassesFocus();
-      }
-      WearDependencies.I.wearScanRuntime.selectProduct(product);
-      return;
-    }
-  }
-
-  bool _onVoicePartialPhrase(String phrase) {
-    final List<BarcodeProductInfo> products =
-        widget.args?.products ?? <BarcodeProductInfo>[];
-    if (products.isEmpty) return false;
-    final VoiceListMatch<BarcodeProductInfo> match =
-        VoiceListMatcher.canMatchPartial(phrase)
-            ? VoiceListMatcher.match(
-                phrase,
-                products,
-                (BarcodeProductInfo product) => product.name,
-              )
-            : VoiceListMatcher.matchExactPhrase(
-                phrase,
-                products,
-                (BarcodeProductInfo product) => product.name,
-              );
-    if (match.type != VoiceListMatchType.unique) {
-      return false;
-    }
-
-    final BarcodeProductInfo product = match.item!;
-    final int index = products.indexOf(product);
-    if (index >= 0) {
-      _focusedIndex = index;
-      _scrollToFocused();
-      _sendGlassesFocus();
-    }
-    return index >= 0;
-  }
-
-  void _onVoiceCancel() {
-    if (!_isProductDialogOpen) return;
-    Navigator.of(context, rootNavigator: true).pop();
-  }
-
-  void _scrollToFocused() {
-    if (!_scroll.hasClients) return;
-    final double target = ((_focusedIndex + 1) * 56.0).clamp(
-      0.0,
-      _scroll.position.maxScrollExtent,
-    );
-    _scroll.animateTo(
-      target,
-      duration: const Duration(milliseconds: 150),
-      curve: Curves.easeOut,
-    );
-  }
-
-  void _showVoiceSearchMessage(String message) {
-    WearDependencies.I.wearFlowController.publishTransientPayload(
-      WearScreenId.productSelect,
-      WearGlassesPayload.status(
-        isError: true,
-        title: 'Голосовой выбор',
-        statusText: message,
-      ),
-    );
-  }
-
-  static const int _visibleGlassesItemCount = 4;
 
   @override
   Widget build(BuildContext context) {
-    final List<BarcodeProductInfo> products =
-        widget.args?.products ?? <BarcodeProductInfo>[];
-    if (products.isEmpty) {
+    final List<BarcodeProductInfo> products = _projection.products;
+    if (_projection.logicalScreen != WearScreenId.productSelect ||
+        _projection.phase != WearScanTaskPhase.selecting ||
+        products.isEmpty) {
       return WearScreenScaffold(
         showHomeButton: true,
         child: Center(
@@ -289,8 +137,8 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
         extraSideInset: 40,
         itemBuilder: (BuildContext context, int i) {
           if (i == 0) {
-            final String barcode = widget.args?.barcode ?? '';
-            final String header = barcode.trim().isEmpty
+            final String barcode = _projection.barcode?.trim() ?? '';
+            final String header = barcode.isEmpty
                 ? 'Несколько товаров'
                 : 'Несколько товаров\nс ШК $barcode';
             return Align(
@@ -302,66 +150,51 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
               ),
             );
           }
-
           if (i == products.length + 1) {
             return const SizedBox.shrink();
           }
-
           final BarcodeProductInfo product = products[i - 1];
           return WearPill(
             title: _resolveTitle(product),
             subtitle: _resolveSubtitle(product),
-            onTap: () => WearDependencies.I.wearScanRuntime.selectProduct(
-              product,
-            ),
+            onTap: () => _selectProduct(product),
             onLongPress: () => _showProductDialog(context, product),
           );
         },
         onFocusChanged: (int listIndex) {
-          final List<BarcodeProductInfo> current =
-              widget.args?.products ?? <BarcodeProductInfo>[];
-          if (current.isEmpty) return;
-          final int itemIndex = (listIndex - 1).clamp(0, current.length - 1);
-          _focusedIndex = itemIndex;
-          _sendGlassesFocus();
+          final int itemIndex = (listIndex - 1).clamp(0, products.length - 1);
+          if (itemIndex == _projection.focusedIndex) return;
+          _requestFocus(itemIndex);
         },
       ),
     );
   }
 
   String _resolveTitle(BarcodeProductInfo product) {
-    final String name = product.name;
-    if (name.trim().isEmpty) {
-      return 'Без названия';
-    }
-    return name;
+    final String name = product.name.trim();
+    return name.isEmpty ? 'Без названия' : name;
   }
 
   String? _resolveSubtitle(BarcodeProductInfo product) {
     final List<String> parts = <String>[];
-    if (product.weight != null) {
-      parts.add('Вес: ${product.weight}');
-    }
+    if (product.weight != null) parts.add('Вес: ${product.weight}');
     if (product.articleRest != null) {
       parts.add('Остаток: ${product.articleRest}');
     }
-    if (parts.isEmpty) {
-      return null;
-    }
-    return parts.join(' · ');
+    return parts.isEmpty ? null : parts.join(' · ');
   }
 
   Future<void> _showProductDialog(
     BuildContext context,
     BarcodeProductInfo product,
   ) async {
-    _isProductDialogOpen = true;
     await showDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) {
         final Size screen = MediaQuery.of(dialogContext).size;
         final double diameter =
             (screen.shortestSide - 12).clamp(160.0, screen.shortestSide);
+        final String barcode = _projection.barcode?.trim() ?? '';
         return Dialog(
           insetPadding: EdgeInsets.zero,
           backgroundColor: Colors.transparent,
@@ -401,13 +234,19 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
                               mainAxisSize: MainAxisSize.min,
                               children: <Widget>[
                                 Text(
-                                  _buildTitle(product),
+                                  _resolveTitle(product),
                                   style: WearTypography.lable15,
                                   textAlign: TextAlign.center,
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  _buildDetails(product),
+                                  <String>[
+                                    if (barcode.isNotEmpty) 'ШК: $barcode',
+                                    if (product.weight != null)
+                                      'Вес: ${product.weight}',
+                                    if (product.articleRest != null)
+                                      'Остаток: ${product.articleRest}',
+                                  ].join('\n'),
                                   style: WearTypography.bodysml,
                                   textAlign: TextAlign.center,
                                 ),
@@ -437,28 +276,5 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
         );
       },
     );
-    _isProductDialogOpen = false;
-  }
-
-  String _buildTitle(BarcodeProductInfo product) {
-    final List<String> lines = <String>[
-      _resolveTitle(product),
-    ];
-    return lines.join('\n');
-  }
-
-  String _buildDetails(BarcodeProductInfo product) {
-    final String barcode = widget.args?.barcode ?? '';
-    final List<String> lines = <String>[];
-    if (barcode.trim().isNotEmpty) {
-      lines.add('ШК: $barcode');
-    }
-    if (product.weight != null) {
-      lines.add('Вес: ${product.weight}');
-    }
-    if (product.articleRest != null) {
-      lines.add('Остаток: ${product.articleRest}');
-    }
-    return lines.join('\n');
   }
 }
