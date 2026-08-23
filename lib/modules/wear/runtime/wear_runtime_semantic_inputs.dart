@@ -90,6 +90,13 @@ class WearUiEffectSlice {
     return null;
   }
 
+  WearUiEffect? effectById(int effectId) {
+    for (final WearUiEffect effect in effects) {
+      if (effect.effectId == effectId) return effect;
+    }
+    return null;
+  }
+
   WearUiEffectSlice add({
     required int sessionEpoch,
     required WearUiEffectKind kind,
@@ -247,43 +254,56 @@ class WearSemanticInputReducer implements WearSliceReducer {
     }
 
     if (intent is WearUiEffectClaimed) {
-      return _finish(state, aggregate, intent.effectId, intent.sessionEpoch,
-          intent.expectedScreen,
-          claim: true);
+      return _finish(
+        state,
+        aggregate,
+        effectId: intent.effectId,
+        sessionEpoch: intent.sessionEpoch,
+        expectedScreen: intent.expectedScreen,
+        claim: true,
+      );
     }
     if (intent is WearUiEffectCompleted) {
-      return _finish(state, aggregate, intent.effectId, intent.sessionEpoch,
-          intent.expectedScreen,
-          requireClaimed: true);
+      return _finish(
+        state,
+        aggregate,
+        effectId: intent.effectId,
+        sessionEpoch: intent.sessionEpoch,
+        expectedScreen: intent.expectedScreen,
+        requireClaimed: true,
+        isCompletion: true,
+        completionValue: intent.value,
+      );
     }
     if (intent is WearUiEffectCancelled) {
-      return _finish(state, aggregate, intent.effectId, intent.sessionEpoch,
-          intent.expectedScreen,
-          allowScreenChange: true);
+      return _finish(
+        state,
+        aggregate,
+        effectId: intent.effectId,
+        sessionEpoch: intent.sessionEpoch,
+        expectedScreen: intent.expectedScreen,
+        allowScreenChange: true,
+      );
     }
     return null;
   }
 
   WearReduction _finish(
     WearRuntimeState state,
-    WearAggregatePayload aggregate,
-    int effectId,
-    int sessionEpoch,
-    WearScreenId expectedScreen, {
+    WearAggregatePayload aggregate, {
+    required int effectId,
+    required int sessionEpoch,
+    required WearScreenId expectedScreen,
     bool claim = false,
     bool requireClaimed = false,
     bool allowScreenChange = false,
+    bool isCompletion = false,
+    Object? completionValue,
   }) {
     if (sessionEpoch != state.sessionEpoch) {
       return WearReduction.reject(WearDispatchRejectReason.staleEpoch);
     }
-    WearUiEffect? effect;
-    for (final WearUiEffect candidate in aggregate.uiEffects.effects) {
-      if (candidate.effectId == effectId) {
-        effect = candidate;
-        break;
-      }
-    }
+    final WearUiEffect? effect = aggregate.uiEffects.effectById(effectId);
     if (effect == null) {
       return WearReduction.reject(WearDispatchRejectReason.staleOperation);
     }
@@ -301,11 +321,42 @@ class WearSemanticInputReducer implements WearSliceReducer {
     if (requireClaimed && effect.status != WearUiEffectStatus.claimed) {
       return WearReduction.reject(WearDispatchRejectReason.staleOperation);
     }
-    final WearUiEffectSlice next = claim
-        ? aggregate.uiEffects.claim(effectId)
-        : aggregate.uiEffects.remove(effectId);
+
+    if (claim) {
+      return WearReduction.accept(
+        nextState: state.withPayload(
+          aggregate.copyWith(uiEffects: aggregate.uiEffects.claim(effectId)),
+        ),
+      );
+    }
+
+    final WearRuntimeState effectRemovedState = state.withPayload(
+      aggregate.copyWith(uiEffects: aggregate.uiEffects.remove(effectId)),
+    );
+    if (!isCompletion || effect.kind != WearUiEffectKind.manualBarcodeInput) {
+      return WearReduction.accept(nextState: effectRemovedState);
+    }
+
+    final String barcode = completionValue is String
+        ? completionValue.trim()
+        : '';
+    if (barcode.isEmpty) {
+      return WearReduction.accept(nextState: effectRemovedState);
+    }
+
+    final WearReduction? scanReduction =
+        const WearReviewedScanSliceReducer().reduceSlice(
+      effectRemovedState,
+      WearScanBarcodeReceived(barcode),
+    );
+    if (scanReduction == null || !scanReduction.accepted) {
+      // The UI effect was valid and must be retired exactly once even when a
+      // concurrent hardware barcode or screen transition made this value stale.
+      return WearReduction.accept(nextState: effectRemovedState);
+    }
     return WearReduction.accept(
-      nextState: state.withPayload(aggregate.copyWith(uiEffects: next)),
+      nextState: scanReduction.nextState ?? effectRemovedState,
+      effects: scanReduction.effects,
     );
   }
 
