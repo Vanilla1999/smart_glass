@@ -11,6 +11,12 @@ void main() {
     final WearRuntimeAuthority authority = WearRuntimeAuthority(
       initialScreen: WearScreenId.menu,
     );
+    await authority.dispatchSemanticInput(
+      kind: WearSemanticInputKind.presentationFocus,
+      modality: WearInputModality.touch,
+      expectedScreen: WearScreenId.menu,
+      focusIndex: 2,
+    );
 
     final WearPhoneProjection phone =
         WearRuntimeProjection.projectPhone(authority.state);
@@ -20,6 +26,7 @@ void main() {
     expect(glasses.logicalScreen, WearScreenId.menu);
     expect(glasses.payload.toJson(), containsPair('screenType', 'menu'));
     expect(phone.version, glasses.version);
+    expect(phone.focusedIndex, 2);
     expect(phone.focusedIndex, glasses.payload.selectedIndex);
     expect(phone.items, glasses.payload.items);
     expect(phone.statusText, glasses.payload.statusText);
