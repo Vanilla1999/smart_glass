@@ -10,6 +10,7 @@ This file indexes canonical, reviewable documentation for the `smart_glasses` pr
 
 ## Wear runtime ownership
 
+- [WEAR_STACK_MERGE_REPORT.md](audits/WEAR_STACK_MERGE_REPORT.md) — Final static merge ledger, ownership audit and remaining owner-run validation
 - [ADR-0001-WEAR_SINGLE_STATE_OWNER.md](decisions/ADR-0001-WEAR_SINGLE_STATE_OWNER.md) — Accepted decision: one authoritative aggregate Wear state and one writable owner per value during migration
 - [ADR-0002-WEAR_STORE_EXECUTION_ORDER.md](decisions/ADR-0002-WEAR_STORE_EXECUTION_ORDER.md) — Accepted dispatch queue, commit/effect/receipt ordering, effect concurrency and terminal dispose contract
 - [WEAR_SINGLE_STATE_RUNTIME_PLAN.md](WEAR_SINGLE_STATE_RUNTIME_PLAN.md) — Active migration roadmap from the transitional controller/feature runtimes to `WearRuntimeStore`
