@@ -1,0 +1,113 @@
+name: Finalize Wear S11 aggregate pending navigation
+
+on:
+  push:
+    branches:
+      - refactor/wear-runtime-route-observation
+    paths:
+      - .github/workflows/finalize-wear-s11-v3.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/wear-runtime-route-observation
+          fetch-depth: 0
+      - name: Apply exact pending-navigation transforms
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          controller = Path('lib/modules/wear/application/wear_flow_controller.dart')
+          source = controller.read_text()
+
+          old = '''  Future<void> flushPendingNavigation() async {
+              final WearNavigationRequest? request = _state.pendingNavigation;
+              if (request == null || _uiLifecycle != WearUiLifecycle.active) return;
+          '''
+          new = '''  Future<void> flushPendingNavigation() async {
+              final WearPendingNavigation? pending =
+                  _authority.payload.navigation.pending;
+              if (pending == null || _uiLifecycle != WearUiLifecycle.active) return;
+              final WearNavigationRequest? legacyRequest = _state.pendingNavigation;
+              final WearNavigationRequest request = WearNavigationRequest(
+                requestId: pending.requestId,
+                screen: pending.screen,
+                extra: legacyRequest?.screen == pending.screen
+                    ? legacyRequest?.extra
+                    : null,
+                replaceCurrent: pending.kind == WearPendingNavigationKind.replace,
+                popCurrent: pending.kind == WearPendingNavigationKind.pop,
+              );
+          '''
+          if old not in source:
+              raise SystemExit('flushPendingNavigation source block not found')
+          source = source.replace(old, new, 1)
+          source = source.replace(
+              'if (_state.pendingNavigation?.requestId == request.requestId) {',
+              'if (_authority.payload.navigation.pending?.requestId == request.requestId) {',
+              1,
+          )
+
+          old_ack = '''  bool acknowledgeNavigation({
+              required int requestId,
+              required WearScreenId screen,
+            }) {
+              final WearNavigationRequest? request = _state.pendingNavigation;
+              if (request == null ||
+                  request.requestId != requestId ||
+                  request.screen != screen) {
+                return false;
+              }
+              print('[WearFlowController] navigation acknowledged request=$request');
+          '''
+          new_ack = '''  bool acknowledgeNavigation({
+              required int requestId,
+              required WearScreenId screen,
+            }) {
+              final WearPendingNavigation? pending =
+                  _authority.payload.navigation.pending;
+              if (pending == null ||
+                  pending.requestId != requestId ||
+                  pending.screen != screen) {
+                return false;
+              }
+              print('[WearFlowController] navigation acknowledged request=$pending');
+          '''
+          if old_ack not in source:
+              raise SystemExit('acknowledgeNavigation source block not found')
+          source = source.replace(old_ack, new_ack, 1)
+          controller.write_text(source)
+
+          dispatcher = Path('lib/modules/wear/services/wear_barcode_dispatcher.dart')
+          barcode = dispatcher.read_text()
+          needle = (
+              '        semanticReceipt.rejectReason != WearDispatchRejectReason.unsupported ||\n'
+              '        _authority.state.sessionEpoch != sessionEpoch ||'
+          )
+          replacement = (
+              '        semanticReceipt.rejectReason != WearDispatchRejectReason.unsupported ||\n'
+              '        _authority.isAuthorized ||\n'
+              '        screen != WearScreenId.main ||\n'
+              '        _authority.state.sessionEpoch != sessionEpoch ||'
+          )
+          if needle in barcode:
+              dispatcher.write_text(barcode.replace(needle, replacement, 1))
+          elif '_authority.isAuthorized ||' not in barcode or 'screen != WearScreenId.main ||' not in barcode:
+              raise SystemExit('bounded barcode fallback guard missing')
+
+          for workflow in Path('.github/workflows').glob('finalize-wear-s11*.yml'):
+              workflow.unlink()
+          PY
+      - name: Commit exact reviewed source
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "fix(wear): deliver aggregate pending navigation"
+          git push origin HEAD:refactor/wear-runtime-route-observation
