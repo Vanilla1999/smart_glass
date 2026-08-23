@@ -166,13 +166,10 @@ class _WearMenuScreenState extends State<WearMenuScreen>
             5 => 3,
             _ => null,
           };
-          if (itemIndex == null) return;
+          if (itemIndex == null || _focusedIndex == itemIndex) return;
           print(
             '[MenuScreen] onFocusChanged: itemIndex=$itemIndex => ${_getMenuItemName(itemIndex)}',
           );
-          if (_focusedIndex != itemIndex) {
-            setState(() => _focusedIndex = itemIndex);
-          }
           _flow.setMenuFocusedIndex(itemIndex);
         },
       ),
