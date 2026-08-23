@@ -4,6 +4,7 @@ import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_effect_router.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_sequencing_reducer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
@@ -138,10 +139,9 @@ class WearScanEffectExecutor
           effect.args,
           completion: const WearStatusCompletion.stay(),
         );
-        return WearOperationResult(
+        return WearScanStatusPresented(
           sessionEpoch: effect.sessionEpoch,
           operationId: effect.operationId,
-          kind: effect.kind,
         );
       } catch (error) {
         return WearScanStatusPresentationFailed(
@@ -153,12 +153,20 @@ class WearScanEffectExecutor
     }
 
     if (effect is WearScanStatusDelayEffect) {
-      await _delay(effect.duration);
-      return WearScanStatusElapsed(
-        sessionEpoch: effect.sessionEpoch,
-        operationId: effect.operationId,
-        target: effect.target,
-      );
+      try {
+        await _delay(effect.duration);
+        return WearScanStatusElapsed(
+          sessionEpoch: effect.sessionEpoch,
+          operationId: effect.operationId,
+          target: effect.target,
+        );
+      } catch (error) {
+        return WearScanStatusDelayFailed(
+          sessionEpoch: effect.sessionEpoch,
+          operationId: effect.operationId,
+          message: _messageFor(error),
+        );
+      }
     }
 
     throw StateError('Unsupported scan effect ${effect.runtimeType}');
