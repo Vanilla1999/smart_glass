@@ -1,0 +1,330 @@
+name: Apply Wear S11 review fixes
+
+on:
+  push:
+    branches:
+      - refactor/wear-runtime-route-observation
+
+permissions:
+  contents: write
+
+jobs:
+  apply-review-fixes:
+    if: github.event.head_commit.message == 'chore(wear): apply S11 review fixes'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply exact reviewed transformations
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path: str, old: str, new: str, expected: int = 1) -> None:
+              file = Path(path)
+              text = file.read_text(encoding='utf-8')
+              actual = text.count(old)
+              if actual != expected:
+                  raise SystemExit(f'{path}: expected {expected} occurrences, found {actual}: {old[:80]!r}')
+              file.write_text(text.replace(old, new), encoding='utf-8')
+
+          flow = 'lib/modules/wear/application/wear_flow_controller.dart'
+          replace_exact(
+              flow,
+              "  bool get _runtimeActive => _authority.payload.lifecycle.runtimeActive;\n",
+              "  bool get _runtimeActive => _authority.payload.lifecycle.runtimeActive;\n"
+              "  WearScreenId get _logicalScreen =>\n"
+              "      _authority.payload.navigation.logicalScreen;\n",
+          )
+          replace_exact(
+              flow,
+              "  bool get currentScreenAcceptsBarcode {\n"
+              "    if (!_runtimeActive) return false;\n"
+              "    final WearBackgroundRuntime? runtime = _backgroundRuntime;\n"
+              "    if (runtime?.handles(_state.screen) == true) {\n"
+              "      return runtime!.acceptsBarcode(_state.screen);\n"
+              "    }\n"
+              "    final WearScreenActionHandler? handler = _screenActions[_state.screen];\n"
+              "    return handler?.onBarcode != null &&\n"
+              "        (handler?.barcodeEnabled?.call() ?? true);\n"
+              "  }",
+              "  bool get currentScreenAcceptsBarcode {\n"
+              "    if (!_runtimeActive) return false;\n"
+              "    final WearScreenId screen = _logicalScreen;\n"
+              "    final WearBackgroundRuntime? runtime = _backgroundRuntime;\n"
+              "    if (runtime?.handles(screen) == true) {\n"
+              "      return runtime!.acceptsBarcode(screen);\n"
+              "    }\n"
+              "    final WearScreenActionHandler? handler = _screenActions[screen];\n"
+              "    return handler?.onBarcode != null &&\n"
+              "        (handler?.barcodeEnabled?.call() ?? true);\n"
+              "  }",
+          )
+          replace_exact(
+              flow,
+              "    if (screen == WearScreenId.voiceClarification &&\n"
+              "        _state.screen == WearScreenId.voiceClarification) {",
+              "    if (screen == WearScreenId.voiceClarification &&\n"
+              "        _logicalScreen == WearScreenId.voiceClarification) {",
+          )
+          replace_exact(
+              flow,
+              "        if (_state.screen == update.screen) {",
+              "        if (_logicalScreen == update.screen) {",
+          )
+          replace_exact(
+              flow,
+              "    if (_state.screen != screen) return;\n"
+              "    final String explicitText = statusText?.trim() ?? '';",
+              "    if (_logicalScreen != screen) return;\n"
+              "    final String explicitText = statusText?.trim() ?? '';",
+          )
+          replace_exact(
+              flow,
+              "    final WearScreenId screen = _state.screen;\n"
+              "    final WearBackgroundRuntime? runtime = _backgroundRuntime;",
+              "    final WearScreenId screen = _logicalScreen;\n"
+              "    final WearBackgroundRuntime? runtime = _backgroundRuntime;",
+          )
+          replace_exact(
+              flow,
+              "    _commandQueue.add((command: command, expectedScreen: _state.screen));",
+              "    _commandQueue.add((command: command, expectedScreen: _logicalScreen));",
+          )
+          replace_exact(
+              flow,
+              "    _commandQueue.add((command: command, expectedScreen: null));",
+              "    _commandQueue.add((command: command, expectedScreen: _logicalScreen));",
+          )
+          replace_exact(
+              flow,
+              "    final WearScreenId sourceScreen = _state.screen;\n"
+              "    if (runtime?.handles(sourceScreen) == true) {",
+              "    final WearScreenId sourceScreen = _logicalScreen;\n"
+              "    if (runtime?.handles(sourceScreen) == true) {",
+          )
+          replace_exact(
+              flow,
+              "      if (!_runtimeActive || _state.screen != sourceScreen) return false;",
+              "      if (!_runtimeActive || _logicalScreen != sourceScreen) return false;",
+          )
+          replace_exact(
+              flow,
+              "    final WearScreenId sourceScreen = _state.screen;\n"
+              "    final VoiceDynamicItemsSnapshot items = dynamicVoiceItemsFor(sourceScreen);",
+              "    final WearScreenId sourceScreen = _logicalScreen;\n"
+              "    final VoiceDynamicItemsSnapshot items = dynamicVoiceItemsFor(sourceScreen);",
+          )
+          replace_exact(
+              flow,
+              "    if (runtime != null && await runtime.handlePhrase(_state.screen, trimmed)) {",
+              "    if (runtime != null && await runtime.handlePhrase(sourceScreen, trimmed)) {",
+          )
+          replace_exact(
+              flow,
+              "      await _invokeScreenPhrase(_state.screen, trimmed);",
+              "      await _invokeScreenPhrase(sourceScreen, trimmed);",
+          )
+          replace_exact(
+              flow,
+              "    final WearScreenId screen = _state.screen;\n"
+              "    final VoiceDynamicItemsSnapshot items = dynamicVoiceItemsFor(screen);",
+              "    final WearScreenId screen = _logicalScreen;\n"
+              "    final VoiceDynamicItemsSnapshot items = dynamicVoiceItemsFor(screen);",
+          )
+          replace_exact(
+              flow,
+              "    if (_state.screen != WearScreenId.voiceClarification) return;\n"
+              "    _setState(",
+              "    if (_logicalScreen != WearScreenId.voiceClarification) return;\n"
+              "    _setState(",
+          )
+          replace_exact(
+              flow,
+              "        _state.screen != WearScreenId.voiceClarification ||\n"
+              "        !identical(_state.currentVoiceClarificationArgs, args)) {",
+              "        _logicalScreen != WearScreenId.voiceClarification ||\n"
+              "        !identical(_state.currentVoiceClarificationArgs, args)) {",
+          )
+          replace_exact(
+              flow,
+              "    return _invokeScreenPartialPhrase(_state.screen, trimmed);",
+              "    return _invokeScreenPartialPhrase(_logicalScreen, trimmed);",
+          )
+          replace_exact(
+              flow,
+              "        if (item.expectedScreen != null &&\n"
+              "            item.expectedScreen != _state.screen) {\n"
+              "          print(\n"
+              "            '[WearFlowController] dropped stale queued voice command '\n"
+              "            'command=$command expectedScreen=${item.expectedScreen} '\n"
+              "            'currentScreen=${_state.screen}',\n"
+              "          );\n"
+              "          continue;\n"
+              "        }\n"
+              "        print('[WearFlowController] command=$command state=$_state');\n"
+              "        final WearBackgroundRuntime? runtime = _backgroundRuntime;\n"
+              "        if (runtime != null &&\n"
+              "            await runtime.handleCommand(_state.screen, command)) {",
+              "        final WearScreenId currentScreen = _logicalScreen;\n"
+              "        if (item.expectedScreen != null &&\n"
+              "            item.expectedScreen != currentScreen) {\n"
+              "          print(\n"
+              "            '[WearFlowController] dropped stale queued voice command '\n"
+              "            'command=$command expectedScreen=${item.expectedScreen} '\n"
+              "            'currentScreen=$currentScreen',\n"
+              "          );\n"
+              "          continue;\n"
+              "        }\n"
+              "        print('[WearFlowController] command=$command state=$_state');\n"
+              "        final WearBackgroundRuntime? runtime = _backgroundRuntime;\n"
+              "        if (runtime != null &&\n"
+              "            await runtime.handleCommand(currentScreen, command)) {",
+          )
+
+          voice = 'lib/modules/wear/application/wear_voice_application_dispatcher.dart'
+          replace_exact(
+              voice,
+              "import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';\n",
+              "import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';\n"
+              "import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';\n",
+          )
+          replace_exact(
+              voice,
+              "  WearVoiceEventAdmissionGate get admissionGate => _admissionGate;\n",
+              "  WearVoiceEventAdmissionGate get admissionGate => _admissionGate;\n\n"
+              "  WearScreenId get _logicalScreen =>\n"
+              "      _flow.authority.payload.navigation.logicalScreen;\n",
+          )
+          text = Path(voice).read_text(encoding='utf-8')
+          count = text.count('_flow.state.screen')
+          if count != 9:
+              raise SystemExit(f'{voice}: expected 9 legacy screen reads, found {count}')
+          Path(voice).write_text(text.replace('_flow.state.screen', '_logicalScreen'), encoding='utf-8')
+
+          main = 'lib/modules/wear/presentation/screens/main/wear_main_screen.dart'
+          replace_exact(
+              main,
+              "    WidgetsBinding.instance.addPostFrameCallback((_) {\n"
+              "      if (_flow.authority.isAuthorized &&\n"
+              "          _flow.authority.payload.navigation.logicalScreen !=\n"
+              "              WearScreenId.menu) {\n"
+              "        unawaited(\n"
+              "          _flow.requestNavigation(\n"
+              "            WearScreenId.menu,\n"
+              "            replaceCurrent: true,\n"
+              "          ),\n"
+              "        );\n"
+              "      }\n"
+              "    });\n",
+              "",
+          )
+
+          dispatcher = 'lib/modules/wear/services/wear_barcode_dispatcher.dart'
+          replace_exact(
+              dispatcher,
+              "    if (fallback == null ||\n"
+              "        semanticReceipt.rejectReason != WearDispatchRejectReason.unsupported ||\n"
+              "        _authority.state.sessionEpoch != sessionEpoch ||\n"
+              "        _authority.payload.navigation.logicalScreen != screen) {",
+              "    if (fallback == null ||\n"
+              "        _authority.isAuthorized ||\n"
+              "        screen != WearScreenId.main ||\n"
+              "        semanticReceipt.rejectReason != WearDispatchRejectReason.unsupported ||\n"
+              "        _authority.state.sessionEpoch != sessionEpoch ||\n"
+              "        _authority.payload.navigation.logicalScreen != screen) {",
+          )
+
+          test = 'test/wear_runtime_route_observation_boundary_test.dart'
+          source = Path(test).read_text(encoding='utf-8')
+          marker = "  test('help, status and auth widgets do not publish canonical glasses state',\n"
+          if source.count(marker) != 1:
+              raise SystemExit(f'{test}: review-test marker not found exactly once')
+          addition = """  test('voice and scanner capabilities use aggregate logical screen', () {
+    final String voice = File(
+      'lib/modules/wear/application/wear_voice_application_dispatcher.dart',
+    ).readAsStringSync();
+    final String flow = File(
+      'lib/modules/wear/application/wear_flow_controller.dart',
+    ).readAsStringSync();
+
+    expect(voice, contains('payload.navigation.logicalScreen'));
+    expect(voice, isNot(contains('_flow.state.screen')));
+    expect(
+      flow,
+      contains('final WearScreenId screen = _logicalScreen;'),
+    );
+    expect(
+      flow,
+      contains('expectedScreen: _logicalScreen'),
+    );
+  });
+
+  test('pre-auth fallback is bounded to anonymous main screen', () {
+    final String dispatcher = File(
+      'lib/modules/wear/services/wear_barcode_dispatcher.dart',
+    ).readAsStringSync();
+    expect(dispatcher, contains('_authority.isAuthorized'));
+    expect(dispatcher, contains('screen != WearScreenId.main'));
+  });
+
+  test('auth widget attachment cannot initiate logical navigation', () {
+    final String source = File(
+      'lib/modules/wear/presentation/screens/main/wear_main_screen.dart',
+    ).readAsStringSync();
+    expect(
+      source,
+      isNot(contains("WidgetsBinding.instance.addPostFrameCallback")),
+    );
+    expect(
+      source,
+      isNot(contains("logicalScreen !=\\n              WearScreenId.menu")),
+    );
+  });
+
+"""
+          Path(test).write_text(source.replace(marker, addition + marker), encoding='utf-8')
+
+          validation = 'docs/checklists/WEAR_MR_S11_ROUTE_OBSERVATION_VALIDATION.md'
+          text = Path(validation).read_text(encoding='utf-8')
+          old = """| Voice screen provider | Aggregate logical screen | screen action registry remains capability wiring |
+| Scanner orchestration | Aggregate snapshot + handler/runtime capability | base controller capability getter is compatibility-only |
+"""
+          new = """| Voice screen provider/admission | Aggregate logical screen | screen action registry remains capability wiring |
+| Scanner orchestration | Aggregate snapshot + capability resolved for aggregate logical screen | base controller remains a temporary resource/action registry until MR-S12 |
+"""
+          if text.count(old) != 1:
+              raise SystemExit(f'{validation}: ownership table marker mismatch')
+          text = text.replace(old, new)
+          boundary = """
+### Remaining compatibility boundary
+
+MR-S11 removes external route/widget/controller-state attribution, but does not
+claim physical deletion of `WearFlowController._state`. The controller still
+contains legacy presentation, status, clarification and action-dispatch code.
+Production screen attribution entering that layer is now captured from aggregate
+logical navigation; MR-S12 removes the mirror and the remaining internal reads.
+
+"""
+          heading = '## 7. Regression specifications\n'
+          if text.count(heading) != 1:
+              raise SystemExit(f'{validation}: regression heading mismatch')
+          text = text.replace(heading, boundary + heading)
+          Path(validation).write_text(text, encoding='utf-8')
+          PY
+      - name: Commit reviewed fixes and remove temporary workflow
+        shell: bash
+        run: |
+          git rm .github/workflows/apply-wear-s11-review-fixes.yml
+          git config user.name "Vanilla1999"
+          git config user.email "41183994+Vanilla1999@users.noreply.github.com"
+          git add lib/modules/wear/application/wear_flow_controller.dart \
+                  lib/modules/wear/application/wear_voice_application_dispatcher.dart \
+                  lib/modules/wear/presentation/screens/main/wear_main_screen.dart \
+                  lib/modules/wear/services/wear_barcode_dispatcher.dart \
+                  test/wear_runtime_route_observation_boundary_test.dart \
+                  docs/checklists/WEAR_MR_S11_ROUTE_OBSERVATION_VALIDATION.md
+          git commit -m "fix(wear): close S11 logical-screen review gaps"
+          git push origin HEAD:refactor/wear-runtime-route-observation
