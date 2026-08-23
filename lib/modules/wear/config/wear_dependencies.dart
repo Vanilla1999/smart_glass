@@ -72,9 +72,13 @@ class WearDependencies {
   /// Shared audio stream — один на оба голосовых сервиса.
   late final AudioStreamService audioStreamService;
 
+  static String? _env(String key) {
+    return dotenv.isInitialized ? dotenv.env[key] : null;
+  }
+
   void _initVoiceServices() {
     final WearScreenId initialScreen =
-        dotenv.env['WEAR_SKIP_SCANNER_CONNECT_SCREEN'] == 'true'
+        _env('WEAR_SKIP_SCANNER_CONNECT_SCREEN') == 'true'
             ? WearScreenId.main
             : WearScreenId.scannerConnect;
     authority = WearRuntimeAuthority(initialScreen: initialScreen);
@@ -193,7 +197,7 @@ class WearDependencies {
       dynamicItemsProvider: wearFlowController.dynamicVoiceItemsFor,
       voiceHintIndexCache: voiceHintIndexCache,
       freeTextPipelineMode: FreeTextPipelineMode.parse(
-        dotenv.env['WEAR_FREE_TEXT_PIPELINE_MODE'],
+        _env('WEAR_FREE_TEXT_PIPELINE_MODE'),
       ),
     );
     voiceControlService = WearVoiceControlService(
@@ -207,7 +211,7 @@ class WearDependencies {
       resolvedPhrases: voiceControlService.phraseEventStream,
     );
     print(
-      '[VoiceRuntime] freeTextMode=${dotenv.env['WEAR_FREE_TEXT_PIPELINE_MODE']} '
+      '[VoiceRuntime] freeTextMode=${_env('WEAR_FREE_TEXT_PIPELINE_MODE')} '
       'mocks=${WearMockConfig.isEnabled} '
       'wavDiagnostics=$voiceCaptureWavDiagnostics '
       'deviceProfile=${audioStreamService.deviceProfile.id} '
