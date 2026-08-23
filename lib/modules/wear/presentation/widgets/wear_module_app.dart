@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/core/services/method_channel_service.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
-import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/application/wear_voice_application_dispatcher.dart';
@@ -83,11 +82,10 @@ class _WearModuleAppState extends State<WearModuleApp>
   StreamSubscription<WearVoicePreviewEvent>? _voicePreviewSub;
   StreamSubscription<WearVoiceDelayEvent>? _voiceDelaySub;
   StreamSubscription<WearScreenId>? _screenActionsSub;
-  StreamSubscription<WearFlowState>? _flowStateSub;
   StreamSubscription<bool>? _voiceReconnectingSub;
   StreamSubscription<String?>? _voiceReconnectErrorSub;
   StreamSubscription<VoiceState>? _voiceStateSub;
-  StreamSubscription<WearRuntimeState>? _controlStateSub;
+  StreamSubscription<WearRuntimeState>? _runtimeStateSub;
   Timer? _voiceHealthTimer;
   VoiceState _voiceState = const VoiceState.disabled();
   bool _voiceStartRequested = false;
@@ -216,20 +214,34 @@ class _WearModuleAppState extends State<WearModuleApp>
       flow.authority.controls.voice.commandsEnabled,
     );
     bool wasAuthorized = flow.authority.isAuthorized;
-    _controlStateSub = flow.authority.states.listen((WearRuntimeState state) {
-      final controls = state.payloadAs<WearAggregatePayload>().controls
-          as WearRuntimeControlPayload;
+    WearScreenId logicalScreen =
+        flow.authority.payload.navigation.logicalScreen;
+    _runtimeStateSub = flow.authority.states.listen((WearRuntimeState state) {
+      final WearAggregatePayload aggregate =
+          state.payloadAs<WearAggregatePayload>();
+      final controls = aggregate.controls as WearRuntimeControlPayload;
       WearStatusIconReporter.I.setVoiceCommandsEnabled(
         controls.voice.commandsEnabled,
       );
-      final bool isAuthorized =
-          state.payloadAs<WearAggregatePayload>().session.isAuthorized;
-      if (isAuthorized == wasAuthorized) return;
-      wasAuthorized = isAuthorized;
-      if (isAuthorized) {
-        _onAuthorized();
-      } else {
-        _onSessionCleared();
+
+      final WearScreenId nextLogicalScreen =
+          aggregate.navigation.logicalScreen;
+      if (nextLogicalScreen != logicalScreen) {
+        logicalScreen = nextLogicalScreen;
+        _syncScannerForCurrentScreen();
+        if (widget.onStartVoice == null) {
+          _configureVoiceForScreen(nextLogicalScreen);
+        }
+      }
+
+      final bool isAuthorized = aggregate.session.isAuthorized;
+      if (isAuthorized != wasAuthorized) {
+        wasAuthorized = isAuthorized;
+        if (isAuthorized) {
+          _onAuthorized();
+        } else {
+          _onSessionCleared();
+        }
       }
     });
     flow.setNavigationOutput(FlutterWearNavigationOutput(router: _router));
@@ -243,20 +255,13 @@ class _WearModuleAppState extends State<WearModuleApp>
       _syncScannerForCurrentScreen();
     }
     _screenActionsSub = flow.screenActionsChanged.listen((WearScreenId screen) {
-      if (screen == flow.state.screen) {
+      final WearScreenId currentLogicalScreen =
+          flow.authority.payload.navigation.logicalScreen;
+      if (screen == currentLogicalScreen) {
         _syncScannerForCurrentScreen();
         if (widget.onStartVoice == null) {
           _configureVoiceForScreen(screen, force: true);
         }
-      }
-    });
-    WearScreenId logicalScreen = flow.state.screen;
-    _flowStateSub = flow.stateStream.listen((WearFlowState state) {
-      if (state.screen == logicalScreen) return;
-      logicalScreen = state.screen;
-      _syncScannerForCurrentScreen();
-      if (widget.onStartVoice == null) {
-        _configureVoiceForScreen(state.screen);
       }
     });
     _voiceSub = _voiceCommands.listen(
@@ -377,17 +382,22 @@ class _WearModuleAppState extends State<WearModuleApp>
     WearDependencies.I.barcodeDispatcher.resetPending();
     final WearRuntimeControlAdapter callback = _controlAdapter;
     final int generation = ++_scannerSyncGeneration;
-    final WearScreenId logicalScreen = _flow.state.screen;
+    final WearRuntimeState runtimeState = _flow.authority.state;
+    final WearScreenId logicalScreen = runtimeState
+        .payloadAs<WearAggregatePayload>()
+        .navigation
+        .logicalScreen;
+    final bool screenAcceptsBarcode = _flow.currentScreenAcceptsBarcode;
     final WearScannerRuntimeDecision decision =
         resolveWearScannerDecisionFromState(
-      _flow.authority.state,
-      currentScreenAcceptsBarcode: _flow.currentScreenAcceptsBarcode,
+      runtimeState,
+      currentScreenAcceptsBarcode: screenAcceptsBarcode,
     );
     unawaited(_applyScannerDecision(
       callback: callback,
       generation: generation,
       logicalScreen: logicalScreen,
-      screenAcceptsBarcode: _flow.currentScreenAcceptsBarcode,
+      screenAcceptsBarcode: screenAcceptsBarcode,
       decision: decision,
     ));
   }
@@ -464,73 +474,73 @@ class _WearModuleAppState extends State<WearModuleApp>
     final int observationRevision = ++_routerObservationRevision;
     final flow = _flow;
     if (_voiceState.phase == VoicePhase.disabled &&
-        _flow.authority.isAuthorized) {
+        flow.authority.isAuthorized) {
       _startVoice('router');
     }
-    // Use _router.state.matchedLocation instead of
-    // routeInformationProvider.value.uri.path — the provider is NOT
-    // updated synchronously during GoRouterDelegate pop (go_router 14.x
-    // bug/design). The delegate's currentConfiguration IS updated before
-    // notifyListeners(), so routerDelegate.state is always current.
+
     final String location = _router.state.matchedLocation;
+    final WearScreenId logicalScreen =
+        flow.authority.payload.navigation.logicalScreen;
     print(
       '[ROUTER-CHANGE] matchedLocation=$location '
-      'currentScreen=${flow.state.screen}',
+      'logicalScreen=$logicalScreen',
     );
     if (widget.onStartVoice == null) {
       WearVoiceSession.I.diagnostics().then(
             (String diagnostics) => print(
               '[VOICE-ROUTE] route changed location=$location '
-              'screen=${flow.state.screen} diagnostics=$diagnostics',
+              'logicalScreen=$logicalScreen diagnostics=$diagnostics',
             ),
           );
     }
     final WearScreenId? screenId =
         FlutterWearNavigationOutput.screenIdForRoute(location);
     if (screenId != null) {
-      _syncScannerForCurrentScreen(routeScreen: screenId);
-      if (widget.onStartVoice == null) {
-        unawaited(
-            _flow.authority.navigationAdapter().observePhoneRoute(screenId));
-      }
-      if (screenId == flow.state.screen) {
-        _configureVoiceForScreen(screenId);
-      } else {
-        print(
-          '[VOICE-ROUTE] skip stale route configuration '
-          'routeScreen=$screenId logicalScreen=${flow.state.screen}',
-        );
-      }
+      unawaited(_observePhoneRoute(screenId, observationRevision));
     }
-    final pendingNavigation = flow.state.pendingNavigation;
-    if (screenId != null &&
-        pendingNavigation != null &&
-        pendingNavigation.screen == screenId) {
-      flow.acknowledgeNavigation(
-        requestId: pendingNavigation.requestId,
-        screen: screenId,
+  }
+
+  Future<void> _observePhoneRoute(
+    WearScreenId screen,
+    int observationRevision,
+  ) async {
+    final WearRuntimeNavigationAdapter adapter =
+        _flow.authority.navigationAdapter();
+    final WearDispatchResult observation = await adapter.observePhoneRoute(screen);
+    if (!observation.accepted ||
+        _runtimeTerminated ||
+        !mounted ||
+        observationRevision != _routerObservationRevision) {
+      return;
+    }
+
+    _actualRouteScreen = screen;
+    _syncScannerForCurrentScreen(routeScreen: screen);
+
+    final WearScreenId logicalScreen =
+        _flow.authority.payload.navigation.logicalScreen;
+    if (screen == logicalScreen) {
+      if (widget.onStartVoice == null) {
+        _configureVoiceForScreen(screen);
+      }
+    } else {
+      print(
+        '[VOICE-ROUTE] skip stale route configuration '
+        'routeScreen=$screen logicalScreen=$logicalScreen',
       );
     }
-    if (screenId != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_runtimeTerminated ||
-            !mounted ||
-            observationRevision != _routerObservationRevision) {
-          return;
-        }
-        final WearScreenId? confirmedScreen =
-            FlutterWearNavigationOutput.screenIdForRoute(
-          _router.state.matchedLocation,
-        );
-        if (confirmedScreen == null) return;
-        print('[ROUTER-CHANGE] observeRoute $confirmedScreen');
-        flow.observeRoute(
-          confirmedScreen,
-          extra: _router.state.extra,
-          canPop: _router.canPop(),
-        );
-      });
+
+    final WearPendingNavigation? pending =
+        _flow.authority.payload.navigation.pending;
+    if (pending == null ||
+        pending.screen != screen ||
+        observationRevision != _routerObservationRevision) {
+      return;
     }
+    await adapter.acknowledge(
+      requestId: pending.requestId,
+      screen: screen,
+    );
   }
 
   void _configureVoiceForScreen(
@@ -951,9 +961,8 @@ class _WearModuleAppState extends State<WearModuleApp>
     _voiceReconnectingSub?.cancel();
     _voiceReconnectErrorSub?.cancel();
     _voiceStateSub?.cancel();
-    _controlStateSub?.cancel();
+    _runtimeStateSub?.cancel();
     _screenActionsSub?.cancel();
-    _flowStateSub?.cancel();
     _flow.setNavigationOutput(
       NoopWearNavigationOutput(),
     );
@@ -988,8 +997,9 @@ class _WearModuleAppState extends State<WearModuleApp>
         }
         if (_router.canPop()) {
           print(
-              '[STACK-DEBUG] WearModuleApp: delegating system back to inner GoRouter.pop()');
-          _router.pop();
+            '[STACK-DEBUG] WearModuleApp: dispatching logical back intent',
+          );
+          unawaited(_flow.handleControllerCommand(WearVoiceCommand.back));
           return;
         }
         print(
@@ -1039,11 +1049,16 @@ class _WearModuleAppState extends State<WearModuleApp>
         textDirection: TextDirection.ltr,
         children: <Widget>[
           voiceAwareApp,
-          StreamBuilder<WearFlowState>(
-            stream: _flow.stateStream,
-            builder: (BuildContext context, AsyncSnapshot<WearFlowState> snap) {
-              final WearScreenId screen =
-                  snap.data?.screen ?? _flow.state.screen;
+          StreamBuilder<WearRuntimeState>(
+            stream: _flow.authority.states,
+            builder:
+                (BuildContext context, AsyncSnapshot<WearRuntimeState> snap) {
+              final WearRuntimeState runtimeState =
+                  snap.data ?? _flow.authority.state;
+              final WearScreenId screen = runtimeState
+                  .payloadAs<WearAggregatePayload>()
+                  .navigation
+                  .logicalScreen;
               final String location = _router.state.matchedLocation;
               return Positioned(
                 left: 0,
