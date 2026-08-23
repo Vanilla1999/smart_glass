@@ -2,6 +2,7 @@ import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_core_slices.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_slice.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_printer_guard.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_sequencing_reducer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
@@ -74,6 +75,7 @@ class WearReviewedScanSliceReducer implements WearSliceReducer {
 
   static const List<WearSliceReducer> _reducers = <WearSliceReducer>[
     WearScanResultAdmissionReducer(),
+    WearScanPrinterSelectionGuard(),
     WearScanStatusSequencingReducer(),
     WearScanSliceReducer(),
   ];
