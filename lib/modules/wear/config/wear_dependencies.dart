@@ -159,7 +159,7 @@ class WearDependencies {
       ]),
     );
     barcodeDispatcher = WearBarcodeDispatcher(
-      flowController: wearFlowController,
+      authority: authority,
     );
     voiceActionCatalog = VoiceActionCatalog(
       includeUnknown: const bool.fromEnvironment(
@@ -185,7 +185,7 @@ class WearDependencies {
     );
     voiceControlService = WearVoiceControlService(
       speechRecognitionService: speechRecognitionService,
-      screenProvider: () => wearFlowController.state.screen,
+      screenProvider: () => authority.payload.navigation.logicalScreen,
       actionCatalog: voiceActionCatalog,
     );
     voiceTypingService = VoiceTypingService(
