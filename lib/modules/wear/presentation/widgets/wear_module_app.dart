@@ -883,7 +883,6 @@ class _WearModuleAppState extends State<WearModuleApp>
     _routerObservationRevision += 1;
     _stopWearControlService('dispose');
     _flow.setRuntimeActive(false);
-    unawaited(_flow.authority.terminate());
     if (widget.flowController == null) {
       WearDependencies.I.barcodeDispatcher.stop();
       unawaited(
