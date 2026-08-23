@@ -10,6 +10,7 @@ enum WearVoiceOverlayPhase {
 class WearVoiceOverlayState {
   const WearVoiceOverlayState({
     this.visible = false,
+    this.sessionEpoch = -1,
     this.revision = 0,
     this.phase,
     this.reason,
@@ -18,6 +19,7 @@ class WearVoiceOverlayState {
   });
 
   final bool visible;
+  final int sessionEpoch;
   final int revision;
   final WearVoiceOverlayPhase? phase;
   final String? reason;
@@ -32,8 +34,14 @@ class WearVoiceOverlayCubit extends Cubit<WearVoiceOverlayState> {
 
   void update(Map<String, dynamic> payload) {
     final bool visible = payload['visible'] == true;
-    final int revision = payload['revision'] as int? ?? state.revision + 1;
-    if (revision <= state.revision) return;
+    final int epoch = payload['sessionEpoch'] as int? ?? state.sessionEpoch;
+    final int revision = payload['stateRevision'] as int? ??
+        payload['revision'] as int? ??
+        state.revision + 1;
+    if (epoch < state.sessionEpoch ||
+        (epoch == state.sessionEpoch && revision <= state.revision)) {
+      return;
+    }
     final WearVoiceOverlayPhase? phase = switch (payload['phase'] as String?) {
       'preparing' => WearVoiceOverlayPhase.preparing,
       'reconnecting' => WearVoiceOverlayPhase.reconnecting,
@@ -44,6 +52,7 @@ class WearVoiceOverlayCubit extends Cubit<WearVoiceOverlayState> {
     final String? message = payload['message'] as String?;
     emit(WearVoiceOverlayState(
       visible: visible,
+      sessionEpoch: epoch,
       revision: revision,
       phase: phase,
       reason: payload['reason'] as String?,

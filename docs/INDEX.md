@@ -25,6 +25,7 @@ This file indexes canonical, reviewable documentation for the `smart_glasses` pr
 - [WEAR_RUNTIME_STABILIZATION_VALIDATION.md](checklists/WEAR_RUNTIME_STABILIZATION_VALIDATION.md) — Local and T2151 acceptance checks for runtime barcode/scanner stabilization merged in PR #1
 - [WEAR_SINGLE_STATE_MR_REVIEW.md](checklists/WEAR_SINGLE_STATE_MR_REVIEW.md) — Required ownership, async-safety, dispatch, projection and test review template for each single-state migration MR
 - [WEAR_MR_S7_INPUT_UI_EFFECTS_VALIDATION.md](checklists/WEAR_MR_S7_INPUT_UI_EFFECTS_VALIDATION.md) — MR-S7 ownership, unified semantic-input and bounded UI-effect validation record
+- [WEAR_MR_S8_UNIFIED_PROJECTION_VALIDATION.md](checklists/WEAR_MR_S8_UNIFIED_PROJECTION_VALIDATION.md) — MR-S8 deterministic phone/glasses projection, versioned envelope, stale/reconnect and overlay validation record
 
 ## Non-canonical notes
 

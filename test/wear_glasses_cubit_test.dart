@@ -130,4 +130,28 @@ void main() {
     expect(cubit.state.selectedIndex, 2);
     expect(cubit.state.items, <String>['First', 'Second', 'null']);
   });
+
+  test('rejects stale revision and accepts reset revision in a new epoch', () {
+    final WearGlassesCubit cubit = WearGlassesCubit();
+    addTearDown(cubit.close);
+
+    Map<String, dynamic> envelope(int epoch, int revision, int selected) =>
+        <String, dynamic>{
+          'schemaVersion': 1,
+          'sessionEpoch': epoch,
+          'stateRevision': revision,
+          'logicalScreen': 'menu',
+          'payload': WearGlassesPayload.menu(selectedIndex: selected).toJson(),
+        };
+
+    cubit.updateFromPayload(envelope(4, 10, 2));
+    cubit.updateFromPayload(envelope(4, 9, 1));
+    expect(cubit.state.selectedIndex, 2);
+    expect(cubit.state.updateId, 1);
+
+    cubit.updateFromPayload(envelope(5, 0, 3));
+    cubit.updateFromPayload(envelope(4, 11, 0));
+    expect(cubit.state.selectedIndex, 3);
+    expect(cubit.state.updateId, 2);
+  });
 }

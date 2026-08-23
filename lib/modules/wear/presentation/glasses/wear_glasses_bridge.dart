@@ -1,6 +1,7 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:smart_glasses/core/services/method_channel_service.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_projection.dart';
 
 class WearGlassesBridge {
   WearGlassesBridge({
@@ -24,6 +25,16 @@ class WearGlassesBridge {
     if (!_isEnabled()) return;
     final Map<String, dynamic> json = payload.toJson();
     await _methodChannelService.updateWearGlasses(json);
+  }
+
+  Future<void> showEnvelope(WearGlassesEnvelope envelope) async {
+    if (!_isEnabled()) return;
+    await _methodChannelService.showWearGlasses(envelope.toJson());
+  }
+
+  Future<void> updateEnvelope(WearGlassesEnvelope envelope) async {
+    if (!_isEnabled()) return;
+    await _methodChannelService.updateWearGlasses(envelope.toJson());
   }
 
   Future<void> hide() async {

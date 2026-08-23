@@ -20,6 +20,7 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voi
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_delay_event.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_navigation_output.dart';
+import 'package:smart_glasses/modules/wear/infrastructure/wear_runtime_glasses_sender.dart';
 import 'package:smart_glasses/modules/wear/navigation/wear_routes.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
@@ -93,6 +94,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   VoiceState _voiceState = const VoiceState.disabled();
   bool _voiceStartRequested = false;
   late WearRuntimeControlAdapter _controlAdapter;
+  late final WearRuntimeGlassesSender _glassesSender;
   int? _voiceStartupToken;
   bool _restartVoiceAfterInterruption = false;
   bool _wasActuallyBackgrounded = false;
@@ -102,7 +104,6 @@ class _WearModuleAppState extends State<WearModuleApp>
   int _wearControlServiceRequestGeneration = 0;
   bool _wearControlServiceEnabled = false;
   bool _runtimeTerminated = false;
-  static int _nextVoiceOverlayRevision = 0;
 
   WearFlowController get _flow =>
       widget.flowController ?? WearDependencies.I.wearFlowController;
@@ -178,6 +179,12 @@ class _WearModuleAppState extends State<WearModuleApp>
     );
     widget.onRouterReady?.call(_router);
     final flow = _flow;
+    _glassesSender = WearRuntimeGlassesSender(
+      store: flow.authority.store,
+      onError: (Object error, StackTrace stackTrace) => print(
+        '[WearModuleApp] glasses projection failed: $error\n$stackTrace',
+      ),
+    )..start();
     _bindControlAdapter();
     _voiceDispatcher = WearVoiceApplicationDispatcher(
       flowController: flow,
@@ -667,24 +674,6 @@ class _WearModuleAppState extends State<WearModuleApp>
     setState(() => _voiceState = state);
     final WearRuntimeControlAdapter callback = _controlAdapter;
     _observeVoiceDispatch(callback.observeVoiceState(state), 'state');
-    _updateGlassesVoiceOverlay(
-      visible: !state.acceptsCommands && state.phase != VoicePhase.disabled,
-      message: switch (state.phase) {
-        VoicePhase.loadingModel => 'Подготовка\nголосового управления',
-        VoicePhase.startingRecorder => 'Настраиваем\nмикрофон очков',
-        VoicePhase.waitingForAudioRoute => 'Подключаем\nмикрофон очков',
-        VoicePhase.reconnecting ||
-        VoicePhase.suspendedBySystem =>
-          'Переподключаем\nголосовое управление',
-        VoicePhase.unavailable => 'Голосовое управление недоступно',
-        VoicePhase.microphoneReconnectRequired =>
-          'Переподключите\nочки или микрофон',
-        VoicePhase.disabled || VoicePhase.ready => null,
-      },
-      phase: state.phase.name,
-      reason: state.reason,
-      attempt: state.attempt,
-    );
   }
 
   void _setVoiceCommandsEnabled(bool enabled) {
@@ -713,31 +702,6 @@ class _WearModuleAppState extends State<WearModuleApp>
     });
   }
 
-  void _updateGlassesVoiceOverlay({
-    required bool visible,
-    String? message,
-    String phase = 'preparing',
-    String reason = 'ui',
-    int attempt = 0,
-  }) {
-    unawaited(
-      MethodChannelService()
-          .updateWearVoiceOverlay(
-        visible: visible,
-        phase: phase,
-        reason: reason,
-        attempt: attempt,
-        revision: ++_nextVoiceOverlayRevision,
-        message: message,
-      )
-          .catchError((Object error, StackTrace stackTrace) {
-        print(
-          '[WearModuleApp] update glasses voice overlay failed: '
-          '$error\n$stackTrace',
-        );
-      }),
-    );
-  }
 
   Future<void> _restartVoice(
     Future<void> Function(String reason) restart,
@@ -886,6 +850,7 @@ class _WearModuleAppState extends State<WearModuleApp>
       return;
     }
     if (state == AppLifecycleState.resumed) {
+      unawaited(_glassesSender.reconnect());
       final bool resumeRecoveryRequired = _wasActuallyBackgrounded;
       _wasActuallyBackgrounded = false;
       _flow.setUiLifecycle(
@@ -964,20 +929,11 @@ class _WearModuleAppState extends State<WearModuleApp>
       );
     }
     MethodChannelService().setAppMethodCallHandler(null);
-    _updateGlassesVoiceOverlay(visible: false);
     WearStatusIconReporter.I.endVoiceStartup(_voiceStartupToken);
     _voiceStartupToken = null;
     WearStatusIconReporter.I.setConnectivityObserver(null);
-    unawaited(
-      WearStatusIconReporter.I.stop().catchError(
-        (Object error, StackTrace stackTrace) {
-          print(
-            '[WearModuleApp] stop glasses projection failed: '
-            '$error\n$stackTrace',
-          );
-        },
-      ),
-    );
+    unawaited(WearStatusIconReporter.I.stop(hideProjection: false));
+    unawaited(_glassesSender.dispose());
     _voiceHealthTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _router.routerDelegate.removeListener(_onRouterChange);
