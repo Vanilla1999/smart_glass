@@ -107,6 +107,17 @@ class WearAggregatePresentationFlowController extends WearFlowController {
     return true;
   }
 
+  /// Clears retained controller resources without letting the legacy initial
+  /// screen override the aggregate logout transition to `main`.
+  @override
+  void resetSessionState() {
+    super.resetSessionState();
+    final WearScreenId screen = _logicalScreen;
+    if (super.state.screen != screen) {
+      super.enterScreen(screen);
+    }
+  }
+
   @override
   void enterScreen(WearScreenId screen, {Object? extra}) {
     _prepareCompatibilityEntry(screen);
