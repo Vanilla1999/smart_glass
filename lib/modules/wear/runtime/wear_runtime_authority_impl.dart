@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_availability_review_reducer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_availability_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_slices.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_validation_reducer.dart';
@@ -57,7 +58,7 @@ class WearRuntimeAuthority {
               WearControlSliceReducer(),
               WearReviewedPrinterSliceReducer(),
               WearReviewedScanSliceReducer(),
-              WearAvailabilitySliceReducer(),
+              WearReviewedAvailabilitySliceReducer(),
               WearCoreSliceReducer(),
             ],
           ),
