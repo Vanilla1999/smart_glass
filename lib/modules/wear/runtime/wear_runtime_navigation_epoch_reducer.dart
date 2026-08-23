@@ -1,3 +1,4 @@
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_core_slices.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
@@ -9,7 +10,7 @@ class WearEpochBoundPhoneRouteObserved extends WearIntent {
   });
 
   final int sessionEpoch;
-  final dynamic screen;
+  final WearScreenId screen;
   final int observationRevision;
 }
 
@@ -22,7 +23,7 @@ class WearEpochBoundNavigationAcknowledged extends WearIntent {
 
   final int sessionEpoch;
   final int requestId;
-  final dynamic screen;
+  final WearScreenId screen;
 }
 
 /// Runs before the generic core reducer.
