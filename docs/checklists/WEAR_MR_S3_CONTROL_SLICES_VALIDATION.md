@@ -21,6 +21,20 @@ flutter test \
   test/wear_scanner_runtime_policy_test.dart
 ```
 
+Production wiring reviewed statically:
+
+- `WearModuleApp` reports coarse voice state/admission through an epoch-bound
+  `WearRuntimeControlAdapter`; command dispatch reads aggregate admission;
+- scanner hardware operations report preparing/prepared/pausing/released/error
+  observations through the adapter, then aggregate policy evaluates admission;
+- `WearBarcodeDispatcher` reads aggregate admission and dispatches an
+  epoch-bound delivery intent before invoking the legacy MR-S5 business handler;
+- Wi-Fi polling remains an I/O/projection concern of `WearStatusIconReporter`,
+  which reports coarse online/offline observations without owning aggregate state;
+- session clear/authorization replaces adapter callbacks with callbacks that
+  explicitly capture the current authority epoch;
+- printer, scan, availability, PCM, Vosk and audio lease ownership is unchanged.
+
 ## Voice
 
 - observation содержит current `sessionEpoch` и monotonic revision;

@@ -22,6 +22,8 @@ import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_navigatio
 import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/navigation/wear_routes.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_adapter.dart';
 import 'package:smart_glasses/modules/wear/services/wear_scanner_runtime_policy.dart';
 import 'package:smart_glasses/modules/wear/services/wear_voice_session.dart';
 import 'package:smart_glasses/modules/wear/services/voice_state.dart';
@@ -86,10 +88,11 @@ class _WearModuleAppState extends State<WearModuleApp>
   StreamSubscription<bool>? _voiceReconnectingSub;
   StreamSubscription<String?>? _voiceReconnectErrorSub;
   StreamSubscription<VoiceState>? _voiceStateSub;
+  StreamSubscription<WearRuntimeState>? _controlStateSub;
   Timer? _voiceHealthTimer;
   VoiceState _voiceState = const VoiceState.disabled();
   bool _voiceStartRequested = false;
-  bool _voiceCommandsEnabled = true;
+  late WearRuntimeControlAdapter _controlAdapter;
   int? _voiceStartupToken;
   bool _restartVoiceAfterInterruption = false;
   bool _wasActuallyBackgrounded = false;
@@ -174,6 +177,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     );
     widget.onRouterReady?.call(_router);
     final flow = _flow;
+    _bindControlAdapter();
     _voiceDispatcher = WearVoiceApplicationDispatcher(
       flowController: flow,
       revisionSnapshotProvider: () {
@@ -189,9 +193,11 @@ class _WearModuleAppState extends State<WearModuleApp>
           freeTextPartialRevision: speech.freeTextPartialRevision,
         );
       },
-      commandsEnabledProvider: () => _voiceCommandsEnabled,
+      commandsEnabledProvider: () =>
+          flow.authority.controls.voice.commandsEnabled,
       commandsEnabledSetter: _setVoiceCommandsEnabled,
-      acceptsCommandsProvider: () => _voiceState.acceptsCommands,
+      acceptsCommandsProvider: () =>
+          flow.authority.controls.voice.acceptsCommands,
       onCommandAccepted: WearStatusIconReporter.I.beginPerformanceTrace,
       onPreviewUseful:
           widget.voicePreviewEventStream == null && widget.onStartVoice == null
@@ -200,7 +206,17 @@ class _WearModuleAppState extends State<WearModuleApp>
       log: print,
     );
     WearStatusIconReporter.I.start();
-    WearStatusIconReporter.I.setVoiceCommandsEnabled(_voiceCommandsEnabled);
+    WearStatusIconReporter.I.setVoiceCommandsEnabled(
+      flow.authority.controls.voice.commandsEnabled,
+    );
+    _controlStateSub = flow.authority.states.listen((WearRuntimeState state) {
+      final controls = state
+          .payloadAs<WearAggregatePayload>()
+          .controls as WearRuntimeControlPayload;
+      WearStatusIconReporter.I.setVoiceCommandsEnabled(
+        controls.voice.commandsEnabled,
+      );
+    });
     flow.setNavigationOutput(FlutterWearNavigationOutput(router: _router));
     flow.setRuntimeActive(true);
     flow.setUiLifecycle(WearUiLifecycle.active);
@@ -308,6 +324,7 @@ class _WearModuleAppState extends State<WearModuleApp>
         ?.listen(_onVoiceStateChanged);
     _authorizedSub = WearSession.authorizedStream.listen((_) {
       if (_runtimeTerminated) return;
+      _bindControlAdapter();
       flow.setRuntimeActive(true);
       if (widget.flowController == null) {
         _startWearControlService('authorized');
@@ -320,6 +337,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     });
     _clearedSub = WearSession.clearedStream.listen((_) {
       if (_runtimeTerminated) return;
+      _bindControlAdapter();
       _voiceDispatcher.resetAdmission();
       flow.resetSessionState();
       if (widget.flowController == null) {
@@ -343,30 +361,49 @@ class _WearModuleAppState extends State<WearModuleApp>
     if (widget.flowController != null) return;
     if (routeScreen != null) _actualRouteScreen = routeScreen;
     WearDependencies.I.barcodeDispatcher.resetPending();
-    final bool routeMatches = _actualRouteScreen == _flow.state.screen;
+    final WearRuntimeControlAdapter callback = _controlAdapter;
+    final WearScreenId logicalScreen = _flow.state.screen;
     final WearScannerRuntimeDecision decision =
-        resolveWearScannerRuntimeDecision(
-      runtimeTerminated: _runtimeTerminated,
-      sessionAuthorized: WearSession.isAuthorized,
-      phoneUiActive: !_wasActuallyBackgrounded,
-      routeMatchesLogicalScreen: routeMatches,
+        resolveWearScannerDecisionFromState(
+      _flow.authority.state,
       currentScreenAcceptsBarcode: _flow.currentScreenAcceptsBarcode,
     );
-    WearDependencies.I.barcodeDispatcher.setRouteAdmission(
-      decision.barcodeAdmissionEnabled,
-    );
-    final Future<void> operation = decision.hardwarePrepared
-        ? WearDependencies.I.scannerRuntime.start()
-        : WearDependencies.I.scannerRuntime.pause();
-    unawaited(
-      operation.catchError((Object error, StackTrace stackTrace) => print(
-            '[WearModuleApp] scanner runtime sync failed '
-            'screen=${_flow.state.screen} routeMatches=$routeMatches '
-            'admission=${decision.barcodeAdmissionEnabled} '
-            'prepare=${decision.hardwarePrepared}: '
-            '$error\n$stackTrace',
-          )),
-    );
+    unawaited(_applyScannerDecision(
+      callback: callback,
+      logicalScreen: logicalScreen,
+      screenAcceptsBarcode: _flow.currentScreenAcceptsBarcode,
+      decision: decision,
+    ));
+  }
+
+  Future<void> _applyScannerDecision({
+    required WearRuntimeControlAdapter callback,
+    required WearScreenId logicalScreen,
+    required bool screenAcceptsBarcode,
+    required WearScannerRuntimeDecision decision,
+  }) async {
+    try {
+      if (decision.hardwarePrepared) {
+        await callback.observeScannerPreparing();
+        await WearDependencies.I.scannerRuntime.start();
+        await callback.observeScannerPrepared();
+      } else {
+        await callback.observeScannerPausing();
+        await WearDependencies.I.scannerRuntime.pause();
+        await callback.observeScannerReleased();
+      }
+      await callback.evaluateScannerAdmission(
+        logicalScreen: logicalScreen,
+        screenAcceptsBarcode: screenAcceptsBarcode,
+      );
+    } catch (error, stackTrace) {
+      await callback.observeScannerError(error);
+      print(
+        '[WearModuleApp] scanner runtime sync failed '
+        'screen=$logicalScreen admission=${decision.barcodeAdmissionEnabled} '
+        'prepare=${decision.hardwarePrepared}: $error\n$stackTrace',
+      );
+    }
   }
 
   void _observeVoiceDispatch<T>(Future<T> operation, String kind) {
@@ -620,6 +657,8 @@ class _WearModuleAppState extends State<WearModuleApp>
   void _setVoiceState(VoiceState state) {
     if (!mounted) return;
     setState(() => _voiceState = state);
+    final WearRuntimeControlAdapter callback = _controlAdapter;
+    _observeVoiceDispatch(callback.observeVoiceState(state), 'state');
     _updateGlassesVoiceOverlay(
       visible: !state.acceptsCommands && state.phase != VoicePhase.disabled,
       message: switch (state.phase) {
@@ -641,10 +680,29 @@ class _WearModuleAppState extends State<WearModuleApp>
   }
 
   void _setVoiceCommandsEnabled(bool enabled) {
-    if (_runtimeTerminated || _voiceCommandsEnabled == enabled) return;
-    setState(() => _voiceCommandsEnabled = enabled);
-    WearStatusIconReporter.I.setVoiceCommandsEnabled(enabled);
+    if (_runtimeTerminated ||
+        _flow.authority.controls.voice.commandsEnabled == enabled) {
+      return;
+    }
+    final WearRuntimeControlAdapter callback = _controlAdapter;
+    _observeVoiceDispatch(
+      callback.observeVoiceState(_voiceState, commandsEnabled: enabled),
+      'admission',
+    );
     print('[WearModuleApp] voice commands enabled=$enabled');
+  }
+
+  void _bindControlAdapter() {
+    final WearRuntimeControlAdapter callback =
+        WearRuntimeControlAdapter(_flow.authority);
+    _controlAdapter = callback;
+    WearStatusIconReporter.I.setConnectivityObserver((status) async {
+      await callback.observeConnectivity(
+        status.isAvailable
+            ? WearConnectivityPhase.online
+            : WearConnectivityPhase.offline,
+      );
+    });
   }
 
   void _updateGlassesVoiceOverlay({
@@ -760,6 +818,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     _voiceHealthTimer = null;
     WearStatusIconReporter.I.endVoiceStartup(_voiceStartupToken);
     _voiceStartupToken = null;
+    WearStatusIconReporter.I.setConnectivityObserver(null);
     final Future<void> Function()? stopVoice = widget.onStopVoice;
     if (stopVoice != null) {
       unawaited(stopVoice());
@@ -899,6 +958,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     _updateGlassesVoiceOverlay(visible: false);
     WearStatusIconReporter.I.endVoiceStartup(_voiceStartupToken);
     _voiceStartupToken = null;
+    WearStatusIconReporter.I.setConnectivityObserver(null);
     unawaited(
       WearStatusIconReporter.I.stop().catchError(
         (Object error, StackTrace stackTrace) {
@@ -919,6 +979,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     _voiceReconnectingSub?.cancel();
     _voiceReconnectErrorSub?.cancel();
     _voiceStateSub?.cancel();
+    _controlStateSub?.cancel();
     _screenActionsSub?.cancel();
     _flowStateSub?.cancel();
     _authorizedSub?.cancel();
@@ -951,7 +1012,7 @@ class _WearModuleAppState extends State<WearModuleApp>
         if (didPop) {
           return;
         }
-        if (!_voiceState.acceptsCommands) {
+        if (!_flow.authority.controls.voice.acceptsCommands) {
           print('[WearModuleApp] suppress system back during voice reconnect');
           return;
         }

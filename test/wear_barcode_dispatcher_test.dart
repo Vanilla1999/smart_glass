@@ -80,4 +80,25 @@ void main() {
     await queue.waitUntilIdle();
     expect(calls, <String>['9000000001', '9000000001']);
   });
+
+  test('queued delivery retains its callback captured at admission', () async {
+    final Completer<void> first = Completer<void>();
+    final List<String> calls = <String>[];
+    final WearBarcodeSerialQueue queue = WearBarcodeSerialQueue(
+      handleBarcode: (String payload) async {
+        if (payload == 'first') await first.future;
+        return true;
+      },
+    );
+
+    queue.add('first');
+    queue.addWithHandler('second', (String payload) async {
+      calls.add('old-epoch:$payload');
+      return false;
+    });
+    first.complete();
+
+    await queue.waitUntilIdle();
+    expect(calls, <String>['old-epoch:second']);
+  });
 }
