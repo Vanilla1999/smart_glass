@@ -190,7 +190,8 @@ void main() {
     expect(source, isNot(contains('_flow.state.screen')));
     expect(source, isNot(contains('flow.observeRoute(')));
     expect(source, contains('authority.payload.navigation.logicalScreen'));
-    expect(source, contains('navigationAdapter().observePhoneRoute'));
+    expect(source, contains('navigationAdapter()'));
+    expect(source, contains('adapter.observePhoneRoute(screen)'));
     expect(source, contains('payload.navigation.pending'));
     expect(source, contains('StreamBuilder<WearRuntimeState>'));
   });
