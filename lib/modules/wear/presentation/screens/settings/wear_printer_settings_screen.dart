@@ -24,9 +24,6 @@ class _WearPrinterSettingsScreenState extends State<WearPrinterSettingsScreen> {
   @override
   void initState() {
     super.initState();
-    WearDependencies.I.wearFlowController.enterScreen(
-      WearScreenId.printerSettings,
-    );
     _screenActionsRegistration =
         WearDependencies.I.wearFlowController.registerScreenActions(
       WearScreenId.printerSettings,
