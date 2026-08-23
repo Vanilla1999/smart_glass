@@ -5,7 +5,6 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
-import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/use_case/authenticate_user_use_case.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
@@ -64,7 +63,7 @@ class WearAuthNotifier extends StateNotifier<WearAuthState> {
 
   Future<void> handleBarcode(String payload) async {
     print('[AUTH] onScanEvent called, payload: $payload');
-    if (WearSession.isAuthorized) {
+    if (WearDependencies.I.authority.isAuthorized) {
       print('[AUTH] Already authorized, ignoring');
       return;
     }
@@ -72,7 +71,7 @@ class WearAuthNotifier extends StateNotifier<WearAuthState> {
   }
 
   Future<void> handleLogoTap() async {
-    if (WearSession.isAuthorized) {
+    if (WearDependencies.I.authority.isAuthorized) {
       print('[AUTH] handleLogoTap ignored: already authorized');
       return;
     }
@@ -89,14 +88,14 @@ class WearAuthNotifier extends StateNotifier<WearAuthState> {
   }
 
   Future<void> handleLogoLongPress() async {
-    if (WearSession.isAuthorized) return;
+    if (WearDependencies.I.authority.isAuthorized) return;
     if (!_isMockLogoSkipAuthEnabled()) return;
     if (state.isLoading) return;
 
     state = state.copyWith(phase: WearAuthPhase.loading);
 
     try {
-      await WearSession.setUser(_mockSkipUser);
+      await WearDependencies.I.authority.authorize(_mockSkipUser);
 
       await WearFeedback.play(WearStatusKind.success);
       state = state.copyWith(
@@ -126,7 +125,7 @@ class WearAuthNotifier extends StateNotifier<WearAuthState> {
 
   Future<void> authorizeByBadgeBarcode(String barcode) async {
     print('[AUTH] authorizeByBadgeBarcode called, barcode: $barcode');
-    if (WearSession.isAuthorized) {
+    if (WearDependencies.I.authority.isAuthorized) {
       print('[AUTH] Already authorized, returning');
       return;
     }
@@ -157,7 +156,7 @@ class WearAuthNotifier extends StateNotifier<WearAuthState> {
           await WearDependencies.I.authenticateUserUseCase;
       final AuthenticatedUser user = await useCase.call(trimmedBarcode);
 
-      await WearSession.setUser(user);
+      await WearDependencies.I.authority.authorize(user);
       print('[AUTH] User authorized: ${user.name}');
 
       await WearFeedback.play(WearStatusKind.success);
@@ -189,7 +188,7 @@ class WearAuthNotifier extends StateNotifier<WearAuthState> {
 
   Future<void> _authorizeWithMockUser() async {
     await Future<void>.delayed(const Duration(milliseconds: 350));
-    await WearSession.setUser(_mockSkipUser);
+    await WearDependencies.I.authority.authorize(_mockSkipUser);
 
     await WearFeedback.play(WearStatusKind.success);
     state = state.copyWith(

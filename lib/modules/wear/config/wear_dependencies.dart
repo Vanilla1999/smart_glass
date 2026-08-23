@@ -7,7 +7,6 @@ import 'package:smart_glasses/modules/wear/application/wear_background_runtime.d
 import 'package:smart_glasses/modules/wear/application/wear_printer_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_scan_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
-import 'package:smart_glasses/modules/wear/application/wear_actual_screen_store.dart';
 import 'package:smart_glasses/modules/wear/data/availability/local_wear_availability_repository.dart';
 import 'package:smart_glasses/modules/wear/data/bdto/data_source/bdto_datasource.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/repository/wear_availability_repository.dart';
@@ -28,7 +27,6 @@ import 'package:smart_glasses/modules/wear/services/wear_photo_store.dart';
 import 'package:smart_glasses/modules/wear/services/wear_scanner_runtime.dart';
 import 'package:smart_glasses/modules/wear/services/wear_barcode_dispatcher.dart';
 import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
-import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
@@ -66,19 +64,17 @@ class WearDependencies {
   late final WearScanRuntime wearScanRuntime;
   late final WearPrinterRuntime _wearPrinterRuntime;
   late final WearAvailabilityRuntime _wearAvailabilityRuntime;
-  late final WearActualScreenStore actualScreenStore;
+  late final WearRuntimeAuthority authority;
 
   /// Shared audio stream — один на оба голосовых сервиса.
   late final AudioStreamService audioStreamService;
 
   void _initVoiceServices() {
-    final WearRuntimeAuthority authority = WearSession.identityAuthority;
-    actualScreenStore = WearActualScreenStore(authority);
+    authority = WearRuntimeAuthority(initialScreen: WearScreenId.scannerConnect);
     audioStreamService = AudioStreamService(
       recordContinuousWav: voiceCaptureWavDiagnostics,
     );
     wearFlowController = WearFlowController(
-      // MR-S8 sends production projection directly from committed snapshots.
       glassesOutput: NoopWearGlassesOutput(),
       navigationOutput: NoopWearNavigationOutput(),
       authority: authority,
@@ -97,6 +93,7 @@ class WearDependencies {
     }
 
     wearScanRuntime = WearScanRuntime(
+      authority: authority,
       lookupBarcode: getBarcodeInfoUseCase().call,
       navigate: navigate,
       showStatus: (args, completion) => wearFlowController.showStatus(
@@ -104,8 +101,8 @@ class WearDependencies {
         completion: completion,
       ),
       printProduct: (BarcodeProductInfo product) async {
-        final selection = WearSession.printerSelectionOrNull;
-        final user = WearSession.userOrNull;
+        final selection = authority.features.printer.selection;
+        final user = authority.userOrNull;
         if (selection == null) {
           throw StateError('Не выбраны принтеры');
         }
@@ -122,11 +119,13 @@ class WearDependencies {
       },
     );
     _wearPrinterRuntime = WearPrinterRuntime(
+      authority: authority,
       loadPrinters: getAvailablePrintersUseCase().call,
       navigate: navigate,
     );
     wearFlowController.setPrinterRuntime(_wearPrinterRuntime);
     _wearAvailabilityRuntime = WearAvailabilityRuntime(
+      authority: authority,
       flowUseCase: availabilityFlowUseCase,
       navigate: navigate,
       fillAdd: availabilityCatalogFillUseCase().addByBarcode,
@@ -135,8 +134,8 @@ class WearDependencies {
         await photoStore.captureLatestPhoto();
       },
       printPriceTag: (WearAvailabilityProduct product) async {
-        final selection = WearSession.printerSelectionOrNull;
-        final user = WearSession.userOrNull;
+        final selection = authority.features.printer.selection;
+        final user = authority.userOrNull;
         if (selection == null) throw StateError('Не выбраны принтеры');
         if (user == null) throw StateError('Пользователь не авторизован');
         if (WearMockConfig.isEnabled) return selection.whitePrinter.name;

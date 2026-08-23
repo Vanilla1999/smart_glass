@@ -36,7 +36,6 @@ class _State extends State<WearAvailabilityGroupScreen> {
       if (mounted) setState(() => _state = next);
       if (previous != next.focusedIndex) _scrollTo(next.focusedIndex);
     });
-    _flow.enterScreen(WearScreenId.availabilityGroup);
   }
 
   @override

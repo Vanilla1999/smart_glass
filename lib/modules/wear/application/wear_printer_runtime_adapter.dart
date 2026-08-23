@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import 'package:smart_glasses/modules/wear/application/wear_background_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
-import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/available_printer.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
@@ -62,7 +61,7 @@ class WearPrinterRuntime implements WearBackgroundRuntime {
     required WearPrinterLoader loadPrinters,
     required WearPrinterNavigation navigate,
     WearRuntimeAuthority? authority,
-  }) : _authority = authority ?? WearSession.identityAuthority {
+  }) : _authority = authority ?? WearRuntimeAuthority() {
     _effectExecutor = WearPrinterEffectExecutor(
       loadPrinters: loadPrinters,
       navigate: navigate,

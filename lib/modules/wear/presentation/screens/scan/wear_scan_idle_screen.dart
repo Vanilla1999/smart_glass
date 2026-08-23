@@ -31,7 +31,6 @@ class WearScanIdleScreen extends StatefulWidget {
 
 class _WearScanIdleScreenState extends State<WearScanIdleScreen>
     with ScreenLifecycleLogging<WearScanIdleScreen> {
-  late final WearScreenActionRegistration _screenActionsRegistration;
   late final StreamSubscription<WearScanRuntimeState> _stateSubscription;
   late WearScanRuntimeState _state;
   bool _isManualInputOpen = false;
@@ -44,24 +43,10 @@ class _WearScanIdleScreenState extends State<WearScanIdleScreen>
         WearDependencies.I.wearScanRuntime.stateStream.listen((next) {
       if (mounted) setState(() => _state = next);
     });
-    WearDependencies.I.wearFlowController.enterScreen(
-      WearScreenId.scanIdle,
-      extra: widget.printers,
-    );
-    _screenActionsRegistration =
-        WearDependencies.I.wearFlowController.registerScreenActions(
-      WearScreenId.scanIdle,
-      WearScreenActionHandler(
-        onSelect: _onVoiceSelect,
-        onManualInput: _onVoiceSelect,
-      ),
-    );
   }
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController
-        .unregisterScreenActions(_screenActionsRegistration);
     unawaited(_stateSubscription.cancel());
     super.dispose();
   }

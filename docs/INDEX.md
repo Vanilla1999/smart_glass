@@ -26,6 +26,7 @@ This file indexes canonical, reviewable documentation for the `smart_glasses` pr
 - [WEAR_SINGLE_STATE_MR_REVIEW.md](checklists/WEAR_SINGLE_STATE_MR_REVIEW.md) — Required ownership, async-safety, dispatch, projection and test review template for each single-state migration MR
 - [WEAR_MR_S7_INPUT_UI_EFFECTS_VALIDATION.md](checklists/WEAR_MR_S7_INPUT_UI_EFFECTS_VALIDATION.md) — MR-S7 ownership, unified semantic-input and bounded UI-effect validation record
 - [WEAR_MR_S8_UNIFIED_PROJECTION_VALIDATION.md](checklists/WEAR_MR_S8_UNIFIED_PROJECTION_VALIDATION.md) — MR-S8 deterministic phone/glasses projection, versioned envelope, stale/reconnect and overlay validation record
+- [WEAR_MR_S9_LEGACY_CLEANUP_VALIDATION.md](checklists/WEAR_MR_S9_LEGACY_CLEANUP_VALIDATION.md) — MR-S9 final writable-owner cleanup, static repository gates and retained adapter record
 
 ## Non-canonical notes
 

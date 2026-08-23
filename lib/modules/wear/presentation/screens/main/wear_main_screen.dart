@@ -5,7 +5,6 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_status_state.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
-import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/cubit/wear_auth_cubit.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/menu/wear_menu_screen.dart';
@@ -35,7 +34,6 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
   @override
   void initState() {
     super.initState();
-    WearSession.beginNewIdentityRuntime();
     final WearFlowController flow = WearDependencies.I.wearFlowController;
     flow.enterScreen(WearScreenId.main);
     _screenActionsRegistration = flow.registerScreenActions(
@@ -44,12 +42,12 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
         onBarcode: (String barcode) =>
             ref.read(wearAuthNotifierProvider.notifier).handleBarcode(barcode),
         barcodeEnabled: () =>
-            !WearSession.isAuthorized &&
+            !flow.authority.isAuthorized &&
             !ref.read(wearAuthNotifierProvider).isLoading,
       ),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (WearSession.isAuthorized) {
+      if (flow.authority.isAuthorized) {
         context.go(WearMenuScreen.route);
         return;
       }
@@ -202,7 +200,7 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
       const SizedBox(height: 8),
       InkWell(
         onTap: () {
-          if (!WearSession.isAuthorized && !state.isLoading) {
+          if (!WearDependencies.I.authority.isAuthorized && !state.isLoading) {
             ref.read(wearAuthNotifierProvider.notifier).handleLogoLongPress();
           }
         },

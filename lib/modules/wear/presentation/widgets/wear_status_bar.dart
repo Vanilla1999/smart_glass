@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:smart_glasses/modules/wear/config/wear_session.dart';
+import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_svg_icon.dart';
 import 'package:smart_glasses/modules/wear/services/wear_printer_status_service.dart';
 import 'package:smart_glasses/modules/wear/services/wear_status_icon_reporter.dart';
@@ -63,8 +63,9 @@ class _WearStatusBarState extends State<WearStatusBar> {
 
   Future<void> _refresh() async {
     final WearWifiStatus wifi = await widget.wifiStatusService.getStatus();
-    final bool printerAvailable = WearSession.hasPrinterSelection &&
-        WearSession.isAuthorized &&
+    final authority = WearDependencies.I.authority;
+    final bool printerAvailable = authority.features.printer.selection != null &&
+        authority.isAuthorized &&
         await widget.printerStatusService.isSelectedPrinterAvailable();
     if (!mounted) return;
     setState(() {
@@ -75,7 +76,8 @@ class _WearStatusBarState extends State<WearStatusBar> {
 
   @override
   Widget build(BuildContext context) {
-    final bool showPrinter = WearSession.hasPrinterSelection;
+    final bool showPrinter =
+        WearDependencies.I.authority.features.printer.selection != null;
 
     return Row(
       mainAxisSize: MainAxisSize.min,

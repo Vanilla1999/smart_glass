@@ -5,7 +5,6 @@ import 'package:smart_glasses/modules/wear/application/wear_background_runtime.d
 import 'package:smart_glasses/modules/wear/application/wear_product_select_args.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_status_state.dart';
-import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
@@ -76,7 +75,7 @@ class WearScanRuntime implements WearBackgroundRuntime {
     required WearScanStatusPresenter showStatus,
     WearScanEffectDelay delay = _defaultDelay,
     WearRuntimeAuthority? authority,
-  }) : _authority = authority ?? WearSession.identityAuthority {
+  }) : _authority = authority ?? WearRuntimeAuthority() {
     _effectExecutor = WearScanEffectExecutor(
       lookup: lookupBarcode,
       print: printProduct,

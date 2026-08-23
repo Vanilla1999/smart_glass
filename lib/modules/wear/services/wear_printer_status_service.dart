@@ -1,6 +1,5 @@
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
-import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/available_printer.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/use_case/get_available_printers_use_case.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
@@ -12,7 +11,8 @@ class WearPrinterStatusService {
   final GetAvailablePrintersUseCase? _useCase;
 
   Future<bool> isSelectedPrinterAvailable() async {
-    final WearPrinterSelection? selection = WearSession.printerSelectionOrNull;
+    final WearPrinterSelection? selection =
+        WearDependencies.I.authority.features.printer.selection;
     if (selection == null) return false;
 
     if (WearMockConfig.isEnabled) return true;

@@ -1,6 +1,6 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:smart_glasses/modules/wear/config/wear_session.dart';
+import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_group.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_flow_state.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
@@ -13,11 +13,11 @@ void main() {
 
   setUp(() {
     dotenv.testLoad(fileInput: 'WEAR_USE_MOCKS=true');
-    WearSession.clear();
+    WearDependencies.I.authority.clearSession();
   });
 
   tearDown(() {
-    WearSession.clear();
+    WearDependencies.I.authority.clearSession();
     dotenv.clean();
   });
 
