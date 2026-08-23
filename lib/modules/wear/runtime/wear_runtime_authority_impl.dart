@@ -29,7 +29,7 @@ class WearLegacyPresentationPayload implements WearPresentationPayload {
 class WearSessionSlice {
   const WearSessionSlice.anonymous() : user = null;
 
-  const WearSessionSlice.authorized(this.user);
+  const WearSessionSlice.authorized(AuthenticatedUser value) : user = value;
 
   final AuthenticatedUser? user;
 
@@ -191,8 +191,19 @@ class WearNavigationSlice {
     );
   }
 
+  /// Resets the logical stack without reusing observation/request identities.
+  ///
+  /// Keeping both counters monotonic prevents a late callback from an older
+  /// session from colliding with the first route/request of the new session.
   WearNavigationSlice clearForSession(WearScreenId screen) {
-    return WearNavigationSlice.initial(screen: screen);
+    return WearNavigationSlice(
+      logicalScreen: screen,
+      actualPhoneScreen: null,
+      pending: null,
+      history: <WearScreenId>[screen],
+      routeObservationRevision: routeObservationRevision,
+      nextRequestId: nextRequestId,
+    );
   }
 
   WearNavigationSlice terminalized() {
@@ -303,20 +314,24 @@ class WearLogicalNavigationRequested extends WearIntent {
 
 class WearPhoneRouteObserved extends WearIntent {
   const WearPhoneRouteObserved({
+    required this.sessionEpoch,
     required this.screen,
     required this.observationRevision,
   });
 
+  final int sessionEpoch;
   final WearScreenId screen;
   final int observationRevision;
 }
 
 class WearNavigationAcknowledged extends WearIntent {
   const WearNavigationAcknowledged({
+    required this.sessionEpoch,
     required this.requestId,
     required this.screen,
   });
 
+  final int sessionEpoch;
   final int requestId;
   final WearScreenId screen;
 }
@@ -352,12 +367,17 @@ class WearAggregateReducer implements WearRuntimeReducer {
         }
         return WearReduction.reject(WearDispatchRejectReason.busy);
       }
+      final WearAggregatePayload nextPayload = payload.copyWith(
+        session: nextSession,
+        lifecycle: payload.lifecycle.copyWith(runtimeActive: true),
+      );
       return WearReduction.accept(
-        nextState: state.withPayload(
-          payload.copyWith(
-            session: nextSession,
-            lifecycle: payload.lifecycle.copyWith(runtimeActive: true),
+        nextState: state.beginNextEpoch(
+          legacy: WearLegacyRuntimeSnapshot(
+            logicalScreen: payload.navigation.logicalScreen,
+            sourceRevision: state.legacy.sourceRevision + 1,
           ),
+          payload: nextPayload,
         ),
       );
     }
@@ -434,6 +454,9 @@ class WearAggregateReducer implements WearRuntimeReducer {
     }
 
     if (intent is WearPhoneRouteObserved) {
+      if (intent.sessionEpoch != state.sessionEpoch) {
+        return WearReduction.reject(WearDispatchRejectReason.staleEpoch);
+      }
       if (intent.observationRevision <=
           payload.navigation.routeObservationRevision) {
         return WearReduction.reject(WearDispatchRejectReason.staleOperation);
@@ -451,6 +474,9 @@ class WearAggregateReducer implements WearRuntimeReducer {
     }
 
     if (intent is WearNavigationAcknowledged) {
+      if (intent.sessionEpoch != state.sessionEpoch) {
+        return WearReduction.reject(WearDispatchRejectReason.staleEpoch);
+      }
       final WearPendingNavigation? pending = payload.navigation.pending;
       if (pending == null ||
           pending.requestId != intent.requestId ||
@@ -549,6 +575,10 @@ class WearRuntimeAuthority {
 
   AuthenticatedUser? get userOrNull => payload.session.user;
 
+  WearRuntimeNavigationAdapter navigationAdapter() {
+    return WearRuntimeNavigationAdapter(this);
+  }
+
   Future<WearDispatchResult> authorize(AuthenticatedUser user) async {
     final bool wasAuthorized = payload.session.isAuthorized;
     final WearDispatchResult result =
@@ -596,8 +626,21 @@ class WearRuntimeAuthority {
     required WearScreenId screen,
     required int observationRevision,
   }) {
+    return observePhoneRouteAtEpoch(
+      sessionEpoch: state.sessionEpoch,
+      screen: screen,
+      observationRevision: observationRevision,
+    );
+  }
+
+  Future<WearDispatchResult> observePhoneRouteAtEpoch({
+    required int sessionEpoch,
+    required WearScreenId screen,
+    required int observationRevision,
+  }) {
     return _store.dispatch(
       WearPhoneRouteObserved(
+        sessionEpoch: sessionEpoch,
         screen: screen,
         observationRevision: observationRevision,
       ),
@@ -608,8 +651,24 @@ class WearRuntimeAuthority {
     required int requestId,
     required WearScreenId screen,
   }) {
+    return acknowledgeNavigationAtEpoch(
+      sessionEpoch: state.sessionEpoch,
+      requestId: requestId,
+      screen: screen,
+    );
+  }
+
+  Future<WearDispatchResult> acknowledgeNavigationAtEpoch({
+    required int sessionEpoch,
+    required int requestId,
+    required WearScreenId screen,
+  }) {
     return _store.dispatch(
-      WearNavigationAcknowledged(requestId: requestId, screen: screen),
+      WearNavigationAcknowledged(
+        sessionEpoch: sessionEpoch,
+        requestId: requestId,
+        screen: screen,
+      ),
     );
   }
 
@@ -652,5 +711,41 @@ class WearRuntimeAuthority {
   Future<void> _closeCompatibilityStreams() async {
     if (!_authorized.isClosed) await _authorized.close();
     if (!_cleared.isClosed) await _cleared.close();
+  }
+}
+
+/// Epoch-bound adapter for asynchronous Flutter route callbacks.
+///
+/// Recreating the adapter after an epoch change is deliberate. A callback held
+/// by an older route keeps the old epoch and is rejected even if it arrives
+/// after the next session has already created a request with similar data.
+class WearRuntimeNavigationAdapter {
+  WearRuntimeNavigationAdapter(WearRuntimeAuthority authority)
+      : _authority = authority,
+        sessionEpoch = authority.state.sessionEpoch,
+        _nextObservationRevision =
+            authority.payload.navigation.routeObservationRevision;
+
+  final WearRuntimeAuthority _authority;
+  final int sessionEpoch;
+  int _nextObservationRevision;
+
+  Future<WearDispatchResult> observePhoneRoute(WearScreenId screen) {
+    return _authority.observePhoneRouteAtEpoch(
+      sessionEpoch: sessionEpoch,
+      screen: screen,
+      observationRevision: ++_nextObservationRevision,
+    );
+  }
+
+  Future<WearDispatchResult> acknowledge({
+    required int requestId,
+    required WearScreenId screen,
+  }) {
+    return _authority.acknowledgeNavigationAtEpoch(
+      sessionEpoch: sessionEpoch,
+      requestId: requestId,
+      screen: screen,
+    );
   }
 }
