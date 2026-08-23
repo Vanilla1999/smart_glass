@@ -1,13 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
-import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availability_glasses_payloads.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_projection.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
@@ -25,37 +25,33 @@ class _WearAvailabilityInteractionScreenState
     extends State<WearAvailabilityInteractionScreen> {
   final ScrollController _scroll = ScrollController();
   final _flow = WearDependencies.I.wearFlowController;
-  StreamSubscription<WearFlowState>? _flowSub;
+  final _authority = WearDependencies.I.authority;
+  StreamSubscription<WearRuntimeState>? _runtimeSub;
   int _focusedIndex = 0;
   static const int _itemCount = 2;
 
   @override
   void initState() {
     super.initState();
-    _focusedIndex = _flow.state.availabilityInteractionFocusedIndex;
     _flow.enterScreen(WearScreenId.availabilityInteraction);
-    _flowSub = _flow.stateStream.listen(_onFlowState);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _flow.publishScreenPayload(
-        WearScreenId.availabilityInteraction,
-        WearAvailabilityGlassesPayloads.interactionTypes(
-          selectedIndex: _focusedIndex,
-        ),
-      );
-    });
+    _focusedIndex = _projectedFocus(_authority.state);
+    _runtimeSub = _authority.states.listen(_onRuntimeState);
   }
 
   @override
   void dispose() {
-    _flowSub?.cancel();
+    _runtimeSub?.cancel();
     _scroll.dispose();
     super.dispose();
   }
 
-  void _onFlowState(WearFlowState state) {
-    if (state.screen != WearScreenId.availabilityInteraction) return;
-    final int next =
-        state.availabilityInteractionFocusedIndex.clamp(0, _itemCount - 1);
+  void _onRuntimeState(WearRuntimeState state) {
+    final WearPhoneProjection projection =
+        WearRuntimeProjection.projectPhone(state);
+    if (projection.logicalScreen != WearScreenId.availabilityInteraction) {
+      return;
+    }
+    final int next = projection.focusedIndex.clamp(0, _itemCount - 1);
     if (next == _focusedIndex) return;
     if (mounted) {
       setState(() => _focusedIndex = next);
@@ -65,6 +61,15 @@ class _WearAvailabilityInteractionScreenState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToFocused();
     });
+  }
+
+  int _projectedFocus(WearRuntimeState state) {
+    final WearPhoneProjection projection =
+        WearRuntimeProjection.projectPhone(state);
+    if (projection.logicalScreen != WearScreenId.availabilityInteraction) {
+      return 0;
+    }
+    return projection.focusedIndex.clamp(0, _itemCount - 1);
   }
 
   @override
