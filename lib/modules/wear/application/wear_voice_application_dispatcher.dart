@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_list_matcher.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
@@ -64,6 +65,9 @@ class WearVoiceApplicationDispatcher {
       <WearVoiceDelayKind, _VoiceDelayKey>{};
 
   WearVoiceEventAdmissionGate get admissionGate => _admissionGate;
+
+  WearScreenId get _logicalScreen =>
+      _flow.authority.payload.navigation.logicalScreen;
 
   Future<WearVoiceAdmissionDecision> dispatchCommand(
     WearVoiceCommand command, {
@@ -170,10 +174,11 @@ class WearVoiceApplicationDispatcher {
   }
 
   Future<bool> dispatchPreview(WearVoicePreviewEvent event) async {
-    if (!_commandsEnabledProvider() || !_acceptsCommandsProvider())
+    if (!_commandsEnabledProvider() || !_acceptsCommandsProvider()) {
       return false;
+    }
     final WearVoiceRevisionSnapshot revisions = _revisionSnapshotProvider();
-    final screen = _flow.state.screen;
+    final WearScreenId screen = _logicalScreen;
     final VoiceDynamicItemsSnapshot items = _flow.dynamicVoiceItemsFor(screen);
     if (event.sourceScreen != screen ||
         event.captureEpoch != revisions.captureEpoch ||
@@ -205,7 +210,7 @@ class WearVoiceApplicationDispatcher {
 
   Future<bool> dispatchDelay(WearVoiceDelayEvent event) async {
     final WearVoiceRevisionSnapshot revisions = _revisionSnapshotProvider();
-    final screen = _flow.state.screen;
+    final WearScreenId screen = _logicalScreen;
     final int currentListRevision = _flow.dynamicVoiceItemsFor(screen).revision;
     final bool contextCurrent = event.sourceScreen == screen &&
         event.captureEpoch == revisions.captureEpoch &&
@@ -256,7 +261,7 @@ class WearVoiceApplicationDispatcher {
 
   WearVoiceAdmissionContext _context() {
     final WearVoiceRevisionSnapshot revisions = _revisionSnapshotProvider();
-    final screen = _flow.state.screen;
+    final WearScreenId screen = _logicalScreen;
     return (
       screen: screen,
       captureEpoch: revisions.captureEpoch,
@@ -299,13 +304,13 @@ class WearVoiceApplicationDispatcher {
     if (event != null) _onCommandAccepted?.call(event);
     _log(
       '[WearVoiceApplicationDispatcher] voice command received '
-      'command=$command screen=${_flow.state.screen} at=$startedAt',
+      'command=$command screen=$_logicalScreen at=$startedAt',
     );
     await _flow.handleVoiceCommand(command);
     final int finishedAt = DateTime.now().millisecondsSinceEpoch;
     _log(
       '[WearVoiceApplicationDispatcher] voice command handled '
-      'command=$command screen=${_flow.state.screen} '
+      'command=$command screen=$_logicalScreen '
       'durationMs=${finishedAt - startedAt}',
     );
   }
@@ -333,7 +338,7 @@ class WearVoiceApplicationDispatcher {
     _log(
       '[WearVoiceApplicationDispatcher] voice phrase received '
       'phrase="$phrase" traceId=${event?.traceId} '
-      'screen=${_flow.state.screen} at=$startedAt',
+      'screen=$_logicalScreen at=$startedAt',
     );
     final String? dynamicItemId = event?.dynamicItemId;
     if (dynamicItemId != null) {
@@ -345,7 +350,7 @@ class WearVoiceApplicationDispatcher {
     _log(
       '[WearVoiceApplicationDispatcher] voice phrase handled '
       'phrase="$phrase" traceId=${event?.traceId} '
-      'screen=${_flow.state.screen} '
+      'screen=$_logicalScreen '
       'durationMs=${finishedAt - startedAt}',
     );
   }
