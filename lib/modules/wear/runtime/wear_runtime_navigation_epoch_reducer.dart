@@ -107,6 +107,14 @@ class WearSessionNavigationEpochReducer implements WearSliceReducer {
       );
     }
 
+    // These compatibility intents do not contain a session epoch. Once MR-S3
+    // owns common control admission, accepting them would re-open an unversioned
+    // path around the authority adapters.
+    if (intent is WearPhoneRouteObserved ||
+        intent is WearNavigationAcknowledged) {
+      return WearReduction.reject(WearDispatchRejectReason.unsupported);
+    }
+
     return null;
   }
 }
