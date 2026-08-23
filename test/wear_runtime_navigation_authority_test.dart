@@ -126,4 +126,21 @@ void main() {
     );
     expect(oldAck.rejectReason, WearDispatchRejectReason.staleOperation);
   });
+
+  test('terminal rejects route adapter callbacks without changing route',
+      () async {
+    final WearRuntimeAuthority authority = WearRuntimeAuthority();
+    final WearRuntimeNavigationAdapter adapter = authority.navigationAdapter();
+    await adapter.observePhoneRoute(WearScreenId.main);
+    await authority.terminate();
+
+    final WearDispatchResult late =
+        await adapter.observePhoneRoute(WearScreenId.menu);
+
+    expect(late.rejectReason, WearDispatchRejectReason.terminal);
+    expect(
+      authority.payload.navigation.actualPhoneScreen,
+      WearScreenId.main,
+    );
+  });
 }
