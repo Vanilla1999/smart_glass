@@ -1,3 +1,4 @@
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
@@ -32,14 +33,32 @@ WearScannerRuntimeDecision resolveWearScannerRuntimeDecision({
   );
 }
 
-/// Aggregate-state selector used by migrated scanner orchestration.
+/// Aggregate-state selector used by scanner orchestration.
 ///
-/// The legacy argument-based policy above remains as a compatibility adapter
-/// until MR-S9; both are kept side-by-side so behavior can be compared.
+/// Badge authorization is the only supported pre-session barcode flow. It is
+/// admitted only while both logical and actual phone screens are `main`. Once a
+/// session exists, the aggregate control selector applies the normal
+/// runtime/lifecycle/background policy.
 WearScannerRuntimeDecision resolveWearScannerDecisionFromState(
   WearRuntimeState state, {
   required bool currentScreenAcceptsBarcode,
 }) {
+  final WearAggregatePayload aggregate =
+      state.payloadAs<WearAggregatePayload>();
+  final WearRuntimeControlPayload controls =
+      aggregate.controls as WearRuntimeControlPayload;
+  final bool preAuthMain = !aggregate.session.isAuthorized &&
+      aggregate.navigation.logicalScreen == WearScreenId.main &&
+      aggregate.lifecycle.phoneUiActive &&
+      aggregate.navigation.actualPhoneScreen == WearScreenId.main;
+  if (preAuthMain) {
+    return WearScannerRuntimeDecision(
+      hardwarePrepared: true,
+      barcodeAdmissionEnabled:
+          controls.scanner.hardwarePrepared && currentScreenAcceptsBarcode,
+    );
+  }
+
   final WearScannerControlDecision decision = selectScannerControlDecision(
     state,
     screenAcceptsBarcode: currentScreenAcceptsBarcode,
