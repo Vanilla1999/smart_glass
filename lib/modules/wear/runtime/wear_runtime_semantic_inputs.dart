@@ -4,6 +4,7 @@ import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_availability_review_reducer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_availability_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_core_slices.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_review_reducers.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
@@ -219,6 +220,11 @@ class WearSemanticInputReducer implements WearSliceReducer {
           if (kind == null) {
             return WearReduction.reject(WearDispatchRejectReason.unsupported);
           }
+          final WearDispatchRejectReason? policyRejection =
+              _uiEffectPolicyRejection(aggregate, kind, intent.expectedScreen);
+          if (policyRejection != null) {
+            return WearReduction.reject(policyRejection);
+          }
           if (aggregate.uiEffects.effectOfKind(kind) != null) {
             return WearReduction.reject(WearDispatchRejectReason.duplicate);
           }
@@ -286,6 +292,26 @@ class WearSemanticInputReducer implements WearSliceReducer {
       );
     }
     return null;
+  }
+
+  WearDispatchRejectReason? _uiEffectPolicyRejection(
+    WearAggregatePayload aggregate,
+    WearUiEffectKind kind,
+    WearScreenId screen,
+  ) {
+    if (kind != WearUiEffectKind.manualBarcodeInput) return null;
+    if (screen != WearScreenId.scanIdle) {
+      return WearDispatchRejectReason.unsupported;
+    }
+    final WearFeaturePayload rawFeatures = aggregate.features;
+    if (rawFeatures is! WearRuntimeFeaturePayload ||
+        rawFeatures.scan is! WearScanTaskSlice) {
+      return WearDispatchRejectReason.unsupported;
+    }
+    final WearScanTaskSlice scan = rawFeatures.scan as WearScanTaskSlice;
+    return scan.phase == WearScanTaskPhase.waiting
+        ? null
+        : WearDispatchRejectReason.busy;
   }
 
   WearReduction _finish(
