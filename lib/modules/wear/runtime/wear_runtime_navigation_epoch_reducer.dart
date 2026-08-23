@@ -56,12 +56,16 @@ class WearSessionNavigationEpochReducer implements WearSliceReducer {
           payload: aggregate.copyWith(
             session: nextSession,
             lifecycle: aggregate.lifecycle.copyWith(runtimeActive: true),
+            controls: aggregate.controls.toTerminalControls(),
           ),
         ),
       );
     }
 
     if (intent is WearEpochBoundPhoneRouteObserved) {
+      if (intent.sessionEpoch < 0 || intent.observationRevision <= 0) {
+        return WearReduction.reject(WearDispatchRejectReason.unsupported);
+      }
       if (intent.sessionEpoch != state.sessionEpoch) {
         return WearReduction.reject(WearDispatchRejectReason.staleEpoch);
       }
@@ -82,6 +86,9 @@ class WearSessionNavigationEpochReducer implements WearSliceReducer {
     }
 
     if (intent is WearEpochBoundNavigationAcknowledged) {
+      if (intent.sessionEpoch < 0 || intent.requestId <= 0) {
+        return WearReduction.reject(WearDispatchRejectReason.unsupported);
+      }
       if (intent.sessionEpoch != state.sessionEpoch) {
         return WearReduction.reject(WearDispatchRejectReason.staleEpoch);
       }
