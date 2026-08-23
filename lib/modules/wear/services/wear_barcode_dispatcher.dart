@@ -209,6 +209,8 @@ class WearBarcodeDispatcher implements MultiScannerDelegate {
         _authority.isAuthorized ||
         screen != WearScreenId.main ||
         semanticReceipt.rejectReason != WearDispatchRejectReason.unsupported ||
+        _authority.isAuthorized ||
+        screen != WearScreenId.main ||
         _authority.state.sessionEpoch != sessionEpoch ||
         _authority.payload.navigation.logicalScreen != screen) {
       return false;
