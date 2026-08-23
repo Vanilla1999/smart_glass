@@ -236,10 +236,22 @@ void main() {
     final String dependencies = File(
       'lib/modules/wear/config/wear_dependencies.dart',
     ).readAsStringSync();
+    final String voice = File(
+      'lib/modules/wear/application/wear_voice_application_dispatcher.dart',
+    ).readAsStringSync();
+    final String facade = File(
+      'lib/modules/wear/application/wear_aggregate_presentation_flow_controller.dart',
+    ).readAsStringSync();
 
     expect(dispatcher, contains('_authority.payload.navigation.logicalScreen'));
     expect(dispatcher, contains('expectedSessionEpoch: sessionEpoch'));
     expect(dispatcher, isNot(contains('_flowController.state.screen')));
+    expect(dispatcher, contains('_authority.isAuthorized'));
+    expect(dispatcher, contains('screen != WearScreenId.main'));
+    expect(voice, contains('payload.navigation.logicalScreen'));
+    expect(voice, isNot(contains('_flow.state.screen')));
+    expect(facade, contains('_legacyScreenMatchesLogical'));
+    expect(facade, contains('bool get currentScreenAcceptsBarcode'));
     expect(
       dependencies,
       contains('screenProvider: () => authority.payload.navigation.logicalScreen'),
@@ -247,6 +259,18 @@ void main() {
     expect(
       dependencies,
       contains('WearBarcodeDispatcher(\n      authority: authority,'),
+    );
+  });
+
+  test('auth widget attachment cannot initiate logical navigation', () {
+    final String source = File(
+      'lib/modules/wear/presentation/screens/main/wear_main_screen.dart',
+    ).readAsStringSync();
+
+    expect(source, isNot(contains('addPostFrameCallback')));
+    expect(
+      source,
+      isNot(contains('logicalScreen != WearScreenId.menu')),
     );
   });
 
