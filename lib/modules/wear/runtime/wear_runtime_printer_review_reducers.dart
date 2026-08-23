@@ -19,26 +19,36 @@ class WearPrinterInputValidationReducer implements WearSliceReducer {
       return WearReduction.reject(WearDispatchRejectReason.unsupported);
     }
     if (intent is WearPrinterSelectionImported) {
-      final String whiteId = intent.selection.whitePrinter.id.trim();
-      final String yellowId = intent.selection.yellowPrinter.id.trim();
-      if (whiteId.isEmpty || yellowId.isEmpty || whiteId == yellowId) {
+      final WearPrinter white = intent.selection.whitePrinter;
+      final WearPrinter yellow = intent.selection.yellowPrinter;
+      if (!_validPrinter(white) ||
+          !_validPrinter(yellow) ||
+          white.id == yellow.id) {
         return WearReduction.reject(WearDispatchRejectReason.unsupported);
       }
     }
     if (intent is WearPrintersLoaded) {
       final Set<String> ids = <String>{};
       for (final WearPrinter printer in intent.printers) {
-        final String id = printer.id.trim();
-        if (id.isEmpty || id != printer.id || !ids.add(id)) {
+        if (!_validPrinter(printer) || !ids.add(printer.id)) {
           return _invalidLoadedResult(
             state,
             intent,
-            'Список принтеров содержит пустой или повторяющийся ID',
+            'Список принтеров содержит пустой, ненормализованный или повторяющийся элемент',
           );
         }
       }
     }
     return null;
+  }
+
+  bool _validPrinter(WearPrinter printer) {
+    final String id = printer.id.trim();
+    final String name = printer.name.trim();
+    return id.isNotEmpty &&
+        id == printer.id &&
+        name.isNotEmpty &&
+        name == printer.name;
   }
 
   WearReduction _invalidLoadedResult(
@@ -49,13 +59,22 @@ class WearPrinterInputValidationReducer implements WearSliceReducer {
     final WearAggregatePayload aggregate =
         state.payloadAs<WearAggregatePayload>();
     final WearFeaturePayload rawFeatures = aggregate.features;
-    if (rawFeatures is! WearRuntimeFeaturePayload ||
-        intent.sessionEpoch != state.sessionEpoch ||
+    if (rawFeatures is! WearRuntimeFeaturePayload) {
+      return WearReduction.reject(WearDispatchRejectReason.unsupported);
+    }
+    if (intent.sessionEpoch != state.sessionEpoch) {
+      return WearReduction.reject(WearDispatchRejectReason.staleEpoch);
+    }
+    if (aggregate.navigation.logicalScreen != WearScreenId.printerSelect) {
+      return WearReduction.reject(WearDispatchRejectReason.staleScreen);
+    }
+    final WearPrinterTaskSlice printer = rawFeatures.printer;
+    if (!printer.isLoading ||
         state.expectedOperationId(WearLoadPrintersEffect.loadOperationKind) !=
             intent.operationId) {
       return WearReduction.reject(WearDispatchRejectReason.staleOperation);
     }
-    final WearPrinterTaskSlice failed = rawFeatures.printer.copyWith(
+    final WearPrinterTaskSlice failed = printer.copyWith(
       phase: WearPrinterTaskPhase.error,
       error: message,
     );
@@ -71,9 +90,6 @@ class WearPrinterInputValidationReducer implements WearSliceReducer {
   }
 }
 
-/// Handles entry from another logical screen before the normal printer
-/// reducer. Any pending load/navigation identity from the abandoned visit is
-/// superseded atomically with the new printer entry.
 class WearPrinterReentryReducer implements WearSliceReducer {
   const WearPrinterReentryReducer();
 
