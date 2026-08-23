@@ -1,12 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/menu/wear_menu_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_projection.dart';
@@ -85,32 +84,16 @@ class _WearHomeConfirmScreenState extends State<WearHomeConfirmScreen>
     _flow.setHomeConfirmFocusedIndex(1);
   }
 
-  Future<void> _selectFocused() async {
-    if (_focusedIndex == 0) {
-      await _goHome();
-      return;
-    }
-    await _cancel();
+  Future<void> _selectFocused() {
+    return _flow.handleControllerCommand(WearVoiceCommand.select);
   }
 
-  Future<void> _goHome() async {
-    final bool accepted = await _flow.commitPresentationFocus(
-      WearScreenId.homeConfirm,
-      0,
-    );
-    if (!accepted || !mounted) return;
-    context.go(WearMenuScreen.route);
+  Future<void> _goHome() {
+    return _flow.handleControllerCommand(WearVoiceCommand.yes);
   }
 
-  Future<void> _cancel() async {
-    final bool accepted = await _flow.commitPresentationFocus(
-      WearScreenId.homeConfirm,
-      1,
-    );
-    if (!accepted || !mounted) return;
-    if (context.canPop()) {
-      context.pop();
-    }
+  Future<void> _cancel() {
+    return _flow.handleControllerCommand(WearVoiceCommand.no);
   }
 
   @override
