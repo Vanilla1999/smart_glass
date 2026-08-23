@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:smart_glasses/modules/wear/data/auth/data_source/auth_data_source.dart';
 import 'package:smart_glasses/modules/wear/data/auth/data_source/auth_dio_client.dart';
@@ -71,8 +73,18 @@ class WearDependencies {
   late final AudioStreamService audioStreamService;
 
   void _initVoiceServices() {
-    authority =
-        WearRuntimeAuthority(initialScreen: WearScreenId.scannerConnect);
+    final WearScreenId initialScreen =
+        dotenv.env['WEAR_SKIP_SCANNER_CONNECT_SCREEN'] == 'true'
+            ? WearScreenId.main
+            : WearScreenId.scannerConnect;
+    authority = WearRuntimeAuthority(initialScreen: initialScreen);
+
+    // The host chooses both initial values from the same configuration. This is
+    // an initial route observation, not a route-to-business mutation.
+    unawaited(
+      authority.navigationAdapter().observePhoneRoute(initialScreen),
+    );
+
     audioStreamService = AudioStreamService(
       recordContinuousWav: voiceCaptureWavDiagnostics,
     );
@@ -160,6 +172,7 @@ class WearDependencies {
     );
     barcodeDispatcher = WearBarcodeDispatcher(
       authority: authority,
+      unsupportedHandler: wearFlowController.handleBarcode,
     );
     voiceActionCatalog = VoiceActionCatalog(
       includeUnknown: const bool.fromEnvironment(
