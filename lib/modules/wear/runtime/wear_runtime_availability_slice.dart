@@ -155,7 +155,10 @@ class WearAvailabilityTaskSlice implements WearAvailabilityFeaturePayload {
     );
   }
 
-  WearAvailabilityTaskSlice reset() => WearAvailabilityTaskSlice.initial();
+  WearAvailabilityTaskSlice reset() =>
+      WearAvailabilityTaskSlice.initial().copyWith(
+        nextOperationId: nextOperationId,
+      );
 }
 
 class WearAvailabilityEntered extends WearIntent {
@@ -842,7 +845,7 @@ class WearAvailabilitySliceReducer implements WearSliceReducer {
         return _startNavigationFromState(
           cleared,
           target: WearScreenId.availabilityCheck,
-          extra: intent.flow,
+          extra: intent.flow.selectedProduct,
         );
       case WearAvailabilityOperation.findBarcode:
         if (intent.flow.step == WearAvailabilityFlowStep.productQuestion &&
@@ -850,7 +853,7 @@ class WearAvailabilitySliceReducer implements WearSliceReducer {
           return _startNavigationFromState(
             cleared,
             target: WearScreenId.availabilityCheck,
-            extra: intent.flow,
+            extra: intent.flow.selectedProduct,
           );
         }
         return WearReduction.accept(nextState: cleared);

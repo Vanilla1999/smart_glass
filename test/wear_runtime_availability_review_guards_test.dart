@@ -41,6 +41,38 @@ void main() {
     expect(navigationExtra, same(expected));
   });
 
+  test('selected product navigates with product route extra', () async {
+    final WearAvailabilityProduct expected = _product(10, 'Товар');
+    Object? navigationExtra;
+    final WearRuntimeAuthority authority = WearRuntimeAuthority();
+    final WearAvailabilityRuntime runtime = _runtime(
+      authority,
+      _Repository(products: <WearAvailabilityProduct>[expected]),
+      navigate: (screen, {extra, replaceCurrent = false}) async {
+        if (screen == WearScreenId.availabilityCheck) navigationExtra = extra;
+      },
+    );
+    addTearDown(() async {
+      await runtime.dispose();
+      await authority.dispose();
+    });
+
+    await runtime.enterScreen(
+      WearScreenId.availabilityProduct,
+      extra: const WearAvailabilityGroup(id: 1, name: 'Группа', counter: 0),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    await runtime.handleDynamicItem(
+      WearScreenId.availabilityProduct,
+      expected.id.toString(),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(navigationExtra, same(expected));
+  });
+
   test('same-screen attachment cannot restart active direct lookup', () async {
     final Completer<List<WearAvailabilityProduct>> lookup =
         Completer<List<WearAvailabilityProduct>>();
@@ -86,6 +118,58 @@ void main() {
       throwsStateError,
     );
   });
+
+  test('replacement adapter rejects a blocked old effect result', () async {
+    final Completer<List<WearAvailabilityProduct>> oldLookup =
+        Completer<List<WearAvailabilityProduct>>();
+    final WearAvailabilityProduct oldProduct = _product(10, 'Старый');
+    final WearAvailabilityProduct currentProduct = _product(11, 'Новый');
+    final WearRuntimeAuthority authority = WearRuntimeAuthority();
+    final WearAvailabilityRuntime oldRuntime = _runtime(
+      authority,
+      _Repository(find: (_) => oldLookup.future),
+    );
+
+    await oldRuntime.enterScreen(WearScreenId.availabilityDirectScan);
+    await oldRuntime.handleBarcode(
+      WearScreenId.availabilityDirectScan,
+      '4600000000010',
+    );
+    await Future<void>.delayed(Duration.zero);
+    final int oldOperationId = authority.availabilityTask.nextOperationId;
+    await oldRuntime.dispose();
+
+    final WearAvailabilityRuntime replacement = _runtime(
+      authority,
+      _Repository(find: (_) async => <WearAvailabilityProduct>[currentProduct]),
+    );
+    addTearDown(() async {
+      if (!oldLookup.isCompleted) {
+        oldLookup.complete(<WearAvailabilityProduct>[oldProduct]);
+      }
+      await replacement.dispose();
+      await authority.dispose();
+    });
+    await replacement.enterScreen(WearScreenId.availabilityDirectScan);
+    await replacement.handleBarcode(
+      WearScreenId.availabilityDirectScan,
+      '4600000000011',
+    );
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      authority.availabilityTask.nextOperationId,
+      greaterThan(oldOperationId),
+    );
+    expect(authority.availabilityTask.flow.selectedProduct, same(currentProduct));
+
+    oldLookup.complete(<WearAvailabilityProduct>[oldProduct]);
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(authority.availabilityTask.flow.selectedProduct, same(currentProduct));
+  });
 }
 
 WearAvailabilityRuntime _runtime(
@@ -128,9 +212,11 @@ WearAvailabilityProduct _product(int id, String name) {
 class _Repository implements WearAvailabilityRepository {
   _Repository({
     Future<List<WearAvailabilityProduct>> Function(String)? find,
+    this.products = const <WearAvailabilityProduct>[],
   }) : _find = find;
 
   final Future<List<WearAvailabilityProduct>> Function(String)? _find;
+  final List<WearAvailabilityProduct> products;
 
   @override
   Future<List<WearAvailabilityGroup>> getGroups() async =>
@@ -138,7 +224,7 @@ class _Repository implements WearAvailabilityRepository {
 
   @override
   Future<List<WearAvailabilityProduct>> getProductsByGroup(int groupId) async =>
-      const <WearAvailabilityProduct>[];
+      products;
 
   @override
   Future<List<WearAvailabilityProduct>> findProductsByBarcode(

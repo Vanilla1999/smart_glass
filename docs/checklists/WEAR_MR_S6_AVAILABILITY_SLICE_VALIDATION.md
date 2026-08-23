@@ -32,8 +32,8 @@ MR-S6 переносит в единый `WearRuntimeState`:
 - [ ] `wear_availability_runtime.dart` экспортирует adapter, а не старый owner.
 - [ ] Adapter не содержит writable groups/products/step/focus/count.
 - [ ] Reducer не вызывает repository, navigation, photo или print.
-- [ ] Все external operations имеют `sessionEpoch + operationId`.
-- [ ] Success и error проверяют одинаковые epoch/screen/operation guards.
+- [x] Все external operations имеют `sessionEpoch + operationId`; operation identity не переиспользуется после same-epoch adapter dispose/reset.
+- [x] Success и error проверяют одинаковые epoch/operation/busy guards и отклоняют stale result симметрично.
 - [ ] Screen change supersede все `availability.*` expected operations.
 - [ ] Same-screen widget re-entry не перезапускает активный effect.
 - [ ] List-changing result сбрасывает focus в допустимый индекс.
@@ -42,7 +42,7 @@ MR-S6 переносит в единый `WearRuntimeState`:
 - [ ] Completion перечитывает groups после repository mutation.
 - [ ] Auth/logout/terminal одним snapshot очищают printer, scan и availability.
 - [ ] Photo/print/fill Future не блокируют dispatch queue.
-- [ ] Executor lease деактивируется при dispose adapter.
+- [x] Executor lease деактивируется при dispose adapter; replacement adapter покрыт сценарием с заблокированным старым effect.
 
 ## Точечные тесты владельца
 
@@ -50,6 +50,7 @@ MR-S6 переносит в единый `WearRuntimeState`:
 flutter test \
   test/wear_runtime_availability_slice_test.dart \
   test/wear_availability_runtime_test.dart \
+  test/wear_runtime_availability_review_guards_test.dart \
   test/wear_runtime_stabilization_test.dart
 ```
 
