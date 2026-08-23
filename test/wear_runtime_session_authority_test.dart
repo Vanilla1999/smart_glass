@@ -118,6 +118,23 @@ void main() {
     expect(late.rejectReason, WearDispatchRejectReason.terminal);
   });
 
+  test('dispose terminalizes before ordinary callbacks can revive runtime',
+      () async {
+    final WearRuntimeAuthority authority = WearRuntimeAuthority();
+    await authority.authorize(user());
+
+    await authority.dispose();
+    final WearDispatchResult auth = await authority.authorize(user());
+    final WearDispatchResult runtime = await authority.setRuntimeActive(true);
+    final WearDispatchResult phone = await authority.setPhoneUiActive(true);
+
+    expect(authority.state.terminal, isTrue);
+    expect(authority.isAuthorized, isFalse);
+    expect(auth.rejectReason, WearDispatchRejectReason.terminal);
+    expect(runtime.rejectReason, WearDispatchRejectReason.terminal);
+    expect(phone.rejectReason, WearDispatchRejectReason.terminal);
+  });
+
   test('all business feature slices are aggregate-owned after MR-S6', () {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);

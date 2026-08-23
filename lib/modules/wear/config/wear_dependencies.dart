@@ -29,6 +29,7 @@ import 'package:smart_glasses/modules/wear/services/wear_scanner_runtime.dart';
 import 'package:smart_glasses/modules/wear/services/wear_barcode_dispatcher.dart';
 import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
 import 'package:smart_glasses/modules/wear/config/wear_session.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -65,18 +66,21 @@ class WearDependencies {
   late final WearScanRuntime wearScanRuntime;
   late final WearPrinterRuntime _wearPrinterRuntime;
   late final WearAvailabilityRuntime _wearAvailabilityRuntime;
-  final WearActualScreenStore actualScreenStore = WearActualScreenStore();
+  late final WearActualScreenStore actualScreenStore;
 
   /// Shared audio stream — один на оба голосовых сервиса.
   late final AudioStreamService audioStreamService;
 
   void _initVoiceServices() {
+    final WearRuntimeAuthority authority = WearSession.identityAuthority;
+    actualScreenStore = WearActualScreenStore(authority);
     audioStreamService = AudioStreamService(
       recordContinuousWav: voiceCaptureWavDiagnostics,
     );
     wearFlowController = WearFlowController(
       glassesOutput: FlutterWearGlassesOutput(),
       navigationOutput: NoopWearNavigationOutput(),
+      authority: authority,
       photoCapture: photoStore.captureLatestPhoto,
     );
     Future<void> navigate(

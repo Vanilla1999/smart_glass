@@ -91,7 +91,8 @@ class WearScanTaskSlice implements WearScanFeaturePayload {
     );
   }
 
-  WearScanTaskSlice reset() => WearScanTaskSlice.initial();
+  WearScanTaskSlice reset() =>
+      WearScanTaskSlice.initial().copyWith(nextOperationId: nextOperationId);
 
   ({WearScanTaskSlice task, int operationId}) allocateOperation() {
     final int operationId = nextOperationId + 1;

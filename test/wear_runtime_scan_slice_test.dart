@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smart_glasses/modules/wear/application/wear_scan_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
@@ -196,6 +197,84 @@ void main() {
     await _flush();
     expect(authority.scanTask.phase, WearScanTaskPhase.waiting);
     expect(authority.scanTask.status, isNull);
+  });
+
+  test('old same-epoch effect is stale after scan executor replacement',
+      () async {
+    final WearRuntimeAuthority authority = await _preparedAuthority();
+    addTearDown(authority.dispose);
+    final Completer<List<BarcodeProductInfo>> oldLookup =
+        Completer<List<BarcodeProductInfo>>();
+    final WearScanRuntime oldRuntime = WearScanRuntime(
+      authority: authority,
+      lookupBarcode: (_) => oldLookup.future,
+      printProduct: (_) async => 'unused',
+      navigate: (_, {extra, replaceCurrent = false}) async {},
+      showStatus: (_, __) async {},
+      delay: (_) async {},
+    );
+
+    await oldRuntime.enterScreen(WearScreenId.scanIdle);
+    await oldRuntime.handleBarcode(WearScreenId.scanIdle, '4600000000006');
+    final int oldOperationId = authority.state.expectedOperationId(
+      WearLookupBarcodeEffect.operationKind,
+    )!;
+    await oldRuntime.dispose();
+
+    final Completer<List<BarcodeProductInfo>> replacementLookup =
+        Completer<List<BarcodeProductInfo>>();
+    final WearScanRuntime replacementRuntime = WearScanRuntime(
+      authority: authority,
+      lookupBarcode: (_) => replacementLookup.future,
+      printProduct: (_) async => 'unused',
+      navigate: (_, {extra, replaceCurrent = false}) async {},
+      showStatus: (_, __) async {},
+      delay: (_) async {},
+    );
+    addTearDown(replacementRuntime.dispose);
+    await replacementRuntime.enterScreen(WearScreenId.scanIdle);
+    await replacementRuntime.handleBarcode(
+      WearScreenId.scanIdle,
+      '4600000000007',
+    );
+    final int replacementOperationId = authority.state.expectedOperationId(
+      WearLookupBarcodeEffect.operationKind,
+    )!;
+
+    expect(replacementOperationId, greaterThan(oldOperationId));
+    final WearDispatchResult staleSuccess = await authority.store.dispatch(
+      WearBarcodeLookupSucceeded(
+        sessionEpoch: authority.state.sessionEpoch,
+        operationId: oldOperationId,
+        products: const <BarcodeProductInfo>[],
+      ),
+    );
+    final WearDispatchResult staleError = await authority.store.dispatch(
+      WearBarcodeLookupFailed(
+        sessionEpoch: authority.state.sessionEpoch,
+        operationId: oldOperationId,
+        message: 'old error',
+      ),
+    );
+    expect(staleSuccess.rejectReason, WearDispatchRejectReason.staleOperation);
+    expect(staleError.rejectReason, WearDispatchRejectReason.staleOperation);
+    oldLookup.complete(<BarcodeProductInfo>[
+      BarcodeProductInfo(id: 10, name: 'Old product'),
+    ]);
+    await _flush();
+    expect(authority.scanTask.phase, WearScanTaskPhase.lookingUp);
+    expect(authority.scanTask.barcode, '4600000000007');
+    expect(
+      authority.state.expectedOperationId(
+        WearLookupBarcodeEffect.operationKind,
+      ),
+      replacementOperationId,
+    );
+
+    replacementLookup.complete(const <BarcodeProductInfo>[]);
+    await _flush();
+    expect(authority.scanTask.phase, WearScanTaskPhase.status);
+    expect(authority.scanTask.status?.title, 'Товар не найден');
   });
 }
 

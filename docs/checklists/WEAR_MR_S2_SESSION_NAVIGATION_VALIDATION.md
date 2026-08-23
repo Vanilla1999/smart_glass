@@ -15,6 +15,17 @@ Stack base: MR-S1 (`refactor/wear-runtime-store-shell`).
 | printer selection | `WearSession` | без изменений, legacy owner | удалится в MR-S4 |
 | feature state | feature runtimes | без изменений | MR-S4..MR-S6 |
 
+Production wiring verified statically:
+
+- `WearDependencies` injects `WearSession.identityAuthority` into both
+  `WearFlowController` and `WearActualScreenStore`;
+- `WearFlowController` writes lifecycle/navigation only through authority
+  intents and exposes legacy `WearFlowState` as a compatibility projection;
+- `WearActualScreenStore.confirm()` is an epoch-bound route-observation
+  adapter and owns no screen/revision fields;
+- detached and widget dispose invoke `WearRuntimeAuthority.terminate()`;
+- printer selection remains writable only in `WearSession` until MR-S4.
+
 ## Что проверить локально
 
 ```bash
@@ -78,6 +89,9 @@ flutter test \
 - `paused/hidden` переводят runtime в terminal;
 - повторная auth публикует второй event;
 - terminal intent оставляет открытый store admission;
+- `WearFlowController` создаёт собственные navigation request id/history;
+- actual-screen compatibility хранит writable screen/revision;
+- detached/dispose только выключает legacy controller без terminal authority;
 - old store implementation остаётся импортируемым параллельно payload-aware implementation.
 
 ## Ручная проверка позже

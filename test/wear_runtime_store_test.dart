@@ -310,6 +310,49 @@ void main() {
     expect(store.state.legacy.logicalScreen, WearScreenId.productSelect);
     expect(store.state.legacy.sourceRevision, 1);
   });
+
+  test('legacy mirror fails when its initial snapshot is rejected', () async {
+    final _LegacySource source = _LegacySource(snapshot(sourceRevision: 0));
+    final WearRuntimeStore store = WearRuntimeStore(
+      initialState: WearRuntimeState.initial(
+        legacy: snapshot(sourceRevision: 1),
+      ),
+      reducer: const WearRuntimeShellReducer(),
+    );
+    final WearLegacySnapshotMirror mirror = WearLegacySnapshotMirror(
+      source: source,
+      store: store,
+    );
+    addTearDown(source.dispose);
+    addTearDown(mirror.dispose);
+    addTearDown(store.dispose);
+
+    await expectLater(mirror.start(), throwsStateError);
+  });
+
+  test('legacy mirror reports rejected updates after attachment', () async {
+    final _LegacySource source = _LegacySource(snapshot(sourceRevision: 1));
+    final WearRuntimeStore store = WearRuntimeStore(
+      initialState: WearRuntimeState.initial(
+        legacy: snapshot(sourceRevision: 0),
+      ),
+      reducer: const WearRuntimeShellReducer(),
+    );
+    final WearLegacySnapshotMirror mirror = WearLegacySnapshotMirror(
+      source: source,
+      store: store,
+    );
+    addTearDown(source.dispose);
+    addTearDown(mirror.dispose);
+    addTearDown(store.dispose);
+
+    await mirror.start();
+    final Future<Object> error = mirror.errors.first;
+    source.emit(snapshot(sourceRevision: 0));
+
+    expect(await error, isA<StateError>());
+    expect(store.state.legacy.sourceRevision, 1);
+  });
 }
 
 class _TestEffect extends WearEffect {

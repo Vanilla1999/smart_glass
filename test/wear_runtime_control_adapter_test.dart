@@ -44,6 +44,28 @@ void main() {
     expect(authority.controls.voice.acceptsCommands, isTrue);
   });
 
+  test('voice adapter reports aggregate command admission explicitly', () async {
+    final WearRuntimeAuthority authority = WearRuntimeAuthority();
+    final WearRuntimeControlAdapter adapter =
+        WearRuntimeControlAdapter(authority);
+    addTearDown(authority.dispose);
+
+    await adapter.observeVoiceState(
+      const VoiceState(
+        phase: VoicePhase.ready,
+        captureEpoch: 1,
+        attempt: 0,
+        reason: 'ready-but-blocked',
+        lastTransitionAt: 1,
+      ),
+      commandsEnabled: false,
+    );
+
+    expect(authority.controls.voice.phase, WearVoiceRuntimePhase.ready);
+    expect(authority.controls.voice.commandsEnabled, isFalse);
+    expect(authority.controls.voice.acceptsCommands, isFalse);
+  });
+
   test('aggregate scanner selector preserves stabilized route semantics',
       () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
