@@ -183,7 +183,6 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen>
     );
     if (_selectedButtonIndex == index) return;
     _flow.setContinueScanFocusedIndex(index);
-    setState(() => _selectedButtonIndex = index);
   }
 
   @override
