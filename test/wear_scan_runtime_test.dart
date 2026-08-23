@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smart_glasses/modules/wear/application/wear_product_select_args.dart';
 import 'package:smart_glasses/modules/wear/application/wear_scan_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_status_state.dart';
@@ -10,7 +11,6 @@ import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/scan/wear_product_select_screen.dart';
 
 void main() {
   setUp(() {

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_product_select_args.dart';
 import 'package:smart_glasses/modules/wear/application/wear_scan_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
@@ -15,15 +16,6 @@ import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_lis
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
-
-class WearProductSelectArgs {
-  const WearProductSelectArgs({
-    required this.barcode,
-    required this.products,
-  });
-  final String barcode;
-  final List<BarcodeProductInfo> products;
-}
 
 class WearProductSelectScreen extends StatefulWidget {
   const WearProductSelectScreen({super.key, required this.args});

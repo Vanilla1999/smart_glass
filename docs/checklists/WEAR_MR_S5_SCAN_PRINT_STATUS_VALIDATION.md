@@ -33,6 +33,8 @@ For lookup, print, presenter, delay and navigation results verify all of:
 - [ ] Success and error paths use equivalent admission.
 - [ ] Session clear/authorization/terminal reset clears expected operations.
 - [ ] A late widget route attachment cannot clear an active lookup or print.
+- [ ] Scan operation identity remains monotonic across same-epoch adapter reset/disposal and replacement.
+- [ ] A blocked old executor effect cannot satisfy the replacement executor's lookup/print/status/navigation expectation.
 
 ## Functional scenarios
 
@@ -52,6 +54,7 @@ For lookup, print, presenter, delay and navigation results verify all of:
 - [ ] Voice/touch product selection dispatch the same semantic intent.
 - [ ] Adapter disposal deactivates only the scan executor and resets only scan state.
 - [ ] Replacing an inactive scan executor is allowed; two live scan executors are rejected.
+- [ ] Specification test covers a blocked old effect completing after same-epoch executor replacement.
 
 ## Suggested local commands
 
