@@ -4,6 +4,7 @@ import 'dart:collection';
 import 'package:multi_scanner/multi_scanner.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_adapter.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_semantic_inputs.dart';
 
@@ -86,12 +87,17 @@ class _QueuedBarcode {
 
 class WearBarcodeDispatcher implements MultiScannerDelegate {
   WearBarcodeDispatcher({
-    required WearFlowController flowController,
+    WearRuntimeAuthority? authority,
+    WearFlowController? flowController,
     MultiScanner? scanner,
-  })  : _flowController = flowController,
+  })  : assert(
+          authority != null || flowController != null,
+          'WearRuntimeAuthority is required',
+        ),
+        _authority = authority ?? flowController!.authority,
         _scanner = scanner ?? MultiScanner.last();
 
-  final WearFlowController _flowController;
+  final WearRuntimeAuthority _authority;
   final MultiScanner _scanner;
   late final WearBarcodeSerialQueue _queue = WearBarcodeSerialQueue(
     handleBarcode: (String _) async => false,
@@ -102,7 +108,7 @@ class WearBarcodeDispatcher implements MultiScannerDelegate {
 
   void start() {
     if (_started) return;
-    _controlAdapter = WearRuntimeControlAdapter(_flowController.authority);
+    _controlAdapter = WearRuntimeControlAdapter(_authority);
     _scanner.addDelegate(this);
     _started = true;
   }
@@ -119,19 +125,27 @@ class WearBarcodeDispatcher implements MultiScannerDelegate {
 
   @override
   bool? onScanEvent(String payload) {
-    final controls = _flowController.authority.controls.scanner;
+    final controls = _authority.controls.scanner;
     if (!_started || !controls.barcodeAdmissionEnabled) {
       return false;
     }
     final WearRuntimeControlAdapter? callback = _controlAdapter;
     if (callback == null) return false;
-    final WearScreenId screen = _flowController.state.screen;
+
+    // Screen and epoch are captured from one committed aggregate snapshot.
+    // Queued work cannot be re-attributed to a newer session or route.
+    final int sessionEpoch = _authority.state.sessionEpoch;
+    final WearScreenId screen =
+        _authority.payload.navigation.logicalScreen;
+    if (callback.sessionEpoch != sessionEpoch) return false;
+
     final int deliveryId = ++_nextDeliveryId;
     final bool accepted = _queue.addWithHandler(
       payload,
       (String value) => _deliverBarcode(
         value,
         callback: callback,
+        sessionEpoch: sessionEpoch,
         screen: screen,
         deliveryId: deliveryId,
       ),
@@ -151,21 +165,25 @@ class WearBarcodeDispatcher implements MultiScannerDelegate {
   Future<bool> _deliverBarcode(
     String payload, {
     required WearRuntimeControlAdapter callback,
+    required int sessionEpoch,
     required WearScreenId screen,
     required int deliveryId,
   }) async {
+    if (callback.sessionEpoch != sessionEpoch) return false;
     final receipt = await callback.acceptBarcodeDelivery(
       deliveryId: deliveryId,
       logicalScreen: screen,
     );
-    if (!receipt.accepted) return false;
-    final semanticReceipt =
-        await _flowController.authority.dispatchSemanticInput(
+    if (!receipt.accepted || receipt.sessionEpoch != sessionEpoch) return false;
+
+    final semanticReceipt = await _authority.dispatchSemanticInput(
       kind: WearSemanticInputKind.barcode,
       modality: WearInputModality.barcode,
       expectedScreen: screen,
+      expectedSessionEpoch: sessionEpoch,
       value: payload,
     );
-    return semanticReceipt.accepted;
+    return semanticReceipt.accepted &&
+        semanticReceipt.sessionEpoch == sessionEpoch;
   }
 }
