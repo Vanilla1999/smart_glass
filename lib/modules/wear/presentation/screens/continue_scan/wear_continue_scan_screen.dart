@@ -38,7 +38,6 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _flow.enterScreen(WearScreenId.continueScan);
     _selectedButtonIndex = _projectedFocus(_authority.state);
     _screenActionsRegistration = _flow.registerScreenActions(
       WearScreenId.continueScan,
@@ -172,7 +171,6 @@ class _WearContinueScanScreenState extends State<WearContinueScanScreen>
       _isActionInProgress = false;
       return;
     }
-    _flow.enterScreen(WearScreenId.menu);
     context.go(WearMenuScreen.route);
   }
 
