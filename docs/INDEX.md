@@ -24,6 +24,7 @@ This file indexes canonical, reviewable documentation for the `smart_glasses` pr
 
 - [WEAR_RUNTIME_STABILIZATION_VALIDATION.md](checklists/WEAR_RUNTIME_STABILIZATION_VALIDATION.md) — Local and T2151 acceptance checks for runtime barcode/scanner stabilization merged in PR #1
 - [WEAR_SINGLE_STATE_MR_REVIEW.md](checklists/WEAR_SINGLE_STATE_MR_REVIEW.md) — Required ownership, async-safety, dispatch, projection and test review template for each single-state migration MR
+- [WEAR_MR_S7_INPUT_UI_EFFECTS_VALIDATION.md](checklists/WEAR_MR_S7_INPUT_UI_EFFECTS_VALIDATION.md) — MR-S7 ownership, unified semantic-input and bounded UI-effect validation record
 
 ## Non-canonical notes
 
@@ -33,5 +34,5 @@ This file indexes canonical, reviewable documentation for the `smart_glasses` pr
 
 ## Roadmap
 
-- [WEAR_SINGLE_STATE_RUNTIME_PLAN.md](WEAR_SINGLE_STATE_RUNTIME_PLAN.md) — Active Wear state-ownership roadmap. The next code step is MR-S1: store shell, immutable snapshot and version contract
+- [WEAR_SINGLE_STATE_RUNTIME_PLAN.md](WEAR_SINGLE_STATE_RUNTIME_PLAN.md) — Active Wear state-ownership roadmap through MR-S9
 - [NATIVE_UAC4_VOICE_MIGRATION_PLAN.md](NATIVE_UAC4_VOICE_MIGRATION_PLAN.md) — Active native UAC4/SSP audio roadmap. Keep audio transport work separate from Wear state-ownership MRs unless a dependency is explicitly proven

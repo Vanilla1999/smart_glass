@@ -9,3 +9,4 @@ export 'wear_runtime_printer_slice.dart';
 export 'wear_runtime_scan_authority.dart';
 export 'wear_runtime_scan_sequencing_reducer.dart';
 export 'wear_runtime_scan_slice.dart';
+export 'wear_runtime_semantic_inputs.dart';

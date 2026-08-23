@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_semantic_inputs.dart';
 
 abstract interface class WearFeaturePayload {}
 
@@ -214,6 +215,7 @@ class WearAggregatePayload implements WearRuntimePayload {
     required this.features,
     required this.controls,
     required this.presentation,
+    required this.uiEffects,
   });
 
   factory WearAggregatePayload.initial({
@@ -227,6 +229,7 @@ class WearAggregatePayload implements WearRuntimePayload {
       features: const WearLegacyFeaturePayload(),
       controls: controls,
       presentation: const WearLegacyPresentationPayload(),
+      uiEffects: WearUiEffectSlice(),
     );
   }
 
@@ -236,6 +239,7 @@ class WearAggregatePayload implements WearRuntimePayload {
   final WearFeaturePayload features;
   final WearControlPayload controls;
   final WearPresentationPayload presentation;
+  final WearUiEffectSlice uiEffects;
 
   WearAggregatePayload copyWith({
     WearSessionSlice? session,
@@ -244,6 +248,7 @@ class WearAggregatePayload implements WearRuntimePayload {
     WearFeaturePayload? features,
     WearControlPayload? controls,
     WearPresentationPayload? presentation,
+    WearUiEffectSlice? uiEffects,
   }) {
     return WearAggregatePayload(
       session: session ?? this.session,
@@ -252,6 +257,7 @@ class WearAggregatePayload implements WearRuntimePayload {
       features: features ?? this.features,
       controls: controls ?? this.controls,
       presentation: presentation ?? this.presentation,
+      uiEffects: uiEffects ?? this.uiEffects,
     );
   }
 
@@ -266,6 +272,7 @@ class WearAggregatePayload implements WearRuntimePayload {
       ),
       navigation: navigation.terminalized(),
       controls: controls.toTerminalControls(),
+      uiEffects: WearUiEffectSlice(nextEffectId: uiEffects.nextEffectId),
     );
   }
 }

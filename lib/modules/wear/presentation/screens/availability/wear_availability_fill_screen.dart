@@ -10,6 +10,7 @@ import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_in
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
@@ -119,10 +120,35 @@ class _WearAvailabilityFillScreenState
   }
 
   Future<void> _manualInput() async {
+    final WearRuntimeAuthority authority =
+        WearDependencies.I.wearFlowController.authority;
+    final WearDispatchResult requested = await authority.dispatchSemanticInput(
+      kind: WearSemanticInputKind.requestUiEffect,
+      modality: WearInputModality.manual,
+      expectedScreen: WearScreenId.availabilityFill,
+      uiEffectKind: WearUiEffectKind.manualBarcodeInput,
+    );
+    if (!requested.accepted || !mounted) return;
+    final WearUiEffect effect = authority.payload.uiEffects.effects.singleWhere(
+      (WearUiEffect value) =>
+          value.kind == WearUiEffectKind.manualBarcodeInput,
+    );
+    final WearDispatchResult claimed = await authority.claimUiEffect(effect);
+    if (!claimed.accepted || !mounted) return;
     final String? code = await context.push<String>(
       WearPrintCodeInputScreen.route,
     );
-    if (code == null || code.trim().isEmpty) return;
-    await WearDependencies.I.wearFlowController.handleBarcode(code);
+    final String value = code?.trim() ?? '';
+    if (value.isEmpty) {
+      await authority.cancelUiEffect(effect);
+      return;
+    }
+    await authority.completeUiEffect(effect, value: value);
+    await authority.dispatchSemanticInput(
+      kind: WearSemanticInputKind.barcode,
+      modality: WearInputModality.manual,
+      expectedScreen: WearScreenId.availabilityFill,
+      value: value,
+    );
   }
 }
