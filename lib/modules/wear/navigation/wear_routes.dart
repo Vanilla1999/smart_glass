@@ -1,20 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:go_router/go_router.dart';
-import 'package:smart_glasses/modules/wear/application/wear_product_select_args.dart';
+import 'package:smart_glasses/modules/wear/application/voice_clarification_args.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_flow_state.dart';
-import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_group.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
-import 'package:smart_glasses/modules/wear/application/voice_clarification_args.dart';
 import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_input_screen.dart';
-import 'package:smart_glasses/modules/wear/presentation/screens/continue_scan/wear_continue_scan_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_check_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_direct_scan_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_fill_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_group_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_interaction_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_product_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/continue_scan/wear_continue_scan_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/help/wear_help_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/home/wear_home_confirm_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/wear_main_screen.dart';
@@ -103,21 +101,13 @@ class WearRoute {
         GoRoute(
           path: WearScanIdleScreen.route,
           builder: (BuildContext context, GoRouterState state) {
-            final WearPrinterSelection? selection =
-                state.extra is WearPrinterSelection
-                    ? state.extra! as WearPrinterSelection
-                    : null;
-            return WearScanIdleScreen(printers: selection);
+            return const WearScanIdleScreen();
           },
         ),
         GoRoute(
           path: WearProductSelectScreen.route,
           builder: (BuildContext context, GoRouterState state) {
-            final WearProductSelectArgs? args =
-                state.extra is WearProductSelectArgs
-                    ? state.extra! as WearProductSelectArgs
-                    : null;
-            return WearProductSelectScreen(args: args);
+            return const WearProductSelectScreen();
           },
         ),
         GoRoute(
