@@ -130,8 +130,13 @@ class WearBarcodeDispatcher implements MultiScannerDelegate {
 
   @override
   bool? onScanEvent(String payload) {
+    final aggregate = _authority.payload;
     final controls = _authority.controls.scanner;
-    if (!_started || !controls.barcodeAdmissionEnabled) {
+    if (!_started ||
+        _authority.state.terminal ||
+        aggregate.lifecycle.terminal ||
+        !aggregate.lifecycle.runtimeActive ||
+        !controls.barcodeAdmissionEnabled) {
       return false;
     }
     final WearRuntimeControlAdapter? callback = _controlAdapter;
@@ -140,9 +145,11 @@ class WearBarcodeDispatcher implements MultiScannerDelegate {
     // Screen and epoch are captured from one committed aggregate snapshot.
     // Queued work cannot be re-attributed to a newer session or route.
     final int sessionEpoch = _authority.state.sessionEpoch;
-    final WearScreenId screen =
-        _authority.payload.navigation.logicalScreen;
-    if (callback.sessionEpoch != sessionEpoch) return false;
+    final WearScreenId screen = aggregate.navigation.logicalScreen;
+    if (callback.sessionEpoch != sessionEpoch ||
+        controls.expectedLogicalScreen != screen) {
+      return false;
+    }
 
     final int deliveryId = ++_nextDeliveryId;
     final bool accepted = _queue.addWithHandler(
