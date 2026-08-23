@@ -26,12 +26,15 @@ class WearRuntimeControlAdapter {
 
   int get sessionEpoch => _sessionEpoch;
 
-  Future<WearDispatchResult> observeVoiceState(VoiceState state) {
+  Future<WearDispatchResult> observeVoiceState(
+    VoiceState state, {
+    bool? commandsEnabled,
+  }) {
     return _authority.observeVoiceFromEpoch(
       sessionEpoch: _sessionEpoch,
       observationRevision: ++_voiceObservationRevision,
       phase: _mapVoicePhase(state.phase),
-      commandsEnabled: state.acceptsCommands,
+      commandsEnabled: commandsEnabled ?? state.acceptsCommands,
       captureEpoch: state.captureEpoch,
       error: state.lastError,
     );
