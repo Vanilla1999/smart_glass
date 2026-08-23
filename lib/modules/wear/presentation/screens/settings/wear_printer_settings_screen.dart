@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/services/wear_printer_status_service.dart';
 
 class WearPrinterSettingsScreen extends StatefulWidget {
@@ -18,14 +18,14 @@ class WearPrinterSettingsScreen extends StatefulWidget {
 class _WearPrinterSettingsScreenState extends State<WearPrinterSettingsScreen> {
   final WearPrinterStatusService _statusService =
       const WearPrinterStatusService();
+  final WearFlowController _flow = WearDependencies.I.wearFlowController;
   late final WearScreenActionRegistration _screenActionsRegistration;
   bool _checking = false;
 
   @override
   void initState() {
     super.initState();
-    _screenActionsRegistration =
-        WearDependencies.I.wearFlowController.registerScreenActions(
+    _screenActionsRegistration = _flow.registerScreenActions(
       WearScreenId.printerSettings,
       WearScreenActionHandler(onSelect: _refresh),
     );
@@ -34,8 +34,7 @@ class _WearPrinterSettingsScreenState extends State<WearPrinterSettingsScreen> {
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController
-        .unregisterScreenActions(_screenActionsRegistration);
+    _flow.unregisterScreenActions(_screenActionsRegistration);
     super.dispose();
   }
 
@@ -45,8 +44,8 @@ class _WearPrinterSettingsScreenState extends State<WearPrinterSettingsScreen> {
     final bool available = await _statusService.isSelectedPrinterAvailable();
     if (!mounted) return;
     setState(() => _checking = false);
-    if (available && context.canPop()) {
-      context.pop();
+    if (available) {
+      await _flow.handleControllerCommand(WearVoiceCommand.back);
     }
   }
 
