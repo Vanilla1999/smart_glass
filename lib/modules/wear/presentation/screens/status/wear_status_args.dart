@@ -6,7 +6,7 @@ class WearStatusScreenArgs {
   const WearStatusScreenArgs({
     required this.kind,
     required this.title,
-    required this.message,
+    this.message = '',
     this.details,
     this.autoAfter,
     this.autoRoute,
