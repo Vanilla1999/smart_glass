@@ -92,7 +92,10 @@ class _WearSettingsScreenState extends ConsumerState<WearSettingsScreen> {
   }
 
   Future<void> _switchUser() async {
-    await WearDependencies.I.authority.clearSession();
+    final result = await WearDependencies.I.authority.clearSession();
+    if (result.accepted) {
+      await _flow.flushPendingNavigation();
+    }
   }
 
   Future<void> _switchDB() {
