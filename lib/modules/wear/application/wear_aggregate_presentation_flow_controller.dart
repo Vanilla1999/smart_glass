@@ -1,7 +1,5 @@
 import 'dart:async';
 
-import 'package:smart_glasses/modules/wear/application/ports/wear_glasses_output.dart';
-import 'package:smart_glasses/modules/wear/application/ports/wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
@@ -21,12 +19,15 @@ class WearAggregatePresentationFlowController extends WearFlowController {
   WearAggregatePresentationFlowController({
     required super.glassesOutput,
     required super.navigationOutput,
-    required WearRuntimeAuthority authority,
+    required super.authority,
     super.flashlightToggle,
     super.photoCapture,
-  }) : super(authority: authority);
+  }) {
+    _authorityStateSub = this.authority.states.listen(_onAuthorityState);
+  }
 
   Future<void> _presentationCommandTail = Future<void>.value();
+  late final StreamSubscription<WearRuntimeState> _authorityStateSub;
 
   @override
   WearFlowState get state => _projectCompatibilityFocus(super.state);
@@ -42,7 +43,6 @@ class WearAggregatePresentationFlowController extends WearFlowController {
   }) async {
     final int? itemCount = _itemCount(screen);
     if (itemCount == null ||
-        !authority.payload.lifecycle.runtimeActive ||
         authority.payload.navigation.logicalScreen != screen) {
       return false;
     }
@@ -133,12 +133,12 @@ class WearAggregatePresentationFlowController extends WearFlowController {
     final WearScreenId expectedScreen =
         authority.payload.navigation.logicalScreen;
     if (!_ownsPresentationFocus(expectedScreen) ||
-        !_isFocusDependentCommand(command)) {
+        !_isAggregatePresentationCommand(expectedScreen, command)) {
       return super.handleVoiceCommand(command);
     }
     return _enqueuePresentationCommand(() async {
       if (authority.payload.navigation.logicalScreen != expectedScreen) return;
-      await _handleFocusDependentCommand(
+      await _handleAggregatePresentationCommand(
         command,
         expectedScreen,
         WearInputModality.voice,
@@ -150,7 +150,7 @@ class WearAggregatePresentationFlowController extends WearFlowController {
   Future<void> handleControllerCommand(WearVoiceCommand command) {
     final WearScreenId screen = authority.payload.navigation.logicalScreen;
     if (!_ownsPresentationFocus(screen) ||
-        !_isFocusDependentCommand(command)) {
+        !_isAggregatePresentationCommand(screen, command)) {
       return super.handleControllerCommand(command);
     }
     return _enqueuePresentationCommand(() async {
@@ -159,7 +159,7 @@ class WearAggregatePresentationFlowController extends WearFlowController {
         await super.handleControllerCommand(command);
         return;
       }
-      await _handleFocusDependentCommand(
+      await _handleAggregatePresentationCommand(
         command,
         current,
         WearInputModality.button,
@@ -167,7 +167,7 @@ class WearAggregatePresentationFlowController extends WearFlowController {
     });
   }
 
-  Future<void> _handleFocusDependentCommand(
+  Future<void> _handleAggregatePresentationCommand(
     WearVoiceCommand command,
     WearScreenId screen,
     WearInputModality modality,
@@ -191,6 +191,43 @@ class WearAggregatePresentationFlowController extends WearFlowController {
         return;
       case WearVoiceCommand.select:
         await _selectCommittedFocus(screen, current, modality);
+        return;
+      case WearVoiceCommand.continueScan:
+        if (screen != WearScreenId.continueScan) {
+          await _delegateCommand(command, modality);
+          return;
+        }
+        if (await commitPresentationFocus(screen, 0, modality: modality)) {
+          await _delegateCommand(command, modality);
+        }
+        return;
+      case WearVoiceCommand.finish:
+        if (screen != WearScreenId.continueScan) {
+          await _delegateCommand(command, modality);
+          return;
+        }
+        if (await commitPresentationFocus(screen, 1, modality: modality)) {
+          await _delegateCommand(command, modality);
+        }
+        return;
+      case WearVoiceCommand.yes:
+        if (screen != WearScreenId.homeConfirm) {
+          await _delegateCommand(command, modality);
+          return;
+        }
+        if (await commitPresentationFocus(screen, 0, modality: modality)) {
+          await _delegateCommand(command, modality);
+        }
+        return;
+      case WearVoiceCommand.no:
+      case WearVoiceCommand.cancel:
+        if (screen != WearScreenId.homeConfirm) {
+          await _delegateCommand(command, modality);
+          return;
+        }
+        if (await commitPresentationFocus(screen, 1, modality: modality)) {
+          await _delegateCommand(command, modality);
+        }
         return;
       default:
         await _delegateCommand(command, modality);
@@ -259,6 +296,19 @@ class WearAggregatePresentationFlowController extends WearFlowController {
     return completer.future;
   }
 
+  void _onAuthorityState(WearRuntimeState runtimeState) {
+    final WearAggregatePayload aggregate =
+        runtimeState.payloadAs<WearAggregatePayload>();
+    final WearScreenId screen = aggregate.navigation.logicalScreen;
+    final int? itemCount = _itemCount(screen);
+    if (itemCount == null) return;
+    final WearPresentationFocusSlice presentation =
+        aggregate.presentation as WearPresentationFocusSlice;
+    final int index =
+        (presentation.focusFor(screen) ?? 0).clamp(0, itemCount - 1);
+    _mirrorCommittedFocus(screen, index);
+  }
+
   void _prepareCompatibilityEntry(WearScreenId screen) {
     if (authority.payload.navigation.logicalScreen != screen ||
         !_ownsPresentationFocus(screen)) {
@@ -268,6 +318,7 @@ class WearAggregatePresentationFlowController extends WearFlowController {
   }
 
   void _mirrorCommittedFocus(WearScreenId screen, int index) {
+    if (_legacyFocus(screen) == index) return;
     switch (screen) {
       case WearScreenId.menu:
         super.setMenuFocusedIndex(index);
@@ -286,19 +337,27 @@ class WearAggregatePresentationFlowController extends WearFlowController {
     }
   }
 
+  int? _legacyFocus(WearScreenId screen) {
+    final WearFlowState legacy = super.state;
+    return switch (screen) {
+      WearScreenId.menu => legacy.menuFocusedIndex,
+      WearScreenId.homeConfirm => legacy.homeConfirmFocusedIndex,
+      WearScreenId.continueScan => legacy.continueScanFocusedIndex,
+      WearScreenId.availabilityInteraction =>
+        legacy.availabilityInteractionFocusedIndex,
+      _ => null,
+    };
+  }
+
   WearFlowState _projectCompatibilityFocus(WearFlowState value) {
     final WearPresentationFocusSlice presentation =
         authority.payload.presentation as WearPresentationFocusSlice;
-    final int menu = presentation.focusFor(WearScreenId.menu) ??
-        value.menuFocusedIndex;
-    final int home = presentation.focusFor(WearScreenId.homeConfirm) ??
-        value.homeConfirmFocusedIndex;
+    final int menu = presentation.focusFor(WearScreenId.menu) ?? 0;
+    final int home = presentation.focusFor(WearScreenId.homeConfirm) ?? 0;
     final int continueScan =
-        presentation.focusFor(WearScreenId.continueScan) ??
-            value.continueScanFocusedIndex;
+        presentation.focusFor(WearScreenId.continueScan) ?? 0;
     final int availability =
-        presentation.focusFor(WearScreenId.availabilityInteraction) ??
-            value.availabilityInteractionFocusedIndex;
+        presentation.focusFor(WearScreenId.availabilityInteraction) ?? 0;
     final int focused = switch (value.screen) {
       WearScreenId.menu => menu,
       WearScreenId.homeConfirm => home,
@@ -337,10 +396,26 @@ class WearAggregatePresentationFlowController extends WearFlowController {
   bool _ownsPresentationFocus(WearScreenId screen) =>
       _itemCount(screen) != null;
 
-  bool _isFocusDependentCommand(WearVoiceCommand command) =>
-      command == WearVoiceCommand.up ||
-      command == WearVoiceCommand.down ||
-      command == WearVoiceCommand.select;
+  bool _isAggregatePresentationCommand(
+    WearScreenId screen,
+    WearVoiceCommand command,
+  ) {
+    if (command == WearVoiceCommand.up ||
+        command == WearVoiceCommand.down ||
+        command == WearVoiceCommand.select) {
+      return true;
+    }
+    if (screen == WearScreenId.continueScan) {
+      return command == WearVoiceCommand.continueScan ||
+          command == WearVoiceCommand.finish;
+    }
+    if (screen == WearScreenId.homeConfirm) {
+      return command == WearVoiceCommand.yes ||
+          command == WearVoiceCommand.no ||
+          command == WearVoiceCommand.cancel;
+    }
+    return false;
+  }
 
   WearScreenId _menuTarget(int index) {
     return switch (index) {
@@ -350,5 +425,11 @@ class WearAggregatePresentationFlowController extends WearFlowController {
       3 => WearScreenId.settings,
       _ => WearScreenId.printerSelect,
     };
+  }
+
+  @override
+  Future<void> dispose() async {
+    await _authorityStateSub.cancel();
+    await super.dispose();
   }
 }
