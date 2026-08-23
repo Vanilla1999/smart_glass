@@ -134,18 +134,28 @@ class WearRuntimeProjection {
         aggregate.features as WearRuntimeFeaturePayload;
     final WearRuntimeControlPayload controls =
         aggregate.controls as WearRuntimeControlPayload;
+    final WearPresentationFocusSlice presentation =
+        aggregate.presentation as WearPresentationFocusSlice;
     final WearGlassesPayload base = switch (screen) {
-      WearScreenId.menu => WearGlassesPayload.menu(),
-      WearScreenId.homeConfirm => WearGlassesPayload.homeConfirm(),
+      WearScreenId.menu => WearGlassesPayload.menu(
+          selectedIndex: presentation.focusFor(screen),
+        ),
+      WearScreenId.homeConfirm => WearGlassesPayload.homeConfirm(
+          selectedIndex: presentation.focusFor(screen),
+        ),
       WearScreenId.help => WearGlassesPayload.help(),
-      WearScreenId.continueScan => WearGlassesPayload.continueScan(),
+      WearScreenId.continueScan => WearGlassesPayload.continueScan(
+          selectedIndex: presentation.focusFor(screen),
+        ),
       WearScreenId.printerSelect => _printer(features.printer),
       WearScreenId.scanIdle ||
       WearScreenId.productSelect ||
       WearScreenId.status =>
         _scan(features.scan as WearScanTaskSlice),
       WearScreenId.availabilityInteraction =>
-        WearAvailabilityGlassesPayloads.interactionTypes(),
+        WearAvailabilityGlassesPayloads.interactionTypes(
+          selectedIndex: presentation.focusFor(screen),
+        ),
       WearScreenId.availabilityGroup ||
       WearScreenId.availabilityProduct ||
       WearScreenId.availabilityDirectScan ||
