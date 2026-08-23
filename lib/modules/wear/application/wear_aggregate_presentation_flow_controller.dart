@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:smart_glasses/modules/wear/application/voice_clarification_args.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
@@ -13,7 +14,7 @@ import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 /// controller is updated. The inherited `WearFlowState` fields are therefore a
 /// read-only compatibility mirror, not the source of a focus transition.
 ///
-/// This facade is intentionally stateless with respect to business data. It can
+/// This facade is intentionally stateless with respect to business focus. It can
 /// be removed together with the legacy presentation fields in MR-S12.
 class WearAggregatePresentationFlowController extends WearFlowController {
   WearAggregatePresentationFlowController({
@@ -70,6 +71,24 @@ class WearAggregatePresentationFlowController extends WearFlowController {
     return true;
   }
 
+  /// Updates the still-legacy clarification context after a semantic
+  /// clarification action. Widget attachment itself never calls `enterScreen`.
+  ///
+  /// The context/focus/notice ownership is intentionally transferred to the
+  /// aggregate presentation slice in MR-S12; this method is the bounded bridge
+  /// for nested clarification and back-history until that transfer.
+  bool updateVoiceClarificationContext(VoiceClarificationArgs args) {
+    if (authority.payload.navigation.logicalScreen !=
+        WearScreenId.voiceClarification) {
+      return false;
+    }
+    super.enterScreen(
+      WearScreenId.voiceClarification,
+      extra: args,
+    );
+    return true;
+  }
+
   @override
   void enterScreen(WearScreenId screen, {Object? extra}) {
     _prepareCompatibilityEntry(screen);
@@ -82,8 +101,10 @@ class WearAggregatePresentationFlowController extends WearFlowController {
     Object? extra,
     required bool canPop,
   }) {
-    _prepareCompatibilityEntry(screen);
-    super.observeRoute(screen, extra: extra, canPop: canPop);
+    // A Flutter route is an observation only. Production WearModuleApp observes
+    // it directly through the epoch-bound navigation adapter. Retained callers
+    // get the same semantics and cannot re-enter a business feature.
+    unawaited(authority.navigationAdapter().observePhoneRoute(screen));
   }
 
   @override
