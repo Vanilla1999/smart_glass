@@ -69,6 +69,7 @@ void main() {
       final WearRuntimeControlAdapter controls =
           WearRuntimeControlAdapter(authority);
 
+      expect((await authority.setRuntimeActive(true)).accepted, isTrue);
       expect((await authority.setPhoneUiActive(true)).accepted, isTrue);
       expect(
         (await navigation.observePhoneRoute(WearScreenId.main)).accepted,
@@ -112,6 +113,7 @@ void main() {
       final WearRuntimeControlAdapter controls =
           WearRuntimeControlAdapter(authority);
 
+      await authority.setRuntimeActive(true);
       await authority.setPhoneUiActive(true);
       await navigation.observePhoneRoute(WearScreenId.help);
       await controls.observeScannerPreparing();
@@ -129,6 +131,37 @@ void main() {
         ).barcodeAdmissionEnabled,
         isFalse,
       );
+    });
+
+    test('inactive runtime closes pre-auth preparation and admission', () async {
+      final WearRuntimeAuthority authority = WearRuntimeAuthority(
+        initialScreen: WearScreenId.main,
+      );
+      addTearDown(authority.dispose);
+      final WearRuntimeNavigationAdapter navigation =
+          authority.navigationAdapter();
+      final WearRuntimeControlAdapter controls =
+          WearRuntimeControlAdapter(authority);
+
+      await authority.setRuntimeActive(true);
+      await authority.setPhoneUiActive(true);
+      await navigation.observePhoneRoute(WearScreenId.main);
+      await controls.observeScannerPreparing();
+      await controls.observeScannerPrepared();
+      await controls.evaluateScannerAdmission(
+        logicalScreen: WearScreenId.main,
+        screenAcceptsBarcode: true,
+      );
+      expect(authority.controls.scanner.barcodeAdmissionEnabled, isTrue);
+
+      await authority.setRuntimeActive(false);
+      final WearScannerRuntimeDecision decision =
+          resolveWearScannerDecisionFromState(
+        authority.state,
+        currentScreenAcceptsBarcode: true,
+      );
+      expect(decision.hardwarePrepared, isFalse);
+      expect(decision.barcodeAdmissionEnabled, isFalse);
     });
 
     test('old scanner adapter cannot admit a barcode after epoch rollover',
