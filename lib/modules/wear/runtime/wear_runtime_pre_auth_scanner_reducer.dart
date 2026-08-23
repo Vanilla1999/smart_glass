@@ -6,9 +6,10 @@ import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 /// Preserves badge-scanner admission before a Wear session exists.
 ///
 /// The ordinary control reducer intentionally requires an authorized runtime.
-/// Badge authorization is the one exception: it is allowed only when both the
-/// aggregate logical screen and observed phone route are `main`, the hardware is
-/// prepared, and the registered screen capability accepts a barcode.
+/// Badge authorization is the one exception: it is allowed only while the
+/// bounded anonymous runtime is active, both aggregate logical and observed
+/// phone screens are `main`, hardware is prepared, and the registered screen
+/// capability accepts a barcode.
 class WearPreAuthScannerAdmissionReducer implements WearSliceReducer {
   const WearPreAuthScannerAdmissionReducer();
 
@@ -36,6 +37,7 @@ class WearPreAuthScannerAdmissionReducer implements WearSliceReducer {
         aggregate.navigation.actualPhoneScreen == WearScreenId.main;
     final bool enabled = !state.terminal &&
         !aggregate.lifecycle.terminal &&
+        aggregate.lifecycle.runtimeActive &&
         routeMatches &&
         scanner.hardwarePrepared &&
         intent.screenAcceptsBarcode;
