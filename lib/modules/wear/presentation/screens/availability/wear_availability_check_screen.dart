@@ -34,7 +34,6 @@ class _State extends State<WearAvailabilityCheckScreen> {
   late final WearFlowController _flow = WearDependencies.I.wearFlowController;
   late final StreamSubscription<WearAvailabilityRuntimeState> _subscription;
   late WearAvailabilityRuntimeState _state;
-  late final WearScreenActionRegistration _actions;
 
   @override
   void initState() {
@@ -43,19 +42,10 @@ class _State extends State<WearAvailabilityCheckScreen> {
     _subscription = _flow.availabilityStateStream.listen((next) {
       if (mounted) setState(() => _state = next);
     });
-    _flow.enterScreen(
-      WearScreenId.availabilityCheck,
-      extra: widget.initialFlow ?? widget.product,
-    );
-    _actions = _flow.registerScreenActions(
-      WearScreenId.availabilityCheck,
-      WearScreenActionHandler(onManualInput: _manualInput),
-    );
   }
 
   @override
   void dispose() {
-    _flow.unregisterScreenActions(_actions);
     unawaited(_subscription.cancel());
     super.dispose();
   }

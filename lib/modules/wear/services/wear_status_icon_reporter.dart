@@ -4,11 +4,8 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voi
 
 import 'package:flutter/foundation.dart';
 
-import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
-import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_bridge.dart';
-import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/services/wear_printer_status_service.dart';
 import 'package:smart_glasses/modules/wear/services/wear_wifi_status_service.dart';
 
@@ -30,8 +27,6 @@ class WearStatusIconReporter {
   WearStatusIconReporter._();
 
   static final WearStatusIconReporter I = WearStatusIconReporter._();
-  static const Duration _projectionTimeout = Duration(seconds: 6);
-
   final WearWifiStatusService _wifiStatusService =
       const WearWifiStatusService();
   final WearPrinterStatusService _printerStatusService =
@@ -43,29 +38,19 @@ class WearStatusIconReporter {
     printerAvailable: false,
     voiceCommandsEnabled: true,
   );
-  WearGlassesPayload? _lastDeliveredPayload;
-  WearVoiceCommandEvent? _pendingPerformanceTrace;
   Timer? _timer;
-  int _payloadGeneration = 0;
   int _lifecycleGeneration = 0;
   int _voiceStartupGeneration = 0;
-  Future<void> _projectionOperation = Future<void>.value();
   bool _wasWifiAvailable = true;
   bool _wasPrinterAvailable = true;
   bool _voiceStartupActive = false;
-  bool _projectionVisible = false;
-  bool _hasDeliveredBase = false;
   final ValueNotifier<bool> _voiceCommandsEnabled = ValueNotifier<bool>(true);
   WearScreenId Function()? _currentScreenForTesting;
   Future<WearStatusIconSnapshot> Function()? _refreshForTesting;
   Future<void> Function(WearWifiStatus status)? _connectivityObserver;
 
   WearStatusIconSnapshot get snapshot => _snapshot;
-  WearGlassesPayload? get lastPayload => _lastDeliveredPayload;
-
-  void beginPerformanceTrace(WearVoiceCommandEvent event) {
-    _pendingPerformanceTrace = event;
-  }
+  void beginPerformanceTrace(WearVoiceCommandEvent _) {}
 
   ValueListenable<bool> get voiceCommandsEnabled => _voiceCommandsEnabled;
 
@@ -133,26 +118,9 @@ class WearStatusIconReporter {
     _timer?.cancel();
     _timer = null;
     _voiceStartupActive = false;
-    _projectionVisible = false;
-    _hasDeliveredBase = false;
-    _lastDeliveredPayload = null;
-    _payloadGeneration++;
     _wasWifiAvailable = true;
     _wasPrinterAvailable = true;
     _voiceCommandsEnabled.value = true;
-    if (!hideProjection || !wearGlassesBridge.isEnabled) {
-      _projectionOperation = Future<void>.value();
-      return;
-    }
-    final Future<void> hideOperation = _projectionOperation.then((_) async {
-      try {
-        await wearGlassesBridge.hide().timeout(_projectionTimeout);
-      } catch (error, stackTrace) {
-        print('[WearStatusIconReporter] hide failed: $error\n$stackTrace');
-      }
-    });
-    _projectionOperation = hideOperation;
-    await hideOperation;
   }
 
   Future<WearStatusIconSnapshot> refresh({int? expectedGeneration}) async {
@@ -167,9 +135,10 @@ class WearStatusIconReporter {
       if (connectivityObserver != null) {
         unawaited(connectivityObserver(wifi));
       }
-      final bool showPrinter = WearSession.hasPrinterSelection;
+      final authority = WearDependencies.I.authority;
+      final bool showPrinter = authority.features.printer.selection != null;
       final bool printerAvailable = showPrinter &&
-          WearSession.isAuthorized &&
+          authority.isAuthorized &&
           await _printerStatusService.isSelectedPrinterAvailable();
       next = WearStatusIconSnapshot(
         wifi: wifi,
@@ -225,198 +194,9 @@ class WearStatusIconReporter {
     _wasPrinterAvailable = !snapshot.showPrinter || snapshot.printerAvailable;
   }
 
-  Future<void> send(WearGlassesPayload payload) async {
-    final int lifecycleGeneration = _lifecycleGeneration;
-    if (_shouldDeferForVoiceStartup(payload)) return;
-    final int payloadGeneration = _beginPayloadUpdate();
-    final WearStatusIconSnapshot snapshot = await refresh(
-      expectedGeneration: lifecycleGeneration,
-    );
-    if (!_isCurrentOperation(lifecycleGeneration, payloadGeneration)) return;
-    if (_shouldDeferForVoiceStartup(payload)) return;
-    final WearGlassesPayload next = _withSnapshot(payload, snapshot);
-    _commitPayload(next, payloadGeneration);
-    await _sendToProjection(next, lifecycleGeneration, payloadGeneration);
-  }
-
-  Future<void> sendForScreen(
-    WearScreenId screen,
-    WearGlassesPayload payload,
-  ) async {
-    final int lifecycleGeneration = _lifecycleGeneration;
-    if (_shouldDeferForVoiceStartup(payload)) return;
-    if (!_isCurrentScreen(screen)) return;
-    final int payloadGeneration = _beginPayloadUpdate();
-    final WearStatusIconSnapshot snapshot = await refresh(
-      expectedGeneration: lifecycleGeneration,
-    );
-    if (!_isCurrentOperation(lifecycleGeneration, payloadGeneration)) return;
-    if (_shouldDeferForVoiceStartup(payload)) return;
-    if (!_isCurrentScreen(screen)) return;
-    final WearGlassesPayload next = _withSnapshot(payload, snapshot);
-    _commitPayload(next, payloadGeneration);
-    await _sendToProjection(next, lifecycleGeneration, payloadGeneration);
-  }
-
-  Future<void> sendFast(WearGlassesPayload payload) async {
-    if (_shouldDeferForVoiceStartup(payload)) return;
-    final int lifecycleGeneration = _lifecycleGeneration;
-    final int payloadGeneration = _beginPayloadUpdate();
-    final WearGlassesPayload next = _withSnapshot(payload, _snapshot);
-    _commitPayload(next, payloadGeneration);
-    await _sendToProjection(next, lifecycleGeneration, payloadGeneration);
-  }
-
-  Future<void> sendFastForScreen(
-    WearScreenId screen,
-    WearGlassesPayload payload,
-  ) async {
-    if (_shouldDeferForVoiceStartup(payload)) return;
-    if (!_isCurrentScreen(screen)) return;
-    final int lifecycleGeneration = _lifecycleGeneration;
-    final int payloadGeneration = _beginPayloadUpdate();
-    final WearGlassesPayload next = _withSnapshot(payload, _snapshot);
-    _commitPayload(next, payloadGeneration);
-    await _sendToProjection(next, lifecycleGeneration, payloadGeneration);
-  }
-
-  Future<void> sendTransientFast(WearGlassesPayload payload) async {
-    if (_shouldDeferForVoiceStartup(payload)) return;
-    final int lifecycleGeneration = _lifecycleGeneration;
-    final int payloadGeneration = _payloadGeneration;
-    final WearGlassesPayload next = _withSnapshot(payload, _snapshot);
-    await _sendToProjection(next, lifecycleGeneration, payloadGeneration);
-  }
-
-  Future<void> show(WearGlassesPayload payload) async {
-    final int lifecycleGeneration = _lifecycleGeneration;
-    if (_shouldDeferForVoiceStartup(payload)) return;
-    final int payloadGeneration = _beginPayloadUpdate();
-    final WearStatusIconSnapshot snapshot = await refresh(
-      expectedGeneration: lifecycleGeneration,
-    );
-    if (!_isCurrentOperation(lifecycleGeneration, payloadGeneration)) return;
-    if (_shouldDeferForVoiceStartup(payload)) return;
-    final WearGlassesPayload next = _withSnapshot(payload, snapshot);
-    _commitPayload(next, payloadGeneration);
-    await _sendToProjection(next, lifecycleGeneration, payloadGeneration);
-  }
-
   Future<void> refreshAndResend() async {
     final int lifecycleGeneration = _lifecycleGeneration;
-    final int payloadGeneration = _payloadGeneration;
     if (_voiceStartupActive) return;
-    if (!_hasDeliveredBase) {
-      await refresh(expectedGeneration: lifecycleGeneration);
-      return;
-    }
-
-    final WearStatusIconSnapshot previous = _snapshot;
-    final WearStatusIconSnapshot next = await refresh(
-      expectedGeneration: lifecycleGeneration,
-    );
-    if (!_isCurrentOperation(lifecycleGeneration, payloadGeneration)) return;
-    if (previous.wifi == next.wifi &&
-        previous.showPrinter == next.showPrinter &&
-        previous.printerAvailable == next.printerAvailable &&
-        previous.voiceCommandsEnabled == next.voiceCommandsEnabled) {
-      return;
-    }
-
-    await WearDependencies.I.wearFlowController.renderCurrentGlasses();
-  }
-
-  WearGlassesPayload _withSnapshot(
-    WearGlassesPayload payload,
-    WearStatusIconSnapshot snapshot,
-  ) {
-    return payload.copyWithStatusIcons(
-      showWifiIcon: payload.showWifiIcon,
-      wifiAvailable: snapshot.wifi.isAvailable,
-      wifiLevel: snapshot.wifi.level,
-      showPrinterIcon: snapshot.showPrinter,
-      printerAvailable: snapshot.printerAvailable,
-      voiceCommandsEnabled: snapshot.voiceCommandsEnabled,
-    );
-  }
-
-  bool _isCurrentScreen(WearScreenId screen) {
-    final WearScreenId Function()? currentScreen = _currentScreenForTesting;
-    if (currentScreen != null) {
-      return currentScreen() == screen;
-    }
-    return WearDependencies.I.wearFlowController.state.screen == screen;
-  }
-
-  int _beginPayloadUpdate() {
-    return ++_payloadGeneration;
-  }
-
-  void _commitPayload(WearGlassesPayload payload, int generation) {
-    if (generation == _payloadGeneration) {
-      _lastDeliveredPayload = payload;
-      _hasDeliveredBase = true;
-    }
-  }
-
-  bool _isCurrentOperation(int lifecycleGeneration, int payloadGeneration) {
-    return lifecycleGeneration == _lifecycleGeneration &&
-        payloadGeneration == _payloadGeneration;
-  }
-
-  Future<void> _sendToProjection(
-    WearGlassesPayload payload,
-    int lifecycleGeneration,
-    int payloadGeneration,
-  ) {
-    if (!wearGlassesBridge.isEnabled) return Future<void>.value();
-    final WearVoiceCommandEvent? performanceTrace = _pendingPerformanceTrace;
-    _pendingPerformanceTrace = null;
-    final Future<void> next = _projectionOperation.then((_) async {
-      if (!_isCurrentOperation(lifecycleGeneration, payloadGeneration)) return;
-      try {
-        if (_isCurrentScreen(WearScreenId.printCodeInput)) {
-          return;
-        }
-        final WearGlassesPayload outgoing = performanceTrace == null
-            ? payload
-            : payload.copyWithPerformanceTrace(
-                traceId: performanceTrace.traceId,
-                command: performanceTrace.command.name,
-                recognizedAtMillis: performanceTrace.recognizedAtMillis,
-                asrMillis: performanceTrace.asrMillis,
-                sentAtMillis: DateTime.now().millisecondsSinceEpoch,
-              );
-        if (_projectionVisible) {
-          await wearGlassesBridge.update(outgoing).timeout(_projectionTimeout);
-        } else {
-          await wearGlassesBridge.show(outgoing).timeout(_projectionTimeout);
-        }
-        if (_isCurrentOperation(lifecycleGeneration, payloadGeneration)) {
-          _projectionVisible = true;
-        }
-      } catch (error, stackTrace) {
-        _projectionVisible = false;
-        print(
-          '[WearStatusIconReporter] projection send failed: '
-          '$error\n$stackTrace',
-        );
-      }
-    });
-    _projectionOperation = next.catchError(
-      (Object error, StackTrace stackTrace) {
-        print(
-          '[WearStatusIconReporter] projection queue failed: '
-          '$error\n$stackTrace',
-        );
-      },
-    );
-    return _projectionOperation;
-  }
-
-  bool _shouldDeferForVoiceStartup(WearGlassesPayload payload) {
-    // Voice status is now an independent overlay. Content updates must continue
-    // underneath it, otherwise a startup overlay can restore stale wear data.
-    return false;
+    await refresh(expectedGeneration: lifecycleGeneration);
   }
 }

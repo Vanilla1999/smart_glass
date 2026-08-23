@@ -26,7 +26,6 @@ class WearAvailabilityFillScreen extends StatefulWidget {
 
 class _WearAvailabilityFillScreenState
     extends State<WearAvailabilityFillScreen> {
-  late final WearScreenActionRegistration _screenActionsRegistration;
   late final StreamSubscription<WearAvailabilityRuntimeState> _subscription;
   late WearAvailabilityRuntimeState _state;
 
@@ -39,23 +38,10 @@ class _WearAvailabilityFillScreenState
         .listen((next) {
       if (mounted) setState(() => _state = next);
     });
-    WearDependencies.I.wearFlowController.enterScreen(
-      WearScreenId.availabilityFill,
-    );
-    _screenActionsRegistration =
-        WearDependencies.I.wearFlowController.registerScreenActions(
-      WearScreenId.availabilityFill,
-      WearScreenActionHandler(
-        onSelect: _manualInput,
-        onManualInput: _manualInput,
-      ),
-    );
   }
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController
-        .unregisterScreenActions(_screenActionsRegistration);
     unawaited(_subscription.cancel());
     super.dispose();
   }

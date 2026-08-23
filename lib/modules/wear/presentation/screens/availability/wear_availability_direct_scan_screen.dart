@@ -29,7 +29,6 @@ class _State extends State<WearAvailabilityDirectScanScreen> {
   late final WearFlowController _flow = WearDependencies.I.wearFlowController;
   late final StreamSubscription<WearAvailabilityRuntimeState> _subscription;
   late WearAvailabilityRuntimeState _state;
-  late final WearScreenActionRegistration _actions;
 
   @override
   void initState() {
@@ -40,16 +39,10 @@ class _State extends State<WearAvailabilityDirectScanScreen> {
       if (mounted) setState(() => _state = next);
       if (previous != next.focusedIndex) _scrollTo(next.focusedIndex);
     });
-    _flow.enterScreen(WearScreenId.availabilityDirectScan);
-    _actions = _flow.registerScreenActions(
-      WearScreenId.availabilityDirectScan,
-      WearScreenActionHandler(onManualInput: _manualInput),
-    );
   }
 
   @override
   void dispose() {
-    _flow.unregisterScreenActions(_actions);
     unawaited(_subscription.cancel());
     _scroll.dispose();
     super.dispose();

@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:smart_glasses/core/constants/app_constants.dart';
-import 'package:smart_glasses/modules/wear/config/wear_session.dart';
+import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
@@ -36,15 +36,15 @@ void main() {
       }
       return null;
     });
-    WearSession.clear();
-    WearSession.setUser(
+    WearDependencies.I.authority.clearSession();
+    WearDependencies.I.authority.authorize(
       AuthenticatedUser(
         idUser: 1,
         idEmployee: 2,
         name: 'Test User',
       ),
     );
-    WearSession.setPrinterSelection(
+    WearDependencies.I.authority.importPrinterSelection(
       const WearPrinterSelection(
         whitePrinter: WearPrinter(id: 'old-white', name: 'OLD White'),
         yellowPrinter: WearPrinter(id: 'old-yellow', name: 'OLD Yellow'),
@@ -55,7 +55,7 @@ void main() {
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(appChannel, null);
-    WearSession.clear();
+    WearDependencies.I.authority.clearSession();
     dotenv.clean();
   });
 
@@ -117,9 +117,9 @@ void main() {
       await tester.tap(find.text('MOCK Желтый 1'));
       await _pumpUntilFound(tester, find.text('Завершение проверки'));
 
-      expect(WearSession.printerSelectionOrNull?.whitePrinter.name,
+      expect(WearDependencies.I.authority.features.printer.selection?.whitePrinter.name,
           'MOCK Белый 1');
-      expect(WearSession.printerSelectionOrNull?.yellowPrinter.name,
+      expect(WearDependencies.I.authority.features.printer.selection?.yellowPrinter.name,
           'MOCK Желтый 1');
       expect(find.text('Завершение проверки'), findsWidgets);
       expect(find.text('Завершить'), findsWidgets);

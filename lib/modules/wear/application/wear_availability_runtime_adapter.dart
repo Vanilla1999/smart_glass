@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:smart_glasses/modules/wear/application/wear_background_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
-import 'package:smart_glasses/modules/wear/config/wear_session.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_flow_state.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_group.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
@@ -61,7 +60,7 @@ class WearAvailabilityRuntime implements WearBackgroundRuntime {
     WearAvailabilityFillAdd? fillAdd,
     WearAvailabilityFillReset? fillReset,
     WearRuntimeAuthority? authority,
-  }) : _authority = authority ?? WearSession.identityAuthority {
+  }) : _authority = authority ?? WearRuntimeAuthority() {
     _effectExecutor = WearAvailabilityEffectExecutor(
       flowUseCase: flowUseCase,
       navigate: navigate,

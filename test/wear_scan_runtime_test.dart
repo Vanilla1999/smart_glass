@@ -6,7 +6,7 @@ import 'package:smart_glasses/modules/wear/application/wear_product_select_args.
 import 'package:smart_glasses/modules/wear/application/wear_scan_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_status_state.dart';
-import 'package:smart_glasses/modules/wear/config/wear_session.dart';
+import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
@@ -15,12 +15,12 @@ import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 void main() {
   setUp(() {
     dotenv.testLoad(fileInput: 'WEAR_USE_MOCKS=false');
-    WearSession.setUser(AuthenticatedUser(
+    WearDependencies.I.authority.authorize(AuthenticatedUser(
       idUser: 1,
       idEmployee: 2,
       name: 'Test User',
     ));
-    WearSession.setPrinterSelection(
+    WearDependencies.I.authority.importPrinterSelection(
       const WearPrinterSelection(
         whitePrinter: WearPrinter(id: '1', name: 'white'),
         yellowPrinter: WearPrinter(id: '2', name: 'yellow'),
@@ -28,7 +28,7 @@ void main() {
     );
   });
 
-  tearDown(WearSession.clear);
+  tearDown(WearDependencies.I.authority.clearSession);
 
   test('barcode lookup and print run without scan widgets', () async {
     final List<WearScreenId> navigation = <WearScreenId>[];

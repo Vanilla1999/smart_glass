@@ -25,6 +25,7 @@ import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_pay
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_voice_hints.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_projection.dart';
 
 typedef WearFlowAction = FutureOr<void> Function();
 typedef WearFlowPhraseAction = FutureOr<void> Function(String phrase);
@@ -155,9 +156,6 @@ class WearFlowController {
   final Map<WearScreenId, List<WearScreenActionRegistration>>
       _screenActionRegistrations =
       <WearScreenId, List<WearScreenActionRegistration>>{};
-  final Map<WearScreenId, WearGlassesPayload> _screenPayloads =
-      <WearScreenId, WearGlassesPayload>{};
-  int _basePayloadRevision = 0;
   final List<({WearVoiceCommand command, WearScreenId? expectedScreen})>
       _commandQueue =
       <({WearVoiceCommand command, WearScreenId? expectedScreen})>[];
@@ -189,7 +187,7 @@ class WearFlowController {
   Stream<WearScreenId> get screenActionsChanged =>
       _screenActionsController.stream;
 
-  int get basePayloadRevision => _basePayloadRevision;
+  int get basePayloadRevision => _authority.state.revision;
 
   WearStatusState? get statusState => _statusState;
 
@@ -233,8 +231,12 @@ class WearFlowController {
           .where((String phrase) => phrase.isNotEmpty)
           .toList(growable: false);
     }
-    return (_screenPayloads[screen]?.voiceHints ??
-            const <WearGlassesVoiceHint>[])
+    if (_authority.payload.navigation.logicalScreen != screen) {
+      return const <String>[];
+    }
+    return WearRuntimeProjection.projectGlasses(_authority.state)
+        .payload
+        .voiceHints
         .map((WearGlassesVoiceHint hint) => hint.phrase.trim())
         .where((String phrase) => phrase.isNotEmpty)
         .toList(growable: false);
@@ -253,17 +255,7 @@ class WearFlowController {
     _backgroundRuntime = runtime;
     _backgroundRuntimeSub = runtime.updates.listen(
       (WearBackgroundScreenUpdate update) {
-        final bool migratedScreen = update.screen == WearScreenId.scanIdle ||
-            update.screen == WearScreenId.productSelect ||
-            update.screen == WearScreenId.printerSelect ||
-            update.screen == WearScreenId.availabilityGroup ||
-            update.screen == WearScreenId.availabilityProduct ||
-            update.screen == WearScreenId.availabilityDirectScan ||
-            update.screen == WearScreenId.availabilityCheck ||
-            update.screen == WearScreenId.availabilityFill;
-        if (_uiLifecycle != WearUiLifecycle.inactive && !migratedScreen) {
-          return;
-        }
+        if (_uiLifecycle != WearUiLifecycle.inactive) return;
         rememberScreenPayload(update.screen, update.payload);
         if (_state.screen == update.screen) {
           _screenActionsController.add(update.screen);
@@ -404,7 +396,7 @@ class WearFlowController {
   }
 
   void enterScreen(WearScreenId screen, {Object? extra}) {
-    _clearContextPayload(screen, extra);
+    _clearTransientPayloadOnScreenChange(screen);
     _setState(
       _stateForEnteredScreen(screen, extra: extra),
     );
@@ -417,7 +409,7 @@ class WearFlowController {
     Object? extra,
     required bool canPop,
   }) {
-    _clearContextPayload(screen, extra);
+    _clearTransientPayloadOnScreenChange(screen);
     unawaited(_authority.navigationAdapter().observePhoneRoute(screen));
     _setState(_stateForEnteredScreen(
       _authority.payload.navigation.logicalScreen,
@@ -592,13 +584,7 @@ class WearFlowController {
     WearScreenId screen,
     WearGlassesPayload payload,
   ) {
-    final List<String> previous = voiceGrammarPhrasesFor(screen);
-    _screenPayloads[screen] = payload;
-    _basePayloadRevision += 1;
-    final List<String> next = voiceGrammarPhrasesFor(screen);
-    if (!_sameStrings(previous, next)) {
-      _screenActionsController.add(screen);
-    }
+    _screenActionsController.add(screen);
   }
 
   Future<bool> publishScreenPayload(
@@ -607,7 +593,6 @@ class WearFlowController {
   ) async {
     if (_state.screen != screen) return false;
     _clearTransientPayload();
-    rememberScreenPayload(screen, payload);
     await _renderGlasses();
     return true;
   }
@@ -663,14 +648,6 @@ class WearFlowController {
     _transientPayloadTimer = null;
     _transientPayload = null;
     _transientPayloadGeneration += 1;
-  }
-
-  static bool _sameStrings(List<String> left, List<String> right) {
-    if (left.length != right.length) return false;
-    for (int index = 0; index < left.length; index++) {
-      if (left[index] != right[index]) return false;
-    }
-    return true;
   }
 
   void setMenuFocusedIndex(int index) {
@@ -1576,42 +1553,9 @@ class WearFlowController {
     );
   }
 
-  void _clearContextPayload(WearScreenId screen, Object? extra) {
+  void _clearTransientPayloadOnScreenChange(WearScreenId screen) {
     if (_state.screen != screen) {
       _clearTransientPayload();
-    }
-    switch (screen) {
-      case WearScreenId.printerSelect:
-        final bool returningFromHomeConfirm =
-            _state.screen == WearScreenId.homeConfirm &&
-                _state.homeConfirmReturnScreen == WearScreenId.printerSelect;
-        if (!returningFromHomeConfirm) {
-          _screenPayloads.remove(screen);
-        }
-        return;
-      case WearScreenId.availabilityGroup:
-        if (_state.screen != WearScreenId.availabilityProduct &&
-            _state.screen != WearScreenId.availabilityGroup) {
-          _screenPayloads.remove(screen);
-        }
-        return;
-      case WearScreenId.productSelect:
-        if (!identical(extra, _state.currentProductSelectArgs)) {
-          _screenPayloads.remove(screen);
-        }
-        return;
-      case WearScreenId.availabilityProduct:
-        if (!identical(extra, _state.currentAvailabilityGroup)) {
-          _screenPayloads.remove(screen);
-        }
-        return;
-      case WearScreenId.availabilityCheck:
-        if (!identical(extra, _state.currentAvailabilityProduct)) {
-          _screenPayloads.remove(screen);
-        }
-        return;
-      default:
-        return;
     }
   }
 
@@ -1965,6 +1909,8 @@ class WearFlowController {
   }
 
   WearGlassesPayload _payloadForState(WearFlowState state) {
+    final WearGlassesPayload aggregatePayload =
+        WearRuntimeProjection.projectGlasses(_authority.state).payload;
     return switch (state.screen) {
       WearScreenId.menu =>
         WearGlassesPayload.menu(selectedIndex: state.menuFocusedIndex),
@@ -1972,70 +1918,24 @@ class WearFlowController {
           selectedIndex: state.homeConfirmFocusedIndex,
         ),
       WearScreenId.help => WearGlassesPayload.help(),
-      WearScreenId.scanIdle => _screenPayloads[WearScreenId.scanIdle] ??
-          WearGlassesPayload.scanWaiting(),
+      WearScreenId.scanIdle => aggregatePayload,
       WearScreenId.continueScan => WearGlassesPayload.continueScan(
           selectedIndex: state.continueScanFocusedIndex,
         ),
-      WearScreenId.printerSelect =>
-        _screenPayloads[WearScreenId.printerSelect] ??
-            WearGlassesPayload.loading(
-              screenType: WearGlassesScreenType.printer,
-              title: 'Принтеры',
-              statusText: 'Открываем выбор принтера...',
-            ),
+      WearScreenId.printerSelect => aggregatePayload,
       WearScreenId.availabilityInteraction =>
         WearAvailabilityGlassesPayloads.interactionTypes(
           selectedIndex: state.availabilityInteractionFocusedIndex,
         ),
-      WearScreenId.availabilityGroup =>
-        _screenPayloads[WearScreenId.availabilityGroup] ??
-            WearAvailabilityGlassesPayloads.loading(
-              title: 'Товарная группа',
-              statusText: 'Загружаем...',
-            ),
-      WearScreenId.availabilityProduct =>
-        _screenPayloads[WearScreenId.availabilityProduct] ??
-            WearAvailabilityGlassesPayloads.loading(
-              title: 'Товарная позиция',
-              statusText: 'Загружаем...',
-            ),
-      WearScreenId.availabilityDirectScan =>
-        _screenPayloads[WearScreenId.availabilityDirectScan] ??
-            WearAvailabilityGlassesPayloads.directScanWaiting(),
-      WearScreenId.availabilityCheck =>
-        _screenPayloads[WearScreenId.availabilityCheck] ??
-            WearAvailabilityGlassesPayloads.loading(
-              title: 'Проверка товара',
-              statusText: 'Загружаем...',
-            ),
-      WearScreenId.availabilityFill =>
-        _screenPayloads[WearScreenId.availabilityFill] ??
-            WearAvailabilityGlassesPayloads.loading(
-              title: 'Наполнение базы',
-              statusText: 'Загружаем...',
-            ),
-      WearScreenId.productSelect =>
-        _screenPayloads[WearScreenId.productSelect] ??
-            WearGlassesPayload.loading(
-              screenType: WearGlassesScreenType.productSelect,
-              title: 'Выбор товара',
-              statusText: 'Открываем список...',
-            ),
+      WearScreenId.availabilityGroup => aggregatePayload,
+      WearScreenId.availabilityProduct => aggregatePayload,
+      WearScreenId.availabilityDirectScan => aggregatePayload,
+      WearScreenId.availabilityCheck => aggregatePayload,
+      WearScreenId.availabilityFill => aggregatePayload,
+      WearScreenId.productSelect => aggregatePayload,
       WearScreenId.voiceClarification => _voiceClarificationPayload(state),
-      WearScreenId.printCodeInput =>
-        _screenPayloads[WearScreenId.printCodeInput] ??
-            WearGlassesPayload.status(
-              isError: false,
-              title: 'Статус',
-              statusText: 'Открываем экран...',
-            ),
-      WearScreenId.status => _screenPayloads[WearScreenId.status] ??
-          WearGlassesPayload.status(
-            isError: false,
-            title: 'Статус',
-            statusText: 'Открываем экран...',
-          ),
+      WearScreenId.printCodeInput => aggregatePayload,
+      WearScreenId.status => aggregatePayload,
       WearScreenId.settings ||
       WearScreenId.dbSettings ||
       WearScreenId.wifiSettings ||
@@ -2046,8 +1946,7 @@ class WearFlowController {
           statusText: 'Открываем настройки...',
         ),
       WearScreenId.scannerConnect => WearGlassesPayload.authWaitingBarcode(),
-      WearScreenId.main => _screenPayloads[WearScreenId.main] ??
-          WearGlassesPayload.authWaitingBarcode(),
+      WearScreenId.main => aggregatePayload,
     };
   }
 

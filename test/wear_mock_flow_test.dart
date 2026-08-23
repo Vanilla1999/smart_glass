@@ -6,7 +6,7 @@ import 'package:smart_glasses/modules/wear/application/wear_product_select_args.
 import 'package:smart_glasses/modules/wear/application/wear_scan_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_mock_config.dart';
-import 'package:smart_glasses/modules/wear/config/wear_session.dart';
+import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
@@ -19,11 +19,11 @@ void main() {
 
   setUp(() {
     dotenv.testLoad(fileInput: 'WEAR_USE_MOCKS=true');
-    WearSession.clear();
+    WearDependencies.I.authority.clearSession();
   });
 
   tearDown(() {
-    WearSession.clear();
+    WearDependencies.I.authority.clearSession();
     dotenv.clean();
   });
 
@@ -47,8 +47,8 @@ void main() {
 
     await notifier.authorizeByBadgeBarcode('any-badge');
 
-    expect(WearSession.isAuthorized, isTrue);
-    expect(WearSession.userOrNull?.name, 'Колиус');
+    expect(WearDependencies.I.authority.isAuthorized, isTrue);
+    expect(WearDependencies.I.authority.userOrNull?.name, 'Колиус');
     expect(notifier.state.phase, WearAuthPhase.idle);
     expect(notifier.state.nav?.kind, WearStatusKind.success);
     expect(notifier.state.nav?.message, 'Колиус');
@@ -76,8 +76,8 @@ void main() {
   });
 
   test('mock scan with barcode ending 2 opens product selection', () async {
-    WearSession.setUser(_testUser());
-    WearSession.setPrinterSelection(_selection());
+    WearDependencies.I.authority.authorize(_testUser());
+    WearDependencies.I.authority.importPrinterSelection(_selection());
     WearProductSelectArgs? selection;
     final WearScanRuntime runtime = _runtime((screen, extra) {
       if (screen == WearScreenId.productSelect) {
@@ -95,8 +95,8 @@ void main() {
   });
 
   test('mock print uses yellow printer for even product id', () async {
-    WearSession.setUser(_testUser());
-    WearSession.setPrinterSelection(_selection());
+    WearDependencies.I.authority.authorize(_testUser());
+    WearDependencies.I.authority.importPrinterSelection(_selection());
     WearStatusScreenArgs? status;
     final WearScanRuntime runtime = _runtime((screen, extra) {
       if (screen == WearScreenId.status) {

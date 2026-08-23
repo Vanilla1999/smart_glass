@@ -47,10 +47,6 @@ class _WearPrinterSelectScreenState extends State<WearPrinterSelectScreen>
         widget.flowController ?? WearDependencies.I.wearFlowController;
     _state = _flowController.printerState;
     _stateSubscription = _flowController.printerStateStream.listen(_onState);
-    _flowController.enterScreen(
-      WearScreenId.printerSelect,
-      extra: widget.returnSelection,
-    );
   }
 
   void _onState(WearPrinterRuntimeState next) {

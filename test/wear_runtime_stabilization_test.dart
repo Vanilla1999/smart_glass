@@ -12,7 +12,7 @@ import 'package:smart_glasses/modules/wear/application/wear_navigation_entry.dar
 import 'package:smart_glasses/modules/wear/application/wear_printer_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
-import 'package:smart_glasses/modules/wear/config/wear_session.dart';
+import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_flow_state.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_group.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
@@ -26,10 +26,10 @@ import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_pay
 void main() {
   setUp(() {
     dotenv.testLoad(fileInput: 'WEAR_USE_MOCKS=false');
-    WearSession.clearPrinterSelection();
+    WearDependencies.I.authority.clearPrinterSelection();
   });
 
-  tearDown(WearSession.clearPrinterSelection);
+  tearDown(WearDependencies.I.authority.clearPrinterSelection);
 
   group('runtime-owned barcode routing', () {
     test('active UI routes a migrated barcode to runtime exactly once',
@@ -416,14 +416,14 @@ void main() {
       await runtime.enterScreen(WearScreenId.printerSelect);
       await runtime.selectPrinter(runtime.state.printers.first);
       await runtime.selectPrinter(runtime.state.visiblePrinters.first);
-      expect(WearSession.printerSelectionOrNull, isNotNull);
+      expect(WearDependencies.I.authority.features.printer.selection, isNotNull);
 
       await runtime.load();
 
       expect(runtime.state.whitePrinter, isNull);
       expect(runtime.state.selection, isNull);
       expect(runtime.state.step, WearPrinterRuntimeStep.white);
-      expect(WearSession.printerSelectionOrNull, isNull);
+      expect(WearDependencies.I.authority.features.printer.selection, isNull);
     });
 
     test('reload keeps a valid pair and refreshes printer models', () async {
@@ -460,9 +460,9 @@ void main() {
       expect(runtime.state.selection?.yellowPrinter.name,
           'Жёлтый B обновлённый');
       expect(runtime.state.step, WearPrinterRuntimeStep.yellow);
-      expect(WearSession.printerSelectionOrNull?.whitePrinter.name,
+      expect(WearDependencies.I.authority.features.printer.selection?.whitePrinter.name,
           'Белый A обновлённый');
-      expect(WearSession.printerSelectionOrNull?.yellowPrinter.name,
+      expect(WearDependencies.I.authority.features.printer.selection?.yellowPrinter.name,
           'Жёлтый B обновлённый');
     });
 
@@ -499,7 +499,7 @@ void main() {
       expect(runtime.state.whitePrinter?.id, 'a');
       expect(runtime.state.selection, isNull);
       expect(runtime.state.step, WearPrinterRuntimeStep.yellow);
-      expect(WearSession.printerSelectionOrNull, isNull);
+      expect(WearDependencies.I.authority.features.printer.selection, isNull);
       expect(runtime.state.visiblePrinters.single.id, 'c');
     });
   });

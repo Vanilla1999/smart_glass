@@ -71,10 +71,6 @@ class WearRuntimeAuthority {
   final WearRuntimeStore _store;
   final WearRuntimeEffectRouter _effectRouter;
   final WearOperationIdGenerator _operationIds = WearOperationIdGenerator();
-  final StreamController<AuthenticatedUser> _authorized =
-      StreamController<AuthenticatedUser>.broadcast();
-  final StreamController<void> _cleared = StreamController<void>.broadcast();
-
   Future<void>? _disposeFuture;
 
   WearRuntimeStore get store => _store;
@@ -91,10 +87,6 @@ class WearRuntimeAuthority {
       payload.features as WearRuntimeFeaturePayload;
 
   Stream<WearRuntimeState> get states => _store.states;
-
-  Stream<AuthenticatedUser> get authorizedStream => _authorized.stream;
-
-  Stream<void> get clearedStream => _cleared.stream;
 
   bool get isAuthorized => payload.session.isAuthorized;
 
@@ -155,29 +147,11 @@ class WearRuntimeAuthority {
   }
 
   Future<WearDispatchResult> authorize(AuthenticatedUser user) async {
-    final bool wasAuthorized = payload.session.isAuthorized;
-    final WearDispatchResult result =
-        await _store.dispatch(WearSessionAuthorized(user));
-    if (result.accepted &&
-        result.stateChanged &&
-        !wasAuthorized &&
-        !_authorized.isClosed) {
-      _authorized.add(payload.session.user!);
-    }
-    return result;
+    return _store.dispatch(WearSessionAuthorized(user));
   }
 
   Future<WearDispatchResult> clearSession() async {
-    final bool wasAuthorized = payload.session.isAuthorized;
-    final WearDispatchResult result =
-        await _store.dispatch(const WearSessionCleared());
-    if (result.accepted &&
-        result.stateChanged &&
-        wasAuthorized &&
-        !_cleared.isClosed) {
-      _cleared.add(null);
-    }
-    return result;
+    return _store.dispatch(const WearSessionCleared());
   }
 
   Future<WearDispatchResult> setRuntimeActive(bool active) {
@@ -237,7 +211,6 @@ class WearRuntimeAuthority {
     final WearDispatchResult result =
         await _store.dispatch(const WearRuntimeTerminated());
     await _store.dispose();
-    await _closeCompatibilityStreams();
     return result;
   }
 
@@ -252,7 +225,6 @@ class WearRuntimeAuthority {
           await _store.dispatch(const WearRuntimeTerminated());
         }
         await _store.dispose();
-        await _closeCompatibilityStreams();
         completer.complete();
       }).catchError((Object error, StackTrace stackTrace) {
         if (!completer.isCompleted) completer.completeError(error, stackTrace);
@@ -261,10 +233,6 @@ class WearRuntimeAuthority {
     return completer.future;
   }
 
-  Future<void> _closeCompatibilityStreams() async {
-    if (!_authorized.isClosed) await _authorized.close();
-    if (!_cleared.isClosed) await _cleared.close();
-  }
 }
 
 class WearRuntimeNavigationAdapter {

@@ -8,7 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
-import 'package:smart_glasses/modules/wear/config/wear_session.dart';
+import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/data/availability/local_wear_availability_repository.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_glasses_output.dart';
@@ -34,7 +34,7 @@ void main() {
       ].join('\n'),
     );
     SharedPreferences.setMockInitialValues(<String, Object>{});
-    WearSession.clear();
+    WearDependencies.I.authority.clearSession();
     final repository = WearDependencies.I.availabilityRepository;
     if (repository is LocalWearAvailabilityRepository) {
       await repository.resetCompletedProducts();
@@ -43,7 +43,7 @@ void main() {
   });
 
   tearDown(() {
-    WearSession.clear();
+    WearDependencies.I.authority.clearSession();
     dotenv.clean();
   });
 

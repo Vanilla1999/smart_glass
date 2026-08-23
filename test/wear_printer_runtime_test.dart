@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:smart_glasses/modules/wear/application/wear_printer_runtime.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
-import 'package:smart_glasses/modules/wear/config/wear_session.dart';
+import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/available_printer.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 
@@ -13,7 +13,7 @@ void main() {
     dotenv.testLoad(fileInput: 'WEAR_USE_MOCKS=false');
   });
 
-  tearDown(WearSession.clearPrinterSelection);
+  tearDown(WearDependencies.I.authority.clearPrinterSelection);
 
   test('loads and selects printers without a widget tree', () async {
     WearScreenId? target;
@@ -53,8 +53,8 @@ void main() {
     );
 
     expect(target, WearScreenId.scanIdle);
-    expect(WearSession.printerSelectionOrNull?.whitePrinter.id, '1');
-    expect(WearSession.printerSelectionOrNull?.yellowPrinter.id, '2');
+    expect(WearDependencies.I.authority.features.printer.selection?.whitePrinter.id, '1');
+    expect(WearDependencies.I.authority.features.printer.selection?.yellowPrinter.id, '2');
     expect(capturedExtra, isNotNull);
   });
 
@@ -85,8 +85,8 @@ void main() {
       isTrue,
     );
 
-    expect(WearSession.printerSelectionOrNull?.whitePrinter.id, '1');
-    expect(WearSession.printerSelectionOrNull?.yellowPrinter.id, '2');
+    expect(WearDependencies.I.authority.features.printer.selection?.whitePrinter.id, '1');
+    expect(WearDependencies.I.authority.features.printer.selection?.yellowPrinter.id, '2');
   });
 
   test('pause and resume preserve step and load printers once', () async {

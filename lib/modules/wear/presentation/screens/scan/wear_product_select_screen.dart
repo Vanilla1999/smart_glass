@@ -32,7 +32,6 @@ class WearProductSelectScreen extends StatefulWidget {
 class _WearProductSelectScreenState extends State<WearProductSelectScreen>
     with ScreenLifecycleLogging<WearProductSelectScreen> {
   final ScrollController _scroll = ScrollController();
-  late final WearScreenActionRegistration _screenActionsRegistration;
   late final StreamSubscription<WearScanRuntimeState> _stateSubscription;
   int _focusedIndex = 0;
   bool _isProductDialogOpen = false;
@@ -48,26 +47,6 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
       setState(() => _focusedIndex = state.focusedIndex);
       if (previous != _focusedIndex) _scrollToFocused();
     });
-    WearDependencies.I.wearFlowController.enterScreen(
-      WearScreenId.productSelect,
-      extra: widget.args,
-    );
-    _screenActionsRegistration =
-        WearDependencies.I.wearFlowController.registerScreenActions(
-      WearScreenId.productSelect,
-      WearScreenActionHandler(
-        onUp: _onVoiceUp,
-        onDown: _onVoiceDown,
-        onSelect: _onVoiceSelect,
-        onCancel: _onVoiceCancel,
-        onNextPage: _onVoiceNextPage,
-        onPreviousPage: _onVoicePreviousPage,
-        onPhrase: _onVoicePhrase,
-        onDynamicItem: _onVoiceDynamicItem,
-        dynamicVoiceItems: _dynamicVoiceItems,
-        onPartialPhrase: _onVoicePartialPhrase,
-      ),
-    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _sendGlassesFocus();
     });
@@ -75,8 +54,6 @@ class _WearProductSelectScreenState extends State<WearProductSelectScreen>
 
   @override
   void dispose() {
-    WearDependencies.I.wearFlowController
-        .unregisterScreenActions(_screenActionsRegistration);
     unawaited(_stateSubscription.cancel());
     _scroll.dispose();
     super.dispose();
