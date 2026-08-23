@@ -79,18 +79,11 @@ class _WearHomeConfirmScreenState extends State<WearHomeConfirmScreen>
   }
 
   void _focusHome() {
-    _setFocus(0);
+    _flow.setHomeConfirmFocusedIndex(0);
   }
 
   void _focusCancel() {
-    _setFocus(1);
-  }
-
-  void _setFocus(int index) {
-    if (_focusedIndex != index) {
-      setState(() => _focusedIndex = index);
-    }
-    _flow.setHomeConfirmFocusedIndex(index);
+    _flow.setHomeConfirmFocusedIndex(1);
   }
 
   Future<void> _selectFocused() async {
