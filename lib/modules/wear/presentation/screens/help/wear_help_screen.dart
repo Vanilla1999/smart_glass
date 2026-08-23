@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
@@ -20,17 +22,28 @@ class WearHelpScreen extends StatefulWidget {
 class _WearHelpScreenState extends State<WearHelpScreen>
     with ScreenLifecycleLogging<WearHelpScreen> {
   final ScrollController _scroll = ScrollController();
+  final WearFlowController _flow = WearDependencies.I.wearFlowController;
+  late final WearScreenActionRegistration _screenActionsRegistration;
+
+  @override
+  void initState() {
+    super.initState();
+    _screenActionsRegistration = _flow.registerScreenActions(
+      WearScreenId.help,
+      WearScreenActionHandler(onSelect: _select),
+    );
+  }
 
   @override
   void dispose() {
+    _flow.unregisterScreenActions(_screenActionsRegistration);
     _scroll.dispose();
     super.dispose();
   }
 
   void _select() {
     unawaited(
-      WearDependencies.I.wearFlowController
-          .handleControllerCommand(WearVoiceCommand.select),
+      _flow.handleControllerCommand(WearVoiceCommand.select),
     );
   }
 
