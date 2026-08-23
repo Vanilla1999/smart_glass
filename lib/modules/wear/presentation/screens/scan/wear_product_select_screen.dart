@@ -16,7 +16,7 @@ import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
 class WearProductSelectScreen extends StatefulWidget {
-  const WearProductSelectScreen({super.key});
+  const WearProductSelectScreen({super.key, Object? args});
 
   static const String route = '/wear_product_select';
 
