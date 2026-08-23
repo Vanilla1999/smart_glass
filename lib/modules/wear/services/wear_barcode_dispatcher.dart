@@ -7,6 +7,7 @@ import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_adapter.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_semantic_inputs.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
 typedef WearBarcodeHandler = Future<bool> Function(String payload);
 
@@ -89,15 +90,18 @@ class WearBarcodeDispatcher implements MultiScannerDelegate {
   WearBarcodeDispatcher({
     WearRuntimeAuthority? authority,
     WearFlowController? flowController,
+    WearBarcodeHandler? unsupportedHandler,
     MultiScanner? scanner,
   })  : assert(
           authority != null || flowController != null,
           'WearRuntimeAuthority is required',
         ),
         _authority = authority ?? flowController!.authority,
+        _unsupportedHandler = unsupportedHandler,
         _scanner = scanner ?? MultiScanner.last();
 
   final WearRuntimeAuthority _authority;
+  final WearBarcodeHandler? _unsupportedHandler;
   final MultiScanner _scanner;
   late final WearBarcodeSerialQueue _queue = WearBarcodeSerialQueue(
     handleBarcode: (String _) async => false,
@@ -170,20 +174,36 @@ class WearBarcodeDispatcher implements MultiScannerDelegate {
     required int deliveryId,
   }) async {
     if (callback.sessionEpoch != sessionEpoch) return false;
-    final receipt = await callback.acceptBarcodeDelivery(
+    final WearDispatchResult receipt = await callback.acceptBarcodeDelivery(
       deliveryId: deliveryId,
       logicalScreen: screen,
     );
     if (!receipt.accepted || receipt.sessionEpoch != sessionEpoch) return false;
 
-    final semanticReceipt = await _authority.dispatchSemanticInput(
+    final WearDispatchResult semanticReceipt =
+        await _authority.dispatchSemanticInput(
       kind: WearSemanticInputKind.barcode,
       modality: WearInputModality.barcode,
       expectedScreen: screen,
       expectedSessionEpoch: sessionEpoch,
       value: payload,
     );
-    return semanticReceipt.accepted &&
-        semanticReceipt.sessionEpoch == sessionEpoch;
+    if (semanticReceipt.accepted &&
+        semanticReceipt.sessionEpoch == sessionEpoch) {
+      return true;
+    }
+
+    // Pre-auth/main remains a bounded compatibility handler until auth itself
+    // becomes an aggregate effect in MR-S12. The fallback is allowed only for an
+    // unsupported semantic path that still belongs to the exact captured epoch
+    // and logical screen; stale/duplicate/busy inputs never bypass the store.
+    final WearBarcodeHandler? fallback = _unsupportedHandler;
+    if (fallback == null ||
+        semanticReceipt.rejectReason != WearDispatchRejectReason.unsupported ||
+        _authority.state.sessionEpoch != sessionEpoch ||
+        _authority.payload.navigation.logicalScreen != screen) {
+      return false;
+    }
+    return fallback(payload);
   }
 }
