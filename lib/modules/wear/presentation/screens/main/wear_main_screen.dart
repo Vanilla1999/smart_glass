@@ -44,7 +44,9 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
       ),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_flow.authority.isAuthorized) {
+      if (_flow.authority.isAuthorized &&
+          _flow.authority.payload.navigation.logicalScreen !=
+              WearScreenId.menu) {
         unawaited(
           _flow.requestNavigation(
             WearScreenId.menu,
