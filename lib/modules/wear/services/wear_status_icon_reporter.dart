@@ -128,7 +128,7 @@ class WearStatusIconReporter {
     );
   }
 
-  Future<void> stop() async {
+  Future<void> stop({bool hideProjection = true}) async {
     _lifecycleGeneration++;
     _timer?.cancel();
     _timer = null;
@@ -140,7 +140,7 @@ class WearStatusIconReporter {
     _wasWifiAvailable = true;
     _wasPrinterAvailable = true;
     _voiceCommandsEnabled.value = true;
-    if (!wearGlassesBridge.isEnabled) {
+    if (!hideProjection || !wearGlassesBridge.isEnabled) {
       _projectionOperation = Future<void>.value();
       return;
     }

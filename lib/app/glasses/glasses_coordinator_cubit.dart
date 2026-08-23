@@ -117,7 +117,13 @@ class GlassesCoordinatorCubit extends Cubit<GlassesCoordinatorState> {
 
   void _handleUpdateWearGlasses(dynamic arguments) {
     if (arguments is Map) {
-      onUpdateWearGlasses(Map<String, dynamic>.from(arguments));
+      final Map<String, dynamic> payload =
+          Map<String, dynamic>.from(arguments);
+      onUpdateWearGlasses(payload);
+      final dynamic overlay = payload['overlay'];
+      if (overlay is Map) {
+        onUpdateWearVoiceOverlay(Map<String, dynamic>.from(overlay));
+      }
     }
   }
 

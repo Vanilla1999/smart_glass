@@ -22,7 +22,7 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_typing/speech_re
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/free_text_pipeline_mode.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_device_profile.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_typing/voice_typing_service.dart';
-import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_glasses_output.dart';
+import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_glasses_output.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/services/wear_photo_store.dart';
 import 'package:smart_glasses/modules/wear/services/wear_scanner_runtime.dart';
@@ -78,7 +78,8 @@ class WearDependencies {
       recordContinuousWav: voiceCaptureWavDiagnostics,
     );
     wearFlowController = WearFlowController(
-      glassesOutput: FlutterWearGlassesOutput(),
+      // MR-S8 sends production projection directly from committed snapshots.
+      glassesOutput: NoopWearGlassesOutput(),
       navigationOutput: NoopWearNavigationOutput(),
       authority: authority,
       photoCapture: photoStore.captureLatestPhoto,
