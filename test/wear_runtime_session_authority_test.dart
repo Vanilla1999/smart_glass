@@ -118,11 +118,17 @@ void main() {
     expect(late.rejectReason, WearDispatchRejectReason.terminal);
   });
 
-  test('only later ownership slices remain explicit legacy placeholders', () {
+  test('all business feature slices are aggregate-owned after MR-S6', () {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
 
-    expect(authority.payload.features, isA<WearLegacyFeaturePayload>());
+    expect(authority.payload.features, isA<WearRuntimeFeaturePayload>());
+    expect(authority.features.printer, isA<WearPrinterTaskSlice>());
+    expect(authority.features.scan, isA<WearScanTaskSlice>());
+    expect(
+      authority.features.availability,
+      isA<WearAvailabilityTaskSlice>(),
+    );
     expect(authority.payload.controls, isA<WearRuntimeControlPayload>());
     expect(
       authority.payload.presentation,
