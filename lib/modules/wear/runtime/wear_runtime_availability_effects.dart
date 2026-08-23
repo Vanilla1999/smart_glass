@@ -147,7 +147,10 @@ class WearAvailabilityEffectExecutor
           flow = _flowUseCase.capturePhoto(flow);
           break;
         case WearAvailabilityOperation.complete:
-          flow = await _flowUseCase.complete(flow);
+          await _flowUseCase.complete(flow);
+          // Completion mutates the repository. Reload groups before publishing
+          // the group screen so counters cannot be projected from stale state.
+          flow = await _flowUseCase.start();
           break;
         case WearAvailabilityOperation.fillAdd:
           final barcode = effect.barcode;
