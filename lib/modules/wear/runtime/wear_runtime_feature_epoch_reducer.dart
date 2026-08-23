@@ -88,7 +88,7 @@ class WearRuntimeFeatureEpochReducer implements WearSliceReducer {
           ),
           payload: aggregate.copyWith(
             session: const WearSessionSlice.anonymous(),
-            lifecycle: aggregate.lifecycle.copyWith(runtimeActive: false),
+            lifecycle: aggregate.lifecycle.copyWith(runtimeActive: true),
             navigation: navigation,
             controls: controls.toTerminalControls(),
             uiEffects: WearUiEffectSlice(
