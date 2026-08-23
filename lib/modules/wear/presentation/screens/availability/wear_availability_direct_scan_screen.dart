@@ -8,10 +8,12 @@ import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
 import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_input_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/input/wear_ui_effect_consumer.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
@@ -29,11 +31,18 @@ class _State extends State<WearAvailabilityDirectScanScreen> {
   late final StreamSubscription<WearAvailabilityRuntimeState> _subscription;
   late WearAvailabilityRuntimeState _state;
   late final WearScreenActionRegistration _actions;
+  late final WearUiEffectConsumer _manualInputConsumer;
 
   @override
   void initState() {
     super.initState();
     _state = _flow.availabilityState;
+    _manualInputConsumer = WearUiEffectConsumer(
+      authority: _flow.authority,
+      kind: WearUiEffectKind.manualBarcodeInput,
+      expectedScreen: WearScreenId.availabilityDirectScan,
+      execute: _executeManualInput,
+    );
     _subscription = _flow.availabilityStateStream.listen((next) {
       final int previous = _state.focusedIndex;
       if (mounted) setState(() => _state = next);
@@ -49,6 +58,7 @@ class _State extends State<WearAvailabilityDirectScanScreen> {
   @override
   void dispose() {
     _flow.unregisterScreenActions(_actions);
+    _manualInputConsumer.dispose();
     unawaited(_subscription.cancel());
     _scroll.dispose();
     super.dispose();
@@ -121,11 +131,25 @@ class _State extends State<WearAvailabilityDirectScanScreen> {
   }
 
   Future<void> _manualInput() async {
-    final String? code =
-        await context.push<String>(WearPrintCodeInputScreen.route);
-    if (code != null && code.trim().isNotEmpty) {
-      await _flow.handleBarcode(code.trim());
+    await _manualInputConsumer.request();
+  }
+
+  Future<void> _executeManualInput(WearUiEffect effect) async {
+    final WearRuntimeAuthority authority = _flow.authority;
+    if (!mounted) return;
+    final String? code = await context.push<String>(WearPrintCodeInputScreen.route);
+    final String value = code?.trim() ?? '';
+    if (value.isEmpty) {
+      await authority.cancelUiEffect(effect);
+      return;
     }
+    await authority.completeUiEffect(effect, value: value);
+    await authority.dispatchSemanticInput(
+      kind: WearSemanticInputKind.barcode,
+      modality: WearInputModality.manual,
+      expectedScreen: WearScreenId.availabilityDirectScan,
+      value: value,
+    );
   }
 
   void _scrollTo(int index) {

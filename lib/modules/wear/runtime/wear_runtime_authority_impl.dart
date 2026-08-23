@@ -14,6 +14,7 @@ import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_composit
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_review_reducers.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_slice.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_semantic_inputs.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
 class WearRuntimeAuthority {
@@ -47,13 +48,15 @@ class WearRuntimeAuthority {
                 availability: WearAvailabilityTaskSlice.initial(),
               ),
               controls: const WearRuntimeControlPayload.initial(),
-              presentation: const WearLegacyPresentationPayload(),
+              presentation: WearPresentationFocusSlice(),
+              uiEffects: WearUiEffectSlice(),
             ),
           ),
           reducer: WearAggregateReducer(
             sliceReducers: const <WearSliceReducer>[
               WearControlInputValidationReducer(),
               WearRuntimeFeatureEpochReducer(),
+              WearSemanticInputReducer(),
               WearSessionNavigationEpochReducer(),
               WearControlSliceReducer(),
               WearReviewedPrinterSliceReducer(),
@@ -98,6 +101,54 @@ class WearRuntimeAuthority {
   AuthenticatedUser? get userOrNull => payload.session.user;
 
   int allocateOperationId() => _operationIds.next();
+
+  Future<WearDispatchResult> dispatchSemanticInput({
+    required WearSemanticInputKind kind,
+    required WearInputModality modality,
+    required WearScreenId expectedScreen,
+    String? value,
+    WearUiEffectKind? uiEffectKind,
+    int? focusIndex,
+    int? expectedSessionEpoch,
+  }) {
+    return _store.dispatch(WearSemanticInput(
+      kind: kind,
+      modality: modality,
+      expectedScreen: expectedScreen,
+      value: value,
+      uiEffectKind: uiEffectKind,
+      focusIndex: focusIndex,
+      expectedSessionEpoch: expectedSessionEpoch ?? _store.state.sessionEpoch,
+    ));
+  }
+
+  Future<WearDispatchResult> claimUiEffect(WearUiEffect effect) {
+    return _store.dispatch(WearUiEffectClaimed(
+      effectId: effect.effectId,
+      sessionEpoch: effect.sessionEpoch,
+      expectedScreen: effect.expectedScreen,
+    ));
+  }
+
+  Future<WearDispatchResult> completeUiEffect(
+    WearUiEffect effect, {
+    Object? value,
+  }) {
+    return _store.dispatch(WearUiEffectCompleted(
+      effectId: effect.effectId,
+      sessionEpoch: effect.sessionEpoch,
+      expectedScreen: effect.expectedScreen,
+      value: value,
+    ));
+  }
+
+  Future<WearDispatchResult> cancelUiEffect(WearUiEffect effect) {
+    return _store.dispatch(WearUiEffectCancelled(
+      effectId: effect.effectId,
+      sessionEpoch: effect.sessionEpoch,
+      expectedScreen: effect.expectedScreen,
+    ));
+  }
 
   WearRuntimeNavigationAdapter navigationAdapter() {
     return WearRuntimeNavigationAdapter(this);

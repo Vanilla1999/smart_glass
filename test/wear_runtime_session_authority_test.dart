@@ -135,7 +135,7 @@ void main() {
     expect(phone.rejectReason, WearDispatchRejectReason.terminal);
   });
 
-  test('all business feature slices are aggregate-owned after MR-S6', () {
+  test('business and presentation slices are aggregate-owned after MR-S7', () {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
 
@@ -149,7 +149,7 @@ void main() {
     expect(authority.payload.controls, isA<WearRuntimeControlPayload>());
     expect(
       authority.payload.presentation,
-      isA<WearLegacyPresentationPayload>(),
+      isA<WearPresentationFocusSlice>(),
     );
   });
 }

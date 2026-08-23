@@ -5,6 +5,7 @@ import 'package:multi_scanner/multi_scanner.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_adapter.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_semantic_inputs.dart';
 
 typedef WearBarcodeHandler = Future<bool> Function(String payload);
 class WearBarcodeSerialQueue {
@@ -157,6 +158,12 @@ class WearBarcodeDispatcher implements MultiScannerDelegate {
       logicalScreen: screen,
     );
     if (!receipt.accepted) return false;
-    return _flowController.handleBarcode(payload);
+    final semanticReceipt = await _flowController.authority.dispatchSemanticInput(
+      kind: WearSemanticInputKind.barcode,
+      modality: WearInputModality.barcode,
+      expectedScreen: screen,
+      value: payload,
+    );
+    return semanticReceipt.accepted;
   }
 }

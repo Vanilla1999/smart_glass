@@ -4,6 +4,7 @@ import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_slices.d
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_core_slices.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_slice.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_semantic_inputs.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
 /// Owns epoch transitions once all business feature slices are aggregate-owned.
@@ -49,6 +50,9 @@ class WearRuntimeFeatureEpochReducer implements WearSliceReducer {
             session: requested,
             lifecycle: aggregate.lifecycle.copyWith(runtimeActive: true),
             controls: controls.toTerminalControls(),
+            uiEffects: WearUiEffectSlice(
+              nextEffectId: aggregate.uiEffects.nextEffectId,
+            ),
             features: rawFeatures.copyWith(
               printer: rawFeatures.printer.reset(),
               scan: scan.reset(),
@@ -81,6 +85,9 @@ class WearRuntimeFeatureEpochReducer implements WearSliceReducer {
             lifecycle: aggregate.lifecycle.copyWith(runtimeActive: false),
             navigation: navigation,
             controls: controls.toTerminalControls(),
+            uiEffects: WearUiEffectSlice(
+              nextEffectId: aggregate.uiEffects.nextEffectId,
+            ),
             features: rawFeatures.copyWith(
               printer: rawFeatures.printer.reset(),
               scan: scan.reset(),
@@ -101,6 +108,9 @@ class WearRuntimeFeatureEpochReducer implements WearSliceReducer {
         ),
         navigation: aggregate.navigation.terminalized(),
         controls: controls.toTerminalControls(),
+        uiEffects: WearUiEffectSlice(
+          nextEffectId: aggregate.uiEffects.nextEffectId,
+        ),
         features: rawFeatures.copyWith(
           printer: rawFeatures.printer.reset(),
           scan: scan.reset(),
