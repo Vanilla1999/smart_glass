@@ -15,7 +15,8 @@ void main() {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
 
-    final WearDispatchResult result = await authority.observeVoice(
+    final WearDispatchResult result = await authority.observeVoiceFromEpoch(
+      sessionEpoch: authority.state.sessionEpoch,
       observationRevision: 1,
       phase: WearVoiceRuntimePhase.ready,
       commandsEnabled: true,
@@ -26,16 +27,14 @@ void main() {
     expect(authority.controls.voice.phase, WearVoiceRuntimePhase.ready);
     expect(authority.controls.voice.acceptsCommands, isTrue);
     expect(authority.controls.voice.captureEpoch, 3);
-    expect(
-      authority.controls.voice.toString(),
-      isNot(contains('pcm')),
-    );
+    expect(authority.controls.voice.toString(), isNot(contains('pcm')));
   });
 
   test('stale voice observation and capture epoch are rejected', () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
-    await authority.observeVoice(
+    await authority.observeVoiceFromEpoch(
+      sessionEpoch: authority.state.sessionEpoch,
       observationRevision: 2,
       phase: WearVoiceRuntimePhase.ready,
       commandsEnabled: true,
@@ -70,24 +69,29 @@ void main() {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
     await authority.authorize(user());
+    final int epoch = authority.state.sessionEpoch;
     await authority.setPhoneUiActive(false);
     await authority.requestNavigation(WearScreenId.scanIdle);
 
-    await authority.observeScannerHardware(
+    await authority.observeScannerHardwareFromEpoch(
+      sessionEpoch: epoch,
       observationRevision: 1,
       phase: WearScannerHardwarePhase.preparing,
     );
-    await authority.evaluateScannerAdmission(
+    await authority.evaluateScannerAdmissionFromEpoch(
+      sessionEpoch: epoch,
       logicalScreen: WearScreenId.scanIdle,
       screenAcceptsBarcode: true,
     );
     expect(authority.controls.scanner.barcodeAdmissionEnabled, isFalse);
 
-    await authority.observeScannerHardware(
+    await authority.observeScannerHardwareFromEpoch(
+      sessionEpoch: epoch,
       observationRevision: 2,
       phase: WearScannerHardwarePhase.prepared,
     );
-    await authority.evaluateScannerAdmission(
+    await authority.evaluateScannerAdmissionFromEpoch(
+      sessionEpoch: epoch,
       logicalScreen: WearScreenId.scanIdle,
       screenAcceptsBarcode: true,
     );
@@ -101,25 +105,27 @@ void main() {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
     await authority.authorize(user());
-    await authority.observeScannerHardware(
+    final int epoch = authority.state.sessionEpoch;
+    await authority.observeScannerHardwareFromEpoch(
+      sessionEpoch: epoch,
       observationRevision: 1,
       phase: WearScannerHardwarePhase.prepared,
     );
-    await authority.observePhoneRoute(
-      screen: WearScreenId.menu,
-      observationRevision: 1,
-    );
+    final WearRuntimeNavigationAdapter navigation = authority.navigationAdapter();
+    await navigation.observePhoneRoute(WearScreenId.menu);
     await authority.requestNavigation(WearScreenId.scanIdle);
     await authority.setPhoneUiActive(true);
 
-    await authority.evaluateScannerAdmission(
+    await authority.evaluateScannerAdmissionFromEpoch(
+      sessionEpoch: epoch,
       logicalScreen: WearScreenId.scanIdle,
       screenAcceptsBarcode: true,
     );
     expect(authority.controls.scanner.barcodeAdmissionEnabled, isFalse);
 
     await authority.setPhoneUiActive(false);
-    await authority.evaluateScannerAdmission(
+    await authority.evaluateScannerAdmissionFromEpoch(
+      sessionEpoch: epoch,
       logicalScreen: WearScreenId.scanIdle,
       screenAcceptsBarcode: true,
     );
@@ -131,21 +137,28 @@ void main() {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
     await authority.authorize(user());
+    final int epoch = authority.state.sessionEpoch;
     await authority.requestNavigation(WearScreenId.scanIdle);
-    await authority.observeScannerHardware(
+    await authority.observeScannerHardwareFromEpoch(
+      sessionEpoch: epoch,
       observationRevision: 1,
       phase: WearScannerHardwarePhase.prepared,
     );
-    await authority.evaluateScannerAdmission(
+    await authority.evaluateScannerAdmissionFromEpoch(
+      sessionEpoch: epoch,
       logicalScreen: WearScreenId.scanIdle,
       screenAcceptsBarcode: true,
     );
 
-    final WearDispatchResult first = await authority.acceptBarcodeDelivery(
+    final WearDispatchResult first =
+        await authority.acceptBarcodeDeliveryFromEpoch(
+      sessionEpoch: epoch,
       deliveryId: 7,
       logicalScreen: WearScreenId.scanIdle,
     );
-    final WearDispatchResult duplicate = await authority.acceptBarcodeDelivery(
+    final WearDispatchResult duplicate =
+        await authority.acceptBarcodeDeliveryFromEpoch(
+      sessionEpoch: epoch,
       deliveryId: 7,
       logicalScreen: WearScreenId.scanIdle,
     );
@@ -158,7 +171,8 @@ void main() {
   test('connectivity observations are monotonic and versioned', () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
-    await authority.observeConnectivity(
+    await authority.observeConnectivityFromEpoch(
+      sessionEpoch: authority.state.sessionEpoch,
       observationRevision: 2,
       phase: WearConnectivityPhase.online,
     );
@@ -180,22 +194,25 @@ void main() {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
     await authority.authorize(user());
+    final int epoch = authority.state.sessionEpoch;
     await authority.requestNavigation(WearScreenId.scanIdle);
-    await authority.observeScannerHardware(
+    await authority.observeScannerHardwareFromEpoch(
+      sessionEpoch: epoch,
       observationRevision: 1,
       phase: WearScannerHardwarePhase.prepared,
     );
-    await authority.evaluateScannerAdmission(
+    await authority.evaluateScannerAdmissionFromEpoch(
+      sessionEpoch: epoch,
       logicalScreen: WearScreenId.scanIdle,
       screenAcceptsBarcode: true,
     );
-    await authority.observeVoice(
+    await authority.observeVoiceFromEpoch(
+      sessionEpoch: epoch,
       observationRevision: 1,
       phase: WearVoiceRuntimePhase.ready,
       commandsEnabled: true,
       captureEpoch: 1,
     );
-    final int epoch = authority.state.sessionEpoch;
 
     await authority.clearSession();
 
