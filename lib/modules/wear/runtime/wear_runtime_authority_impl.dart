@@ -6,6 +6,7 @@ import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_epoch_re
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_slices.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_validation_reducer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_core_slices.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_navigation_epoch_reducer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
 class WearRuntimeAuthority {
@@ -25,6 +26,7 @@ class WearRuntimeAuthority {
           reducer: WearAggregateReducer(
             sliceReducers: const <WearSliceReducer>[
               WearControlInputValidationReducer(),
+              WearSessionNavigationEpochReducer(),
               WearControlEpochResetReducer(),
               WearControlSliceReducer(),
               WearCoreSliceReducer(),
@@ -58,6 +60,10 @@ class WearRuntimeAuthority {
   bool get isAuthorized => payload.session.isAuthorized;
 
   AuthenticatedUser? get userOrNull => payload.session.user;
+
+  WearRuntimeNavigationAdapter navigationAdapter() {
+    return WearRuntimeNavigationAdapter(this);
+  }
 
   Future<WearDispatchResult> authorize(AuthenticatedUser user) async {
     final bool wasAuthorized = payload.session.isAuthorized;
@@ -106,8 +112,21 @@ class WearRuntimeAuthority {
     required WearScreenId screen,
     required int observationRevision,
   }) {
+    return observePhoneRouteAtEpoch(
+      sessionEpoch: state.sessionEpoch,
+      screen: screen,
+      observationRevision: observationRevision,
+    );
+  }
+
+  Future<WearDispatchResult> observePhoneRouteAtEpoch({
+    required int sessionEpoch,
+    required WearScreenId screen,
+    required int observationRevision,
+  }) {
     return _store.dispatch(
-      WearPhoneRouteObserved(
+      WearEpochBoundPhoneRouteObserved(
+        sessionEpoch: sessionEpoch,
         screen: screen,
         observationRevision: observationRevision,
       ),
@@ -118,8 +137,24 @@ class WearRuntimeAuthority {
     required int requestId,
     required WearScreenId screen,
   }) {
+    return acknowledgeNavigationAtEpoch(
+      sessionEpoch: state.sessionEpoch,
+      requestId: requestId,
+      screen: screen,
+    );
+  }
+
+  Future<WearDispatchResult> acknowledgeNavigationAtEpoch({
+    required int sessionEpoch,
+    required int requestId,
+    required WearScreenId screen,
+  }) {
     return _store.dispatch(
-      WearNavigationAcknowledged(requestId: requestId, screen: screen),
+      WearEpochBoundNavigationAcknowledged(
+        sessionEpoch: sessionEpoch,
+        requestId: requestId,
+        screen: screen,
+      ),
     );
   }
 
@@ -237,5 +272,36 @@ class WearRuntimeAuthority {
   Future<void> _closeCompatibilityStreams() async {
     if (!_authorized.isClosed) await _authorized.close();
     if (!_cleared.isClosed) await _cleared.close();
+  }
+}
+
+class WearRuntimeNavigationAdapter {
+  WearRuntimeNavigationAdapter(WearRuntimeAuthority authority)
+      : _authority = authority,
+        sessionEpoch = authority.state.sessionEpoch,
+        _nextObservationRevision =
+            authority.payload.navigation.routeObservationRevision;
+
+  final WearRuntimeAuthority _authority;
+  final int sessionEpoch;
+  int _nextObservationRevision;
+
+  Future<WearDispatchResult> observePhoneRoute(WearScreenId screen) {
+    return _authority.observePhoneRouteAtEpoch(
+      sessionEpoch: sessionEpoch,
+      screen: screen,
+      observationRevision: ++_nextObservationRevision,
+    );
+  }
+
+  Future<WearDispatchResult> acknowledge({
+    required int requestId,
+    required WearScreenId screen,
+  }) {
+    return _authority.acknowledgeNavigationAtEpoch(
+      sessionEpoch: sessionEpoch,
+      requestId: requestId,
+      screen: screen,
+    );
   }
 }
