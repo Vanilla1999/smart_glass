@@ -1,0 +1,113 @@
+name: Finalize reviewed Wear S11 tree
+
+on:
+  push:
+    branches:
+      - refactor/wear-runtime-route-observation
+    paths:
+      - .github/workflows/finalize-wear-s11-final.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/wear-runtime-route-observation
+          fetch-depth: 0
+      - name: Verify or apply reviewed guards and remove temporary workflows
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          controller = Path('lib/modules/wear/application/wear_flow_controller.dart')
+          source = controller.read_text()
+          if 'final WearPendingNavigation? pending =' not in source:
+              pattern = re.compile(
+                  r"  Future<void> flushPendingNavigation\(\) async \{\n"
+                  r"\s+final WearNavigationRequest\? request = _state\.pendingNavigation;\n"
+                  r"\s+if \(request == null \|\| _uiLifecycle != WearUiLifecycle\.active\) return;"
+              )
+              replacement = """  Future<void> flushPendingNavigation() async {
+            final WearPendingNavigation? pending =
+                _authority.payload.navigation.pending;
+            if (pending == null || _uiLifecycle != WearUiLifecycle.active) return;
+            final WearNavigationRequest? legacyRequest = _state.pendingNavigation;
+            final WearNavigationRequest request = WearNavigationRequest(
+              requestId: pending.requestId,
+              screen: pending.screen,
+              extra: legacyRequest?.screen == pending.screen
+                  ? legacyRequest?.extra
+                  : null,
+              replaceCurrent: pending.kind == WearPendingNavigationKind.replace,
+              popCurrent: pending.kind == WearPendingNavigationKind.pop,
+            );"""
+              source, count = pattern.subn(replacement, source, count=1)
+              if count != 1:
+                  raise SystemExit('pending delivery insertion point not found')
+          source = source.replace(
+              'if (_state.pendingNavigation?.requestId == request.requestId) {',
+              'if (_authority.payload.navigation.pending?.requestId == request.requestId) {',
+              1,
+          )
+          if 'navigation acknowledged request=$pending' not in source:
+              ack = re.compile(
+                  r"  bool acknowledgeNavigation\(\{\n"
+                  r"\s+required int requestId,\n"
+                  r"\s+required WearScreenId screen,\n"
+                  r"\s+\}\) \{\n"
+                  r"\s+final WearNavigationRequest\? request = _state\.pendingNavigation;\n"
+                  r"\s+if \(request == null \|\|\n"
+                  r"\s+request\.requestId != requestId \|\|\n"
+                  r"\s+request\.screen != screen\) \{\n"
+                  r"\s+return false;\n"
+                  r"\s+\}\n"
+                  r"\s+print\('\[WearFlowController\] navigation acknowledged request=\$request'\);"
+              )
+              replacement = """  bool acknowledgeNavigation({
+            required int requestId,
+            required WearScreenId screen,
+          }) {
+            final WearPendingNavigation? pending =
+                _authority.payload.navigation.pending;
+            if (pending == null ||
+                pending.requestId != requestId ||
+                pending.screen != screen) {
+              return false;
+            }
+            print('[WearFlowController] navigation acknowledged request=$pending');"""
+              source, count = ack.subn(replacement, source, count=1)
+              if count != 1:
+                  raise SystemExit('pending acknowledgement insertion point not found')
+          controller.write_text(source)
+
+          dispatcher = Path('lib/modules/wear/services/wear_barcode_dispatcher.dart')
+          barcode = dispatcher.read_text()
+          if '_authority.isAuthorized ||' not in barcode:
+              pattern = re.compile(
+                  r"(semanticReceipt\.rejectReason != WearDispatchRejectReason\.unsupported \|\|\n)"
+                  r"(\s+)(_authority\.state\.sessionEpoch != sessionEpoch \|\|)"
+              )
+              barcode, count = pattern.subn(
+                  r"\1\2_authority.isAuthorized ||\n\2screen != WearScreenId.main ||\n\2\3",
+                  barcode,
+                  count=1,
+              )
+              if count != 1:
+                  raise SystemExit('barcode fallback insertion point not found')
+              dispatcher.write_text(barcode)
+
+          for workflow in Path('.github/workflows').glob('finalize-wear-s11*.yml'):
+              workflow.unlink()
+          PY
+      - name: Commit final reviewed tree
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "fix(wear): finalize aggregate route boundary"
+          git push origin HEAD:refactor/wear-runtime-route-observation
