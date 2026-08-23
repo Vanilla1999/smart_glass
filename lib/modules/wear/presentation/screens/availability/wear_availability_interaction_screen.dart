@@ -33,7 +33,6 @@ class _WearAvailabilityInteractionScreenState
   @override
   void initState() {
     super.initState();
-    _flow.enterScreen(WearScreenId.availabilityInteraction);
     _focusedIndex = _projectedFocus(_authority.state);
     _runtimeSub = _authority.states.listen(_onRuntimeState);
   }
