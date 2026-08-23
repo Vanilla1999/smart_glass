@@ -431,7 +431,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     if (screenId != null) {
       _syncScannerForCurrentScreen(routeScreen: screenId);
       if (widget.onStartVoice == null) {
-        WearDependencies.I.actualScreenStore.confirm(screenId);
+        unawaited(WearDependencies.I.actualScreenStore.confirm(screenId));
       }
       if (screenId == flow.state.screen) {
         _configureVoiceForScreen(screenId);
@@ -793,6 +793,7 @@ class _WearModuleAppState extends State<WearModuleApp>
         WearUiLifecycle.inactive,
       );
       _flow.setRuntimeActive(false);
+      unawaited(_flow.authority.terminate());
       if (widget.flowController == null) {
         WearDependencies.I.barcodeDispatcher.stop();
         unawaited(WearDependencies.I.scannerRuntime.release());
@@ -882,6 +883,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     _routerObservationRevision += 1;
     _stopWearControlService('dispose');
     _flow.setRuntimeActive(false);
+    unawaited(_flow.authority.terminate());
     if (widget.flowController == null) {
       WearDependencies.I.barcodeDispatcher.stop();
       unawaited(
