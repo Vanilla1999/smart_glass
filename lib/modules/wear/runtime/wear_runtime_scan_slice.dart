@@ -170,12 +170,12 @@ class WearPriceTagPrintSucceeded extends WearIntent {
   const WearPriceTagPrintSucceeded({
     required this.sessionEpoch,
     required this.operationId,
-    required this.productName,
+    required this.printerName,
   });
 
   final int sessionEpoch;
   final int operationId;
-  final String productName;
+  final String printerName;
 }
 
 class WearPriceTagPrintFailed extends WearIntent {
@@ -549,15 +549,17 @@ class WearScanSliceReducer implements WearSliceReducer {
         requiredPhase: WearScanTaskPhase.printing,
       );
       if (rejection != null) return WearReduction.reject(rejection);
+      final String productName = scan.productName ?? '';
       return _enterStatus(
         state.clearExpectedOperation(WearPrintPriceTagEffect.operationKind),
         aggregate,
         rawFeatures,
-        scan.copyWith(productName: intent.productName),
+        scan,
         args: WearStatusScreenArgs(
           kind: WearStatusKind.success,
           title: 'Ценник напечатан',
-          message: intent.productName,
+          message: productName,
+          details: intent.printerName,
           autoAfter: const Duration(seconds: 2),
           autoAction: WearStatusAutoAction.none,
         ),

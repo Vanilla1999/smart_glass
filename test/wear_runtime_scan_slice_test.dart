@@ -36,7 +36,7 @@ void main() {
     expect(authority.scanTask.products, isEmpty);
   });
 
-  test('one lookup result commits printing before print completes', () async {
+  test('one lookup result preserves product after print completes', () async {
     final WearRuntimeAuthority authority = await _preparedAuthority();
     addTearDown(authority.dispose);
     final Completer<String> print = Completer<String>();
@@ -44,7 +44,7 @@ void main() {
     authority.registerEffectExecutor(
       WearScanEffectExecutor(
         lookup: (_) async => <BarcodeProductInfo>[
-          BarcodeProductInfo(id: 10, name: 'Product'),
+          BarcodeProductInfo(id: 10, name: 'Молоко'),
         ],
         print: (_, __) {
           printCalls++;
@@ -62,15 +62,20 @@ void main() {
 
     expect(printCalls, 1);
     expect(authority.scanTask.phase, WearScanTaskPhase.printing);
+    expect(authority.scanTask.productName, 'Молоко');
     expect(
       authority.state
           .expectedOperationId(WearPrintPriceTagEffect.operationKind),
       isNotNull,
     );
 
-    print.complete('Product');
+    print.complete('Белый принтер');
     await _flush();
+
     expect(authority.scanTask.phase, WearScanTaskPhase.status);
+    expect(authority.scanTask.productName, 'Молоко');
+    expect(authority.scanTask.status?.message, 'Молоко');
+    expect(authority.scanTask.status?.details, 'Белый принтер');
   });
 
   test('many lookup results enter immutable product selection', () async {
@@ -195,7 +200,7 @@ void main() {
     expect(authority.state.sessionEpoch, greaterThan(oldEpoch));
     expect(authority.scanTask.phase, WearScanTaskPhase.waiting);
 
-    print.complete('Product');
+    print.complete('White');
     await _flush();
     expect(authority.scanTask.phase, WearScanTaskPhase.waiting);
     expect(authority.scanTask.status, isNull);

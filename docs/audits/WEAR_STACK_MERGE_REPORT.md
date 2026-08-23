@@ -2,7 +2,23 @@
 
 Дата актуализации: 2026-08-23.
 
-## 1. Где находится исходный план
+## 1. Назначение отчёта
+
+Этот документ фиксирует:
+
+- исходный план Wear single-state migration;
+- фактическую историю PR #1–#12;
+- состояние integration branch после merge stack и post-merge stabilization;
+- достигнутый ownership migrated business slices;
+- оставшийся compatibility layer;
+- исторический host-validation snapshot;
+- обязательные follow-up и device-only release gates.
+
+Отчёт не заменяет GitHub history, commit objects или CI. Для moving review-fix
+branch её актуальный HEAD и итоговый merge SHA берутся из соответствующего PR, а
+не поддерживаются вручную в этом документе до merge.
+
+## 2. Где находится исходный план
 
 Основной план миграции находится в
 [`docs/WEAR_SINGLE_STATE_RUNTIME_PLAN.md`](../WEAR_SINGLE_STATE_RUNTIME_PLAN.md).
@@ -14,23 +30,33 @@
 - [`docs/decisions/ADR-0002-WEAR_STORE_EXECUTION_ORDER.md`](../decisions/ADR-0002-WEAR_STORE_EXECUTION_ORDER.md) — порядок dispatch, commit, effect и receipt;
 - [`docs/checklists/WEAR_SINGLE_STATE_MR_REVIEW.md`](../checklists/WEAR_SINGLE_STATE_MR_REVIEW.md) — обязательная проверка каждого migration MR;
 - `docs/checklists/WEAR_MR_S*_*.md` — validation record отдельных этапов;
+- [`docs/audits/WEAR_STACK_REVIEW_FIX_PLAN.md`](WEAR_STACK_REVIEW_FIX_PLAN.md) — bounded plan исправления замечаний финального review;
 - [`docs/INDEX.md`](../INDEX.md) — индекс canonical project documentation.
 
 Изначальная стратегия: strangler migration без одновременной записи одного
 значения в legacy и aggregate owners. Каждый MR должен был уменьшать число
-mutable owners, переносить один bounded slice и сохранять работающий flow.
+mutable owners, переносить bounded slice и сохранять работающий flow.
 
-## 2. Integration branch и committed state
+## 3. Integration branch и commit ledger
 
 - Integration/base branch: `experiment/aligned-audio-frontend`.
-- GitHub remote tracking branch: `github/experiment/aligned-audio-frontend`.
-- Последний committed и pushed HEAD: `10d639b25a7be567fbafc3f9ef0c972040c670ec`.
-- Merge stack HEAD до документационного commit: `99d8e5b702d19e99c1c8ffb69f9d54309a70933f`.
-- Commit исходного merge report: `10d639b docs(wear): record single-state stack merge`.
-- Исправления compilation/runtime/tests после `10d639b` находятся в текущем
-  рабочем дереве и пока не закоммичены и не отправлены.
+- MR-S9 merge SHA: `99d8e5b702d19e99c1c8ffb69f9d54309a70933f`.
+- Первый merge-report commit: `10d639b25a7be567fbafc3f9ef0c972040c670ec`.
+- Committed post-merge stabilization HEAD, от которого начат review-fix MR:
+  `5b203450eff51119d65cd0c4f3817b2d4a0fc38e`.
+- Post-merge production fixes, test migration и предыдущая актуализация отчёта
+  входят в `5b20345`; они больше не являются незакоммиченным working-tree state.
+- Review-fix branch: `fix/wear-stack-review-findings`.
+- План review-fix зафиксирован commit
+  `c642f2dd904ac9ba0e8ea4930ab3fb91d004b8c9`.
 
-## 3. План и фактические merges
+Для аудита важно различать три точки:
+
+1. `99d8e5b` — кодовый результат merge MR-S9;
+2. `10d639b` — первоначальный merge report поверх stack;
+3. `5b20345` — committed stabilization и migrated legacy tests после stack.
+
+## 4. План и фактические merges
 
 Все canonical PR были смержены 2026-08-23 в плановом порядке в
 `experiment/aligned-audio-frontend`.
@@ -47,52 +73,69 @@ mutable owners, переносить один bounded slice и сохранят�
 | Duplicate, not merged | [#8](https://github.com/Vanilla1999/smart_glass/pull/8) | `refactor/wear-session-navigation-state` | `refactor/wear-runtime-store-shell` | — | — | Superseded MR-S2 duplicate, closed |
 | MR-S6 | [#9](https://github.com/Vanilla1999/smart_glass/pull/9) | `refactor/wear-runtime-availability-slice` | `experiment/aligned-audio-frontend` | `808fecb9dbe14b1bb0c633432af889f16905d474` | `0af51a1f3a9b04bb10b6d3ad096a2546008fb18a` | Authoritative availability slice |
 | MR-S7 | [#10](https://github.com/Vanilla1999/smart_glass/pull/10) | `refactor/wear-runtime-semantic-inputs` | `experiment/aligned-audio-frontend` | `94843ad69d02da8a566e8a111a75b432b54d5c36` | `90155f87b0d94cd707f6d737d10011f20655f4d3` | Semantic inputs and bounded UI effects |
-| MR-S8 | [#11](https://github.com/Vanilla1999/smart_glass/pull/11) | `refactor/wear-runtime-unified-projection` | `experiment/aligned-audio-frontend` | `e777e8389662c5ee130e6c12136d8e807542d05e` | `a6688567ccab2ee9fc4f03c6511d5ee5ccec71a5` | Unified phone/glasses projection |
-| MR-S9 | [#12](https://github.com/Vanilla1999/smart_glass/pull/12) | `refactor/wear-runtime-legacy-cleanup` | `experiment/aligned-audio-frontend` | `afd5f526b786654cedbdc29e1ff5b2a9853275d3` | `99d8e5b702d19e99c1c8ffb69f9d54309a70933f` | Legacy writable-owner cleanup |
+| MR-S8 | [#11](https://github.com/Vanilla1999/smart_glass/pull/11) | `refactor/wear-runtime-unified-projection` | `experiment/aligned-audio-frontend` | `e777e8389662c5ee130e6c12136d8e807542d05e` | `a6688567ccab2ee9fc4f03c6511d5ee5ccec71a5` | Unified aggregate projection and versioned glasses envelope |
+| MR-S9 | [#12](https://github.com/Vanilla1999/smart_glass/pull/12) | `refactor/wear-runtime-legacy-cleanup` | `experiment/aligned-audio-frontend` | `afd5f526b786654cedbdc29e1ff5b2a9853275d3` | `99d8e5b702d19e99c1c8ffb69f9d54309a70933f` | Cleanup of migrated legacy writable owners and retained adapters |
 
-PR #8 не входит в merge history. Открытых PR и unresolved review threads после
-merge stack не осталось.
+PR #8 закрыт без merge и не входит в integration history. Утверждение относится
+к original stack #1–#12 и не означает отсутствие других, более поздних PR в
+репозитории.
 
-## 4. Состояние веток после merge
+## 5. Состояние веток после merge
 
-Canonical head branches PR #2...#12 были удалены локально и на GitHub после
-merge; integration branch сохранена. Baseline branch PR #1 и отдельные ветки на
-других remotes не являются частью cleanup canonical MR stack.
+Canonical head branches PR #2...#12 были удалены после merge; integration branch
+сохранена. Это исторический remote cleanup snapshot original stack.
 
-Текущее состояние:
+Подтверждённое committed состояние:
 
-- `experiment/aligned-audio-frontend` и
-  `github/experiment/aligned-audio-frontend` указывают на `10d639b`;
-- локальных canonical `plan/wear-single-state-runtime` и
-  `refactor/wear-runtime-*` branches больше нет;
-- в `github/*` canonical PR #2...#12 head refs отсутствуют;
-- ветки `main`, voice/UAC4, `works`, `fsd`, пользовательские и branches другого
-  remote `origin` не удалялись как часть этой работы;
-- PR #8 закрыт без merge, его commit не добавлялся в integration branch.
+- integration branch содержала `5b20345` при создании review-fix branch;
+- PR #8 закрыт без merge, его commit не добавлялся в integration branch;
+- `artifacts/voice_replay/`, `packages/vosk_flutter_service/build/` и
+  `packages/vosk_flutter_service/pubspec.lock` не входят в committed tree
+  `5b20345`;
+- ветки `main`, voice/UAC4, `works`, `fsd`, пользовательские ветки и refs другого
+  remote не являлись целью cleanup.
 
-## 5. Финальный ownership
+Текущее локальное working tree, локальные refs и ignored files этим GitHub audit
+не подтверждаются. Для таких утверждений нужен отдельный timestamped вывод
+`git status`/`git branch`, которого в этом отчёте нет.
 
-| Value | Writable owner |
+## 6. Достигнутый ownership и граница результата
+
+Для migrated business values authoritative state находится в aggregate runtime:
+
+| Value | Authoritative owner после stack |
 |---|---|
 | Session identity and lifecycle | Aggregate session/lifecycle slices |
-| Logical navigation, history and pending request | Aggregate navigation slice |
-| Actual phone route | Epoch-bound aggregate navigation observation |
-| Voice, scanner and connectivity | Aggregate control slices |
+| Logical navigation and pending request | Aggregate navigation slice |
+| Voice, scanner and connectivity admission | Aggregate control slices |
 | Printer state and selection | Aggregate printer slice |
 | Scan, print and status | Aggregate scan slice |
 | Availability flow | Aggregate availability slice |
-| Semantic inputs and UI effects | Aggregate semantic/UI-effect reducers |
-| Phone and glasses projection | Pure projection of one committed snapshot |
+| Semantic inputs and bounded UI effects | Aggregate semantic/UI-effect reducers |
+| Glasses projection and envelope version | Projection of committed aggregate snapshot |
 | Glasses transport | `WearRuntimeGlassesSender` |
 
-Feature runtime classes остаются input/read-projection adapters над injected root
-authority. Compatibility helpers не должны снова становиться writable business
-owners.
+При этом исходный Definition of Done раздела 15 выполнен не полностью для всего
+phone presentation layer. В проекте сохранены:
 
-## 6. Исправления после merge
+- `WearFlowController` с compatibility presentation/navigation state;
+- runtime adapters для ещё не полностью мигрированных экранов;
+- widget lifecycle paths, которые всё ещё вызывают compatibility `enterScreen()`;
+- phone screens, которые читают legacy-compatible controller stream вместо
+  единой aggregate phone projection.
 
-После первого статического merge audit были устранены compilation и runtime
-проблемы merged stack:
+Поэтому корректная формулировка результата:
+
+> Основные Wear business slices и glasses projection переведены на aggregate
+> authority. Полное удаление compatibility state и перевод всего phone UI в
+> projection-only режим остаются отдельным follow-up milestone.
+
+Нельзя использовать этот отчёт как разрешение снова добавлять второй writable
+owner уже мигрированного business value.
+
+## 7. Committed post-merge stabilization
+
+Commit `5b20345` включает production/test stabilization после первого merge audit:
 
 - navigation acknowledgement переведён на epoch-bound authority adapter;
 - удалены обращения к отсутствующему `_clearContextPayload`;
@@ -105,11 +148,21 @@ owners.
 - mock lookup/print перенесены в `WearScanEffectExecutor`;
 - stale availability/photo/scan/printer results защищены epoch, operation и screen
   admission;
-- targeted adapters и tests приведены к typed authority API.
+- targeted adapters и legacy tests приведены к typed authority API.
 
-## 7. Миграция legacy tests
+Review-fix MR дополнительно исправляет доказанную семантическую ошибку успешной
+печати:
 
-Первый полный последовательный запуск после production fixes показал:
+- `PrintPriceTagUseCase` и mock path возвращают имя использованного принтера;
+- typed success intent переносит `printerName`, а не маскирует его как товар;
+- `WearScanTaskSlice.productName` сохраняет выбранный товар;
+- success status использует товар как `message`, принтер как `details`;
+- raw и status-sequencing reducers имеют одинаковый контракт;
+- regression tests используют разные значения товара и принтера.
+
+## 8. Миграция legacy tests
+
+Первый полный последовательный запуск после production fixes ранее показал:
 
 - 661 passed;
 - 2 skipped;
@@ -125,24 +178,24 @@ owners.
 - availability tests считали accepted dispatch завершённым external effect;
 - feedback assertions отражали старую policy.
 
-Выполнено:
+В `5b20345` зафиксировано:
 
 - добавлен `test/support/wear_runtime_test_helper.dart`;
-- каждый migrated test создаёт fresh local authority, ожидает authorization,
-  runtime/UI activation и использует тот же authority в controller;
+- migrated tests создают fresh local authority, ожидают authorization, runtime/UI
+  activation и используют тот же authority в controller;
 - setup navigation выполняется через awaited `requestNavigation()`;
 - effect completion ожидается через predicate по authoritative state;
 - router tests различают logical screen, actual route и acknowledgement;
 - projection tests создают aggregate state вместо direct payload injection;
 - удалены 40 test cases, проверявших намеренно удалённый controller-owned
   payload/history compatibility contract; актуальная ownership coverage сохранена
-  в runtime authority, navigation и projection suites.
+  в authority, navigation и projection suites.
 
-## 8. Итоговая валидация
+## 9. Исторический host-validation snapshot
 
-Host-side validation выполнена на текущем рабочем дереве:
+До commit `5b20345` был записан следующий локальный результат:
 
-| Gate | Result |
+| Gate | Исторический локальный результат |
 |---|---|
 | Migrated nine-file suite | 138 passed, 0 failed |
 | Targeted Wear runtime suite | 152 passed, 0 failed |
@@ -153,30 +206,51 @@ Host-side validation выполнена на текущем рабочем де�
 | `flutter build apk --debug` | Passed |
 | Debug APK | `build/app/outputs/flutter-apk/app-debug.apk` |
 
-Согласно Flutter documentation, `test/` выполняется host-side. Native
-`integration_test/`/`patrol_test/` scenarios требуют Android device/emulator и не
-входят в приведённые 751 host tests.
+Ограничения этого evidence:
 
-## 9. Что не проверено
+- это сохранённый локальный snapshot, а не GitHub Actions/commit status;
+- в отчёте нет immutable log artifact, environment manifest и APK SHA-256;
+- он не доказывает результат на moving review-fix HEAD;
+- в review-fix MR Flutter, Dart analyzer, Gradle, tests и APK build повторно не
+  запускались; изменения проверяются только чтением кода и PR diff.
+
+Следовательно, после merge review-fix для commit-bound release evidence нужен
+отдельный разрешённый CI/local validation run на точном final SHA.
+
+## 10. Device-only release gates
 
 На реальном устройстве или emulator ещё необходимо проверить:
 
 - Android MethodChannel и secondary glasses display;
 - real scanner/camera permissions and lifecycle;
+- USB/camera scanner input и reconnect/replay;
 - UAC4 microphone routing и native Vosk model loading;
 - logout/detached resource release;
 - phone inactive/resume и scanner prepare/pause races;
 - printer, scan и availability screen-off flows;
 - glasses disconnect/reconnect и transport failure;
-- exactly-once print/photo/UI effects на реальном hardware path.
+- exactly-once print/photo/UI effects на реальном hardware path;
+- настоящий принтер и корректное отображение пары товар/принтер после печати.
 
-## 10. Текущее незавершённое действие
+Эти пункты остаются обязательными production release gates независимо от
+host-side unit coverage.
 
-Техническая миграция и host validation завершены, но post-merge fixes, test
-migration и эта актуализация отчёта находятся в незакоммиченном рабочем дереве.
-До создания commit необходимо ещё раз проверить intended diff и не включать
-существующие untracked artifacts:
+## 11. Оставшиеся follow-up
 
-- `artifacts/voice_replay/`;
-- `packages/vosk_flutter_service/build/`;
-- `packages/vosk_flutter_service/pubspec.lock`.
+После review-fix MR остаются отдельными задачами:
+
+1. Перевести оставшиеся phone screens на aggregate selectors или
+   `WearRuntimeProjection.projectPhone`.
+2. Удалить business `enterScreen()` из widget lifecycle там, где он ещё служит
+   mutation, а не observation.
+3. Устранить дублирование `currentScreen`, menu focus и других navigation values
+   между aggregate и compatibility state.
+4. Сузить `WearFlowController` до façade без собственного writable business state
+   либо удалить его после миграции последнего consumer.
+5. Расширить ownership/static gates на весь Wear presentation layer.
+6. Выполнить commit-bound host validation на разрешённом final SHA.
+7. Закрыть device-only release gates из раздела 10.
+
+Итоговый статус нельзя описывать как полный production sign-off, пока пункты 6–7
+не подтверждены. Архитектурный stack завершил основной aggregate migration, но
+полный presentation cleanup исходного Definition of Done ещё открыт.
