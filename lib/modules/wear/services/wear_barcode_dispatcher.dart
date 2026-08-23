@@ -202,11 +202,12 @@ class WearBarcodeDispatcher implements MultiScannerDelegate {
     }
 
     // Pre-auth/main remains a bounded compatibility handler until auth itself
-    // becomes an aggregate effect in MR-S12. The fallback is allowed only for an
-    // unsupported semantic path that still belongs to the exact captured epoch
-    // and logical screen; stale/duplicate/busy inputs never bypass the store.
+    // becomes an aggregate effect in MR-S12. No authenticated or non-main path
+    // may bypass the aggregate semantic reducer.
     final WearBarcodeHandler? fallback = _unsupportedHandler;
     if (fallback == null ||
+        _authority.isAuthorized ||
+        screen != WearScreenId.main ||
         semanticReceipt.rejectReason != WearDispatchRejectReason.unsupported ||
         _authority.state.sessionEpoch != sessionEpoch ||
         _authority.payload.navigation.logicalScreen != screen) {
