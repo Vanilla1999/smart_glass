@@ -10,6 +10,7 @@ import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaf
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_svg_icon.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_phone_feature_projection.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
@@ -59,9 +60,12 @@ class _WearScanIdleScreenState extends State<WearScanIdleScreen>
 
   Future<void> _requestManualInput() async {
     final WearRuntimeState snapshot = _authority.state;
-    final WearAggregatePayload aggregate =
-        snapshot.payloadAs<WearAggregatePayload>();
-    if (aggregate.navigation.logicalScreen != WearScreenId.scanIdle) return;
+    final WearScanPhoneProjection projection =
+        WearScanPhoneProjection.fromState(snapshot);
+    if (projection.logicalScreen != WearScreenId.scanIdle ||
+        projection.phase != WearScanTaskPhase.waiting) {
+      return;
+    }
     await _authority.dispatchSemanticInput(
       kind: WearSemanticInputKind.requestUiEffect,
       modality: WearInputModality.touch,
@@ -76,10 +80,6 @@ class _WearScanIdleScreenState extends State<WearScanIdleScreen>
     if (_effectCallbackScheduled || _executingEffectId != null) return;
     final WearAggregatePayload aggregate =
         state.payloadAs<WearAggregatePayload>();
-    if (aggregate.navigation.logicalScreen != WearScreenId.scanIdle ||
-        !aggregate.lifecycle.phoneUiActive) {
-      return;
-    }
     final WearUiEffect? effect =
         aggregate.uiEffects.effectOfKind(WearUiEffectKind.manualBarcodeInput);
     if (effect == null ||
@@ -88,6 +88,15 @@ class _WearScanIdleScreenState extends State<WearScanIdleScreen>
         effect.expectedScreen != WearScreenId.scanIdle) {
       return;
     }
+    final WearScanPhoneProjection projection =
+        WearScanPhoneProjection.fromState(state);
+    if (projection.logicalScreen != WearScreenId.scanIdle ||
+        projection.phase != WearScanTaskPhase.waiting) {
+      unawaited(_authority.cancelUiEffect(effect));
+      return;
+    }
+    if (!aggregate.lifecycle.phoneUiActive) return;
+
     _effectCallbackScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _effectCallbackScheduled = false;
@@ -98,27 +107,44 @@ class _WearScanIdleScreenState extends State<WearScanIdleScreen>
 
   Future<void> _consumeManualInput(WearUiEffect effect) async {
     if (_executingEffectId != null || !mounted) return;
-    final bool isCurrentRoute = ModalRoute.of(context)?.isCurrent ?? false;
-    if (!isCurrentRoute) return;
+    if (!(ModalRoute.of(context)?.isCurrent ?? false)) return;
 
     final WearRuntimeState beforeClaim = _authority.state;
     final WearAggregatePayload aggregate =
         beforeClaim.payloadAs<WearAggregatePayload>();
     final WearUiEffect? current = aggregate.uiEffects.effectById(effect.effectId);
+    final WearScanPhoneProjection beforeProjection =
+        WearScanPhoneProjection.fromState(beforeClaim);
     if (current == null ||
         current.status != WearUiEffectStatus.pending ||
         current.sessionEpoch != beforeClaim.sessionEpoch ||
         current.expectedScreen != WearScreenId.scanIdle ||
-        aggregate.navigation.logicalScreen != WearScreenId.scanIdle) {
+        beforeProjection.logicalScreen != WearScreenId.scanIdle ||
+        beforeProjection.phase != WearScanTaskPhase.waiting) {
       return;
     }
 
     final WearDispatchResult claim = await _authority.claimUiEffect(current);
-    if (!claim.accepted ||
-        claim.sessionEpoch != current.sessionEpoch ||
-        !mounted) {
+    if (!claim.accepted || claim.sessionEpoch != current.sessionEpoch) return;
+
+    final WearRuntimeState afterClaim = _authority.state;
+    final WearAggregatePayload afterAggregate =
+        afterClaim.payloadAs<WearAggregatePayload>();
+    final WearUiEffect? claimed =
+        afterAggregate.uiEffects.effectById(current.effectId);
+    final WearScanPhoneProjection afterProjection =
+        WearScanPhoneProjection.fromState(afterClaim);
+    final bool stillCurrent = mounted &&
+        (ModalRoute.of(context)?.isCurrent ?? false) &&
+        afterClaim.sessionEpoch == current.sessionEpoch &&
+        afterProjection.logicalScreen == WearScreenId.scanIdle &&
+        afterProjection.phase == WearScanTaskPhase.waiting &&
+        claimed?.status == WearUiEffectStatus.claimed;
+    if (!stillCurrent) {
+      await _authority.cancelUiEffect(current);
       return;
     }
+
     _executingEffectId = current.effectId;
     try {
       final String? code = await context.push<String>(
