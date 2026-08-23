@@ -1,0 +1,54 @@
+name: Finalize Wear S11 bounded fallback
+
+on:
+  push:
+    branches:
+      - refactor/wear-runtime-route-observation
+    paths:
+      - .github/workflows/finalize-wear-s11.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/wear-runtime-route-observation
+          fetch-depth: 0
+      - name: Apply exact reviewed transform
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('lib/modules/wear/services/wear_barcode_dispatcher.dart')
+          source = path.read_text()
+          old = '''    if (fallback == null ||
+                  semanticReceipt.rejectReason != WearDispatchRejectReason.unsupported ||
+                  _authority.state.sessionEpoch != sessionEpoch ||
+                  _authority.payload.navigation.logicalScreen != screen) {
+          '''
+          new = '''    if (fallback == null ||
+                  semanticReceipt.rejectReason != WearDispatchRejectReason.unsupported ||
+                  _authority.isAuthorized ||
+                  screen != WearScreenId.main ||
+                  _authority.state.sessionEpoch != sessionEpoch ||
+                  _authority.payload.navigation.logicalScreen != screen) {
+          '''
+          if old not in source:
+              if '_authority.isAuthorized ||' not in source or 'screen != WearScreenId.main ||' not in source:
+                  raise SystemExit('expected fallback guard not found')
+          else:
+              path.write_text(source.replace(old, new, 1))
+
+          Path('.github/workflows/finalize-wear-s11.yml').unlink()
+          PY
+      - name: Commit reviewed source
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add lib/modules/wear/services/wear_barcode_dispatcher.dart .github/workflows/finalize-wear-s11.yml
+          git commit -m "fix(wear): bound unsupported barcode fallback to pre-auth main"
+          git push origin HEAD:refactor/wear-runtime-route-observation
