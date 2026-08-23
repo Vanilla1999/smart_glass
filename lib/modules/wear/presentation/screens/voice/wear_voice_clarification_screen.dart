@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/voice_clarification_args.dart';
+import 'package:smart_glasses/modules/wear/application/wear_aggregate_presentation_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
@@ -38,7 +39,8 @@ class _WearVoiceClarificationScreenState
   VoiceClarificationArgs? _currentArgs;
   late final WearScreenActionRegistration _screenActionsRegistration;
 
-  WearFlowController get _flow => WearDependencies.I.wearFlowController;
+  WearAggregatePresentationFlowController get _flow =>
+      WearDependencies.I.wearFlowController;
 
   List<VoiceDynamicItem> get _matches =>
       _currentArgs?.matches ?? const <VoiceDynamicItem>[];
@@ -51,10 +53,6 @@ class _WearVoiceClarificationScreenState
         identical(_flow.state.currentVoiceClarificationArgs, _currentArgs)) {
       _focusedIndex = _flow.state.voiceClarificationFocusedIndex;
     }
-    _flow.enterScreen(
-      WearScreenId.voiceClarification,
-      extra: _currentArgs,
-    );
     _screenActionsRegistration = _flow.registerScreenActions(
       WearScreenId.voiceClarification,
       WearScreenActionHandler(
@@ -275,7 +273,7 @@ class _WearVoiceClarificationScreenState
           _notice = null;
         });
         _clearNotice();
-        _flow.enterScreen(WearScreenId.voiceClarification, extra: next);
+        _flow.updateVoiceClarificationContext(next);
         _focusCurrent();
         return;
       case VoiceListMatchType.unique:
@@ -340,7 +338,7 @@ class _WearVoiceClarificationScreenState
       _isSelecting = false;
     });
     _clearNotice();
-    _flow.enterScreen(WearScreenId.voiceClarification, extra: previous);
+    _flow.updateVoiceClarificationContext(previous);
     _focusCurrent();
     return true;
   }
