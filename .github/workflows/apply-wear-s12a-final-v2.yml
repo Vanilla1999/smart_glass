@@ -1,0 +1,521 @@
+name: Robustly finalize Wear S12A
+
+on:
+  push:
+    branches:
+      - refactor/wear-runtime-presentation-state
+    paths:
+      - .github/workflows/apply-wear-s12a-final-v2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/wear-runtime-presentation-state
+          fetch-depth: 0
+      - name: Apply format-independent reviewed transforms
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          # State model/reducer final form.
+          p = Path('lib/modules/wear/runtime/wear_runtime_presentation_slice.dart')
+          s = p.read_text()
+          s = re.sub(r'\n/// Timer adapter for aggregate generic status operations\..*\Z', '\n', s, flags=re.S)
+          s = s.replace("import 'dart:async';\n\n", '', 1)
+          if '_freezeClarificationArgs(' not in s:
+              anchor = 'class WearVoiceClarificationContextChanged extends WearIntent {'
+              helper = '''VoiceClarificationArgs _freezeClarificationArgs(
+            VoiceClarificationArgs args,
+          ) {
+            return VoiceClarificationArgs(
+              sourceScreen: args.sourceScreen,
+              phrase: args.phrase,
+              matches: List.unmodifiable(args.matches),
+              sourceListRevision: args.sourceListRevision,
+              previous: args.previous == null
+                  ? null
+                  : _freezeClarificationArgs(args.previous!),
+              spokenPhrases: List.unmodifiable(args.spokenPhrases),
+              excludedWords: Set.unmodifiable(args.excludedWords),
+            );
+          }
+
+        '''
+              if anchor not in s:
+                  raise SystemExit('clarification helper anchor missing')
+              s = s.replace(anchor, helper + anchor, 1)
+          s = s.replace('clarificationArgs: intent.args,', 'clarificationArgs: _freezeClarificationArgs(intent.args),', 1)
+          if 'final bool scheduled =' not in s:
+              pattern = re.compile(
+                  r'    if \(intent is WearGenericStatusShown\) \{.*?\n    \}\n\n    if \(intent is WearGenericStatusElapsed\) \{',
+                  re.S,
+              )
+              block = '''    if (intent is WearGenericStatusShown) {
+              final WearReduction? rejection = _validate(
+                state,
+                aggregate,
+                sessionEpoch: intent.sessionEpoch,
+                expectedScreen: intent.expectedScreen,
+              );
+              if (rejection != null) return rejection;
+              if (intent.operationId <= 0) {
+                return WearReduction.reject(WearDispatchRejectReason.unsupported);
+              }
+              final bool scheduled = intent.deadline != null &&
+                  intent.completion.kind != WearStatusCompletionKind.stay &&
+                  intent.completion.target != null;
+              final WearNavigationSlice navigation = aggregate.navigation.request(
+                WearScreenId.status,
+                kind: WearPendingNavigationKind.push,
+              );
+              final WearRuntimePresentationSlice nextPresentation = presentation
+                  .copyWith(clearStatus: true)
+                  .copyWith(
+                    statusArgs: intent.args,
+                    statusCompletion: intent.completion,
+                    statusOperationId: scheduled ? intent.operationId : null,
+                    statusDeadline: scheduled ? intent.deadline : null,
+                  );
+              WearRuntimeState nextState = state
+                  .clearExpectedOperation(wearGenericStatusOperationKind)
+                  .withPayload(aggregate.copyWith(
+                    navigation: navigation,
+                    presentation: nextPresentation,
+                  ));
+              if (scheduled) {
+                nextState = nextState.expectOperation(
+                  kind: wearGenericStatusOperationKind,
+                  operationId: intent.operationId,
+                );
+              }
+              return WearReduction.accept(nextState: nextState);
+            }
+
+            if (intent is WearGenericStatusElapsed) {'''
+              s, n = pattern.subn(block, s, count=1)
+              if n != 1:
+                  raise SystemExit('status shown reducer block missing')
+          if 'intent is WearBackRequested' not in s:
+              s = s.replace(
+                  'if (intent is WearLogicalNavigationRequested) {',
+                  'if (intent is WearLogicalNavigationRequested ||\n'
+                  '        intent is WearBackRequested ||\n'
+                  '        intent is WearHomeRequested) {',
+                  1,
+              )
+          s = s.replace(
+              'if (intent.screen != WearScreenId.voiceClarification &&',
+              'if (nextAggregate.navigation.logicalScreen !=\n'
+              '              WearScreenId.voiceClarification &&',
+              1,
+          )
+          s = s.replace(
+              'if (intent.screen != WearScreenId.status &&',
+              'if (nextAggregate.navigation.logicalScreen != WearScreenId.status &&',
+              1,
+          )
+          p.write_text(s)
+
+          # Root wiring.
+          p = Path('lib/modules/wear/runtime/wear_runtime_authority_impl.dart')
+          s = p.read_text()
+          imp = "import 'package:smart_glasses/modules/wear/runtime/wear_runtime_presentation_slice.dart';\n"
+          if imp not in s:
+              matches = list(re.finditer(r"import 'package:smart_glasses/modules/wear/runtime/[^']+';\n", s))
+              if not matches:
+                  raise SystemExit('authority imports missing')
+              pos = matches[-1].end()
+              s = s[:pos] + imp + s[pos:]
+          if 'WearRuntimePresentationReducer(),' not in s:
+              s, n = re.subn(
+                  r'(\s+WearSessionNavigationEpochReducer\(\),\n)',
+                  r'\1              WearRuntimePresentationReducer(),\n',
+                  s,
+                  count=1,
+              )
+              if n != 1:
+                  raise SystemExit('authority reducer insertion failed')
+          if s.count('WearRuntimePresentationReducer(),') != 1:
+              raise SystemExit('presentation reducer wiring is not unique')
+          p.write_text(s)
+
+          p = Path('lib/modules/wear/runtime/wear_runtime_authority.dart')
+          s = p.read_text()
+          for line in ("export 'wear_runtime_presentation_slice.dart';\n", "export 'wear_runtime_presentation_scheduler.dart';\n"):
+              if line not in s:
+                  s += line
+          p.write_text(s)
+
+          p = Path('lib/modules/wear/runtime/wear_runtime_feature_epoch_reducer.dart')
+          s = p.read_text()
+          imp = "import 'package:smart_glasses/modules/wear/runtime/wear_runtime_presentation_slice.dart';\n"
+          if imp not in s:
+              imports = list(re.finditer(r"import 'package:smart_glasses/modules/wear/runtime/[^']+';\n", s))
+              pos = imports[-1].end()
+              s = s[:pos] + imp + s[pos:]
+          s = re.sub(
+              r'(payload: aggregate\.copyWith\(\n)(\s+)(?!presentation:)(session:)',
+              r'\1\2presentation: WearRuntimePresentationSlice(),\n\2\3',
+              s,
+          )
+          s = re.sub(
+              r'(final WearAggregatePayload terminalPayload = aggregate\.copyWith\(\n)(\s+)(?!presentation:)(session:)',
+              r'\1\2presentation: WearRuntimePresentationSlice(),\n\2\3',
+              s,
+              count=1,
+          )
+          if s.count('presentation: WearRuntimePresentationSlice(),') < 3:
+              raise SystemExit('epoch reset wiring incomplete')
+          p.write_text(s)
+
+          # Projection.
+          p = Path('lib/modules/wear/runtime/wear_runtime_projection.dart')
+          s = p.read_text()
+          required_imports = (
+              "import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';\n",
+              "import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_voice_hints.dart';\n",
+              "import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';\n",
+              "import 'package:smart_glasses/modules/wear/runtime/wear_runtime_presentation_slice.dart';\n",
+          )
+          missing = ''.join(i for i in required_imports if i not in s)
+          if missing:
+              imports = list(re.finditer(r"import '[^']+';\n", s))
+              pos = imports[-1].end()
+              s = s[:pos] + missing + s[pos:]
+          if 'final WearRuntimePresentationSlice runtimePresentation' not in s:
+              s, n = re.subn(
+                  r'final WearPresentationFocusSlice presentation =\s*aggregate\.presentation as WearPresentationFocusSlice;',
+                  'final WearRuntimePresentationSlice runtimePresentation =\n'
+                  '        WearRuntimePresentationSlice.from(aggregate.presentation);\n'
+                  '    final WearPresentationFocusSlice presentation = runtimePresentation;',
+                  s,
+                  count=1,
+              )
+              if n != 1:
+                  raise SystemExit('projection presentation declaration missing')
+          if 'runtimePresentation.statusArgs' not in s:
+              s, n = re.subn(
+                  r'WearScreenId\.scanIdle\s*\|\|\s*WearScreenId\.productSelect\s*\|\|\s*WearScreenId\.status\s*=>\s*_scan\(features\.scan as WearScanTaskSlice\),',
+                  'WearScreenId.scanIdle || WearScreenId.productSelect =>\n'
+                  '        _scan(features.scan as WearScanTaskSlice),\n'
+                  '      WearScreenId.status => runtimePresentation.statusArgs == null\n'
+                  '          ? _scan(features.scan as WearScanTaskSlice)\n'
+                  '          : _genericStatus(runtimePresentation.statusArgs!),',
+                  s,
+                  count=1,
+              )
+              if n != 1:
+                  raise SystemExit('projection status switch missing')
+          if '_voiceClarification(runtimePresentation)' not in s:
+              s, n = re.subn(
+                  r'WearScreenId\.voiceClarification\s*=>\s*WearGlassesPayload\.status\(\s*isError: false,\s*title: \'Уточните команду\',\s*\),',
+                  'WearScreenId.voiceClarification =>\n'
+                  '        _voiceClarification(runtimePresentation),',
+                  s,
+                  count=1,
+              )
+              if n != 1:
+                  raise SystemExit('projection clarification switch missing')
+          if 'static WearGlassesPayload _genericStatus(' not in s:
+              anchor = re.search(r'  static WearGlassesPayload _printer\(', s)
+              if anchor is None:
+                  raise SystemExit('projection helper anchor missing')
+              helpers = '''  static WearGlassesPayload _genericStatus(
+            WearStatusScreenArgs args,
+          ) {
+            return WearGlassesPayload.status(
+              isError: args.kind.name == 'error',
+              title: args.title,
+              subtitle: args.message,
+              statusText: args.glassesStatusText ?? args.details,
+              statusIcon: args.glassesStatusIcon,
+            );
+          }
+
+          static WearGlassesPayload _voiceClarification(
+            WearRuntimePresentationSlice presentation,
+          ) {
+            final args = presentation.clarificationArgs;
+            final List<VoiceDynamicItem> matches =
+                args?.matches ?? const <VoiceDynamicItem>[];
+            if (matches.isEmpty) {
+              return const WearGlassesPayload(
+                screenType: WearGlassesScreenType.productSelect,
+                phase: WearGlassesPhase.idle,
+                title: 'Уточните фразу',
+                statusText: 'Совпадения не найдены',
+              );
+            }
+            const int pageSize = 4;
+            final int selected = presentation.clarificationFocusedIndex
+                .clamp(0, matches.length - 1);
+            final int pageStart = (selected ~/ pageSize) * pageSize;
+            final int page = (selected ~/ pageSize) + 1;
+            final int pageCount = ((matches.length - 1) ~/ pageSize) + 1;
+            final List<VoiceDynamicItem> visible =
+                matches.skip(pageStart).take(pageSize).toList(growable: false);
+            final VoiceDynamicItemsSnapshot snapshot = VoiceDynamicItemsSnapshot(
+              revision: Object.hashAll(
+                matches.map((VoiceDynamicItem item) => item.revisionHash),
+              ),
+              items: matches,
+              excludedWords: args?.excludedWords ?? const <String>{},
+            );
+            return WearGlassesPayload(
+              screenType: WearGlassesScreenType.productSelect,
+              phase: WearGlassesPhase.idle,
+              title: 'Уточните фразу',
+              subtitle: args?.phrase,
+              items: visible.map((item) => item.label).toList(growable: false),
+              voiceHints: WearGlassesVoiceHints.forVisibleItems(
+                screen: WearScreenId.voiceClarification,
+                snapshot: snapshot,
+                visibleItemIds:
+                    visible.map((item) => item.id).toList(growable: false),
+                onPrepared: () {},
+              ),
+              selectedIndex: selected - pageStart,
+              pageText:
+                  pageCount > 1 ? 'Страница: $page из $pageCount' : null,
+              statusText: presentation.clarificationNotice,
+            );
+          }
+
+        '''
+              s = s[:anchor.start()] + helpers + s[anchor.start():]
+          p.write_text(s)
+
+          # Controller context commit and aggregate route extra.
+          p = Path('lib/modules/wear/application/wear_flow_controller.dart')
+          s = p.read_text()
+          imp = "import 'package:smart_glasses/modules/wear/runtime/wear_runtime_presentation_slice.dart';\n"
+          if imp not in s:
+              imports = list(re.finditer(r"import '[^']+';\n", s))
+              pos = imports[-1].end()
+              s = s[:pos] + imp + s[pos:]
+          if 'WearVoiceClarificationContextChanged(' not in s:
+              pattern = re.compile(r'(\s+)final result = await _authority\.requestNavigation\(target, kind: kind\);')
+              m = pattern.search(s)
+              if m is None:
+                  raise SystemExit('controller navigation request missing')
+              indent = m.group(1)
+              block = (
+                  indent + 'if (target == WearScreenId.voiceClarification &&\n'
+                  + indent + '    extra is VoiceClarificationArgs) {\n'
+                  + indent + '  final contextReceipt = await _authority.store.dispatch(\n'
+                  + indent + '    WearVoiceClarificationContextChanged(\n'
+                  + indent + '      sessionEpoch: _authority.state.sessionEpoch,\n'
+                  + indent + '      expectedScreen: _logicalScreen,\n'
+                  + indent + '      args: extra,\n'
+                  + indent + '    ),\n'
+                  + indent + '  );\n'
+                  + indent + '  if (!contextReceipt.accepted) return;\n'
+                  + indent + '}\n'
+                  + indent + 'final result = await _authority.requestNavigation(target, kind: kind);'
+              )
+              s = s[:m.start()] + block + s[m.end():]
+          if '.statusArgs,' not in s or '.clarificationArgs,' not in s:
+              pattern = re.compile(
+                  r'extra:\s*legacyRequest\?\.screen == pending\.screen\s*\? legacyRequest\?\.extra\s*: null,'
+              )
+              replacement = '''extra: switch (pending.screen) {
+              WearScreenId.status => WearRuntimePresentationSlice.from(
+                  _authority.payload.presentation,
+                ).statusArgs,
+              WearScreenId.voiceClarification =>
+                WearRuntimePresentationSlice.from(
+                  _authority.payload.presentation,
+                ).clarificationArgs,
+              _ => legacyRequest?.screen == pending.screen
+                  ? legacyRequest?.extra
+                  : null,
+            },'''
+              s, n = pattern.subn(replacement, s, count=1)
+              if n != 1:
+                  raise SystemExit('controller aggregate route extra missing')
+          p.write_text(s)
+
+          # Production facade.
+          p = Path('lib/modules/wear/application/wear_aggregate_presentation_flow_controller.dart')
+          s = p.read_text()
+          needed = (
+              "import 'package:smart_glasses/modules/wear/application/voice_clarification_args.dart';\n",
+              "import 'package:smart_glasses/modules/wear/application/wear_status_state.dart';\n",
+              "import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';\n",
+              "import 'package:smart_glasses/modules/wear/runtime/wear_runtime_presentation_slice.dart';\n",
+              "import 'package:smart_glasses/modules/wear/runtime/wear_runtime_presentation_scheduler.dart';\n",
+          )
+          missing = ''.join(i for i in needed if i not in s)
+          if missing:
+              imports = list(re.finditer(r"import '[^']+';\n", s))
+              pos = imports[-1].end()
+              s = s[:pos] + missing + s[pos:]
+          if '_presentationScheduler =' not in s:
+              s, n = re.subn(
+                  r'(_authorityStateSub = this\.authority\.states\.listen\(_onAuthorityState\);)',
+                  r'\1\n    _presentationScheduler =\n        WearRuntimePresentationScheduler(this.authority);',
+                  s,
+                  count=1,
+              )
+              if n != 1:
+                  raise SystemExit('facade scheduler constructor missing')
+          if 'WearRuntimePresentationScheduler _presentationScheduler' not in s:
+              s, n = re.subn(
+                  r'(late final StreamSubscription<WearRuntimeState> _authorityStateSub;)',
+                  r'\1\n  late final WearRuntimePresentationScheduler _presentationScheduler;',
+                  s,
+                  count=1,
+              )
+              if n != 1:
+                  raise SystemExit('facade scheduler field missing')
+          pattern = re.compile(r'  bool updateVoiceClarificationContext\(VoiceClarificationArgs args\) \{.*?\n  \}\n', re.S)
+          replacement = '''  bool updateVoiceClarificationContext(VoiceClarificationArgs args) {
+            if (authority.payload.navigation.logicalScreen !=
+                WearScreenId.voiceClarification) {
+              return false;
+            }
+            final int epoch = authority.state.sessionEpoch;
+            unawaited(authority.store
+                .dispatch(WearVoiceClarificationContextChanged(
+                  sessionEpoch: epoch,
+                  expectedScreen: WearScreenId.voiceClarification,
+                  args: args,
+                ))
+                .then<void>((result) {
+              if (!result.accepted || authority.state.sessionEpoch != epoch) return;
+              super.enterScreen(WearScreenId.voiceClarification, extra: args);
+            }));
+            return true;
+          }
+        '''
+          s, n = pattern.subn(replacement, s, count=1)
+          if n != 1 and 'WearVoiceClarificationContextChanged(' not in s:
+              raise SystemExit('facade clarification method missing')
+          if 'WearGenericStatusShown(' not in s:
+              marker = re.search(r'  @override\n  Future<void> dispose\(\) async \{', s)
+              if marker is None:
+                  raise SystemExit('facade dispose marker missing')
+              methods = '''  @override
+          WearStatusState? get statusState {
+            final WearRuntimePresentationSlice presentation =
+                WearRuntimePresentationSlice.from(authority.payload.presentation);
+            final WearStatusScreenArgs? args = presentation.statusArgs;
+            final WearStatusCompletion? completion = presentation.statusCompletion;
+            if (args == null || completion == null) return null;
+            return WearStatusState(
+              args: args,
+              deadline: presentation.statusDeadline,
+              completion: completion,
+            );
+          }
+
+          @override
+          Future<void> showStatus(
+            WearStatusScreenArgs args, {
+            required WearStatusCompletion completion,
+          }) async {
+            final Duration? duration = args.autoAfter;
+            final WearStatusScreenArgs passiveArgs = WearStatusScreenArgs(
+              kind: args.kind,
+              title: args.title,
+              message: args.message,
+              details: args.details,
+              glassesStatusText: args.glassesStatusText,
+              glassesStatusIcon: args.glassesStatusIcon,
+              autoAction: WearStatusAutoAction.none,
+            );
+            final int operationId = authority.allocateOperationId();
+            final int epoch = authority.state.sessionEpoch;
+            final WearScreenId source =
+                authority.payload.navigation.logicalScreen;
+            final result = await authority.store.dispatch(WearGenericStatusShown(
+              sessionEpoch: epoch,
+              operationId: operationId,
+              expectedScreen: source,
+              args: passiveArgs,
+              completion: completion,
+              deadline: duration == null ? null : DateTime.now().add(duration),
+            ));
+            if (result.accepted && authority.state.sessionEpoch == epoch) {
+              await flushPendingNavigation();
+            }
+          }
+
+          @override
+          void setVoiceClarificationFocusedIndex(int index, int itemCount) {
+            final int epoch = authority.state.sessionEpoch;
+            unawaited(authority.store
+                .dispatch(WearVoiceClarificationFocusChanged(
+                  sessionEpoch: epoch,
+                  index: index,
+                ))
+                .then<void>((result) {
+              if (result.accepted && authority.state.sessionEpoch == epoch) {
+                super.setVoiceClarificationFocusedIndex(index, itemCount);
+              }
+            }));
+          }
+
+          @override
+          void setVoiceClarificationNotice(String? message) {
+            final int epoch = authority.state.sessionEpoch;
+            unawaited(authority.store
+                .dispatch(WearVoiceClarificationNoticeChanged(
+                  sessionEpoch: epoch,
+                  notice: message,
+                ))
+                .then<void>((result) {
+              if (result.accepted && authority.state.sessionEpoch == epoch) {
+                super.setVoiceClarificationNotice(message);
+              }
+            }));
+          }
+
+        '''
+              s = s[:marker.start()] + methods + s[marker.start():]
+          if 'await _presentationScheduler.dispose();' not in s:
+              s = s.replace(
+                  '  Future<void> dispose() async {\n    await _authorityStateSub.cancel();',
+                  '  Future<void> dispose() async {\n'
+                  '    await _presentationScheduler.dispose();\n'
+                  '    await _authorityStateSub.cancel();',
+                  1,
+              )
+          p.write_text(s)
+
+          # Docs index is idempotent.
+          p = Path('docs/INDEX.md')
+          s = p.read_text()
+          plan = '- [WEAR_MR_S12A_PRESENTATION_STATE_PLAN.md](audits/WEAR_MR_S12A_PRESENTATION_STATE_PLAN.md) — Plan-first transfer of clarification and generic status ownership into aggregate presentation state\n'
+          validation = '- [WEAR_MR_S12A_PRESENTATION_STATE_VALIDATION.md](checklists/WEAR_MR_S12A_PRESENTATION_STATE_VALIDATION.md) — Aggregate clarification/status ownership, stale-result and projection validation record\n'
+          if plan not in s:
+              pos = s.find('## Modules')
+              if pos < 0:
+                  raise SystemExit('docs index module marker missing')
+              s = s[:pos] + plan + '\n' + s[pos:]
+          if validation not in s:
+              pos = s.find('## Non-canonical notes')
+              if pos < 0:
+                  raise SystemExit('docs index notes marker missing')
+              s = s[:pos] + validation + '\n' + s[pos:]
+          p.write_text(s)
+
+          for workflow in Path('.github/workflows').glob('apply-wear-s12a*.yml'):
+              workflow.unlink()
+          for workflow in Path('.github/workflows').glob('finalize-wear-s11*.yml'):
+              workflow.unlink()
+          PY
+      - name: Commit robust final S12A tree
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "fix(wear): finalize aggregate presentation state"
+          git push origin HEAD:refactor/wear-runtime-presentation-state
