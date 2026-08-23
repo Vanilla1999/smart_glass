@@ -250,7 +250,7 @@ class WearSemanticInputReducer implements WearSliceReducer {
     }
     if (intent is WearUiEffectCancelled) {
       return _finish(state, aggregate, intent.effectId, intent.sessionEpoch,
-          intent.expectedScreen);
+          intent.expectedScreen, allowScreenChange: true);
     }
     return null;
   }
@@ -263,6 +263,7 @@ class WearSemanticInputReducer implements WearSliceReducer {
     WearScreenId expectedScreen, {
     bool claim = false,
     bool requireClaimed = false,
+    bool allowScreenChange = false,
   }) {
     if (sessionEpoch != state.sessionEpoch) {
       return WearReduction.reject(WearDispatchRejectReason.staleEpoch);
@@ -277,8 +278,9 @@ class WearSemanticInputReducer implements WearSliceReducer {
     if (effect == null) {
       return WearReduction.reject(WearDispatchRejectReason.staleOperation);
     }
-    if (expectedScreen != aggregate.navigation.logicalScreen ||
-        effect.expectedScreen != expectedScreen) {
+    if (effect.expectedScreen != expectedScreen ||
+        (!allowScreenChange &&
+            expectedScreen != aggregate.navigation.logicalScreen)) {
       return WearReduction.reject(WearDispatchRejectReason.staleScreen);
     }
     if (claim && !aggregate.lifecycle.phoneUiActive) {
