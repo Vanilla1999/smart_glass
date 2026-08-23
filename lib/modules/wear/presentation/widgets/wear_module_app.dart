@@ -812,6 +812,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     print('[WearModuleApp] lifecycle state=$state');
     if (state == AppLifecycleState.detached) {
       _runtimeTerminated = true;
+      _scannerSyncGeneration += 1;
       _routerObservationRevision += 1;
       _stopWearControlService('app_lifecycle_detached');
       _wasActuallyBackgrounded = false;
@@ -912,6 +913,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   void dispose() {
     print('[VOICE-LIFECYCLE] WearModuleApp dispose');
     _runtimeTerminated = true;
+    _scannerSyncGeneration += 1;
     _routerObservationRevision += 1;
     _stopWearControlService('dispose');
     _flow.setRuntimeActive(false);
