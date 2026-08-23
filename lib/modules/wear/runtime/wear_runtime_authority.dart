@@ -4,3 +4,6 @@ export 'wear_runtime_core_slices.dart';
 export 'wear_runtime_epoch_bound_controls.dart';
 export 'wear_runtime_printer_authority.dart';
 export 'wear_runtime_printer_slice.dart';
+export 'wear_runtime_scan_authority.dart';
+export 'wear_runtime_scan_sequencing_reducer.dart';
+export 'wear_runtime_scan_slice.dart';
