@@ -2,15 +2,15 @@ import 'dart:async';
 
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_availability_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_slices.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_validation_reducer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_core_slices.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_effect_router.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_feature_epoch_reducer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_navigation_epoch_reducer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_composite_reducer.dart';
-import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_epoch_reducer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_slice.dart';
-import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_epoch_reducer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_review_reducers.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
@@ -43,7 +43,7 @@ class WearRuntimeAuthority {
               features: WearRuntimeFeaturePayload(
                 printer: WearPrinterTaskSlice.initial(),
                 scan: WearScanTaskSlice.initial(),
-                availability: const WearLegacyAvailabilityFeaturePayload(),
+                availability: WearAvailabilityTaskSlice.initial(),
               ),
               controls: const WearRuntimeControlPayload.initial(),
               presentation: const WearLegacyPresentationPayload(),
@@ -52,12 +52,12 @@ class WearRuntimeAuthority {
           reducer: WearAggregateReducer(
             sliceReducers: const <WearSliceReducer>[
               WearControlInputValidationReducer(),
+              WearRuntimeFeatureEpochReducer(),
               WearSessionNavigationEpochReducer(),
-              WearPrinterEpochResetReducer(),
-              WearScanEpochResetReducer(),
               WearControlSliceReducer(),
               WearReviewedPrinterSliceReducer(),
               WearReviewedScanSliceReducer(),
+              WearAvailabilitySliceReducer(),
               WearCoreSliceReducer(),
             ],
           ),
