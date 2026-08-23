@@ -22,8 +22,6 @@ class _WearWifiSettingsScreenState extends State<WearWifiSettingsScreen> {
   @override
   void initState() {
     super.initState();
-    WearDependencies.I.wearFlowController
-        .enterScreen(WearScreenId.wifiSettings);
     _screenActionsRegistration =
         WearDependencies.I.wearFlowController.registerScreenActions(
       WearScreenId.wifiSettings,
