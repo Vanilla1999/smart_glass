@@ -24,8 +24,12 @@ class WearLegacySnapshotMirror {
   final WearRuntimeStore _store;
 
   StreamSubscription<WearLegacyRuntimeSnapshot>? _subscription;
+  final StreamController<Object> _errorsController =
+      StreamController<Object>.broadcast(sync: true);
   Future<void>? _startFuture;
   bool _disposed = false;
+
+  Stream<Object> get errors => _errorsController.stream;
 
   Future<void> start() {
     final Future<void>? existing = _startFuture;
@@ -43,9 +47,10 @@ class WearLegacySnapshotMirror {
         final WearDispatchResult initial = await _store.dispatch(
           WearObserveLegacySnapshot(_source.currentSnapshot),
         );
-        if (!initial.accepted &&
-            initial.rejectReason == WearDispatchRejectReason.terminal) {
-          throw StateError('Cannot attach mirror to a terminal Wear store');
+        if (!initial.accepted) {
+          throw StateError(
+            'Cannot attach mirror: ${initial.rejectReason}',
+          );
         }
         if (_disposed) {
           completer.complete();
@@ -54,12 +59,14 @@ class WearLegacySnapshotMirror {
         _subscription = _source.snapshots.listen(
           (WearLegacyRuntimeSnapshot snapshot) {
             unawaited(
-              _store.dispatch(WearObserveLegacySnapshot(snapshot)),
+              _forward(snapshot),
             );
           },
           onError: (Object error, StackTrace stackTrace) {
             if (!completer.isCompleted) {
               completer.completeError(error, stackTrace);
+            } else if (!_errorsController.isClosed) {
+              _errorsController.add(error);
             }
           },
         );
@@ -72,10 +79,26 @@ class WearLegacySnapshotMirror {
     return completer.future;
   }
 
+  Future<void> _forward(WearLegacyRuntimeSnapshot snapshot) async {
+    try {
+      final WearDispatchResult result = await _store.dispatch(
+        WearObserveLegacySnapshot(snapshot),
+      );
+      if (!result.accepted && !_errorsController.isClosed) {
+        _errorsController.add(
+          StateError('Legacy snapshot rejected: ${result.rejectReason}'),
+        );
+      }
+    } on Object catch (error) {
+      if (!_errorsController.isClosed) _errorsController.add(error);
+    }
+  }
+
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
     await _subscription?.cancel();
     _subscription = null;
+    await _errorsController.close();
   }
 }
