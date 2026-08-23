@@ -2,6 +2,7 @@ import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_core_slices.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_slice.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_sequencing_reducer.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
@@ -36,7 +37,9 @@ class WearScanResultAdmissionReducer implements WearSliceReducer {
       }
     }
 
-    if (intent is WearScanStatusElapsed ||
+    if (intent is WearScanStatusPresented ||
+        intent is WearScanStatusElapsed ||
+        intent is WearScanStatusDelayFailed ||
         intent is WearScanStatusPresentationFailed) {
       if (aggregate.navigation.logicalScreen != WearScreenId.status ||
           scan.screen != WearScreenId.status) {
@@ -47,13 +50,15 @@ class WearScanResultAdmissionReducer implements WearSliceReducer {
     if (intent is WearBarcodeLookupSucceeded) {
       final Set<int> ids = <int>{};
       for (final BarcodeProductInfo product in intent.products) {
-        if (!ids.add(product.id)) {
-          return const WearScanSliceReducer().reduceSlice(
+        final String name = product.name.trim();
+        if (!ids.add(product.id) || name.isEmpty || name != product.name) {
+          return const WearScanStatusSequencingReducer().reduceSlice(
             state,
             WearBarcodeLookupFailed(
               sessionEpoch: intent.sessionEpoch,
               operationId: intent.operationId,
-              message: 'Ответ поиска содержит повторяющийся ID товара',
+              message:
+                  'Ответ поиска содержит повторяющийся ID или некорректное название товара',
             ),
           );
         }
@@ -69,6 +74,7 @@ class WearReviewedScanSliceReducer implements WearSliceReducer {
 
   static const List<WearSliceReducer> _reducers = <WearSliceReducer>[
     WearScanResultAdmissionReducer(),
+    WearScanStatusSequencingReducer(),
     WearScanSliceReducer(),
   ];
 
