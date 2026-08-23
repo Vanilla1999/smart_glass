@@ -97,7 +97,8 @@ class WearBarcodeDispatcher implements MultiScannerDelegate {
           'WearRuntimeAuthority is required',
         ),
         _authority = authority ?? flowController!.authority,
-        _unsupportedHandler = unsupportedHandler,
+        _unsupportedHandler =
+            unsupportedHandler ?? flowController?.handleBarcode,
         _scanner = scanner ?? MultiScanner.last();
 
   final WearRuntimeAuthority _authority;
