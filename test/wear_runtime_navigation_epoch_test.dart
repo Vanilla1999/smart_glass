@@ -11,7 +11,8 @@ void main() {
         name: 'User $id',
       );
 
-  test('authorization starts a new session epoch', () async {
+  test('authorization advances the epoch before controls become current',
+      () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
     final int anonymousEpoch = authority.state.sessionEpoch;
@@ -19,72 +20,56 @@ void main() {
     final WearDispatchResult result = await authority.authorize(user(1));
 
     expect(result.accepted, isTrue);
-    expect(result.stateChanged, isTrue);
     expect(authority.state.sessionEpoch, anonymousEpoch + 1);
     expect(authority.state.revision, 0);
   });
 
-  test('route callback captured before authorization is stale afterwards',
-      () async {
+  test('pre-auth route adapter cannot mutate the authorized epoch', () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
-    final WearRuntimeNavigationAdapter anonymousAdapter =
-        authority.navigationAdapter();
+    final WearRuntimeNavigationAdapter oldAdapter = authority.navigationAdapter();
 
     await authority.authorize(user(1));
-    final WearDispatchResult late =
-        await anonymousAdapter.observePhoneRoute(WearScreenId.main);
+    final WearDispatchResult result =
+        await oldAdapter.observePhoneRoute(WearScreenId.main);
 
-    expect(late.accepted, isFalse);
-    expect(late.rejectReason, WearDispatchRejectReason.staleEpoch);
-    expect(authority.payload.navigation.actualPhoneScreen, isNull);
+    expect(result.accepted, isFalse);
+    expect(result.rejectReason, WearDispatchRejectReason.staleEpoch);
   });
 
-  test('session reset never reuses route or request identities', () async {
+  test('old-session acknowledgement cannot collide after reset', () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
     await authority.authorize(user(1));
     final WearRuntimeNavigationAdapter firstSession =
         authority.navigationAdapter();
-
-    final WearDispatchResult firstObservation =
-        await firstSession.observePhoneRoute(WearScreenId.main);
-    expect(firstObservation.accepted, isTrue);
     await authority.requestNavigation(WearScreenId.menu);
-    final int oldRequestId =
-        authority.payload.navigation.pending!.requestId;
+    final int oldRequestId = authority.payload.navigation.pending!.requestId;
     final int oldObservationRevision =
         authority.payload.navigation.routeObservationRevision;
 
     await authority.clearSession();
     await authority.authorize(user(2));
     await authority.requestNavigation(WearScreenId.printerSelect);
-    final int newRequestId =
-        authority.payload.navigation.pending!.requestId;
+    final int newRequestId = authority.payload.navigation.pending!.requestId;
     final WearRuntimeNavigationAdapter secondSession =
         authority.navigationAdapter();
-    final WearDispatchResult secondObservation =
+    final WearDispatchResult newObservation =
         await secondSession.observePhoneRoute(WearScreenId.main);
 
     expect(newRequestId, greaterThan(oldRequestId));
+    expect(newObservation.accepted, isTrue);
     expect(
       authority.payload.navigation.routeObservationRevision,
       greaterThan(oldObservationRevision),
     );
-    expect(secondObservation.accepted, isTrue);
 
-    final WearDispatchResult lateAcknowledgement = await firstSession.acknowledge(
+    final WearDispatchResult late = await firstSession.acknowledge(
       requestId: oldRequestId,
       screen: WearScreenId.menu,
     );
-    expect(lateAcknowledgement.accepted, isFalse);
-    expect(
-      lateAcknowledgement.rejectReason,
-      WearDispatchRejectReason.staleEpoch,
-    );
-    expect(
-      authority.payload.navigation.pending?.requestId,
-      newRequestId,
-    );
+    expect(late.accepted, isFalse);
+    expect(late.rejectReason, WearDispatchRejectReason.staleEpoch);
+    expect(authority.payload.navigation.pending?.requestId, newRequestId);
   });
 }

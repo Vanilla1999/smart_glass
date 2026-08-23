@@ -3,6 +3,8 @@ import 'dart:collection';
 
 import 'package:multi_scanner/multi_scanner.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_adapter.dart';
 
 typedef WearBarcodeHandler = Future<bool> Function(String payload);
 class WearBarcodeSerialQueue {
@@ -14,7 +16,7 @@ class WearBarcodeSerialQueue {
 
   final WearBarcodeHandler _handleBarcode;
   final int maxPending;
-  final Queue<String> _pending = Queue<String>();
+  final Queue<_QueuedBarcode> _pending = Queue<_QueuedBarcode>();
 
   bool _draining = false;
   int _generation = 0;
@@ -22,9 +24,13 @@ class WearBarcodeSerialQueue {
   int get pendingCount => _pending.length;
 
   bool add(String payload) {
+    return addWithHandler(payload, _handleBarcode);
+  }
+
+  bool addWithHandler(String payload, WearBarcodeHandler handler) {
     final String value = payload.trim();
     if (value.isEmpty || _pending.length >= maxPending) return false;
-    _pending.addLast(value);
+    _pending.addLast(_QueuedBarcode(value, handler));
     _ensureDrain();
     return true;
   }
@@ -54,11 +60,13 @@ class WearBarcodeSerialQueue {
 
   Future<void> _drain(int generation) async {
     while (generation == _generation && _pending.isNotEmpty) {
-      final String payload = _pending.removeFirst();
+      final _QueuedBarcode delivery = _pending.removeFirst();
       try {
-        final bool consumed = await _handleBarcode(payload);
+        final bool consumed = await delivery.handler(delivery.payload);
         if (!consumed) {
-          print('[WearBarcodeDispatcher] barcode not consumed: $payload');
+          print(
+            '[WearBarcodeDispatcher] barcode not consumed: ${delivery.payload}',
+          );
         }
       } catch (error, stackTrace) {
         print('[WearBarcodeDispatcher] barcode error=$error\n$stackTrace');
@@ -67,24 +75,32 @@ class WearBarcodeSerialQueue {
   }
 }
 
+class _QueuedBarcode {
+  const _QueuedBarcode(this.payload, this.handler);
+
+  final String payload;
+  final WearBarcodeHandler handler;
+}
+
 class WearBarcodeDispatcher implements MultiScannerDelegate {
   WearBarcodeDispatcher({
     required WearFlowController flowController,
     MultiScanner? scanner,
   })  : _flowController = flowController,
-        _scanner = scanner ?? MultiScanner.last(),
-        _queue = WearBarcodeSerialQueue(
-          handleBarcode: flowController.handleBarcode,
-        );
+        _scanner = scanner ?? MultiScanner.last();
 
   final WearFlowController _flowController;
   final MultiScanner _scanner;
-  final WearBarcodeSerialQueue _queue;
+  late final WearBarcodeSerialQueue _queue = WearBarcodeSerialQueue(
+    handleBarcode: (String _) async => false,
+  );
   bool _started = false;
-  bool _routeAdmissionEnabled = false;
+  int _nextDeliveryId = 0;
+  WearRuntimeControlAdapter? _controlAdapter;
 
   void start() {
     if (_started) return;
+    _controlAdapter = WearRuntimeControlAdapter(_flowController.authority);
     _scanner.addDelegate(this);
     _started = true;
   }
@@ -93,24 +109,31 @@ class WearBarcodeDispatcher implements MultiScannerDelegate {
     if (!_started) return;
     _scanner.removeDelegate(this);
     _started = false;
+    _controlAdapter = null;
     _queue.reset();
   }
 
   void resetPending() => _queue.reset();
 
-  void setRouteAdmission(bool enabled) {
-    _routeAdmissionEnabled = enabled;
-    if (!enabled) _queue.reset();
-  }
-
   @override
   bool? onScanEvent(String payload) {
-    if (!_started ||
-        !_routeAdmissionEnabled ||
-        !_flowController.currentScreenAcceptsBarcode) {
+    final controls = _flowController.authority.controls.scanner;
+    if (!_started || !controls.barcodeAdmissionEnabled) {
       return false;
     }
-    final bool accepted = _queue.add(payload);
+    final WearRuntimeControlAdapter? callback = _controlAdapter;
+    if (callback == null) return false;
+    final WearScreenId screen = _flowController.state.screen;
+    final int deliveryId = ++_nextDeliveryId;
+    final bool accepted = _queue.addWithHandler(
+      payload,
+      (String value) => _deliverBarcode(
+        value,
+        callback: callback,
+        screen: screen,
+        deliveryId: deliveryId,
+      ),
+    );
     if (!accepted) {
       print(
         '[WearBarcodeDispatcher] barcode queue rejected payload '
@@ -122,4 +145,18 @@ class WearBarcodeDispatcher implements MultiScannerDelegate {
 
   @override
   bool? onErrorScan(Exception error) => false;
+
+  Future<bool> _deliverBarcode(
+    String payload, {
+    required WearRuntimeControlAdapter callback,
+    required WearScreenId screen,
+    required int deliveryId,
+  }) async {
+    final receipt = await callback.acceptBarcodeDelivery(
+      deliveryId: deliveryId,
+      logicalScreen: screen,
+    );
+    if (!receipt.accepted) return false;
+    return _flowController.handleBarcode(payload);
+  }
 }
