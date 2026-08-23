@@ -5,7 +5,6 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_status_state.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
-import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/main/cubit/wear_auth_cubit.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/menu/wear_menu_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/settings/db_settings_screen.dart';
@@ -35,7 +34,6 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
   void initState() {
     super.initState();
     final WearFlowController flow = WearDependencies.I.wearFlowController;
-    flow.enterScreen(WearScreenId.main);
     _screenActionsRegistration = flow.registerScreenActions(
       WearScreenId.main,
       WearScreenActionHandler(
@@ -49,12 +47,7 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (flow.authority.isAuthorized) {
         context.go(WearMenuScreen.route);
-        return;
       }
-      WearDependencies.I.wearFlowController.publishScreenPayload(
-        WearScreenId.main,
-        WearGlassesPayload.authWaitingBarcode(),
-      );
     });
   }
 
@@ -72,13 +65,6 @@ class _WearMainScreenState extends ConsumerState<WearMainScreen> {
       if (previous?.phase != next.phase) {
         WearDependencies.I.wearFlowController
             .refreshScreenActions(WearScreenId.main);
-      }
-      if (previous?.phase != next.phase &&
-          next.phase == WearAuthPhase.loading) {
-        WearDependencies.I.wearFlowController.publishScreenPayload(
-          WearScreenId.main,
-          WearGlassesPayload.authLoading(),
-        );
       }
       if (previous?.nav != next.nav && next.nav != null) {
         final WearStatusScreenArgs nav = next.nav!;
