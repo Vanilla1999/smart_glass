@@ -112,7 +112,6 @@ class _WearAvailabilityInteractionScreenState
         onFocusChanged: (int listIndex) {
           final int itemIndex = (listIndex - 1).clamp(0, _itemCount - 1);
           if (itemIndex == _focusedIndex) return;
-          setState(() => _focusedIndex = itemIndex);
           _flow.setAvailabilityInteractionFocusedIndex(itemIndex);
         },
       ),
