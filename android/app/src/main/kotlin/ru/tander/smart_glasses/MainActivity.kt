@@ -78,6 +78,7 @@ class MainActivity : FlutterFragmentActivity() {
     private var currentRecognizedText = ""
     private var currentWearGlassesPayload: Map<*, *>? = null
     private var currentWearVoiceOverlayPayload: Map<*, *>? = null
+    private var currentWearScanOverlayPayload: Map<*, *>? = null
     private var wearProjectionGeneration = 0
     private val mainHandler = Handler(Looper.getMainLooper())
     private val pendingWearResults = mutableSetOf<BoundedResult>()
@@ -124,6 +125,10 @@ class MainActivity : FlutterFragmentActivity() {
                         val payload = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
                         Log.d("SmartWear", "updateWearVoiceOverlay called: $payload")
                         updateWearVoiceOverlay(payload, result)
+                    }
+                    "updateWearScanOverlay" -> {
+                        val payload = call.arguments as? Map<*, *> ?: emptyMap<String, Any?>()
+                        updateWearScanOverlay(payload, result)
                     }
                     "hideWearGlasses" -> {
                         Log.d("SmartWear", "hideWearGlasses called")
@@ -327,7 +332,7 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     channel.invokeMethod("navigateToRoute", "/wear", object : MethodChannel.Result {
                         override fun success(value: Any?) {
-                            applyCurrentWearVoiceOverlay()
+                            applyCurrentWearOverlays()
                             pendingResult.success(value)
                         }
                         override fun error(code: String, message: String?, details: Any?) {
@@ -366,7 +371,7 @@ class MainActivity : FlutterFragmentActivity() {
         val pendingResult = BoundedResult(result, "updateWearGlasses")
         channel.invokeMethod("updateWearGlasses", payload, object : MethodChannel.Result {
             override fun success(value: Any?) {
-                applyCurrentWearVoiceOverlay()
+                applyCurrentWearOverlays()
                 pendingResult.success(value)
             }
             override fun error(code: String, message: String?, details: Any?) {
@@ -390,10 +395,29 @@ class MainActivity : FlutterFragmentActivity() {
         )
     }
 
+    private fun updateWearScanOverlay(payload: Map<*, *>, result: MethodChannel.Result) {
+        currentWearScanOverlayPayload = payload
+        val channel = glassesChannel
+        if (channel == null) {
+            if (currentWearGlassesPayload == null) {
+                result.error("GLASSES_ENGINE_UNAVAILABLE", "Secondary Flutter channel is unavailable", null)
+            } else {
+                result.success(null)
+            }
+            return
+        }
+        channel.invokeMethod(
+            "updateWearScanOverlay",
+            payload,
+            BoundedResult(result, "updateWearScanOverlay")
+        )
+    }
+
     private fun hideWearGlasses(result: MethodChannel.Result) {
         invalidatePendingWearShow()
         currentWearGlassesPayload = null
         currentWearVoiceOverlayPayload = null
+        currentWearScanOverlayPayload = null
         val channel = glassesChannel
         if (channel == null) {
             result.error("GLASSES_ENGINE_UNAVAILABLE", "Secondary Flutter channel is unavailable", null)
@@ -431,7 +455,7 @@ class MainActivity : FlutterFragmentActivity() {
         channel.invokeMethod("updateWearGlasses", payload, object : MethodChannel.Result {
             override fun success(value: Any?) {
                 channel.invokeMethod("navigateToRoute", "/wear", object : MethodChannel.Result {
-                    override fun success(value: Any?) = applyCurrentWearVoiceOverlay()
+                    override fun success(value: Any?) = applyCurrentWearOverlays()
                     override fun error(code: String, message: String?, details: Any?) {
                         Log.e("SmartWear", "restore wear navigation failed $code: $message")
                     }
@@ -453,6 +477,12 @@ class MainActivity : FlutterFragmentActivity() {
         val payload = currentWearVoiceOverlayPayload ?: return
         if (payload["visible"] != true) return
         glassesChannel?.invokeMethod("updateWearVoiceOverlay", payload)
+    }
+
+    private fun applyCurrentWearOverlays() {
+        applyCurrentWearVoiceOverlay()
+        val payload = currentWearScanOverlayPayload ?: return
+        glassesChannel?.invokeMethod("updateWearScanOverlay", payload)
     }
 
     private fun invalidatePendingWearShow() {

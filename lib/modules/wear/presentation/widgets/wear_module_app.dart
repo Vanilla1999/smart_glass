@@ -19,6 +19,7 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voi
 import 'package:smart_glasses/modules/wear/infrastructure/flutter_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/wear_runtime_glasses_sender.dart';
+import 'package:smart_glasses/modules/wear/infrastructure/wear_scan_overlay_sender.dart';
 import 'package:smart_glasses/modules/wear/navigation/wear_routes.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
@@ -92,6 +93,7 @@ class _WearModuleAppState extends State<WearModuleApp>
   bool _voiceStartRequested = false;
   late WearRuntimeControlAdapter _controlAdapter;
   late final WearRuntimeGlassesSender _glassesSender;
+  late final WearScanOverlaySender _scanOverlaySender;
   int? _voiceStartupToken;
   bool _restartVoiceAfterInterruption = false;
   bool _wasActuallyBackgrounded = false;
@@ -182,6 +184,11 @@ class _WearModuleAppState extends State<WearModuleApp>
         '[WearModuleApp] glasses projection failed: $error\n$stackTrace',
       ),
     )..start();
+    _scanOverlaySender = WearScanOverlaySender(
+      onError: (Object error, StackTrace stackTrace) => print(
+        '[WearModuleApp] scan overlay failed: $error\n$stackTrace',
+      ),
+    );
     _bindControlAdapter();
     _voiceDispatcher = WearVoiceApplicationDispatcher(
       flowController: flow,
@@ -454,8 +461,18 @@ class _WearModuleAppState extends State<WearModuleApp>
         logicalScreen: logicalScreen,
         screenAcceptsBarcode: screenAcceptsBarcode,
       );
+      if (_runtimeTerminated || generation != _scannerSyncGeneration) return;
+      final WearScannerRuntimeDecision currentDecision =
+          resolveWearScannerDecisionFromState(
+        _flow.authority.state,
+        currentScreenAcceptsBarcode: _flow.currentScreenAcceptsBarcode,
+      );
+      await _scanOverlaySender.setEnabled(
+        currentDecision.barcodeAdmissionEnabled,
+      );
     } catch (error, stackTrace) {
       if (generation != _scannerSyncGeneration) return;
+      await _scanOverlaySender.setEnabled(false);
       await callback.observeScannerError(error);
       print(
         '[WearModuleApp] scanner runtime sync failed '
@@ -476,6 +493,7 @@ class _WearModuleAppState extends State<WearModuleApp>
         '$error\n$stackTrace',
       );
     }).then((_) async {
+      await _scanOverlaySender.setEnabled(false);
       if (release) {
         await WearDependencies.I.scannerRuntime.release();
       } else {
@@ -1010,6 +1028,7 @@ class _WearModuleAppState extends State<WearModuleApp>
     WearStatusIconReporter.I.setConnectivityObserver(null);
     unawaited(WearStatusIconReporter.I.stop(hideProjection: false));
     unawaited(_glassesSender.dispose());
+    unawaited(_scanOverlaySender.dispose());
     _voiceHealthTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _router.routerDelegate.removeListener(_onRouterChange);

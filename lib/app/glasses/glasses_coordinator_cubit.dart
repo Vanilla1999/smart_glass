@@ -15,6 +15,7 @@ class GlassesCoordinatorCubit extends Cubit<GlassesCoordinatorState> {
     required this.onUpdateScreen2RecognizedText,
     required this.onUpdateWearGlasses,
     this.onUpdateWearVoiceOverlay = _ignoreWearVoiceOverlay,
+    this.onUpdateWearScanOverlay = _ignoreWearScanOverlay,
   })  : _methodChannelService = methodChannelService,
         super(const GlassesCoordinatorInitial());
 
@@ -34,6 +35,7 @@ class GlassesCoordinatorCubit extends Cubit<GlassesCoordinatorState> {
   // Wear projection callbacks
   final Function(Map<String, dynamic> payload) onUpdateWearGlasses;
   final Function(Map<String, dynamic> payload) onUpdateWearVoiceOverlay;
+  final Function(Map<String, dynamic> payload) onUpdateWearScanOverlay;
 
   String _currentRoute = '/';
 
@@ -65,6 +67,9 @@ class GlassesCoordinatorCubit extends Cubit<GlassesCoordinatorState> {
         break;
       case 'updateWearVoiceOverlay':
         _handleUpdateWearVoiceOverlay(call.arguments);
+        break;
+      case 'updateWearScanOverlay':
+        _handleUpdateWearScanOverlay(call.arguments);
         break;
     }
   }
@@ -117,8 +122,7 @@ class GlassesCoordinatorCubit extends Cubit<GlassesCoordinatorState> {
 
   void _handleUpdateWearGlasses(dynamic arguments) {
     if (arguments is Map) {
-      final Map<String, dynamic> payload =
-          Map<String, dynamic>.from(arguments);
+      final Map<String, dynamic> payload = Map<String, dynamic>.from(arguments);
       onUpdateWearGlasses(payload);
       final dynamic overlay = payload['overlay'];
       if (overlay is Map) {
@@ -133,5 +137,12 @@ class GlassesCoordinatorCubit extends Cubit<GlassesCoordinatorState> {
     }
   }
 
+  void _handleUpdateWearScanOverlay(dynamic arguments) {
+    if (arguments is Map) {
+      onUpdateWearScanOverlay(Map<String, dynamic>.from(arguments));
+    }
+  }
+
   static void _ignoreWearVoiceOverlay(Map<String, dynamic> payload) {}
+  static void _ignoreWearScanOverlay(Map<String, dynamic> payload) {}
 }

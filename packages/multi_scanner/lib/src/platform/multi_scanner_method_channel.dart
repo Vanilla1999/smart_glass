@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:multi_scanner/barcode_settings_config.dart';
 import 'package:multi_scanner/src/bluetooth/battary_state.dart';
 import 'package:multi_scanner/src/bluetooth/bt_device.dart';
+import 'package:multi_scanner/src/barcode_tracking_event.dart';
 import 'package:multi_scanner/src/global_multi_scanner.dart';
 import 'package:multi_scanner/src/platform/multi_scanner_platform_interface.dart';
 
@@ -12,6 +13,7 @@ import 'package:multi_scanner/src/platform/multi_scanner_platform_interface.dart
 class MethodChannelMultiScanner extends MultiScannerPlatform {
   StreamSubscription<dynamic>? _barcodeSubscription;
   Future<void> _listenerRegistration = Future<void>.value();
+  Future<void> _trackingOperation = Future<void>.value();
 
   /// EventChannel для получния баркода из native
   @visibleForTesting
@@ -26,6 +28,12 @@ class MethodChannelMultiScanner extends MultiScannerPlatform {
   EventChannel eventScannerDisabled = const EventChannel(
     'tander/multi_scanner_plugin/event_scanner_disabled',
   );
+  @visibleForTesting
+  EventChannel barcodeTrackingEventChannel = const EventChannel(
+    'tander/multi_scanner_plugin/event_barcode_tracking',
+  );
+
+  Stream<BarcodeTrackingEvent>? _barcodeTrackingEvents;
 
   /// MethodChannel использующийся для получения доступа к функциям SDK
   @visibleForTesting
@@ -139,6 +147,37 @@ class MethodChannelMultiScanner extends MultiScannerPlatform {
     return methodChannel.invokeMethod<void>('deletePhoto', <String, String>{
       'uri': uri,
     });
+  }
+
+  @override
+  Stream<BarcodeTrackingEvent> get barcodeTrackingEvents =>
+      _barcodeTrackingEvents ??= barcodeTrackingEventChannel
+          .receiveBroadcastStream()
+          .map(BarcodeTrackingEvent.tryParse)
+          .where((BarcodeTrackingEvent? event) {
+            if (event == null) {
+              debugPrint('Ignoring malformed barcode tracking event');
+              return false;
+            }
+            return true;
+          })
+          .cast<BarcodeTrackingEvent>()
+          .asBroadcastStream();
+
+  @override
+  Future<void> startBarcodeTracking() =>
+      _serializeTrackingOperation('startBarcodeTracking');
+
+  @override
+  Future<void> stopBarcodeTracking() =>
+      _serializeTrackingOperation('stopBarcodeTracking');
+
+  Future<void> _serializeTrackingOperation(String method) {
+    final Future<void> operation = _trackingOperation
+        .catchError((Object _) {})
+        .then<void>((_) => methodChannel.invokeMethod<void>(method));
+    _trackingOperation = operation;
+    return operation;
   }
 
   @override

@@ -33,6 +33,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import ru.tander.aidl.BluetoothDeviceParcel
+import ru.tander.aidl.BarcodeTrackingParcel
 import ru.tander.viScanner.WakeUpHelper
 import ru.tander.viScanner.ViBarcodeHelper
 import ru.tander.viScanner.ViBluetoothScannerApi
@@ -60,6 +61,7 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
     private var activity: Activity? = null
     private var lifecycle: Lifecycle? = null
     private lateinit var eventHandler: EventChannelHandler
+    private lateinit var barcodeTrackingEventHandler: BarcodeTrackingEventChannelHandler
     private var flutterPluginBinding: FlutterPlugin.FlutterPluginBinding? = null
     private var componentActivity: ComponentActivity? = null
     private var viCameraScanner: ViCameraScanner? = null
@@ -67,6 +69,10 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
         Log.d("barcode", barcode)
         sendBroadcast(barcode, "")
     }
+    private val barcodeTrackingCallback: (BarcodeTrackingParcel) -> Unit = { event ->
+        barcodeTrackingEventHandler.emit(event)
+    }
+    private var barcodeTrackingRegistered = false
     private val pluginJob = SupervisorJob()
     private val scannerLifecycleMutex = Mutex()
     private val lifecycleScope: LifecycleCoroutineScope?
@@ -81,6 +87,8 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
         channel.setMethodCallHandler(this)
         eventHandler = EventChannelHandler()
         eventHandler.startListening(flutterPluginBinding.binaryMessenger)
+        barcodeTrackingEventHandler = BarcodeTrackingEventChannelHandler()
+        barcodeTrackingEventHandler.startListening(flutterPluginBinding.binaryMessenger)
         eventChannel = EventChannel(flutterPluginBinding.binaryMessenger, "tander/multi_scanner_plugin/eventSinkServiceConnections")
         eventChannel!!.setStreamHandler(this)
         eventScannerDisabled = EventChannel(flutterPluginBinding.binaryMessenger, "tander/multi_scanner_plugin/event_scanner_disabled")
@@ -119,6 +127,7 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
                 scannerLifecycleMutex.withLock {
                     WakeUpHelper().disableTurnOffDeviseOnScanButton()
                     ViScanner.removeBarcodeCallBack(barcodeCallback)
+                    removeBarcodeTrackingCallback()
                     ViScanner.release()
                     wearPrepared = false
                 }
@@ -130,6 +139,27 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
         when (call.method) {
             "getPlatformVersion" -> {
                 result.success("Android ${android.os.Build.VERSION.RELEASE}")
+            }
+
+            "startBarcodeTracking" -> {
+                launch {
+                    scannerLifecycleMutex.withLock {
+                        if (!barcodeTrackingRegistered) {
+                            ViScanner.registerBarcodeTrackingCallback(barcodeTrackingCallback)
+                            barcodeTrackingRegistered = true
+                        }
+                    }
+                    result.success(null)
+                }
+            }
+
+            "stopBarcodeTracking" -> {
+                launch {
+                    scannerLifecycleMutex.withLock {
+                        removeBarcodeTrackingCallback()
+                    }
+                    result.success(null)
+                }
             }
 
             "switchHoneywellLight" -> {
@@ -491,6 +521,7 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
                     try {
                         scannerLifecycleMutex.withLock {
                             ViScanner.removeBarcodeCallBack(barcodeCallback)
+                            removeBarcodeTrackingCallback()
                             ViScanner.release()
                             wearPrepared = false
                         }
@@ -584,12 +615,20 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
 
     override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
         ViScanner.removeBarcodeCallBack(barcodeCallback)
+        removeBarcodeTrackingCallback()
         eventHandler.stopListening()
+        barcodeTrackingEventHandler.stopListening()
         channel.setMethodCallHandler(null)
         eventChannel!!.setStreamHandler(null)
         eventScannerDisabled!!.setStreamHandler(null)
         cancel()
         flutterPluginBinding = null
+    }
+
+    private fun removeBarcodeTrackingCallback() {
+        if (!barcodeTrackingRegistered) return
+        ViScanner.removeBarcodeTrackingCallback(barcodeTrackingCallback)
+        barcodeTrackingRegistered = false
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {

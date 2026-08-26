@@ -1,6 +1,7 @@
 import 'package:multi_scanner/barcode_settings_config.dart';
 import 'package:multi_scanner/multi_scanner.dart';
 import 'package:multi_scanner/src/barcode_enum.dart';
+import 'package:multi_scanner/src/barcode_tracking_event.dart';
 import 'package:multi_scanner/src/bluetooth/bt_device.dart';
 import 'package:multi_scanner/src/global_multi_scanner.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
@@ -91,6 +92,20 @@ abstract class MultiScannerPlatform extends PlatformInterface {
 
   Future<void> deletePhoto(String uri) {
     throw UnimplementedError('deletePhoto() has not been implemented.');
+  }
+
+  Stream<BarcodeTrackingEvent> get barcodeTrackingEvents {
+    throw UnimplementedError('barcodeTrackingEvents has not been implemented.');
+  }
+
+  Future<void> startBarcodeTracking() {
+    throw UnimplementedError(
+      'startBarcodeTracking() has not been implemented.',
+    );
+  }
+
+  Future<void> stopBarcodeTracking() {
+    throw UnimplementedError('stopBarcodeTracking() has not been implemented.');
   }
 
   /// Выход из спящего режима на клавиши сканирования

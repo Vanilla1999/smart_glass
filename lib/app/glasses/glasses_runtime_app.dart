@@ -6,6 +6,7 @@ import 'package:smart_glasses/features/glasses/presentation/cubit/screen1/glasse
 import 'package:smart_glasses/features/glasses/presentation/cubit/screen2/glasses_screen2_cubit.dart';
 import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_glasses_cubit.dart';
 import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_voice_overlay_cubit.dart';
+import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_scan_overlay_cubit.dart';
 import 'package:smart_glasses/features/glasses/presentation/screens/glasses_screen.dart';
 import 'package:smart_glasses/features/glasses/presentation/screens/glasses_screen2.dart';
 import 'package:smart_glasses/features/glasses/presentation/screens/glasses_initialization_screen.dart';
@@ -30,6 +31,7 @@ class _GlassesRuntimeAppState extends State<GlassesRuntimeApp> {
   late final GlassesScreen2Cubit _screen2Cubit;
   late final WearGlassesCubit _wearGlassesCubit;
   late final WearVoiceOverlayCubit _wearVoiceOverlayCubit;
+  late final WearScanOverlayCubit _wearScanOverlayCubit;
 
   @override
   void initState() {
@@ -40,6 +42,7 @@ class _GlassesRuntimeAppState extends State<GlassesRuntimeApp> {
     _screen2Cubit = GlassesScreen2Cubit();
     _wearGlassesCubit = WearGlassesCubit();
     _wearVoiceOverlayCubit = WearVoiceOverlayCubit();
+    _wearScanOverlayCubit = WearScanOverlayCubit();
 
     // Create coordinator with callbacks
     _coordinatorCubit = GlassesCoordinatorCubit(
@@ -51,6 +54,7 @@ class _GlassesRuntimeAppState extends State<GlassesRuntimeApp> {
       onUpdateScreen2RecognizedText: _screen2Cubit.updateRecognizedText,
       onUpdateWearGlasses: _wearGlassesCubit.updateFromPayload,
       onUpdateWearVoiceOverlay: _wearVoiceOverlayCubit.update,
+      onUpdateWearScanOverlay: _wearScanOverlayCubit.update,
     );
 
     // Initialize coordinator
@@ -68,6 +72,7 @@ class _GlassesRuntimeAppState extends State<GlassesRuntimeApp> {
     _screen2Cubit.close();
     _wearGlassesCubit.close();
     _wearVoiceOverlayCubit.close();
+    _wearScanOverlayCubit.close();
     super.dispose();
   }
 
@@ -107,6 +112,7 @@ class _GlassesRuntimeAppState extends State<GlassesRuntimeApp> {
         BlocProvider.value(value: _screen2Cubit),
         BlocProvider.value(value: _wearGlassesCubit),
         BlocProvider.value(value: _wearVoiceOverlayCubit),
+        BlocProvider.value(value: _wearScanOverlayCubit),
       ],
       child: MaterialApp(
         navigatorKey: _navigatorKey,

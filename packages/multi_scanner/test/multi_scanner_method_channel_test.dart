@@ -151,6 +151,25 @@ void main() {
     expect(calls.single.method, 'pauseForWear');
   });
 
+  test('barcode tracking lifecycle calls are serialized', () async {
+    final calls = <String>[];
+    final start = Completer<void>();
+    channel.setMockMethodCallHandler((MethodCall methodCall) {
+      calls.add(methodCall.method);
+      if (methodCall.method == 'startBarcodeTracking') return start.future;
+      return Future<void>.value();
+    });
+
+    final Future<void> starting = platform.startBarcodeTracking();
+    final Future<void> stopping = platform.stopBarcodeTracking();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(calls, <String>['startBarcodeTracking']);
+    start.complete();
+    await Future.wait(<Future<void>>[starting, stopping]);
+    expect(calls, <String>['startBarcodeTracking', 'stopBarcodeTracking']);
+  });
+
   test('concurrent barcode listener registrations are serialized', () async {
     final _ControlledEventChannel events = _ControlledEventChannel();
     platform = MethodChannelMultiScanner()..eventChannel = events;

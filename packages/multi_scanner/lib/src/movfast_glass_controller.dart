@@ -1,4 +1,5 @@
 import 'package:multi_scanner/src/base_controller.dart';
+import 'package:multi_scanner/src/barcode_tracking_event.dart';
 import 'package:multi_scanner/src/platform/multi_scanner_platform_interface.dart';
 
 class MovfastGlassController extends BaseController {
@@ -34,4 +35,11 @@ class MovfastGlassController extends BaseController {
   Future<String> takePhoto() => _platform.takePhoto();
 
   Future<void> deletePhoto(String uri) => _platform.deletePhoto(uri);
+
+  Stream<BarcodeTrackingEvent> get trackingEvents =>
+      _platform.barcodeTrackingEvents;
+
+  Future<void> startBarcodeTracking() => _platform.startBarcodeTracking();
+
+  Future<void> stopBarcodeTracking() => _platform.stopBarcodeTracking();
 }

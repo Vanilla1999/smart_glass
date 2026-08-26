@@ -139,6 +139,23 @@ void main() {
     await authority.dispose();
   });
 
+  test('start sends the current full snapshot immediately', () async {
+    final WearRuntimeAuthority authority = WearRuntimeAuthority(
+      initialScreen: WearScreenId.scanIdle,
+    );
+    final _RecordingBridge bridge = _RecordingBridge();
+    final WearRuntimeGlassesSender sender = WearRuntimeGlassesSender(
+      store: authority.store,
+      bridge: bridge,
+    )..start();
+
+    await Future<void>.delayed(Duration.zero);
+
+    expect(bridge.shown.single.logicalScreen, WearScreenId.scanIdle);
+    await sender.dispose();
+    await authority.dispose();
+  });
+
   test('glasses follow logical screen while the phone route is stale',
       () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority(

@@ -5,6 +5,7 @@ export 'src/base_controller.dart';
 export 'src/barcode_enum.dart';
 export 'src/mertech_controller.dart';
 export 'src/movfast_glass_controller.dart';
+export 'src/barcode_tracking_event.dart';
 export 'src/wake_up_controller.dart';
 export 'src/bluetooth/multi_scanner_bluetooth.dart';
 export 'src/bluetooth/bt_device.dart';

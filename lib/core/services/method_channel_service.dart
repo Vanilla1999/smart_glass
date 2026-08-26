@@ -103,6 +103,15 @@ class MethodChannelService {
     }
   }
 
+  Future<void> updateWearScanOverlay(Map<String, dynamic> payload) async {
+    try {
+      await _appChannel.invokeMethod('updateWearScanOverlay', payload);
+    } catch (e) {
+      print('Error updating wear scan overlay: $e');
+      rethrow;
+    }
+  }
+
   /// Hide wear projection screen on glasses.
   Future<void> hideWearGlasses() async {
     try {

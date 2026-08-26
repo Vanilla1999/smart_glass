@@ -6,6 +6,7 @@ import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_glas
 import 'package:smart_glasses/features/glasses/presentation/cubit/wear/wear_voice_overlay_cubit.dart';
 import 'package:smart_glasses/features/glasses/presentation/widgets/wear/wear_glasses_scaffold.dart';
 import 'package:smart_glasses/features/glasses/presentation/widgets/wear/wear_list_scroll_metrics.dart';
+import 'package:smart_glasses/features/glasses/presentation/widgets/wear/wear_scan_overlay.dart';
 import 'package:smart_glasses/features/glasses/presentation/widgets/wear/wear_voice_hint_text.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
@@ -50,21 +51,27 @@ class _WearGlassesScreenState extends State<WearGlassesScreen> {
         return BlocBuilder<WearGlassesCubit, WearGlassesState>(
           builder: (BuildContext context, WearGlassesState state) {
             _logPerformanceFrame(state);
+            final bool isWaitingForBarcode =
+                state.screenType == WearGlassesScreenType.scan &&
+                    state.phase == WearGlassesPhase.scanning;
             return WearGlassesScaffold(
+              overlay: WearScanOverlay(visible: isWaitingForBarcode),
               child: Stack(
                 children: <Widget>[
                   Padding(
                     padding: const EdgeInsets.only(top: 20),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.max,
-                        children: <Widget>[
-                          _TitleBlock(state: state),
-                          const SizedBox(height: 12),
-                          Expanded(child: _Body(state: state)),
-                        ],
-                      ),
-                    ),
+                    child: isWaitingForBarcode
+                        ? _BarcodeWaitingPrompt(text: state.subtitle ?? '')
+                        : Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.max,
+                              children: <Widget>[
+                                _TitleBlock(state: state),
+                                const SizedBox(height: 12),
+                                Expanded(child: _Body(state: state)),
+                              ],
+                            ),
+                          ),
                   ),
                   Align(
                     alignment: Alignment.topRight,
@@ -80,6 +87,31 @@ class _WearGlassesScreenState extends State<WearGlassesScreen> {
           },
         );
       },
+    );
+  }
+}
+
+class _BarcodeWaitingPrompt extends StatelessWidget {
+  const _BarcodeWaitingPrompt({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: WearGlassesScaffold.accentColor,
+          fontSize: 20,
+          height: 1.4,
+          fontWeight: FontWeight.w400,
+        ),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+      ),
     );
   }
 }

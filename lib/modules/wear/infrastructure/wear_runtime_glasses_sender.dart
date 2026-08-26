@@ -30,6 +30,7 @@ class WearRuntimeGlassesSender {
   void start() {
     if (_subscription != null || _disposed) return;
     _subscription = _store.states.listen(_accept);
+    _accept(_store.state);
   }
 
   void _accept(WearRuntimeState state) {

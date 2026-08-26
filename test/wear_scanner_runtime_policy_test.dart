@@ -1,12 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_adapter.dart';
 import 'package:smart_glasses/modules/wear/services/wear_scanner_runtime_policy.dart';
 
 import 'support/wear_runtime_test_helper.dart';
 
 void main() {
-  test('authorized matching route prepares scanner for a barcode screen',
+  test('authorized barcode admission opens only after scanner preparation',
       () async {
     final WearRuntimeAuthority authority =
         await createActiveWearRuntimeAuthority(
@@ -25,6 +26,22 @@ void main() {
 
     expect(decision.hardwarePrepared, isTrue);
     expect(decision.barcodeAdmissionEnabled, isFalse);
+
+    final WearRuntimeControlAdapter controls =
+        WearRuntimeControlAdapter(authority);
+    await controls.observeScannerPreparing();
+    await controls.observeScannerPrepared();
+    await controls.evaluateScannerAdmission(
+      logicalScreen: WearScreenId.scanIdle,
+      screenAcceptsBarcode: true,
+    );
+    final WearScannerRuntimeDecision afterPreparation =
+        resolveWearScannerDecisionFromState(
+      authority.state,
+      currentScreenAcceptsBarcode: true,
+    );
+
+    expect(afterPreparation.barcodeAdmissionEnabled, isTrue);
   });
 
   test('authorized route drift closes scanner preparation and admission',
