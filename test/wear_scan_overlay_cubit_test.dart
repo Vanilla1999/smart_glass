@@ -202,6 +202,65 @@ void main() {
     expect(cubit.state.centerX, closeTo(0.5, 0.0001));
   });
 
+  test('applies the movement dead zone independently per axis', () {
+    final WearScanOverlayCubit cubit = WearScanOverlayCubit();
+    addTearDown(cubit.close);
+
+    void update(int revision, double centerX, double centerY) {
+      cubit.update(<String, dynamic>{
+        'visible': true,
+        'revision': revision,
+        'phase': 'candidate',
+        'candidateId': 10,
+        'detectedAtElapsedRealtimeNanos': revision * 67_000_000,
+        'left': centerX - 0.1,
+        'right': centerX + 0.1,
+        'top': centerY - 0.1,
+        'bottom': centerY + 0.1,
+      });
+    }
+
+    update(1, 0.5, 0.5);
+    update(2, 0.5, 0.5);
+    update(3, 0.508, 0.55);
+
+    expect(cubit.state.centerX, closeTo(0.5, 0.0001));
+    expect(cubit.state.centerY, greaterThan(0.5));
+    expect(cubit.state.centerY, lessThan(0.55));
+  });
+
+  test('locks without moving toward a newly selected candidate', () {
+    final WearScanOverlayCubit cubit = WearScanOverlayCubit();
+    addTearDown(cubit.close);
+
+    void update({
+      required int revision,
+      required int candidateId,
+      required String phase,
+      required double centerX,
+    }) {
+      cubit.update(<String, dynamic>{
+        'visible': true,
+        'revision': revision,
+        'phase': phase,
+        'candidateId': candidateId,
+        'detectedAtElapsedRealtimeNanos': revision * 67_000_000,
+        'left': centerX - 0.1,
+        'right': centerX + 0.1,
+        'top': 0.4,
+        'bottom': 0.6,
+      });
+    }
+
+    update(revision: 1, candidateId: 10, phase: 'candidate', centerX: 0.2);
+    update(revision: 2, candidateId: 10, phase: 'candidate', centerX: 0.2);
+    update(revision: 3, candidateId: 11, phase: 'candidate', centerX: 0.8);
+    update(revision: 4, candidateId: 11, phase: 'locked', centerX: 0.8);
+
+    expect(cubit.state.phase, WearScanOverlayPhase.locked);
+    expect(cubit.state.centerX, closeTo(0.2, 0.0001));
+  });
+
   testWidgets('renders reticle and moves to candidate center',
       (WidgetTester tester) async {
     await tester.binding.setSurfaceSize(const Size(640, 480));
@@ -248,7 +307,17 @@ void main() {
     expect(slide.offset.dy, closeTo(84 / 120, 0.0001));
     expect(slide.duration, const Duration(milliseconds: 150));
     expect(slide.curve, Curves.easeOutCubic);
-    await tester.pump(const Duration(milliseconds: 1025));
+
+    final Finder reticle = find.byKey(const Key('wear-scan-reticle'));
+    expect(tester.getTopLeft(reticle).dx, closeTo(210, 0.0001));
+    await tester.pump(const Duration(milliseconds: 75));
+    final double halfwayX = tester.getTopLeft(reticle).dx;
+    expect(halfwayX, greaterThan(210));
+    expect(halfwayX, lessThan(338));
+    await tester.pump(const Duration(milliseconds: 75));
+    expect(tester.getTopLeft(reticle).dx, closeTo(338, 0.0001));
+
+    await tester.pump(const Duration(milliseconds: 875));
     await tester.pumpAndSettle();
   });
 }

@@ -92,12 +92,19 @@ class WearScanOverlayCubit extends Cubit<WearScanOverlayState> {
     final double centerX = _center(payload['left'], payload['right']);
     final double centerY = _center(payload['top'], payload['bottom']);
     final int candidateId = payload['candidateId'] as int? ?? -1;
+    final bool hasVisualCandidate =
+        _candidateId != null && _centerXFilter.initialized;
     final bool candidateChanged = candidateId != _candidateId;
     if (candidateChanged && !locked && !_confirmCandidate(candidateId)) {
       return (_centerXFilter.value, _centerYFilter.value);
     }
     if (candidateChanged) {
       _candidateId = candidateId;
+      _clearPendingCandidate();
+      if (locked && hasVisualCandidate) {
+        _detectedAtNanos = payload['detectedAtElapsedRealtimeNanos'] as int?;
+        return (_centerXFilter.value, _centerYFilter.value);
+      }
     }
     _clearPendingCandidate();
 
@@ -112,19 +119,18 @@ class WearScanOverlayCubit extends Cubit<WearScanOverlayState> {
       _centerXFilter.reset(centerX);
       _centerYFilter.reset(centerY);
     } else {
-      final bool insideDeadZone =
-          (centerX - _centerXFilter.value).abs() <= _movementDeadZone &&
-              (centerY - _centerYFilter.value).abs() <= _movementDeadZone;
-      if (insideDeadZone) {
+      final double interval =
+          elapsedSeconds != null && elapsedSeconds > 0 && elapsedSeconds <= 0.5
+              ? elapsedSeconds
+              : _fallbackElapsedSeconds;
+      if ((centerX - _centerXFilter.value).abs() <= _movementDeadZone) {
         _centerXFilter.hold(centerX);
+      } else {
+        _centerXFilter.filter(centerX, interval);
+      }
+      if ((centerY - _centerYFilter.value).abs() <= _movementDeadZone) {
         _centerYFilter.hold(centerY);
       } else {
-        final double interval = elapsedSeconds != null &&
-                elapsedSeconds > 0 &&
-                elapsedSeconds <= 0.5
-            ? elapsedSeconds
-            : _fallbackElapsedSeconds;
-        _centerXFilter.filter(centerX, interval);
         _centerYFilter.filter(centerY, interval);
       }
     }
