@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:smart_glasses/modules/wear/application/voice_clarification_args.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/application/wear_status_state.dart';
@@ -24,6 +22,10 @@ class WearRuntimePresentationSlice extends WearPresentationFocusSlice {
     this.statusCompletion,
     this.statusOperationId,
     this.statusDeadline,
+    this.recognitionFeedbackScreen,
+    this.recognitionPreviewText,
+    this.recognitionProcessingText,
+    this.voiceHintsGeneration = 0,
   });
 
   factory WearRuntimePresentationSlice.from(
@@ -45,6 +47,15 @@ class WearRuntimePresentationSlice extends WearPresentationFocusSlice {
   final WearStatusCompletion? statusCompletion;
   final int? statusOperationId;
   final DateTime? statusDeadline;
+  final WearScreenId? recognitionFeedbackScreen;
+  final String? recognitionPreviewText;
+  final String? recognitionProcessingText;
+  final int voiceHintsGeneration;
+
+  String? recognitionFeedbackFor(WearScreenId screen) {
+    if (recognitionFeedbackScreen != screen) return null;
+    return recognitionProcessingText ?? recognitionPreviewText;
+  }
 
   bool get hasClarification => clarificationArgs != null;
   bool get hasGenericStatus => statusArgs != null;
@@ -68,9 +79,20 @@ class WearRuntimePresentationSlice extends WearPresentationFocusSlice {
     bool clearClarificationNotice = false,
     WearStatusScreenArgs? statusArgs,
     WearStatusCompletion? statusCompletion,
+    bool clearStatusCompletion = false,
     int? statusOperationId,
+    bool clearStatusOperationId = false,
     DateTime? statusDeadline,
+    bool clearStatusDeadline = false,
+    bool clearStatusArgs = false,
     bool clearStatus = false,
+    WearScreenId? recognitionFeedbackScreen,
+    String? recognitionPreviewText,
+    String? recognitionProcessingText,
+    bool clearRecognitionFeedback = false,
+    bool clearRecognitionPreview = false,
+    bool clearRecognitionProcessing = false,
+    int? voiceHintsGeneration,
   }) {
     return WearRuntimePresentationSlice(
       focusedIndices: focusedIndices ?? this.focusedIndices,
@@ -83,13 +105,29 @@ class WearRuntimePresentationSlice extends WearPresentationFocusSlice {
       clarificationNotice: clearClarification || clearClarificationNotice
           ? null
           : clarificationNotice ?? this.clarificationNotice,
-      statusArgs: clearStatus ? null : statusArgs ?? this.statusArgs,
-      statusCompletion:
-          clearStatus ? null : statusCompletion ?? this.statusCompletion,
-      statusOperationId:
-          clearStatus ? null : statusOperationId ?? this.statusOperationId,
-      statusDeadline:
-          clearStatus ? null : statusDeadline ?? this.statusDeadline,
+      statusArgs:
+          clearStatus || clearStatusArgs ? null : statusArgs ?? this.statusArgs,
+      statusCompletion: clearStatus || clearStatusCompletion
+          ? null
+          : statusCompletion ?? this.statusCompletion,
+      statusOperationId: clearStatus || clearStatusOperationId
+          ? null
+          : statusOperationId ?? this.statusOperationId,
+      statusDeadline: clearStatus || clearStatusDeadline
+          ? null
+          : statusDeadline ?? this.statusDeadline,
+      recognitionFeedbackScreen: clearRecognitionFeedback
+          ? null
+          : recognitionFeedbackScreen ?? this.recognitionFeedbackScreen,
+      recognitionPreviewText:
+          clearRecognitionFeedback || clearRecognitionPreview
+              ? null
+              : recognitionPreviewText ?? this.recognitionPreviewText,
+      recognitionProcessingText:
+          clearRecognitionFeedback || clearRecognitionProcessing
+              ? null
+              : recognitionProcessingText ?? this.recognitionProcessingText,
+      voiceHintsGeneration: voiceHintsGeneration ?? this.voiceHintsGeneration,
     );
   }
 
@@ -98,6 +136,21 @@ class WearRuntimePresentationSlice extends WearPresentationFocusSlice {
       focusedIndices: focusedIndices,
     );
   }
+}
+
+VoiceClarificationArgs _freezeClarificationArgs(
+  VoiceClarificationArgs args,
+) {
+  return VoiceClarificationArgs(
+    sourceScreen: args.sourceScreen,
+    phrase: args.phrase,
+    matches: List.unmodifiable(args.matches),
+    sourceListRevision: args.sourceListRevision,
+    previous:
+        args.previous == null ? null : _freezeClarificationArgs(args.previous!),
+    spokenPhrases: List.unmodifiable(args.spokenPhrases),
+    excludedWords: Set.unmodifiable(args.excludedWords),
+  );
 }
 
 class WearVoiceClarificationContextChanged extends WearIntent {
@@ -172,6 +225,32 @@ class WearGenericStatusCleared extends WearIntent {
   final int sessionEpoch;
 }
 
+class WearRecognitionFeedbackChanged extends WearIntent {
+  const WearRecognitionFeedbackChanged({
+    required this.sessionEpoch,
+    required this.expectedScreen,
+    required this.processing,
+    this.text,
+    this.clearAll = false,
+  });
+
+  final int sessionEpoch;
+  final WearScreenId expectedScreen;
+  final bool processing;
+  final String? text;
+  final bool clearAll;
+}
+
+class WearVoiceHintsPrepared extends WearIntent {
+  const WearVoiceHintsPrepared({
+    required this.sessionEpoch,
+    required this.expectedScreen,
+  });
+
+  final int sessionEpoch;
+  final WearScreenId expectedScreen;
+}
+
 class WearRuntimePresentationReducer implements WearSliceReducer {
   const WearRuntimePresentationReducer();
 
@@ -181,6 +260,49 @@ class WearRuntimePresentationReducer implements WearSliceReducer {
         state.payloadAs<WearAggregatePayload>();
     final WearRuntimePresentationSlice presentation =
         WearRuntimePresentationSlice.from(aggregate.presentation);
+
+    if (intent is WearRecognitionFeedbackChanged) {
+      final WearReduction? rejection = _validate(
+        state,
+        aggregate,
+        sessionEpoch: intent.sessionEpoch,
+        expectedScreen: intent.expectedScreen,
+      );
+      if (rejection != null) return rejection;
+      final String? normalized = intent.text?.trim();
+      final WearRuntimePresentationSlice next = intent.clearAll
+          ? presentation.copyWith(clearRecognitionFeedback: true)
+          : presentation.copyWith(
+              recognitionFeedbackScreen: intent.expectedScreen,
+              recognitionPreviewText: intent.processing ? null : normalized,
+              recognitionProcessingText: intent.processing ? normalized : null,
+              clearRecognitionPreview: !intent.processing && normalized == null,
+              clearRecognitionProcessing:
+                  intent.processing && normalized == null,
+            );
+      return WearReduction.accept(
+        nextState: state.withPayload(
+          aggregate.copyWith(presentation: next),
+        ),
+      );
+    }
+
+    if (intent is WearVoiceHintsPrepared) {
+      final WearReduction? rejection = _validate(
+        state,
+        aggregate,
+        sessionEpoch: intent.sessionEpoch,
+        expectedScreen: intent.expectedScreen,
+      );
+      if (rejection != null) return rejection;
+      return WearReduction.accept(
+        nextState: state.withPayload(aggregate.copyWith(
+          presentation: presentation.copyWith(
+            voiceHintsGeneration: presentation.voiceHintsGeneration + 1,
+          ),
+        )),
+      );
+    }
 
     if (intent is WearVoiceClarificationContextChanged) {
       final WearReduction? rejection = _validate(
@@ -196,7 +318,7 @@ class WearRuntimePresentationReducer implements WearSliceReducer {
       return WearReduction.accept(
         nextState: state.withPayload(aggregate.copyWith(
           presentation: presentation.copyWith(
-            clarificationArgs: intent.args,
+            clarificationArgs: _freezeClarificationArgs(intent.args),
             clarificationFocusedIndex: 0,
             clearClarificationNotice: true,
           ),
@@ -240,7 +362,8 @@ class WearRuntimePresentationReducer implements WearSliceReducer {
         return WearReduction.reject(WearDispatchRejectReason.staleScreen);
       }
       final String? notice = intent.notice?.trim();
-      final String? normalized = notice == null || notice.isEmpty ? null : notice;
+      final String? normalized =
+          notice == null || notice.isEmpty ? null : notice;
       if (presentation.clarificationNotice == normalized) {
         return WearReduction.accept();
       }
@@ -277,25 +400,31 @@ class WearRuntimePresentationReducer implements WearSliceReducer {
       if (intent.operationId <= 0) {
         return WearReduction.reject(WearDispatchRejectReason.unsupported);
       }
+      final bool scheduled = intent.deadline != null &&
+          intent.completion.kind != WearStatusCompletionKind.stay &&
+          intent.completion.target != null;
       final WearNavigationSlice navigation = aggregate.navigation.request(
         WearScreenId.status,
         kind: WearPendingNavigationKind.push,
       );
       return WearReduction.accept(
-        nextState: state
-            .expectOperation(
-              kind: wearGenericStatusOperationKind,
-              operationId: intent.operationId,
-            )
+        nextState: (scheduled
+                ? state.expectOperation(
+                    kind: wearGenericStatusOperationKind,
+                    operationId: intent.operationId,
+                  )
+                : state.clearExpectedOperation(wearGenericStatusOperationKind))
             .withPayload(aggregate.copyWith(
-              navigation: navigation,
-              presentation: presentation.copyWith(
-                statusArgs: intent.args,
-                statusCompletion: intent.completion,
-                statusOperationId: intent.operationId,
-                statusDeadline: intent.deadline,
-              ),
-            )),
+          navigation: navigation,
+          presentation: presentation.copyWith(
+            statusArgs: intent.args,
+            statusCompletion: intent.completion,
+            statusOperationId: scheduled ? intent.operationId : null,
+            clearStatusOperationId: !scheduled,
+            statusDeadline: scheduled ? intent.deadline : null,
+            clearStatusDeadline: !scheduled,
+          ),
+        )),
       );
     }
 
@@ -348,7 +477,9 @@ class WearRuntimePresentationReducer implements WearSliceReducer {
       );
     }
 
-    if (intent is WearLogicalNavigationRequested) {
+    if (intent is WearLogicalNavigationRequested ||
+        intent is WearBackRequested ||
+        intent is WearHomeRequested) {
       final WearReduction? navigationReduction =
           const WearCoreSliceReducer().reduceSlice(state, intent);
       if (navigationReduction == null || !navigationReduction.accepted) {
@@ -361,13 +492,12 @@ class WearRuntimePresentationReducer implements WearSliceReducer {
       WearRuntimePresentationSlice nextPresentation =
           WearRuntimePresentationSlice.from(nextAggregate.presentation);
       WearRuntimeState nextState = navigated;
-      if (intent.screen != WearScreenId.voiceClarification &&
+      final WearScreenId target = nextAggregate.navigation.logicalScreen;
+      if (target != WearScreenId.voiceClarification &&
           nextPresentation.hasClarification) {
-        nextPresentation =
-            nextPresentation.copyWith(clearClarification: true);
+        nextPresentation = nextPresentation.copyWith(clearClarification: true);
       }
-      if (intent.screen != WearScreenId.status &&
-          nextPresentation.hasGenericStatus) {
+      if (target != WearScreenId.status && nextPresentation.hasGenericStatus) {
         nextPresentation = nextPresentation.copyWith(clearStatus: true);
         nextState =
             nextState.clearExpectedOperation(wearGenericStatusOperationKind);
@@ -396,68 +526,5 @@ class WearRuntimePresentationReducer implements WearSliceReducer {
       return WearReduction.reject(WearDispatchRejectReason.staleScreen);
     }
     return null;
-  }
-}
-
-/// Timer adapter for aggregate generic status operations.
-///
-/// The deadline and operation identity remain in [WearRuntimeState]. This class
-/// owns only the cancellable host timer and can never navigate or mutate a slice
-/// directly.
-class WearRuntimePresentationScheduler {
-  WearRuntimePresentationScheduler(this._authority) {
-    _subscription = _authority.states.listen(_onState);
-  }
-
-  final dynamic _authority;
-  late final StreamSubscription<WearRuntimeState> _subscription;
-  Timer? _timer;
-  ({int epoch, int operationId})? _scheduled;
-
-  void _onState(WearRuntimeState state) {
-    if (state.terminal) {
-      _cancel();
-      return;
-    }
-    final WearAggregatePayload aggregate =
-        state.payloadAs<WearAggregatePayload>();
-    final WearRuntimePresentationSlice presentation =
-        WearRuntimePresentationSlice.from(aggregate.presentation);
-    final int? operationId = presentation.statusOperationId;
-    final DateTime? deadline = presentation.statusDeadline;
-    if (aggregate.navigation.logicalScreen != WearScreenId.status ||
-        operationId == null ||
-        deadline == null) {
-      _cancel();
-      return;
-    }
-    final ({int epoch, int operationId}) key = (
-      epoch: state.sessionEpoch,
-      operationId: operationId,
-    );
-    if (_scheduled == key) return;
-    _cancel();
-    _scheduled = key;
-    final Duration delay = deadline.difference(DateTime.now());
-    _timer = Timer(delay.isNegative ? Duration.zero : delay, () {
-      if (_scheduled != key) return;
-      _timer = null;
-      _scheduled = null;
-      unawaited(_authority.store.dispatch(WearGenericStatusElapsed(
-        sessionEpoch: key.epoch,
-        operationId: key.operationId,
-      )));
-    });
-  }
-
-  void _cancel() {
-    _timer?.cancel();
-    _timer = null;
-    _scheduled = null;
-  }
-
-  Future<void> dispose() async {
-    _cancel();
-    await _subscription.cancel();
   }
 }

@@ -39,6 +39,19 @@ void main() {
     expect(late.rejectReason, WearDispatchRejectReason.staleEpoch);
   });
 
+  test('session clear keeps anonymous runtime active for badge scanning',
+      () async {
+    final WearRuntimeAuthority authority = WearRuntimeAuthority();
+    addTearDown(authority.dispose);
+    await authority.authorize(user(1));
+
+    await authority.clearSession();
+
+    expect(authority.isAuthorized, isFalse);
+    expect(authority.payload.lifecycle.runtimeActive, isTrue);
+    expect(authority.payload.navigation.logicalScreen, WearScreenId.main);
+  });
+
   test('session clear preserves navigation identity monotonicity', () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);

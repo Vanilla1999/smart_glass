@@ -112,7 +112,8 @@ class _WearScanIdleScreenState extends State<WearScanIdleScreen>
     final WearRuntimeState beforeClaim = _authority.state;
     final WearAggregatePayload aggregate =
         beforeClaim.payloadAs<WearAggregatePayload>();
-    final WearUiEffect? current = aggregate.uiEffects.effectById(effect.effectId);
+    final WearUiEffect? current =
+        aggregate.uiEffects.effectById(effect.effectId);
     final WearScanPhoneProjection beforeProjection =
         WearScanPhoneProjection.fromState(beforeClaim);
     if (current == null ||

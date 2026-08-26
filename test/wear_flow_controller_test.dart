@@ -48,6 +48,45 @@ void main() {
       return flow;
     }
 
+    test('adopts and delivers an existing matching navigation request once',
+        () async {
+      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
+      final WearFlowController controller = createFlow(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: navigation,
+      );
+      await authority.requestNavigation(WearScreenId.help);
+      final int requestId = authority.payload.navigation.pending!.requestId;
+
+      await controller.requestNavigation(WearScreenId.help);
+
+      expect(controller.state.pendingNavigation?.requestId, requestId);
+      expect(navigation.goToCalls, <WearScreenId>[WearScreenId.help]);
+    });
+
+    test('accepts current logical target without a pending request', () async {
+      final _FakeNavigationOutput navigation = _FakeNavigationOutput();
+      await authority.requestNavigation(WearScreenId.help);
+      final pending = authority.payload.navigation.pending!;
+      await authority.acknowledgeNavigationAtEpoch(
+        sessionEpoch: authority.state.sessionEpoch,
+        requestId: pending.requestId,
+        screen: pending.screen,
+      );
+      final WearFlowController controller = createFlow(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: navigation,
+      );
+
+      await expectLater(
+        controller.requestNavigation(WearScreenId.help),
+        completes,
+      );
+
+      expect(authority.payload.navigation.pending, isNull);
+      expect(navigation.goToCalls, isEmpty);
+    });
+
     test('stores pending navigation while UI is inactive', () async {
       final _FakeNavigationOutput navigation = _FakeNavigationOutput();
       final WearFlowController controller = createFlow(
@@ -843,13 +882,11 @@ void main() {
       expect(received, '4600000000001');
     });
 
-    test('barcode-disabled screen pauses admission and rejects events',
-        () async {
+    test('legacy barcode callback cannot open aggregate admission', () async {
       final WearFlowController controller = createFlow(
         glassesOutput: _FakeGlassesOutput(),
         navigationOutput: _FakeNavigationOutput(),
       );
-      bool enabled = true;
       int calls = 0;
       await authority.setPhoneUiActive(true);
       await controller.requestNavigation(WearScreenId.availabilityCheck);
@@ -857,18 +894,13 @@ void main() {
         WearScreenId.availabilityCheck,
         WearScreenActionHandler(
           onBarcode: (_) => calls++,
-          barcodeEnabled: () => enabled,
+          barcodeEnabled: () => true,
         ),
       );
 
-      expect(controller.currentScreenAcceptsBarcode, isTrue);
-      expect(await controller.handleBarcode('product'), isTrue);
-
-      enabled = false;
-
       expect(controller.currentScreenAcceptsBarcode, isFalse);
-      expect(await controller.handleBarcode('price-tag'), isFalse);
-      expect(calls, 1);
+      expect(await controller.handleBarcode('product'), isFalse);
+      expect(calls, 0);
     });
 
     test('yes and no commands invoke semantic screen actions', () async {
@@ -999,6 +1031,57 @@ void main() {
       expect(navigation.backCalls, 1);
       expect(controller.state.screen, WearScreenId.availabilityProduct);
       expect(selectedId, '2');
+    });
+
+    test('clarification selection accepts the frozen aggregate context',
+        () async {
+      final WearFlowController controller = createFlow(
+        glassesOutput: _FakeGlassesOutput(),
+        navigationOutput: _FakeNavigationOutput(),
+      );
+      String? selectedId;
+      await authority.setPhoneUiActive(true);
+      controller.registerScreenActions(
+        WearScreenId.availabilityProduct,
+        WearScreenActionHandler(
+          onDynamicItem: (String itemId) => selectedId = itemId,
+          dynamicVoiceItems: () => const VoiceDynamicItemsSnapshot(
+            revision: 1,
+            items: <VoiceDynamicItem>[
+              VoiceDynamicItem(id: '1', label: 'Первый товар'),
+            ],
+          ),
+        ),
+      );
+      const VoiceClarificationArgs args = VoiceClarificationArgs(
+        sourceScreen: WearScreenId.availabilityProduct,
+        phrase: 'товар',
+        sourceListRevision: 1,
+        matches: <VoiceDynamicItem>[
+          VoiceDynamicItem(id: '1', label: 'Первый товар'),
+        ],
+      );
+      await controller.requestNavigation(
+        WearScreenId.voiceClarification,
+        extra: args,
+      );
+      final VoiceClarificationArgs frozen = VoiceClarificationArgs(
+        sourceScreen: WearScreenId.availabilityProduct,
+        phrase: 'товар',
+        sourceListRevision: 1,
+        matches: List<VoiceDynamicItem>.unmodifiable(
+          const <VoiceDynamicItem>[
+            VoiceDynamicItem(id: '1', label: 'Первый товар'),
+          ],
+        ),
+      );
+
+      expect(identical(frozen, args), isFalse);
+      expect(
+        await controller.selectVoiceClarificationItem(frozen, '1'),
+        isTrue,
+      );
+      expect(selectedId, '1');
     });
 
     test('does not leave clarification when selected item became stale',

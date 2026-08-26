@@ -1,8 +1,8 @@
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
-import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_core_slices.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_slice.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_presentation_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
@@ -429,6 +429,8 @@ class WearScanStatusSequencingReducer implements WearSliceReducer {
     WearScanTaskSlice scan, {
     required WearScreenId target,
   }) {
+    final WearRuntimePresentationSlice presentation =
+        WearRuntimePresentationSlice.from(aggregate.presentation);
     final WearScanTaskSlice waiting = scan.copyWith(
       phase: WearScanTaskPhase.waiting,
       screen: target,
@@ -446,6 +448,7 @@ class WearScanStatusSequencingReducer implements WearSliceReducer {
       kind: WearPendingNavigationKind.replace,
     );
     final WearRuntimeState next = state
+        .clearExpectedOperation(wearGenericStatusOperationKind)
         .withLegacy(
           WearLegacyRuntimeSnapshot(
             logicalScreen: target,
@@ -456,6 +459,7 @@ class WearScanStatusSequencingReducer implements WearSliceReducer {
           aggregate.copyWith(
             navigation: navigation,
             features: features.copyWith(scan: allocation.task),
+            presentation: presentation.copyWith(clearStatus: true),
           ),
         )
         .expectOperation(

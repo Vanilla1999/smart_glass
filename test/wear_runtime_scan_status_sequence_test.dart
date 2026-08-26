@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/application/wear_status_state.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
 import 'package:smart_glasses/modules/wear/domain/price_tag_print/model/barcode_product_info.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_presentation_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_effects.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
@@ -48,9 +50,17 @@ void main() {
         navigate: (screen, {extra, replaceCurrent = false}) async {
           navigation.add(screen);
         },
-        presentStatus: (_, {required completion}) {
+        presentStatus: (args, {required completion}) async {
           presenterCalls++;
-          return presenter.future;
+          await presenter.future;
+          await authority.store.dispatch(WearGenericStatusShown(
+            sessionEpoch: authority.state.sessionEpoch,
+            operationId: authority.allocateOperationId(),
+            expectedScreen: WearScreenId.status,
+            args: args,
+            completion: const WearStatusCompletion.stay(),
+            deadline: null,
+          ));
         },
         delay: (_) {
           delayCalls++;
@@ -76,6 +86,11 @@ void main() {
     delay.complete();
     await _flush();
     expect(navigation, <WearScreenId>[WearScreenId.scanIdle]);
+    expect(
+      WearRuntimePresentationSlice.from(authority.payload.presentation)
+          .statusArgs,
+      isNull,
+    );
   });
 
   test('delay failure fails open to the committed return target', () async {
@@ -117,6 +132,7 @@ void main() {
         navigate: (_, {extra, replaceCurrent = false}) async {},
         presentStatus: (_, {required completion}) async {},
         delay: (_) => statusDelay.future,
+        printingDelay: (_) async {},
       ),
     );
 

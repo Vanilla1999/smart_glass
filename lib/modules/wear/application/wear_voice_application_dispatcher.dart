@@ -203,7 +203,7 @@ class WearVoiceApplicationDispatcher {
       }
     }
     if (item == null) return false;
-    final bool useful = await _flow.handleVoicePartialPhrase(item.label);
+    final bool useful = await _flow.focusVoiceDynamicItem(screen, item.id);
     if (useful) _onPreviewUseful?.call(event);
     return useful;
   }

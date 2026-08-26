@@ -160,7 +160,7 @@ class WearStatusIconReporter {
     final WearScreenId Function()? currentScreenForTesting =
         _currentScreenForTesting;
     final WearScreenId current = currentScreenForTesting?.call() ??
-        WearDependencies.I.wearFlowController.state.screen;
+        WearDependencies.I.authority.payload.navigation.logicalScreen;
     final bool onWifiSettingsScreen = current == WearScreenId.wifiSettings;
     final bool onPrinterSettingsScreen =
         current == WearScreenId.printerSettings;

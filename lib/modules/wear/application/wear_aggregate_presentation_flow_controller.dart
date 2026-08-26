@@ -4,8 +4,12 @@ import 'package:smart_glasses/modules/wear/application/voice_clarification_args.
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/application/wear_status_state.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_presentation_scheduler.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_presentation_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
 /// Aggregate-first compatibility facade for the remaining simple phone screens.
@@ -25,16 +29,20 @@ class WearAggregatePresentationFlowController extends WearFlowController {
     super.photoCapture,
   }) {
     _authorityStateSub = this.authority.states.listen(_onAuthorityState);
+    _presentationScheduler = WearRuntimePresentationScheduler(
+      this.authority,
+      onElapsedAccepted: flushPendingNavigation,
+    );
   }
 
   Future<void> _presentationCommandTail = Future<void>.value();
+  Future<void> _presentationUpdateTail = Future<void>.value();
   late final StreamSubscription<WearRuntimeState> _authorityStateSub;
+  late final WearRuntimePresentationScheduler _presentationScheduler;
 
-  WearScreenId get _logicalScreen =>
-      authority.payload.navigation.logicalScreen;
+  WearScreenId get _logicalScreen => authority.payload.navigation.logicalScreen;
 
-  bool get _legacyScreenMatchesLogical =>
-      super.state.screen == _logicalScreen;
+  bool get _legacyScreenMatchesLogical => super.state.screen == _logicalScreen;
 
   @override
   WearFlowState get state => _projectCompatibilityFocus(super.state);
@@ -100,11 +108,92 @@ class WearAggregatePresentationFlowController extends WearFlowController {
     if (_logicalScreen != WearScreenId.voiceClarification) {
       return false;
     }
-    super.enterScreen(
-      WearScreenId.voiceClarification,
-      extra: args,
-    );
+    final int epoch = authority.state.sessionEpoch;
+    _presentationUpdateTail = _presentationUpdateTail.then((_) async {
+      final result =
+          await authority.store.dispatch(WearVoiceClarificationContextChanged(
+        sessionEpoch: epoch,
+        expectedScreen: WearScreenId.voiceClarification,
+        args: args,
+      ));
+      if (!result.accepted || authority.state.sessionEpoch != epoch) return;
+      super.enterScreen(WearScreenId.voiceClarification, extra: args);
+    });
     return true;
+  }
+
+  @override
+  WearStatusState? get statusState {
+    final WearRuntimePresentationSlice presentation =
+        WearRuntimePresentationSlice.from(authority.payload.presentation);
+    final WearStatusScreenArgs? args = presentation.statusArgs;
+    final WearStatusCompletion? completion = presentation.statusCompletion;
+    if (args == null || completion == null) return null;
+    return WearStatusState(
+      args: args,
+      deadline: presentation.statusDeadline,
+      completion: completion,
+    );
+  }
+
+  @override
+  Future<void> showStatus(
+    WearStatusScreenArgs args, {
+    required WearStatusCompletion completion,
+  }) async {
+    final Duration? duration = args.autoAfter;
+    final WearStatusScreenArgs passiveArgs = WearStatusScreenArgs(
+      kind: args.kind,
+      title: args.title,
+      message: args.message,
+      details: args.details,
+      glassesStatusText: args.glassesStatusText,
+      glassesStatusIcon: args.glassesStatusIcon,
+      showHome: args.showHome,
+      autoAction: WearStatusAutoAction.none,
+    );
+    final int epoch = authority.state.sessionEpoch;
+    final result = await authority.store.dispatch(WearGenericStatusShown(
+      sessionEpoch: epoch,
+      operationId: authority.allocateOperationId(),
+      expectedScreen: authority.payload.navigation.logicalScreen,
+      args: passiveArgs,
+      completion: completion,
+      deadline: duration == null ? null : DateTime.now().add(duration),
+    ));
+    if (result.accepted && authority.state.sessionEpoch == epoch) {
+      await flushPendingNavigation();
+    }
+  }
+
+  @override
+  void setVoiceClarificationFocusedIndex(int index, int itemCount) {
+    final int epoch = authority.state.sessionEpoch;
+    _presentationUpdateTail = _presentationUpdateTail.then((_) async {
+      final result =
+          await authority.store.dispatch(WearVoiceClarificationFocusChanged(
+        sessionEpoch: epoch,
+        index: index,
+      ));
+      if (result.accepted && authority.state.sessionEpoch == epoch) {
+        super.setVoiceClarificationFocusedIndex(index, itemCount);
+      }
+    });
+  }
+
+  @override
+  void setVoiceClarificationNotice(String? message) {
+    final int epoch = authority.state.sessionEpoch;
+    _presentationUpdateTail = _presentationUpdateTail.then((_) async {
+      final result =
+          await authority.store.dispatch(WearVoiceClarificationNoticeChanged(
+        sessionEpoch: epoch,
+        notice: message,
+      ));
+      if (result.accepted && authority.state.sessionEpoch == epoch) {
+        super.setVoiceClarificationNotice(message);
+      }
+    });
   }
 
   /// Clears retained controller resources without letting the legacy initial
@@ -341,9 +430,7 @@ class WearAggregatePresentationFlowController extends WearFlowController {
         return;
       case WearScreenId.continueScan:
         await _delegateCommand(
-          focus == 0
-              ? WearVoiceCommand.continueScan
-              : WearVoiceCommand.finish,
+          focus == 0 ? WearVoiceCommand.continueScan : WearVoiceCommand.finish,
           modality,
         );
         return;
@@ -414,6 +501,12 @@ class WearAggregatePresentationFlowController extends WearFlowController {
       case WearScreenId.availabilityInteraction:
         super.setAvailabilityInteractionFocusedIndex(index);
         return;
+      case WearScreenId.voiceClarification:
+        super.setVoiceClarificationFocusedIndex(
+          index,
+          _itemCount(screen) ?? 0,
+        );
+        return;
       default:
         return;
     }
@@ -427,6 +520,7 @@ class WearAggregatePresentationFlowController extends WearFlowController {
       WearScreenId.continueScan => legacy.continueScanFocusedIndex,
       WearScreenId.availabilityInteraction =>
         legacy.availabilityInteractionFocusedIndex,
+      WearScreenId.voiceClarification => legacy.voiceClarificationFocusedIndex,
       _ => null,
     };
   }
@@ -440,11 +534,14 @@ class WearAggregatePresentationFlowController extends WearFlowController {
         presentation.focusFor(WearScreenId.continueScan) ?? 0;
     final int availability =
         presentation.focusFor(WearScreenId.availabilityInteraction) ?? 0;
+    final int clarification =
+        presentation.focusFor(WearScreenId.voiceClarification) ?? 0;
     final int focused = switch (value.screen) {
       WearScreenId.menu => menu,
       WearScreenId.homeConfirm => home,
       WearScreenId.continueScan => continueScan,
       WearScreenId.availabilityInteraction => availability,
+      WearScreenId.voiceClarification => clarification,
       _ => value.focusedIndex,
     };
     return value.copyWith(
@@ -453,6 +550,7 @@ class WearAggregatePresentationFlowController extends WearFlowController {
       homeConfirmFocusedIndex: home,
       continueScanFocusedIndex: continueScan,
       availabilityInteractionFocusedIndex: availability,
+      voiceClarificationFocusedIndex: clarification,
     );
   }
 
@@ -474,6 +572,11 @@ class WearAggregatePresentationFlowController extends WearFlowController {
       WearScreenId.continueScan ||
       WearScreenId.availabilityInteraction =>
         2,
+      WearScreenId.voiceClarification =>
+        WearRuntimePresentationSlice.from(authority.payload.presentation)
+            .clarificationArgs
+            ?.matches
+            .length,
       _ => null,
     };
   }
@@ -514,6 +617,7 @@ class WearAggregatePresentationFlowController extends WearFlowController {
 
   @override
   Future<void> dispose() async {
+    await _presentationScheduler.dispose();
     await _authorityStateSub.cancel();
     await super.dispose();
   }

@@ -14,12 +14,15 @@ class WearRuntimePresentationScheduler {
   WearRuntimePresentationScheduler(
     this._authority, {
     DateTime Function()? now,
+    FutureOr<void> Function()? onElapsedAccepted,
   }) : _now = now ?? DateTime.now {
+    _onElapsedAccepted = onElapsedAccepted;
     _subscription = _authority.states.listen(_onState);
   }
 
   final WearRuntimeAuthority _authority;
   final DateTime Function() _now;
+  late final FutureOr<void> Function()? _onElapsedAccepted;
   late final StreamSubscription<WearRuntimeState> _subscription;
   Timer? _timer;
   ({int epoch, int operationId})? _scheduled;
@@ -53,11 +56,19 @@ class WearRuntimePresentationScheduler {
       if (_scheduled != key) return;
       _timer = null;
       _scheduled = null;
-      unawaited(_authority.store.dispatch(WearGenericStatusElapsed(
-        sessionEpoch: key.epoch,
-        operationId: key.operationId,
-      )));
+      unawaited(_dispatchElapsed(key));
     });
+  }
+
+  Future<void> _dispatchElapsed(
+    ({int epoch, int operationId}) key,
+  ) async {
+    final WearDispatchResult result =
+        await _authority.store.dispatch(WearGenericStatusElapsed(
+      sessionEpoch: key.epoch,
+      operationId: key.operationId,
+    ));
+    if (result.accepted) await _onElapsedAccepted?.call();
   }
 
   void _cancel() {

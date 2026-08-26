@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_bridge.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_projection.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_dynamic_voice_items.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_core_slices.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_presentation_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
 class WearRuntimeGlassesSender {
@@ -18,6 +21,7 @@ class WearRuntimeGlassesSender {
   final void Function(Object, StackTrace)? _onError;
   StreamSubscription<WearRuntimeState>? _subscription;
   Future<void> _queue = Future<void>.value();
+  Future<void> _hintRefreshQueue = Future<void>.value();
   WearRuntimeVersion? _acceptedVersion;
   WearGlassesEnvelope? _latest;
   bool _visible = false;
@@ -29,8 +33,32 @@ class WearRuntimeGlassesSender {
   }
 
   void _accept(WearRuntimeState state) {
-    final WearGlassesEnvelope envelope =
-        WearRuntimeProjection.projectGlasses(state);
+    final navigation = state.payloadAs<WearAggregatePayload>().navigation;
+    final screen = navigation.logicalScreen;
+    final int listRevision =
+        selectWearDynamicVoiceItems(state, screen).revision;
+    final WearGlassesEnvelope envelope = WearRuntimeProjection.projectGlasses(
+      state,
+      onVoiceHintsPrepared: () {
+        if (_disposed) return;
+        final WearRuntimeState current = _store.state;
+        final currentNavigation =
+            current.payloadAs<WearAggregatePayload>().navigation;
+        final currentScreen = currentNavigation.logicalScreen;
+        if (current.sessionEpoch != state.sessionEpoch ||
+            currentScreen != screen ||
+            selectWearDynamicVoiceItems(current, currentScreen).revision !=
+                listRevision) {
+          return;
+        }
+        _hintRefreshQueue = _hintRefreshQueue.then((_) async {
+          await _store.dispatch(WearVoiceHintsPrepared(
+            sessionEpoch: current.sessionEpoch,
+            expectedScreen: currentScreen,
+          ));
+        });
+      },
+    );
     final WearRuntimeVersion? accepted = _acceptedVersion;
     if (accepted != null && envelope.version.compareTo(accepted) <= 0) return;
     _acceptedVersion = envelope.version;
@@ -39,8 +67,9 @@ class WearRuntimeGlassesSender {
   }
 
   Future<void> reconnect() {
+    final WearRuntimeState state = _store.state;
     final WearGlassesEnvelope envelope =
-        WearRuntimeProjection.projectGlasses(_store.state);
+        WearRuntimeProjection.projectGlasses(state);
     _acceptedVersion = envelope.version;
     _latest = envelope;
     return _enqueue(envelope, reconnect: true);
@@ -51,7 +80,9 @@ class WearRuntimeGlassesSender {
     required bool reconnect,
   }) {
     final Future<void> operation = _queue.then((_) async {
-      if (_disposed || (!reconnect && !identical(_latest, envelope))) return;
+      if (_disposed || (!reconnect && !identical(_latest, envelope))) {
+        return;
+      }
       try {
         if (_visible && !reconnect) {
           await _bridge.updateEnvelope(envelope);
@@ -74,6 +105,7 @@ class WearRuntimeGlassesSender {
     if (_disposed) return;
     _disposed = true;
     await _subscription?.cancel();
+    await _hintRefreshQueue;
     await _queue;
     try {
       await _bridge.hide();

@@ -133,11 +133,5 @@ class _WearAvailabilityFillScreenState
       return;
     }
     await authority.completeUiEffect(effect, value: value);
-    await authority.dispatchSemanticInput(
-      kind: WearSemanticInputKind.barcode,
-      modality: WearInputModality.manual,
-      expectedScreen: WearScreenId.availabilityFill,
-      value: value,
-    );
   }
 }

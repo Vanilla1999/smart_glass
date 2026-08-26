@@ -59,6 +59,7 @@ void main() {
       }) async {
         navigation.add(screen);
       },
+      delay: (_) async {},
     );
 
     await runtime.enterScreen(WearScreenId.scanIdle);
@@ -69,7 +70,10 @@ void main() {
     await _flush();
 
     expect(printCalls, 1);
-    expect(navigation, <WearScreenId>[WearScreenId.status]);
+    expect(
+      navigation,
+      <WearScreenId>[WearScreenId.status, WearScreenId.scanIdle],
+    );
     await runtime.dispose();
   });
 
@@ -87,6 +91,7 @@ void main() {
         Object? extra,
         bool replaceCurrent = false,
       }) async {},
+      delay: (_) async {},
     );
 
     await runtime.enterScreen(WearScreenId.scanIdle);
@@ -152,6 +157,7 @@ void main() {
         Object? extra,
         bool replaceCurrent = false,
       }) async {},
+      delay: (_) async {},
     );
     addTearDown(runtime.dispose);
 

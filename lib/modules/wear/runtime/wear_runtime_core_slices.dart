@@ -390,7 +390,7 @@ class WearCoreSliceReducer implements WearSliceReducer {
       if (!payload.session.isAuthorized) return WearReduction.accept();
       final WearAggregatePayload nextPayload = payload.copyWith(
         session: const WearSessionSlice.anonymous(),
-        lifecycle: payload.lifecycle.copyWith(runtimeActive: false),
+        lifecycle: payload.lifecycle.copyWith(runtimeActive: true),
         navigation: payload.navigation.clearForSession(WearScreenId.main),
       );
       return WearReduction.accept(
@@ -407,9 +407,6 @@ class WearCoreSliceReducer implements WearSliceReducer {
     if (intent is WearRuntimeActiveChanged) {
       if (payload.lifecycle.runtimeActive == intent.active) {
         return WearReduction.accept();
-      }
-      if (intent.active && !payload.session.isAuthorized) {
-        return WearReduction.reject(WearDispatchRejectReason.unsupported);
       }
       return WearReduction.accept(
         nextState: state.withPayload(

@@ -438,11 +438,13 @@ WearScannerControlDecision selectScannerControlDecision(
       barcodeAdmissionEnabled: false,
     );
   }
-  final bool hardwareShouldBePrepared =
-      aggregate.session.isAuthorized && aggregate.lifecycle.runtimeActive;
   final bool routeAllows = !aggregate.lifecycle.phoneUiActive ||
       aggregate.navigation.actualPhoneScreen ==
           aggregate.navigation.logicalScreen;
+  final bool hardwareShouldBePrepared = aggregate.session.isAuthorized &&
+      aggregate.lifecycle.runtimeActive &&
+      screenAcceptsBarcode &&
+      routeAllows;
   return WearScannerControlDecision(
     hardwareShouldBePrepared: hardwareShouldBePrepared,
     barcodeAdmissionEnabled: hardwareShouldBePrepared &&

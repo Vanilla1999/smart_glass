@@ -3,9 +3,11 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_glasses/modules/wear/application/wear_aggregate_presentation_flow_controller.dart';
+import 'package:smart_glasses/modules/wear/application/voice_clarification_args.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voice_command.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_glasses_output.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/noop_wear_navigation_output.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
@@ -13,7 +15,8 @@ import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
 void main() {
   group('aggregate-owned phone presentation focus', () {
-    test('touch commits aggregate before exposing compatibility focus', () async {
+    test('touch commits aggregate before exposing compatibility focus',
+        () async {
       final WearRuntimeAuthority authority = WearRuntimeAuthority(
         initialScreen: WearScreenId.menu,
       );
@@ -40,7 +43,8 @@ void main() {
       expect(authority.state.revision, committedRevision);
     });
 
-    test('direct aggregate update is reflected by compatibility view', () async {
+    test('direct aggregate update is reflected by compatibility view',
+        () async {
       final WearRuntimeAuthority authority = WearRuntimeAuthority(
         initialScreen: WearScreenId.menu,
       );
@@ -145,7 +149,8 @@ void main() {
       expect(authority.payload.navigation.logicalScreen, WearScreenId.menu);
     });
 
-    test('voice and hardware buttons share committed aggregate focus', () async {
+    test('voice and hardware buttons share committed aggregate focus',
+        () async {
       final WearRuntimeAuthority authority = WearRuntimeAuthority(
         initialScreen: WearScreenId.menu,
       );
@@ -172,6 +177,35 @@ void main() {
 
       await controller.handleVoiceCommand(WearVoiceCommand.select);
       expect(authority.payload.navigation.logicalScreen, WearScreenId.help);
+    });
+
+    test('inactive-phone clarification commands commit aggregate focus',
+        () async {
+      final WearRuntimeAuthority authority = WearRuntimeAuthority();
+      final WearAggregatePresentationFlowController controller =
+          _controller(authority);
+      addTearDown(controller.dispose);
+      await authority.authorize(
+        AuthenticatedUser(idUser: 1, idEmployee: 2, name: 'Test user'),
+      );
+      const VoiceClarificationArgs args = VoiceClarificationArgs(
+        sourceScreen: WearScreenId.availabilityProduct,
+        phrase: 'товар',
+        sourceListRevision: 1,
+        matches: <VoiceDynamicItem>[
+          VoiceDynamicItem(id: '1', label: 'Первый'),
+          VoiceDynamicItem(id: '2', label: 'Второй'),
+        ],
+      );
+      await controller.requestNavigation(
+        WearScreenId.voiceClarification,
+        extra: args,
+      );
+
+      await controller.handleVoiceCommand(WearVoiceCommand.down);
+
+      expect(_focus(authority, WearScreenId.voiceClarification), 1);
+      expect(controller.state.voiceClarificationFocusedIndex, 1);
     });
   });
 

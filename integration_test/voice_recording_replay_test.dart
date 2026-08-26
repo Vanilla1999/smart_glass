@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,7 +11,6 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart
 import 'package:smart_glasses/modules/wear/application/wear_flow_state.dart';
 import 'package:smart_glasses/modules/wear/application/wear_navigation_entry.dart';
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
-import 'package:smart_glasses/modules/wear/application/wear_ui_lifecycle.dart';
 import 'package:smart_glasses/modules/wear/application/wear_voice_application_dispatcher.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_action_catalog.dart';
 import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
@@ -28,6 +26,7 @@ import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_pay
 import 'package:smart_glasses/modules/wear/services/wear_voice_session.dart';
 
 import '../test/support/replay_voice_capture.dart';
+import '../test/support/wear_runtime_test_helper.dart';
 
 const String _wavAsset = String.fromEnvironment('VOICE_REPLAY_WAV_ASSET');
 const String _caseName = String.fromEnvironment(
@@ -52,14 +51,6 @@ void main() {
       wavData.lengthInBytes,
     );
 
-    final ReplayVoiceCapture capture = ReplayVoiceCapture();
-    final AudioStreamService audio = AudioStreamService(nativeCapture: capture);
-    final _RecordingNavigationOutput navigation = _RecordingNavigationOutput();
-    final WearFlowController flow = WearFlowController(
-      glassesOutput: _NoopGlassesOutput(),
-      navigationOutput: navigation,
-    )..setUiLifecycle(WearUiLifecycle.active);
-
     final WearScreenId screen = switch (_caseName) {
       'yellow' || 'unrecognized' => WearScreenId.printerSelect,
       'back' => WearScreenId.availabilityInteraction,
@@ -70,7 +61,17 @@ void main() {
           'Expected availability, back, yellow, unrecognized or continuous',
         ),
     };
-    flow.enterScreen(screen);
+    final ReplayVoiceCapture capture = ReplayVoiceCapture();
+    final AudioStreamService audio = AudioStreamService(nativeCapture: capture);
+    final _RecordingNavigationOutput navigation = _RecordingNavigationOutput();
+    final authority = await createActiveWearRuntimeAuthority(
+      initialScreen: screen,
+    );
+    final WearFlowController flow = createWearFlowController(
+      authority: authority,
+      glassesOutput: _NoopGlassesOutput(),
+      navigationOutput: navigation,
+    );
 
     const VoiceDynamicItemsSnapshot printerItems = VoiceDynamicItemsSnapshot(
       revision: 1,
@@ -455,7 +456,7 @@ void main() {
                   .where((event) =>
                       event.visible && event.statusText == 'Не распознано')
                   .length,
-               'diagnostics': await speech.diagnostics(),
+              'diagnostics': await speech.diagnostics(),
             })}');
         final Map<String, int> replayTimeouts =
             speech.metricsSnapshot.replayNativeTimeouts;
@@ -464,6 +465,16 @@ void main() {
           0,
           reason: 'Continuous replay must not hide terminal Vosk timeouts: '
               '$replayTimeouts',
+        );
+        expect(
+          navigation.goToCalls,
+          contains(WearScreenId.printerSelect),
+          reason: 'Every continuous fixture contains the print command',
+        );
+        expect(
+          selectedItems,
+          contains('yellow'),
+          reason: 'Every continuous fixture selects the yellow printer',
         );
       } else if (_caseName == 'yellow') {
         expect(actionCount, 1);
@@ -517,6 +528,7 @@ void main() {
       await control.dispose();
       await speech.dispose();
       await capture.dispose();
+      await flow.dispose();
     }
   }, timeout: const Timeout(Duration(minutes: 30)));
 }

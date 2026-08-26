@@ -8,12 +8,15 @@ import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_flow_state.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
+import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_input_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/input/wear_ui_effect_consumer.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/printers/wear_printer_select_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
@@ -36,6 +39,7 @@ class _State extends State<WearAvailabilityCheckScreen> {
   late final StreamSubscription<WearAvailabilityRuntimeState> _subscription;
   late WearAvailabilityRuntimeState _state;
   late final WearUiEffectConsumer _manualInputConsumer;
+  late final WearScreenActionRegistration _actions;
 
   @override
   void initState() {
@@ -50,11 +54,16 @@ class _State extends State<WearAvailabilityCheckScreen> {
     _subscription = _flow.availabilityStateStream.listen((next) {
       if (mounted) setState(() => _state = next);
     });
+    _actions = _flow.registerScreenActions(
+      WearScreenId.availabilityCheck,
+      WearScreenActionHandler(onPrint: _selectPrintersAndPrint),
+    );
   }
 
   @override
   void dispose() {
     _manualInputConsumer.dispose();
+    _flow.unregisterScreenActions(_actions);
     unawaited(_subscription.cancel());
     super.dispose();
   }
@@ -125,7 +134,7 @@ class _State extends State<WearAvailabilityCheckScreen> {
             child: WearPill(
                 title: 'Напечатать',
                 icon: WearImages.printer,
-                onTap: _flow.printAvailabilityPriceTag),
+                onTap: _selectPrintersAndPrint),
           ),
         WearAvailabilityFlowStep.photoCapture => SizedBox(
             width: 150,
@@ -159,12 +168,24 @@ class _State extends State<WearAvailabilityCheckScreen> {
       return;
     }
     await authority.completeUiEffect(effect, value: value);
-    await authority.dispatchSemanticInput(
-      kind: WearSemanticInputKind.barcode,
-      modality: WearInputModality.manual,
-      expectedScreen: WearScreenId.availabilityCheck,
-      value: value,
+  }
+
+  Future<void> _selectPrintersAndPrint() async {
+    if (_state.busy ||
+        _state.flow.step != WearAvailabilityFlowStep.priceTagOutdated) {
+      return;
+    }
+    final WearDispatchResult navigation =
+        await _flow.authority.enterPrinterScreen(returnSelection: true);
+    if (!navigation.accepted || !mounted) return;
+    final WearPrinterSelection? selection =
+        await context.push<WearPrinterSelection>(
+      WearPrinterSelectScreen.route,
+      extra: true,
     );
+    if (!mounted || selection == null) return;
+
+    await _flow.printAvailabilityPriceTag();
   }
 
   String _title(WearAvailabilityFlowStep step) => switch (step) {

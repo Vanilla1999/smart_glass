@@ -6,7 +6,8 @@ import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_loggi
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_phone_feature_projection.dart';
-import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_slice.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_presentation_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
@@ -31,31 +32,59 @@ class WearStatusScreen extends StatefulWidget {
 
 class _WearStatusScreenState extends State<WearStatusScreen>
     with ScreenLifecycleLogging<WearStatusScreen> {
+  late final WearRuntimeAuthority _authority;
+  late final Stream<WearRuntimeState> _coherentStates;
+
+  @override
+  void initState() {
+    super.initState();
+    _authority = WearDependencies.I.authority;
+    _coherentStates = _authority.states.where(_isCoherent);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final authority = WearDependencies.I.authority;
     return StreamBuilder<WearRuntimeState>(
-      stream: authority.states,
-      initialData: authority.state,
-      builder: (BuildContext context, AsyncSnapshot<WearRuntimeState> snapshot) {
-        final WearRuntimeState state = snapshot.data ?? authority.state;
+      stream: _coherentStates,
+      initialData: _isCoherent(_authority.state) ? _authority.state : null,
+      builder:
+          (BuildContext context, AsyncSnapshot<WearRuntimeState> snapshot) {
+        final WearRuntimeState? state = snapshot.data;
+        if (state == null) {
+          return const WearScreenScaffold(child: SizedBox.shrink());
+        }
         final WearScanPhoneProjection projection =
             WearScanPhoneProjection.fromState(state);
         final WearStatusScreenArgs? aggregateStatus =
             projection.logicalScreen == WearScreenId.status &&
                     projection.phase == WearScanTaskPhase.status
                 ? projection.status
-                : null;
-        final WearStatusScreenArgs args = aggregateStatus ??
-            widget.args ??
-            const WearStatusScreenArgs(
+                : WearRuntimePresentationSlice.from(
+                    state.payloadAs<WearAggregatePayload>().presentation,
+                  ).statusArgs;
+        final WearStatusScreenArgs? args = aggregateStatus;
+        if (args == null) {
+          debugPrint(
+            '[WearStatusScreen] missing aggregate status payload '
+            'epoch=${state.sessionEpoch} revision=${state.revision}',
+          );
+          return const _StatusContent(
+            args: WearStatusScreenArgs(
               kind: WearStatusKind.error,
-              title: 'Ошибка',
-              message: 'Нет данных для экрана',
-            );
+              title: 'Ошибка состояния',
+              message: 'Не удалось отобразить статус операции',
+              autoAction: WearStatusAutoAction.none,
+            ),
+          );
+        }
         return _StatusContent(args: args);
       },
     );
+  }
+
+  bool _isCoherent(WearRuntimeState state) {
+    final navigation = state.payloadAs<WearAggregatePayload>().navigation;
+    return navigation.actualPhoneScreen == navigation.logicalScreen;
   }
 }
 

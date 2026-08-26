@@ -42,7 +42,7 @@ class NumberParserService {
 
     void emitDigits(String digits, String reason) {
       out.write(digits);
-      print('EMIT[$reason]: $digits');
+      // print('EMIT[$reason]: $digits');
     }
 
     void flush(String reason) {
@@ -193,7 +193,7 @@ class NumberParserService {
 
     flush('eof');
     final result = out.toString();
-    print('RESULT: $result');
+    // print('RESULT: $result');
     return result;
   }
 }

@@ -1,9 +1,11 @@
 export 'wear_runtime_authority_impl.dart';
 export 'wear_runtime_availability_authority.dart';
 export 'wear_runtime_availability_slice.dart';
+export 'wear_runtime_barcode_capability.dart';
 export 'wear_runtime_control_slices.dart';
 export 'wear_runtime_core_slices.dart';
 export 'wear_runtime_epoch_bound_controls.dart';
+export 'wear_runtime_dynamic_voice_items.dart';
 export 'wear_runtime_printer_authority.dart';
 export 'wear_runtime_printer_slice.dart';
 export 'wear_runtime_scan_authority.dart';

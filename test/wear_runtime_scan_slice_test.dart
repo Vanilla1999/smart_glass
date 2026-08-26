@@ -40,6 +40,7 @@ void main() {
     final WearRuntimeAuthority authority = await _preparedAuthority();
     addTearDown(authority.dispose);
     final Completer<String> print = Completer<String>();
+    final Completer<void> printingDwell = Completer<void>();
     var printCalls = 0;
     authority.registerEffectExecutor(
       WearScanEffectExecutor(
@@ -53,6 +54,13 @@ void main() {
         navigate: (_, {extra, replaceCurrent = false}) async {},
         presentStatus: (_, {required completion}) async {},
         delay: (_) => Completer<void>().future,
+        printingDelay: (Duration duration) {
+          expect(
+            duration,
+            WearScanEffectExecutor.minimumPrintingDuration,
+          );
+          return printingDwell.future;
+        },
       ),
     );
 
@@ -70,6 +78,11 @@ void main() {
     );
 
     print.complete('Белый принтер');
+    await _flush();
+
+    expect(authority.scanTask.phase, WearScanTaskPhase.printing);
+
+    printingDwell.complete();
     await _flush();
 
     expect(authority.scanTask.phase, WearScanTaskPhase.status);
@@ -156,6 +169,7 @@ void main() {
         navigate: (_, {extra, replaceCurrent = false}) async {},
         presentStatus: (_, {required completion}) async {},
         delay: (_) async {},
+        printingDelay: (_) async {},
       ),
     );
 

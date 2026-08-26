@@ -138,12 +138,6 @@ class _State extends State<WearAvailabilityDirectScanScreen> {
       return;
     }
     await authority.completeUiEffect(effect, value: value);
-    await authority.dispatchSemanticInput(
-      kind: WearSemanticInputKind.barcode,
-      modality: WearInputModality.manual,
-      expectedScreen: WearScreenId.availabilityDirectScan,
-      value: value,
-    );
   }
 
   void _scrollTo(int index) {

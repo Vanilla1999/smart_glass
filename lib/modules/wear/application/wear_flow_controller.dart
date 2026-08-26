@@ -25,7 +25,9 @@ import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_pay
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_voice_hints.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_presentation_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_projection.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
 typedef WearFlowAction = FutureOr<void> Function();
 typedef WearFlowPhraseAction = FutureOr<void> Function(String phrase);
@@ -172,8 +174,7 @@ class WearFlowController {
   WearAvailabilityRuntime? _availabilityRuntime;
   StreamSubscription<WearBackgroundScreenUpdate>? _backgroundRuntimeSub;
   Future<void> _runtimeReset = Future<void>.value();
-  String? _recognitionPreviewText;
-  String? _recognitionProcessingText;
+  Future<void> _recognitionFeedbackUpdate = Future<void>.value();
   Timer? _transientPayloadTimer;
   int _transientPayloadGeneration = 0;
   WearGlassesPayload? _transientPayload;
@@ -183,7 +184,7 @@ class WearFlowController {
 
   WearRuntimeAuthority get authority => _authority;
 
-  WearFlowState get state => _state;
+  WearFlowState get state => _withAuthoritativeNavigation(_state);
 
   Stream<WearFlowState> get stateStream => _stateController.stream;
   Stream<WearScreenId> get screenActionsChanged =>
@@ -206,23 +207,72 @@ class WearFlowController {
 
   bool get currentScreenAcceptsBarcode {
     if (!_runtimeActive) return false;
-    final WearScreenId screen = _logicalScreen;
-    final WearBackgroundRuntime? runtime = _backgroundRuntime;
-    if (runtime?.handles(screen) == true) {
-      return runtime!.acceptsBarcode(screen);
+    if (_authority.isAuthorized) {
+      return selectWearBarcodeCapability(_authority.state);
     }
+    final WearScreenId screen = _logicalScreen;
     final WearScreenActionHandler? handler = _screenActions[screen];
     return handler?.onBarcode != null &&
         (handler?.barcodeEnabled?.call() ?? true);
   }
 
   VoiceDynamicItemsSnapshot dynamicVoiceItemsFor(WearScreenId screen) {
+    final VoiceDynamicItemsSnapshot aggregateItems =
+        selectWearDynamicVoiceItems(_authority.state, screen);
+    if (aggregateItems.items.isNotEmpty ||
+        screen == WearScreenId.voiceClarification) {
+      return aggregateItems;
+    }
     final WearBackgroundRuntime? runtime = _backgroundRuntime;
     if (runtime != null && runtime.handles(screen)) {
       return runtime.dynamicVoiceItemsFor(screen);
     }
     return _screenActions[screen]?.dynamicVoiceItems?.call() ??
         VoiceDynamicItemsSnapshot.empty;
+  }
+
+  Future<bool> focusVoiceDynamicItem(
+    WearScreenId screen,
+    String itemId,
+  ) async {
+    final int sessionEpoch = _authority.state.sessionEpoch;
+    final VoiceDynamicItemsSnapshot snapshot = dynamicVoiceItemsFor(screen);
+    final int index = snapshot.items.indexWhere(
+      (VoiceDynamicItem item) => item.id == itemId,
+    );
+    if (index < 0 || _logicalScreen != screen) return false;
+    final VoiceDynamicItemsSnapshot aggregateSnapshot =
+        selectWearDynamicVoiceItems(_authority.state, screen);
+    if (aggregateSnapshot.items.isEmpty &&
+        screen != WearScreenId.voiceClarification) {
+      return _invokeScreenPartialPhrase(screen, snapshot.items[index].label);
+    }
+    if (screen != WearScreenId.printerSelect &&
+        screen != WearScreenId.productSelect &&
+        screen != WearScreenId.availabilityGroup &&
+        screen != WearScreenId.availabilityProduct &&
+        screen != WearScreenId.availabilityDirectScan &&
+        screen != WearScreenId.voiceClarification) {
+      return _invokeScreenPartialPhrase(screen, snapshot.items[index].label);
+    }
+    final WearDispatchResult result = switch (screen) {
+      WearScreenId.printerSelect => await _authority.focusPrinter(index),
+      WearScreenId.productSelect => await _authority.focusScanProduct(index),
+      WearScreenId.availabilityGroup ||
+      WearScreenId.availabilityProduct ||
+      WearScreenId.availabilityDirectScan =>
+        await _authority.focusAvailabilityItem(index),
+      WearScreenId.voiceClarification => await _authority.store.dispatch(
+          WearVoiceClarificationFocusChanged(
+            sessionEpoch: sessionEpoch,
+            index: index,
+          ),
+        ),
+      _ => throw StateError('Unsupported aggregate voice screen: $screen'),
+    };
+    return result.accepted &&
+        _authority.state.sessionEpoch == sessionEpoch &&
+        _logicalScreen == screen;
   }
 
   List<String> voiceGrammarPhrasesFor(WearScreenId screen) {
@@ -320,21 +370,38 @@ class WearFlowController {
             ? 'Похоже: $candidate'
             : null;
     final String? visibleText = visible ? nextText : null;
-    if (kind == WearVoiceDelayKind.processing) {
-      _recognitionProcessingText = visibleText;
-    } else {
-      _recognitionPreviewText = visibleText;
-    }
+    _recognitionFeedbackUpdate = _recognitionFeedbackUpdate.then((_) async {
+      await _authority.store.dispatch(
+        WearRecognitionFeedbackChanged(
+          sessionEpoch: _authority.state.sessionEpoch,
+          expectedScreen: screen,
+          processing: kind == WearVoiceDelayKind.processing,
+          text: visibleText,
+        ),
+      );
+    });
+    await _recognitionFeedbackUpdate;
     await _renderGlasses();
   }
 
   void _clearRecognitionFeedback() {
-    _recognitionPreviewText = null;
-    _recognitionProcessingText = null;
+    final int sessionEpoch = _authority.state.sessionEpoch;
+    final WearScreenId screen = _logicalScreen;
+    _recognitionFeedbackUpdate = _recognitionFeedbackUpdate.then((_) async {
+      await _authority.store.dispatch(
+        WearRecognitionFeedbackChanged(
+          sessionEpoch: sessionEpoch,
+          expectedScreen: screen,
+          processing: false,
+          clearAll: true,
+        ),
+      );
+    });
   }
 
   String? _recognitionFeedbackText() =>
-      _recognitionProcessingText ?? _recognitionPreviewText;
+      WearRuntimePresentationSlice.from(_authority.payload.presentation)
+          .recognitionFeedbackFor(_logicalScreen);
 
   void setUiLifecycle(WearUiLifecycle lifecycle) {
     if (_uiLifecycle == lifecycle) return;
@@ -348,7 +415,7 @@ class WearFlowController {
         runtime!.restorePresentationState(screen, presentationState);
       }
     }
-    print('[WearFlowController] uiLifecycle=$lifecycle');
+    // print('[WearFlowController] uiLifecycle=$lifecycle');
     unawaited(_authority
         .setPhoneUiActive(lifecycle == WearUiLifecycle.active)
         .then<void>((result) {
@@ -366,7 +433,7 @@ class WearFlowController {
 
   void setRuntimeActive(bool active) {
     unawaited(_authority.setRuntimeActive(active));
-    print('[WearFlowController] runtimeActive=$active');
+    // print('[WearFlowController] runtimeActive=$active');
     if (!active) {
       _clearStatus();
       _clearRecognitionFeedback();
@@ -441,7 +508,7 @@ class WearFlowController {
         .add(registration);
     _screenActions[screen] = handler;
     _screenActionsController.add(screen);
-    print('[WearFlowController] register actions screen=$screen');
+    // print('[WearFlowController] register actions screen=$screen');
     return registration;
   }
 
@@ -468,7 +535,7 @@ class WearFlowController {
     final bool wasCurrent = index == registrations.length - 1;
     registrations.removeAt(index);
     if (!wasCurrent) {
-      print('[WearFlowController] unregister inactive actions screen=$screen');
+      // print('[WearFlowController] unregister inactive actions screen=$screen');
       return;
     }
     if (registrations.isEmpty) {
@@ -478,7 +545,7 @@ class WearFlowController {
       _screenActions[screen] = registrations.last._handler;
     }
     _screenActionsController.add(screen);
-    print('[WearFlowController] unregister actions screen=$screen');
+    // print('[WearFlowController] unregister actions screen=$screen');
   }
 
   bool canHandleVoiceCommand(WearScreenId screen, WearVoiceCommand command) {
@@ -658,7 +725,8 @@ class WearFlowController {
 
   void setMenuFocusedIndex(int index) {
     final int next = index.clamp(0, _menuItemCount - 1);
-    if (_state.menuFocusedIndex == next && _logicalScreen == WearScreenId.menu) {
+    if (_state.menuFocusedIndex == next &&
+        _logicalScreen == WearScreenId.menu) {
       return;
     }
     _setState(
@@ -800,10 +868,8 @@ class WearFlowController {
     final String trimmed = phrase.trim();
     if (trimmed.isEmpty || !_runtimeActive) return;
     final WearScreenId sourceScreen = _logicalScreen;
-    print(
-      '[WearFlowController] phrase="$trimmed" '
-      'logicalScreen=$sourceScreen state=$_state',
-    );
+    // print('[WearFlowController] phrase="$trimmed" '
+    //     'logicalScreen=$sourceScreen state=$_state');
     final VoiceDynamicItemsSnapshot items = dynamicVoiceItemsFor(sourceScreen);
     final bool isDynamicSearch =
         sourceScreen == WearScreenId.voiceClarification ||
@@ -896,7 +962,10 @@ class WearFlowController {
   ) async {
     if (_isVoiceClarificationSelectionInProgress ||
         _logicalScreen != WearScreenId.voiceClarification ||
-        !identical(_state.currentVoiceClarificationArgs, args)) {
+        !_sameVoiceClarificationContext(
+          _state.currentVoiceClarificationArgs as VoiceClarificationArgs?,
+          args,
+        )) {
       return false;
     }
     final WearScreenActionHandler? sourceHandler =
@@ -947,6 +1016,25 @@ class WearFlowController {
     }
   }
 
+  bool _sameVoiceClarificationContext(
+    VoiceClarificationArgs? current,
+    VoiceClarificationArgs candidate,
+  ) {
+    if (current == null ||
+        current.sourceScreen != candidate.sourceScreen ||
+        current.sourceListRevision != candidate.sourceListRevision ||
+        current.phrase != candidate.phrase ||
+        current.matches.length != candidate.matches.length) {
+      return false;
+    }
+    for (var index = 0; index < current.matches.length; index++) {
+      if (current.matches[index].id != candidate.matches[index].id) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   Future<bool> handleVoicePartialPhrase(String phrase) async {
     final String trimmed = phrase.trim();
     if (trimmed.isEmpty ||
@@ -956,10 +1044,8 @@ class WearFlowController {
       return false;
     }
     final WearScreenId screen = _logicalScreen;
-    print(
-      '[WearFlowController] partial phrase="$trimmed" '
-      'logicalScreen=$screen state=$_state',
-    );
+    // print('[WearFlowController] partial phrase="$trimmed" '
+    //     'logicalScreen=$screen state=$_state');
     return _invokeScreenPartialPhrase(screen, trimmed);
   }
 
@@ -980,13 +1066,10 @@ class WearFlowController {
           );
           continue;
         }
-        print(
-          '[WearFlowController] command=$command '
-          'logicalScreen=$screen state=$_state',
-        );
+        // print('[WearFlowController] command=$command '
+        //     'logicalScreen=$screen state=$_state');
         final WearBackgroundRuntime? runtime = _backgroundRuntime;
-        if (runtime != null &&
-            await runtime.handleCommand(screen, command)) {
+        if (runtime != null && await runtime.handleCommand(screen, command)) {
           continue;
         }
         switch (command) {
@@ -1127,14 +1210,13 @@ class WearFlowController {
     final WearNavigationRequest request = WearNavigationRequest(
       requestId: pending.requestId,
       screen: pending.screen,
-      extra: legacyRequest?.screen == pending.screen
-          ? legacyRequest?.extra
-          : null,
+      extra:
+          legacyRequest?.screen == pending.screen ? legacyRequest?.extra : null,
       replaceCurrent: pending.kind == WearPendingNavigationKind.replace,
       popCurrent: pending.kind == WearPendingNavigationKind.pop,
     );
     if (_deliveredNavigationRequestId == request.requestId) return;
-    print('[WearFlowController] ui active flush pendingNavigation=$request');
+    // print('[WearFlowController] ui active flush pendingNavigation=$request');
     _deliveredNavigationRequestId = request.requestId;
     try {
       if (_inactiveNavigationCount > 1) {
@@ -1151,7 +1233,8 @@ class WearFlowController {
       }
       await _navigationOutput.goTo(request.screen, extra: request.extra);
     } catch (error, stackTrace) {
-      if (_authority.payload.navigation.pending?.requestId == request.requestId) {
+      if (_authority.payload.navigation.pending?.requestId ==
+          request.requestId) {
         _deliveredNavigationRequestId = null;
         _setState(_state.copyWith(error: error.toString()));
       }
@@ -1173,7 +1256,7 @@ class WearFlowController {
         pending.screen != screen) {
       return false;
     }
-    print('[WearFlowController] navigation acknowledged request=$pending');
+    // print('[WearFlowController] navigation acknowledged request=$pending');
     _deliveredNavigationRequestId = null;
     _inactiveNavigationCount = 0;
     unawaited(_authority
@@ -1480,10 +1563,30 @@ class WearFlowController {
         : replaceCurrent
             ? WearPendingNavigationKind.replace
             : WearPendingNavigationKind.push;
+    if (target == WearScreenId.voiceClarification &&
+        extra is VoiceClarificationArgs) {
+      final contextResult = await _authority.store.dispatch(
+        WearVoiceClarificationContextChanged(
+          sessionEpoch: _authority.state.sessionEpoch,
+          expectedScreen: _logicalScreen,
+          args: extra,
+        ),
+      );
+      if (!contextResult.accepted) return;
+    }
     final result = await _authority.requestNavigation(target, kind: kind);
-    if (!result.accepted) return;
-    final WearPendingNavigation pending =
-        _authority.payload.navigation.pending!;
+    final WearPendingNavigation? pending =
+        _authority.payload.navigation.pending;
+    final bool adoptsPending =
+        result.rejectReason == WearDispatchRejectReason.duplicate &&
+            pending?.screen == target &&
+            pending?.kind == kind;
+    if ((!result.accepted && !adoptsPending) ||
+        pending == null ||
+        pending.screen != target ||
+        pending.kind != kind) {
+      return;
+    }
     final WearNavigationRequest request = WearNavigationRequest(
       requestId: pending.requestId,
       screen: target,
@@ -1500,11 +1603,11 @@ class WearFlowController {
     unawaited(_renderGlasses());
     unawaited(_enterBackgroundScreen(target, extra: extra));
     if (_uiLifecycle == WearUiLifecycle.active) {
-      print('[WearFlowController] request navigation target=$request');
+      // print('[WearFlowController] request navigation target=$request');
       unawaited(flushPendingNavigation());
     } else {
       _inactiveNavigationCount++;
-      print('[WearFlowController] ui inactive pendingNavigation=$request');
+      // print('[WearFlowController] ui inactive pendingNavigation=$request');
     }
   }
 
@@ -1834,10 +1937,10 @@ class WearFlowController {
     final WearFlowAction? action =
         selector(handler ?? const WearScreenActionHandler());
     if (action == null) {
-      print('[WearFlowController] no screen action screen=$screen');
+      // print('[WearFlowController] no screen action screen=$screen');
       return false;
     }
-    print('[WearFlowController] invoke screen action screen=$screen');
+    // print('[WearFlowController] invoke screen action screen=$screen');
     await action();
     return true;
   }
@@ -1847,10 +1950,10 @@ class WearFlowController {
     final WearFlowPhraseAction? action =
         (handler ?? const WearScreenActionHandler()).onPhrase;
     if (action == null) {
-      print('[WearFlowController] no phrase action screen=$screen');
+      // print('[WearFlowController] no phrase action screen=$screen');
       return false;
     }
-    print('[WearFlowController] invoke phrase action screen=$screen');
+    // print('[WearFlowController] invoke phrase action screen=$screen');
     await action(phrase);
     return true;
   }
@@ -1863,10 +1966,8 @@ class WearFlowController {
     if (runtime != null && runtime.handles(screen)) {
       final bool handled = await runtime.handleDynamicItem(screen, item.id);
       if (handled) {
-        print(
-          '[WearFlowController] exact dynamic item handled in background '
-          'screen=$screen itemId=${item.id}',
-        );
+        // print('[WearFlowController] exact dynamic item handled in background '
+        //     'screen=$screen itemId=${item.id}');
       }
       return handled;
     }
@@ -1874,19 +1975,15 @@ class WearFlowController {
     final WearScreenActionHandler? handler = _screenActions[screen];
     final WearFlowDynamicItemAction? dynamicAction = handler?.onDynamicItem;
     if (dynamicAction != null) {
-      print(
-        '[WearFlowController] invoke exact dynamic item '
-        'screen=$screen itemId=${item.id}',
-      );
+      // print('[WearFlowController] invoke exact dynamic item '
+      //     'screen=$screen itemId=${item.id}');
       await dynamicAction(item.id);
       return true;
     }
     final WearFlowPhraseAction? phraseAction = handler?.onPhrase;
     if (phraseAction == null) return false;
-    print(
-      '[WearFlowController] invoke exact dynamic label '
-      'screen=$screen itemId=${item.id}',
-    );
+    // print('[WearFlowController] invoke exact dynamic label '
+    //     'screen=$screen itemId=${item.id}');
     await phraseAction(item.label);
     return true;
   }
@@ -1899,10 +1996,10 @@ class WearFlowController {
     final WearFlowPartialPhraseAction? action =
         (handler ?? const WearScreenActionHandler()).onPartialPhrase;
     if (action == null) {
-      print('[WearFlowController] no partial phrase action screen=$screen');
+      // print('[WearFlowController] no partial phrase action screen=$screen');
       return false;
     }
-    print('[WearFlowController] invoke partial phrase action screen=$screen');
+    // print('[WearFlowController] invoke partial phrase action screen=$screen');
     return action(phrase);
   }
 
@@ -1913,14 +2010,12 @@ class WearFlowController {
         ? basePayload
         : basePayload.copyWithStatusText(feedbackText);
     final WearGlassesPayload payload = _transientPayload ?? contentPayload;
-    if (feedbackText != null) {
-      print(
-        '[VOICE_FEEDBACK_PAYLOAD] screen=${_logicalScreen.name} '
-        'screenType=${payload.screenType.name} phase=${payload.phase.name} '
-        'status="${payload.statusText}" items=${payload.items.length} '
-        'selectedIndex=${payload.selectedIndex}',
-      );
-    }
+    // if (feedbackText != null) {
+    //   print('[VOICE_FEEDBACK_PAYLOAD] screen=${_logicalScreen.name} '
+    //       'screenType=${payload.screenType.name} phase=${payload.phase.name} '
+    //       'status="${payload.statusText}" items=${payload.items.length} '
+    //       'selectedIndex=${payload.selectedIndex}');
+    // }
     final WearGlassesOutput output = _glassesOutput;
     if (_transientPayload != null && output is WearTransientGlassesOutput) {
       await _sendTransientGlassesPayload(
@@ -2083,7 +2178,7 @@ class WearFlowController {
         focusIndex: nextFocus,
       ));
     }
-    print('[WearFlowController] state=$_state');
+    // print('[WearFlowController] state=$_state');
     if (!_stateController.isClosed) {
       _stateController.add(next);
     }

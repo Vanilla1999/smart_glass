@@ -105,7 +105,7 @@ void main() {
   test('mock print uses yellow printer for even product id', () async {
     await authority.authorize(_testUser());
     await authority.importPrinterSelection(_selection());
-    await authority.requestNavigation(WearScreenId.productSelect);
+    await authority.requestNavigation(WearScreenId.scanIdle);
     WearStatusScreenArgs? status;
     final WearScanRuntime runtime = _runtime(authority, (screen, extra) {
       if (screen == WearScreenId.status) {
@@ -114,22 +114,16 @@ void main() {
     });
     addTearDown(runtime.dispose);
 
-    final BarcodeProductInfo product = BarcodeProductInfo(
-      id: 1002002,
-      name: 'MOCK Молоко 3,2% 930 мл',
-    );
-    await runtime.enterScreen(
-      WearScreenId.productSelect,
-      extra: WearProductSelectArgs(
-        barcode: '2200002',
-        products: <BarcodeProductInfo>[product],
-      ),
+    await runtime.enterScreen(WearScreenId.scanIdle);
+    await runtime.handleBarcode(WearScreenId.scanIdle, '2200002');
+    final BarcodeProductInfo product = runtime.state.products.firstWhere(
+      (BarcodeProductInfo item) => item.id.isEven,
     );
     await runtime.selectProduct(product);
 
     expect(runtime.state.phase, WearScanRuntimePhase.status);
     expect(status?.kind, WearStatusKind.success);
-    expect(status?.message, 'MOCK Желтый 1');
+    expect(status?.details, 'MOCK Желтый 1');
   });
 }
 
@@ -147,6 +141,7 @@ WearScanRuntime _runtime(
     navigate: (screen, {extra, replaceCurrent = false}) async {
       onNavigate(screen, extra);
     },
+    delay: (_) async {},
   );
 }
 

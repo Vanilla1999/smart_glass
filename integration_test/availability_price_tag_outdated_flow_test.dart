@@ -7,16 +7,19 @@ import 'package:go_router/go_router.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:smart_glasses/core/constants/app_constants.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/auth/model/authenticated_user.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer_selection.dart';
 import 'package:smart_glasses/modules/wear/presentation/input/wear_print_code_input_screen.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_availability_authority.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_authority.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/availability/wear_availability_check_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/printers/wear_printer_select_screen.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_screen.dart';
+import 'package:smart_glasses/modules/wear/presentation/widgets/wear_module_app.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -24,7 +27,7 @@ void main() {
   const MethodChannel appChannel = MethodChannel(AppConstants.appChannelName);
   final List<Map<String, dynamic>> glassesPayloads = <Map<String, dynamic>>[];
 
-  setUp(() {
+  setUp(() async {
     dotenv.testLoad(
       fileInput: 'WEAR_USE_MOCKS=true\nWEAR_GLASSES_ENABLED=true',
     );
@@ -37,26 +40,37 @@ void main() {
       }
       return null;
     });
-    WearDependencies.I.authority.clearSession();
-    WearDependencies.I.authority.authorize(
+    await WearDependencies.I.authority.clearSession();
+    await WearDependencies.I.authority.setRuntimeActive(false);
+    await WearDependencies.I.authority.authorize(
       AuthenticatedUser(
         idUser: 1,
         idEmployee: 2,
         name: 'Test User',
       ),
     );
-    WearDependencies.I.authority.importPrinterSelection(
+    await WearDependencies.I.authority.importPrinterSelection(
       const WearPrinterSelection(
         whitePrinter: WearPrinter(id: 'old-white', name: 'OLD White'),
         yellowPrinter: WearPrinter(id: 'old-yellow', name: 'OLD Yellow'),
       ),
     );
+    await WearDependencies.I.authority.enterAvailabilityScreen(
+      WearScreenId.availabilityCheck,
+      extra: _outdatedProduct,
+    );
+    final pending = WearDependencies.I.authority.payload.navigation.pending!;
+    await WearDependencies.I.authority.acknowledgeNavigationAtEpoch(
+      sessionEpoch: WearDependencies.I.authority.state.sessionEpoch,
+      requestId: pending.requestId,
+      screen: pending.screen,
+    );
   });
 
-  tearDown(() {
+  tearDown(() async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(appChannel, null);
-    WearDependencies.I.authority.clearSession();
+    await WearDependencies.I.authority.clearSession();
     dotenv.clean();
   });
 
@@ -65,8 +79,14 @@ void main() {
     (WidgetTester tester) async {
       await tester.pumpWidget(
         ProviderScope(
-          child: MaterialApp.router(
-            routerConfig: _router(_outdatedProduct),
+          child: WearModuleApp(
+            flowController: WearDependencies.I.wearFlowController,
+            voiceCommandStream: const Stream.empty(),
+            routes: _routes(_outdatedProduct),
+            initialLocation: WearAvailabilityCheckScreen.route,
+            onStartVoice: () async {},
+            onStopVoice: () async {},
+            onRestartVoice: (_) async {},
           ),
         ),
       );
@@ -103,19 +123,25 @@ void main() {
       );
       expect(outdatedPayload['screenType'], 'availability');
       expect(outdatedPayload['statusText'], 'Ценник неактуален');
+      await tester.pumpAndSettle();
 
       await tester.tap(find.text('Напечатать'));
-      await tester.pump(const Duration(milliseconds: 300));
+      await _pumpUntilFound(tester, find.textContaining('Выберите принтер'));
 
       expect(find.textContaining('Выберите принтер'), findsWidgets);
       expect(find.text('MOCK Белый 1'), findsWidgets);
       expect(find.text('OLD White'), findsNothing);
 
       await tester.tap(find.text('MOCK Белый 1'));
-      await _pumpUntilFound(tester, find.text('MOCK Желтый 1'));
-      expect(find.text('MOCK Желтый 1'), findsWidgets);
-
-      await tester.tap(find.text('MOCK Желтый 1'));
+      await _pumpUntilFound(
+        tester,
+        find.textContaining('для желтых ценников'),
+      );
+      final flowController = WearDependencies.I.wearFlowController;
+      final yellowPrinter = flowController.printerState.printers.firstWhere(
+        (printer) => printer.name == 'MOCK Жёлтый 1',
+      );
+      await flowController.selectPrinter(yellowPrinter);
       await _pumpUntilFound(tester, find.text('Завершение проверки'));
 
       expect(
@@ -125,7 +151,7 @@ void main() {
       expect(
           WearDependencies
               .I.authority.features.printer.selection?.yellowPrinter.name,
-          'MOCK Желтый 1');
+          'MOCK Жёлтый 1');
       expect(find.text('Завершение проверки'), findsWidgets);
       expect(find.text('Завершить'), findsWidgets);
       expect(find.text('Сканирование товара'), findsNothing);
@@ -157,7 +183,9 @@ Future<Map<String, dynamic>> _pumpUntilPayload(
   final DateTime end = DateTime.now().add(timeout);
   while (DateTime.now().isBefore(end)) {
     await tester.pump(const Duration(milliseconds: 100));
-    for (final Map<String, dynamic> payload in payloads.reversed) {
+    for (final Map<String, dynamic> envelope in payloads.reversed) {
+      final Map<String, dynamic> payload =
+          Map<String, dynamic>.from(envelope['payload'] as Map);
       if (matches(payload)) {
         return payload;
       }
@@ -166,44 +194,40 @@ Future<Map<String, dynamic>> _pumpUntilPayload(
   fail('Expected glasses payload was not sent. Payloads: $payloads');
 }
 
-GoRouter _router(WearAvailabilityProduct product) {
-  return GoRouter(
-    initialLocation: WearAvailabilityCheckScreen.route,
-    initialExtra: product,
-    routes: <RouteBase>[
-      GoRoute(
-        path: WearAvailabilityCheckScreen.route,
-        builder: (BuildContext context, GoRouterState state) {
-          return WearAvailabilityCheckScreen(
-            product: state.extra is WearAvailabilityProduct
-                ? state.extra! as WearAvailabilityProduct
-                : null,
-          );
-        },
-      ),
-      GoRoute(
-        path: WearPrinterSelectScreen.route,
-        builder: (BuildContext context, GoRouterState state) {
-          return WearPrinterSelectScreen(returnSelection: state.extra == true);
-        },
-      ),
-      GoRoute(
-        path: WearPrintCodeInputScreen.route,
-        builder: (BuildContext context, GoRouterState state) {
-          return WearPrintCodeInputScreen(args: state.extra);
-        },
-      ),
-      GoRoute(
-        path: WearStatusScreen.route,
-        builder: (BuildContext context, GoRouterState state) {
-          final WearStatusScreenArgs? args = state.extra is WearStatusScreenArgs
-              ? state.extra! as WearStatusScreenArgs
-              : null;
-          return WearStatusScreen(args: args);
-        },
-      ),
-    ],
-  );
+List<RouteBase> _routes(WearAvailabilityProduct product) {
+  return <RouteBase>[
+    GoRoute(
+      path: WearAvailabilityCheckScreen.route,
+      builder: (BuildContext context, GoRouterState state) {
+        return WearAvailabilityCheckScreen(
+          product: state.extra is WearAvailabilityProduct
+              ? state.extra! as WearAvailabilityProduct
+              : product,
+        );
+      },
+    ),
+    GoRoute(
+      path: WearPrinterSelectScreen.route,
+      builder: (BuildContext context, GoRouterState state) {
+        return WearPrinterSelectScreen(returnSelection: state.extra == true);
+      },
+    ),
+    GoRoute(
+      path: WearPrintCodeInputScreen.route,
+      builder: (BuildContext context, GoRouterState state) {
+        return WearPrintCodeInputScreen(args: state.extra);
+      },
+    ),
+    GoRoute(
+      path: WearStatusScreen.route,
+      builder: (BuildContext context, GoRouterState state) {
+        final WearStatusScreenArgs? args = state.extra is WearStatusScreenArgs
+            ? state.extra! as WearStatusScreenArgs
+            : null;
+        return WearStatusScreen(args: args);
+      },
+    ),
+  ];
 }
 
 const WearAvailabilityProduct _outdatedProduct = WearAvailabilityProduct(

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:multi_scanner/src/global_multi_scanner.dart';
 import 'package:multi_scanner/src/platform/multi_scanner_method_channel.dart';
 
 void main() {
@@ -149,4 +150,84 @@ void main() {
 
     expect(calls.single.method, 'pauseForWear');
   });
+
+  test('concurrent barcode listener registrations are serialized', () async {
+    final _ControlledEventChannel events = _ControlledEventChannel();
+    platform = MethodChannelMultiScanner()..eventChannel = events;
+    final Set<GlobalMultiScannerDelegate> delegates =
+        <GlobalMultiScannerDelegate>{};
+    await platform.registerListenerScan(delegates);
+
+    final Future<void> second = platform.registerListenerScan(delegates);
+    final Future<void> third = platform.registerListenerScan(delegates);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(events.listenCount, 1);
+    expect(events.maxConcurrentCancels, 1);
+
+    events.completeNextCancel();
+    await Future<void>.delayed(Duration.zero);
+    expect(events.listenCount, 2);
+    expect(events.maxConcurrentCancels, 1);
+
+    events.completeNextCancel();
+    await Future.wait(<Future<void>>[second, third]);
+    expect(events.listenCount, 3);
+    expect(events.maxConcurrentCancels, 1);
+  });
+}
+
+class _ControlledEventChannel extends EventChannel {
+  _ControlledEventChannel() : super('controlled-events');
+
+  final List<Completer<void>> _cancellations = <Completer<void>>[];
+  int listenCount = 0;
+  int concurrentCancels = 0;
+  int maxConcurrentCancels = 0;
+
+  @override
+  Stream<dynamic> receiveBroadcastStream([dynamic arguments]) =>
+      _ControlledStream(this);
+
+  void completeNextCancel() =>
+      _cancellations.firstWhere((Completer<void> value) => !value.isCompleted)
+        ..complete();
+}
+
+class _ControlledStream extends Stream<dynamic> {
+  _ControlledStream(this.channel);
+
+  final _ControlledEventChannel channel;
+
+  @override
+  StreamSubscription<dynamic> listen(
+    void Function(dynamic event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    channel.listenCount++;
+    return _ControlledSubscription(channel);
+  }
+}
+
+class _ControlledSubscription implements StreamSubscription<dynamic> {
+  _ControlledSubscription(this.channel);
+
+  final _ControlledEventChannel channel;
+
+  @override
+  Future<void> cancel() async {
+    final Completer<void> cancellation = Completer<void>();
+    channel._cancellations.add(cancellation);
+    channel.concurrentCancels++;
+    if (channel.concurrentCancels > channel.maxConcurrentCancels) {
+      channel.maxConcurrentCancels = channel.concurrentCancels;
+    }
+    await cancellation.future;
+    channel.concurrentCancels--;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

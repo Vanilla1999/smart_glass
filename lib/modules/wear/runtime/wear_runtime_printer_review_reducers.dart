@@ -109,6 +109,9 @@ class WearPrinterReentryReducer implements WearSliceReducer {
 
     WearPrinterTaskSlice printer = rawFeatures.printer.copyWith(
       returnSelection: intent.returnSelection,
+      step: intent.returnSelection ? WearPrinterTaskStep.white : null,
+      focusedIndex: intent.returnSelection ? 0 : null,
+      clearWhite: intent.returnSelection,
       clearError: true,
     );
     WearRuntimeState nextState = state
@@ -136,7 +139,7 @@ class WearPrinterReentryReducer implements WearSliceReducer {
         )
         .withPayload(nextAggregate);
 
-    if (printer.printers.isNotEmpty) {
+    if (printer.printers.isNotEmpty && !intent.returnSelection) {
       return WearReduction.accept(
         nextState: nextState.withPayload(
           nextAggregate.copyWith(

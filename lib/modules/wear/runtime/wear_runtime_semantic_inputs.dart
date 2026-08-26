@@ -300,9 +300,13 @@ class WearSemanticInputReducer implements WearSliceReducer {
     WearScreenId screen,
   ) {
     if (kind != WearUiEffectKind.manualBarcodeInput) return null;
-    if (screen != WearScreenId.scanIdle) {
+    if (screen != WearScreenId.scanIdle &&
+        screen != WearScreenId.availabilityCheck &&
+        screen != WearScreenId.availabilityDirectScan &&
+        screen != WearScreenId.availabilityFill) {
       return WearDispatchRejectReason.unsupported;
     }
+    if (screen != WearScreenId.scanIdle) return null;
     final WearFeaturePayload rawFeatures = aggregate.features;
     if (rawFeatures is! WearRuntimeFeaturePayload ||
         rawFeatures.scan is! WearScanTaskSlice) {
@@ -363,26 +367,30 @@ class WearSemanticInputReducer implements WearSliceReducer {
       return WearReduction.accept(nextState: effectRemovedState);
     }
 
-    final String barcode = completionValue is String
-        ? completionValue.trim()
-        : '';
+    final String barcode =
+        completionValue is String ? completionValue.trim() : '';
     if (barcode.isEmpty) {
       return WearReduction.accept(nextState: effectRemovedState);
     }
 
-    final WearReduction? scanReduction =
-        const WearReviewedScanSliceReducer().reduceSlice(
-      effectRemovedState,
-      WearScanBarcodeReceived(barcode),
-    );
-    if (scanReduction == null || !scanReduction.accepted) {
+    final WearReduction? barcodeReduction =
+        expectedScreen == WearScreenId.scanIdle
+            ? const WearReviewedScanSliceReducer().reduceSlice(
+                effectRemovedState,
+                WearScanBarcodeReceived(barcode),
+              )
+            : const WearReviewedAvailabilitySliceReducer().reduceSlice(
+                effectRemovedState,
+                WearAvailabilityBarcodeReceived(barcode),
+              );
+    if (barcodeReduction == null || !barcodeReduction.accepted) {
       // The UI effect was valid and must be retired exactly once even when a
       // concurrent hardware barcode or screen transition made this value stale.
       return WearReduction.accept(nextState: effectRemovedState);
     }
     return WearReduction.accept(
-      nextState: scanReduction.nextState ?? effectRemovedState,
-      effects: scanReduction.effects,
+      nextState: barcodeReduction.nextState ?? effectRemovedState,
+      effects: barcodeReduction.effects,
     );
   }
 
@@ -390,6 +398,7 @@ class WearSemanticInputReducer implements WearSliceReducer {
     return screen == WearScreenId.menu ||
         screen == WearScreenId.homeConfirm ||
         screen == WearScreenId.continueScan ||
-        screen == WearScreenId.availabilityInteraction;
+        screen == WearScreenId.availabilityInteraction ||
+        screen == WearScreenId.voiceClarification;
   }
 }

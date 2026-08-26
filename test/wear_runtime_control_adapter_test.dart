@@ -88,10 +88,22 @@ void main() {
       authority.state,
       currentScreenAcceptsBarcode: true,
     );
-    expect(aggregate.hardwarePrepared, isTrue);
+    expect(aggregate.hardwarePrepared, isFalse);
     expect(aggregate.barcodeAdmissionEnabled, isFalse);
 
     await authority.setPhoneUiActive(false);
+    aggregate = resolveWearScannerDecisionFromState(
+      authority.state,
+      currentScreenAcceptsBarcode: true,
+    );
+    expect(aggregate.hardwarePrepared, isTrue);
+    expect(aggregate.barcodeAdmissionEnabled, isTrue);
+
+    await authority.observePhoneRouteAtEpoch(
+      sessionEpoch: authority.state.sessionEpoch,
+      screen: WearScreenId.scanIdle,
+      observationRevision: 2,
+    );
     aggregate = resolveWearScannerDecisionFromState(
       authority.state,
       currentScreenAcceptsBarcode: true,

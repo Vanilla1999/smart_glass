@@ -70,20 +70,24 @@ void main() {
     expect(authority.state.sessionEpoch, oldEpoch + 1);
     expect(authority.state.revision, 0);
     expect(authority.isAuthorized, isFalse);
-    expect(authority.payload.lifecycle.runtimeActive, isFalse);
+    expect(authority.payload.lifecycle.runtimeActive, isTrue);
     expect(authority.payload.lifecycle.phoneUiActive, isTrue);
     expect(authority.payload.navigation.logicalScreen, WearScreenId.main);
-    expect(authority.payload.navigation.pending, isNull);
+    expect(authority.payload.navigation.pending?.screen, WearScreenId.main);
+    expect(
+      authority.payload.navigation.pending?.kind,
+      WearPendingNavigationKind.replace,
+    );
   });
 
-  test('runtime cannot become active before authorization', () async {
+  test('anonymous main can activate runtime for badge admission', () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
 
     final WearDispatchResult result = await authority.setRuntimeActive(true);
 
-    expect(result.accepted, isFalse);
-    expect(result.rejectReason, WearDispatchRejectReason.unsupported);
+    expect(result.accepted, isTrue);
+    expect(authority.payload.lifecycle.runtimeActive, isTrue);
   });
 
   test('phone UI pause does not stop authorized runtime', () async {

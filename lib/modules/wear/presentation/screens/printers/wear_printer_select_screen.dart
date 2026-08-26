@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart';
 import 'package:smart_glasses/modules/wear/application/wear_printer_runtime.dart';
-import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/config/wear_dependencies.dart';
 import 'package:smart_glasses/modules/wear/infrastructure/screen_lifecycle_logging.dart';
 import 'package:smart_glasses/modules/wear/models/wear_printer.dart';
@@ -12,6 +11,8 @@ import 'package:smart_glasses/modules/wear/presentation/widgets/wear_loading.dar
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_authority.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
@@ -38,6 +39,7 @@ class _WearPrinterSelectScreenState extends State<WearPrinterSelectScreen>
   late final WearFlowController _flowController;
   late final StreamSubscription<WearPrinterRuntimeState> _stateSubscription;
   late WearPrinterRuntimeState _state;
+  late final int _initialSelectionRevision;
   bool _selectionReturned = false;
 
   @override
@@ -46,6 +48,7 @@ class _WearPrinterSelectScreenState extends State<WearPrinterSelectScreen>
     _flowController =
         widget.flowController ?? WearDependencies.I.wearFlowController;
     _state = _flowController.printerState;
+    _initialSelectionRevision = _state.selectionRevision;
     _stateSubscription = _flowController.printerStateStream.listen(_onState);
   }
 
@@ -58,16 +61,22 @@ class _WearPrinterSelectScreenState extends State<WearPrinterSelectScreen>
     }
     if (widget.returnSelection &&
         !_selectionReturned &&
+        next.selectionRevision > _initialSelectionRevision &&
         next.selection != null) {
       _selectionReturned = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) context.pop(next.selection);
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        final WearDispatchResult back = await _flowController.authority.back();
+        if (back.accepted && mounted) context.pop(next.selection);
       });
     }
   }
 
   @override
   void dispose() {
+    if (widget.returnSelection && !_selectionReturned) {
+      unawaited(_flowController.authority.cancelPrinterReturnSelection());
+    }
     unawaited(_stateSubscription.cancel());
     _scroll.dispose();
     super.dispose();

@@ -13,6 +13,9 @@ import 'package:smart_glasses/modules/wear/domain/service/voice_command/wear_voi
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_pill.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_scaling_list_view.dart';
 import 'package:smart_glasses/modules/wear/presentation/widgets/wear_screen_scaffold.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_core_slices.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_presentation_slice.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_colors.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_typography.dart';
 
@@ -31,13 +34,13 @@ class WearVoiceClarificationScreen extends StatefulWidget {
 class _WearVoiceClarificationScreenState
     extends State<WearVoiceClarificationScreen> {
   final ScrollController _scroll = ScrollController();
-  int _focusedIndex = 0;
   bool _isProgrammaticScroll = false;
   bool _isSelecting = false;
   String? _notice;
   Timer? _noticeTimer;
   VoiceClarificationArgs? _currentArgs;
   late final WearScreenActionRegistration _screenActionsRegistration;
+  late final StreamSubscription<WearRuntimeState> _runtimeSubscription;
 
   WearAggregatePresentationFlowController get _flow =>
       WearDependencies.I.wearFlowController;
@@ -45,14 +48,15 @@ class _WearVoiceClarificationScreenState
   List<VoiceDynamicItem> get _matches =>
       _currentArgs?.matches ?? const <VoiceDynamicItem>[];
 
+  int get _focusedIndex => WearRuntimePresentationSlice.from(
+        _flow.authority.payload.presentation,
+      ).clarificationFocusedIndex;
+
   @override
   void initState() {
     super.initState();
     _currentArgs = widget.args;
-    if (_flow.state.screen == WearScreenId.voiceClarification &&
-        identical(_flow.state.currentVoiceClarificationArgs, _currentArgs)) {
-      _focusedIndex = _flow.state.voiceClarificationFocusedIndex;
-    }
+    _runtimeSubscription = _flow.authority.states.listen(_onRuntimeState);
     _screenActionsRegistration = _flow.registerScreenActions(
       WearScreenId.voiceClarification,
       WearScreenActionHandler(
@@ -74,6 +78,7 @@ class _WearVoiceClarificationScreenState
   @override
   void dispose() {
     _noticeTimer?.cancel();
+    unawaited(_runtimeSubscription.cancel());
     _flow.unregisterScreenActions(_screenActionsRegistration);
     _scroll.dispose();
     super.dispose();
@@ -131,7 +136,6 @@ class _WearVoiceClarificationScreenState
           if (_isProgrammaticScroll) return;
           final int next = (listIndex - 1).clamp(0, _matches.length - 1);
           if (next == _focusedIndex) return;
-          _focusedIndex = next;
           _flow.setVoiceClarificationFocusedIndex(next, _matches.length);
         },
       ),
@@ -195,14 +199,18 @@ class _WearVoiceClarificationScreenState
 
   void _onUp() {
     if (_focusedIndex <= 0) return;
-    _focusedIndex--;
-    _focusCurrent();
+    _flow.setVoiceClarificationFocusedIndex(
+      _focusedIndex - 1,
+      _matches.length,
+    );
   }
 
   void _onDown() {
     if (_focusedIndex >= _matches.length - 1) return;
-    _focusedIndex++;
-    _focusCurrent();
+    _flow.setVoiceClarificationFocusedIndex(
+      _focusedIndex + 1,
+      _matches.length,
+    );
   }
 
   void _onNextPage() {
@@ -212,8 +220,7 @@ class _WearVoiceClarificationScreenState
       _showNotice('Это последняя страница');
       return;
     }
-    _focusedIndex = nextIndex;
-    _focusCurrent();
+    _flow.setVoiceClarificationFocusedIndex(nextIndex, _matches.length);
   }
 
   void _onPreviousPage() {
@@ -222,8 +229,10 @@ class _WearVoiceClarificationScreenState
       _showNotice('Это первая страница');
       return;
     }
-    _focusedIndex = (currentPage - 1) * _visibleGlassesItemCount;
-    _focusCurrent();
+    _flow.setVoiceClarificationFocusedIndex(
+      (currentPage - 1) * _visibleGlassesItemCount,
+      _matches.length,
+    );
   }
 
   Future<void> _onSelect() async {
@@ -266,7 +275,6 @@ class _WearVoiceClarificationScreenState
         );
         setState(() {
           _currentArgs = next;
-          _focusedIndex = 0;
           _notice = null;
         });
         _clearNotice();
@@ -299,8 +307,7 @@ class _WearVoiceClarificationScreenState
       (VoiceDynamicItem item) => item.id == match.item!.id,
     );
     if (index < 0) return false;
-    _focusedIndex = index;
-    _focusCurrent();
+    _flow.setVoiceClarificationFocusedIndex(index, _matches.length);
     return true;
   }
 
@@ -330,7 +337,6 @@ class _WearVoiceClarificationScreenState
     if (previous == null) return false;
     setState(() {
       _currentArgs = previous;
-      _focusedIndex = 0;
       _notice = null;
       _isSelecting = false;
     });
@@ -357,7 +363,6 @@ class _WearVoiceClarificationScreenState
   }
 
   void _focusCurrent() {
-    _flow.setVoiceClarificationFocusedIndex(_focusedIndex, _matches.length);
     if (!_scroll.hasClients) return;
     final double target = ((_focusedIndex + 1) * 56.0)
         .clamp(0.0, _scroll.position.maxScrollExtent);
@@ -365,6 +370,27 @@ class _WearVoiceClarificationScreenState
     _scroll.jumpTo(target);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _isProgrammaticScroll = false;
+    });
+  }
+
+  void _onRuntimeState(WearRuntimeState state) {
+    if (!mounted ||
+        state.payloadAs<WearAggregatePayload>().navigation.logicalScreen !=
+            WearScreenId.voiceClarification) {
+      return;
+    }
+    final WearRuntimePresentationSlice presentation =
+        WearRuntimePresentationSlice.from(
+      state.payloadAs<WearAggregatePayload>().presentation,
+    );
+    final VoiceClarificationArgs? args = presentation.clarificationArgs;
+    if (args != null && !identical(args, _currentArgs)) {
+      setState(() => _currentArgs = args);
+    } else {
+      setState(() {});
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusCurrent();
     });
   }
 

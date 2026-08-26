@@ -32,6 +32,7 @@ class WearPrinterRuntimeState {
     required this.selection,
     required this.step,
     required this.focusedIndex,
+    required this.selectionRevision,
     required this.error,
   });
 
@@ -41,6 +42,7 @@ class WearPrinterRuntimeState {
   final WearPrinterSelection? selection;
   final WearPrinterRuntimeStep step;
   final int focusedIndex;
+  final int selectionRevision;
   final String? error;
 
   bool get isLoading => phase == WearPrinterRuntimePhase.loading;
@@ -251,6 +253,7 @@ class WearPrinterRuntime implements WearBackgroundRuntime {
       selection: task.selection,
       step: task.step,
       focusedIndex: task.focusedIndex,
+      selectionRevision: task.selectionRevision,
       error: task.error,
     );
   }

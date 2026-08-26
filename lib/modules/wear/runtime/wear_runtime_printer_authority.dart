@@ -59,6 +59,10 @@ extension WearRuntimePrinterAuthority on WearRuntimeAuthority {
     return store.dispatch(const WearPrinterSelectionCleared());
   }
 
+  Future<WearDispatchResult> cancelPrinterReturnSelection() {
+    return store.dispatch(const WearPrinterReturnSelectionCancelled());
+  }
+
   Future<WearDispatchResult> resetPrinterTask() {
     return store.dispatch(const WearPrinterTaskReset());
   }

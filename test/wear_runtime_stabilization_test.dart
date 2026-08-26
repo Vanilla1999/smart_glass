@@ -62,7 +62,7 @@ void main() {
       expect(legacyCalls, 0);
     });
 
-    test('active UI keeps the legacy auth barcode fallback', () async {
+    test('authorized UI cannot use the legacy auth barcode fallback', () async {
       final _RecordingRuntime runtime = _RecordingRuntime(
         handledScreens: <WearScreenId>{WearScreenId.availabilityFill},
       );
@@ -83,9 +83,9 @@ void main() {
         ),
       );
 
-      expect(await controller.handleBarcode('badge'), isTrue);
+      expect(await controller.handleBarcode('badge'), isFalse);
 
-      expect(received, 'badge');
+      expect(received, isNull);
       expect(runtime.barcodes, isEmpty);
     });
 

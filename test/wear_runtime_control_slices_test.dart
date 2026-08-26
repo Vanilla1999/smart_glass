@@ -72,6 +72,11 @@ void main() {
     final int epoch = authority.state.sessionEpoch;
     await authority.setPhoneUiActive(false);
     await authority.requestNavigation(WearScreenId.scanIdle);
+    await authority.observePhoneRouteAtEpoch(
+      sessionEpoch: epoch,
+      screen: WearScreenId.scanIdle,
+      observationRevision: 1,
+    );
 
     await authority.observeScannerHardwareFromEpoch(
       sessionEpoch: epoch,
@@ -100,8 +105,7 @@ void main() {
     expect(authority.controls.scanner.barcodeAdmissionEnabled, isTrue);
   });
 
-  test(
-      'active route drift blocks barcode while background logical route admits',
+  test('route drift blocks active phone but allows background logical route',
       () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);
@@ -141,6 +145,11 @@ void main() {
     await authority.authorize(user());
     final int epoch = authority.state.sessionEpoch;
     await authority.requestNavigation(WearScreenId.scanIdle);
+    await authority.observePhoneRouteAtEpoch(
+      sessionEpoch: epoch,
+      screen: WearScreenId.scanIdle,
+      observationRevision: 1,
+    );
     await authority.observeScannerHardwareFromEpoch(
       sessionEpoch: epoch,
       observationRevision: 1,

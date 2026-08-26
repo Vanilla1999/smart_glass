@@ -6,7 +6,6 @@ import 'package:smart_glasses/modules/wear/application/wear_flow_controller.dart
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_adapter.dart';
-import 'package:smart_glasses/modules/wear/runtime/wear_runtime_semantic_inputs.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
 typedef WearBarcodeHandler = Future<bool> Function(String payload);
@@ -24,6 +23,7 @@ class WearBarcodeSerialQueue {
 
   bool _draining = false;
   int _generation = 0;
+  Future<void>? _drainOperation;
 
   int get pendingCount => _pending.length;
 
@@ -45,6 +45,8 @@ class WearBarcodeSerialQueue {
   }
 
   Future<void> waitUntilIdle() async {
+    final Future<void>? operation = _drainOperation;
+    if (operation != null) await operation;
     while (_draining || _pending.isNotEmpty) {
       await Future<void>.delayed(Duration.zero);
     }
@@ -54,12 +56,10 @@ class WearBarcodeSerialQueue {
     if (_draining || _pending.isEmpty) return;
     _draining = true;
     final int generation = _generation;
-    unawaited(
-      _drain(generation).whenComplete(() {
-        _draining = false;
-        if (_pending.isNotEmpty) _ensureDrain();
-      }),
-    );
+    _drainOperation = _drain(generation).whenComplete(() {
+      _draining = false;
+      if (_pending.isNotEmpty) _ensureDrain();
+    });
   }
 
   Future<void> _drain(int generation) async {
@@ -68,9 +68,7 @@ class WearBarcodeSerialQueue {
       try {
         final bool consumed = await delivery.handler(delivery.payload);
         if (!consumed) {
-          print(
-            '[WearBarcodeDispatcher] barcode not consumed: ${delivery.payload}',
-          );
+          print('[WearBarcodeDispatcher] barcode not consumed');
         }
       } catch (error, stackTrace) {
         print('[WearBarcodeDispatcher] barcode error=$error\n$stackTrace');
@@ -108,6 +106,7 @@ class WearBarcodeDispatcher implements MultiScannerDelegate {
     handleBarcode: (String _) async => false,
   );
   bool _started = false;
+  int _deliveryGeneration = 0;
   int _nextDeliveryId = 0;
   WearRuntimeControlAdapter? _controlAdapter;
 
@@ -122,11 +121,15 @@ class WearBarcodeDispatcher implements MultiScannerDelegate {
     if (!_started) return;
     _scanner.removeDelegate(this);
     _started = false;
+    _deliveryGeneration += 1;
     _controlAdapter = null;
     _queue.reset();
   }
 
-  void resetPending() => _queue.reset();
+  void resetPending() {
+    _deliveryGeneration += 1;
+    _queue.reset();
+  }
 
   @override
   bool? onScanEvent(String payload) {
@@ -137,36 +140,42 @@ class WearBarcodeDispatcher implements MultiScannerDelegate {
         aggregate.lifecycle.terminal ||
         !aggregate.lifecycle.runtimeActive ||
         !controls.barcodeAdmissionEnabled) {
+      resetPending();
       return false;
     }
-    final WearRuntimeControlAdapter? callback = _controlAdapter;
+    WearRuntimeControlAdapter? callback = _controlAdapter;
     if (callback == null) return false;
 
     // Screen and epoch are captured from one committed aggregate snapshot.
     // Queued work cannot be re-attributed to a newer session or route.
     final int sessionEpoch = _authority.state.sessionEpoch;
     final WearScreenId screen = aggregate.navigation.logicalScreen;
-    if (callback.sessionEpoch != sessionEpoch ||
-        controls.expectedLogicalScreen != screen) {
+    if (callback.sessionEpoch != sessionEpoch) {
+      resetPending();
+      callback = WearRuntimeControlAdapter(_authority);
+      _controlAdapter = callback;
+    }
+    if (controls.expectedLogicalScreen != screen) {
+      resetPending();
       return false;
     }
+    final WearRuntimeControlAdapter deliveryCallback = callback;
 
     final int deliveryId = ++_nextDeliveryId;
+    final int deliveryGeneration = _deliveryGeneration;
     final bool accepted = _queue.addWithHandler(
       payload,
       (String value) => _deliverBarcode(
         value,
-        callback: callback,
+        callback: deliveryCallback,
         sessionEpoch: sessionEpoch,
         screen: screen,
         deliveryId: deliveryId,
+        deliveryGeneration: deliveryGeneration,
       ),
     );
     if (!accepted) {
-      print(
-        '[WearBarcodeDispatcher] barcode queue rejected payload '
-        'pending=${_queue.pendingCount}',
-      );
+      print('[WearBarcodeDispatcher] barcode queue is full');
     }
     return accepted;
   }
@@ -180,14 +189,26 @@ class WearBarcodeDispatcher implements MultiScannerDelegate {
     required int sessionEpoch,
     required WearScreenId screen,
     required int deliveryId,
+    required int deliveryGeneration,
   }) async {
-    if (callback.sessionEpoch != sessionEpoch) return false;
+    if (!_deliveryIsCurrent(deliveryGeneration, sessionEpoch, screen) ||
+        callback.sessionEpoch != sessionEpoch) {
+      return false;
+    }
     final WearDispatchResult receipt = await callback.acceptBarcodeDelivery(
       deliveryId: deliveryId,
       logicalScreen: screen,
     );
-    if (!receipt.accepted || receipt.sessionEpoch != sessionEpoch) return false;
-
+    if (!_deliveryIsCurrent(deliveryGeneration, sessionEpoch, screen) ||
+        !receipt.accepted ||
+        receipt.sessionEpoch != sessionEpoch) {
+      print(
+        '[WearBarcodeDispatcher] delivery rejected '
+        'deliveryId=$deliveryId screen=$screen '
+        'reason=${receipt.rejectReason}',
+      );
+      return false;
+    }
     final WearDispatchResult semanticReceipt =
         await _authority.dispatchSemanticInput(
       kind: WearSemanticInputKind.barcode,
@@ -196,25 +217,53 @@ class WearBarcodeDispatcher implements MultiScannerDelegate {
       expectedSessionEpoch: sessionEpoch,
       value: payload,
     );
-    if (semanticReceipt.accepted &&
-        semanticReceipt.sessionEpoch == sessionEpoch) {
+    if (_deliveryIsCurrent(deliveryGeneration, sessionEpoch, screen) &&
+        semanticReceipt.accepted &&
+        semanticReceipt.sessionEpoch == sessionEpoch &&
+        _authority.state.sessionEpoch == sessionEpoch &&
+        _authority.payload.navigation.logicalScreen == screen) {
       return true;
     }
+    print(
+      '[WearBarcodeDispatcher] semantic rejected '
+      'deliveryId=$deliveryId screen=$screen '
+      'reason=${semanticReceipt.rejectReason}',
+    );
 
     // Pre-auth/main remains a bounded compatibility handler until auth itself
     // becomes an aggregate effect in MR-S12. No authenticated or non-main path
     // may bypass the aggregate semantic reducer.
     final WearBarcodeHandler? fallback = _unsupportedHandler;
     if (fallback == null ||
+        !_deliveryIsCurrent(deliveryGeneration, sessionEpoch, screen) ||
         _authority.isAuthorized ||
         screen != WearScreenId.main ||
         semanticReceipt.rejectReason != WearDispatchRejectReason.unsupported ||
-        _authority.isAuthorized ||
-        screen != WearScreenId.main ||
         _authority.state.sessionEpoch != sessionEpoch ||
         _authority.payload.navigation.logicalScreen != screen) {
       return false;
     }
     return fallback(payload);
+  }
+
+  bool _deliveryIsCurrent(
+    int generation,
+    int sessionEpoch,
+    WearScreenId screen,
+  ) {
+    final aggregate = _authority.payload;
+    final controls = _authority.controls.scanner;
+    final bool routeAllows = !aggregate.lifecycle.phoneUiActive ||
+        aggregate.navigation.actualPhoneScreen == screen;
+    return _started &&
+        generation == _deliveryGeneration &&
+        !_authority.state.terminal &&
+        !aggregate.lifecycle.terminal &&
+        aggregate.lifecycle.runtimeActive &&
+        routeAllows &&
+        controls.barcodeAdmissionEnabled &&
+        controls.expectedLogicalScreen == screen &&
+        _authority.state.sessionEpoch == sessionEpoch &&
+        aggregate.navigation.logicalScreen == screen;
   }
 }

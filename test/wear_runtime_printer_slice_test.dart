@@ -140,6 +140,45 @@ void main() {
     expect(navigationCalls, 0);
   });
 
+  test('cancelled return-selection keeps the committed printer pair', () async {
+    final WearRuntimeAuthority authority = WearRuntimeAuthority();
+    final WearPrinterRuntime runtime = WearPrinterRuntime(
+      authority: authority,
+      loadPrinters: () async => <AvailablePrinter>[
+        available('a', 'A'),
+        available('b', 'B'),
+        available('c', 'C'),
+      ],
+      navigate: _noopNavigation,
+    );
+    addTearDown(runtime.dispose);
+    addTearDown(authority.dispose);
+    await _selectPair(runtime, authority);
+    final String? whiteId = authority.printerTask.selection?.whitePrinter.id;
+    final String? yellowId = authority.printerTask.selection?.yellowPrinter.id;
+    final int revision = authority.printerTask.selectionRevision;
+
+    await authority.requestNavigation(WearScreenId.menu);
+    await runtime.enterScreen(WearScreenId.printerSelect, extra: true);
+    await _flush();
+
+    expect(authority.printerTask.selection?.whitePrinter.id, whiteId);
+    expect(authority.printerTask.selection?.yellowPrinter.id, yellowId);
+    expect(authority.printerTask.selectionRevision, revision);
+    await runtime.selectPrinter(authority.printerTask.visiblePrinters.last);
+    expect(authority.printerTask.selection?.whitePrinter.id, whiteId);
+    expect(authority.printerTask.selection?.yellowPrinter.id, yellowId);
+    expect(authority.printerTask.selectionRevision, revision);
+
+    await authority.cancelPrinterReturnSelection();
+
+    expect(authority.printerTask.whitePrinter?.id, whiteId);
+    expect(authority.printerTask.selection?.whitePrinter.id, whiteId);
+    expect(authority.printerTask.selection?.yellowPrinter.id, yellowId);
+    expect(authority.printerTask.selectionRevision, revision);
+    expect(authority.printerTask.returnSelection, isFalse);
+  });
+
   test('reload rebinds a valid pair to fresh models', () async {
     var call = 0;
     final WearRuntimeAuthority authority = WearRuntimeAuthority();

@@ -29,23 +29,28 @@ typedef WearScanEffectDelay = Future<void> Function(Duration duration);
 
 class WearScanEffectExecutor
     implements WearEffectExecutor, WearEffectExecutorLease {
+  static const Duration minimumPrintingDuration = Duration(seconds: 2);
+
   WearScanEffectExecutor({
     required WearScanEffectLookup lookup,
     required WearScanEffectPrint print,
     required WearScanEffectNavigation navigate,
     required WearScanEffectStatus presentStatus,
     WearScanEffectDelay delay = _defaultDelay,
+    WearScanEffectDelay? printingDelay,
   })  : _lookup = lookup,
         _print = print,
         _navigate = navigate,
         _presentStatus = presentStatus,
-        _delay = delay;
+        _delay = delay,
+        _printingDelay = printingDelay ?? delay;
 
   final WearScanEffectLookup _lookup;
   final WearScanEffectPrint _print;
   final WearScanEffectNavigation _navigate;
   final WearScanEffectStatus _presentStatus;
   final WearScanEffectDelay _delay;
+  final WearScanEffectDelay _printingDelay;
   bool _active = true;
 
   static Future<void> _defaultDelay(Duration duration) {
@@ -97,11 +102,19 @@ class WearScanEffectExecutor
 
     if (effect is WearPrintPriceTagEffect) {
       try {
-        final String printerName = WearMockConfig.isEnabled
-            ? (effect.product.id.isEven
-                ? effect.selection.yellowPrinter.name
-                : effect.selection.whitePrinter.name)
-            : await _print(effect.product, effect.selection);
+        final Future<String> printOperation = WearMockConfig.isEnabled
+            ? Future<String>.value(
+                effect.product.id.isEven
+                    ? effect.selection.yellowPrinter.name
+                    : effect.selection.whitePrinter.name,
+              )
+            : _print(effect.product, effect.selection);
+        final List<Object?> results =
+            await Future.wait<Object?>(<Future<Object?>>[
+          printOperation,
+          _printingDelay(minimumPrintingDuration),
+        ]);
+        final String printerName = results.first! as String;
         return WearPriceTagPrintSucceeded(
           sessionEpoch: effect.sessionEpoch,
           operationId: effect.operationId,

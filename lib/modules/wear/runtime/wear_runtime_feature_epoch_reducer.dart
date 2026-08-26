@@ -3,6 +3,7 @@ import 'package:smart_glasses/modules/wear/runtime/wear_runtime_availability_sli
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_slices.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_core_slices.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_slice.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_presentation_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_semantic_inputs.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
@@ -48,6 +49,7 @@ class WearRuntimeFeatureEpochReducer implements WearSliceReducer {
             sourceRevision: state.legacy.sourceRevision + 1,
           ),
           payload: aggregate.copyWith(
+            presentation: WearRuntimePresentationSlice(),
             session: requested,
             lifecycle: aggregate.lifecycle.copyWith(runtimeActive: true),
             controls: controls.toTerminalControls(),
@@ -87,6 +89,7 @@ class WearRuntimeFeatureEpochReducer implements WearSliceReducer {
             sourceRevision: state.legacy.sourceRevision + 1,
           ),
           payload: aggregate.copyWith(
+            presentation: WearRuntimePresentationSlice(),
             session: const WearSessionSlice.anonymous(),
             lifecycle: aggregate.lifecycle.copyWith(runtimeActive: true),
             navigation: navigation,
@@ -106,6 +109,7 @@ class WearRuntimeFeatureEpochReducer implements WearSliceReducer {
 
     if (intent is WearRuntimeTerminated) {
       final WearAggregatePayload terminalPayload = aggregate.copyWith(
+        presentation: WearRuntimePresentationSlice(),
         session: const WearSessionSlice.anonymous(),
         lifecycle: const WearLifecycleSlice(
           runtimeActive: false,

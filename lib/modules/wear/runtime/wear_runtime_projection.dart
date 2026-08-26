@@ -1,12 +1,17 @@
 import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_group.dart';
 import 'package:smart_glasses/modules/wear/domain/availability/model/wear_availability_product.dart';
+import 'package:smart_glasses/modules/wear/domain/service/voice_command/voice_utterance_coordinator.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_availability_glasses_payloads.dart';
 import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_payload.dart';
+import 'package:smart_glasses/modules/wear/presentation/glasses/wear_glasses_voice_hints.dart';
+import 'package:smart_glasses/modules/wear/presentation/screens/status/wear_status_args.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_availability_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_slices.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_core_slices.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_dynamic_voice_items.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_printer_slice.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_presentation_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_scan_slice.dart';
 import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 import 'package:smart_glasses/modules/wear/theme/wear_images.dart';
@@ -94,14 +99,20 @@ class WearRuntimeProjection {
     );
   }
 
-  static WearGlassesEnvelope projectGlasses(WearRuntimeState state) {
+  static WearGlassesEnvelope projectGlasses(
+    WearRuntimeState state, {
+    void Function()? onVoiceHintsPrepared,
+  }) {
     final WearRuntimeControlPayload controls =
         _aggregate(state).controls as WearRuntimeControlPayload;
     return WearGlassesEnvelope(
       sessionEpoch: state.sessionEpoch,
       stateRevision: state.revision,
       logicalScreen: _aggregate(state).navigation.logicalScreen,
-      payload: _payload(state),
+      payload: _payload(
+        state,
+        onVoiceHintsPrepared: onVoiceHintsPrepared,
+      ),
       overlay: _overlay(controls.voice),
     );
   }
@@ -125,15 +136,19 @@ class WearRuntimeProjection {
   static WearAggregatePayload _aggregate(WearRuntimeState state) =>
       state.payloadAs<WearAggregatePayload>();
 
-  static WearGlassesPayload _payload(WearRuntimeState state) {
+  static WearGlassesPayload _payload(
+    WearRuntimeState state, {
+    void Function()? onVoiceHintsPrepared,
+  }) {
     final WearAggregatePayload aggregate = _aggregate(state);
     final WearScreenId screen = aggregate.navigation.logicalScreen;
     final WearRuntimeFeaturePayload features =
         aggregate.features as WearRuntimeFeaturePayload;
     final WearRuntimeControlPayload controls =
         aggregate.controls as WearRuntimeControlPayload;
-    final WearPresentationFocusSlice presentation =
-        aggregate.presentation as WearPresentationFocusSlice;
+    final WearRuntimePresentationSlice runtimePresentation =
+        WearRuntimePresentationSlice.from(aggregate.presentation);
+    final WearPresentationFocusSlice presentation = runtimePresentation;
     final WearGlassesPayload base = switch (screen) {
       WearScreenId.menu => WearGlassesPayload.menu(
           selectedIndex: presentation.focusFor(screen) ?? 0,
@@ -145,11 +160,23 @@ class WearRuntimeProjection {
       WearScreenId.continueScan => WearGlassesPayload.continueScan(
           selectedIndex: presentation.focusFor(screen) ?? 0,
         ),
-      WearScreenId.printerSelect => _printer(features.printer),
-      WearScreenId.scanIdle ||
-      WearScreenId.productSelect ||
-      WearScreenId.status =>
-        _scan(features.scan as WearScanTaskSlice),
+      WearScreenId.printerSelect => _printer(
+          state,
+          features.printer,
+          onVoiceHintsPrepared,
+        ),
+      WearScreenId.scanIdle || WearScreenId.productSelect => _scan(
+          state,
+          features.scan as WearScanTaskSlice,
+          onVoiceHintsPrepared,
+        ),
+      WearScreenId.status => runtimePresentation.statusArgs == null
+          ? _scan(
+              state,
+              features.scan as WearScanTaskSlice,
+              onVoiceHintsPrepared,
+            )
+          : _genericStatus(runtimePresentation.statusArgs!),
       WearScreenId.availabilityInteraction =>
         WearAvailabilityGlassesPayloads.interactionTypes(
           selectedIndex: presentation.focusFor(screen) ?? 0,
@@ -159,16 +186,21 @@ class WearRuntimeProjection {
       WearScreenId.availabilityDirectScan ||
       WearScreenId.availabilityCheck ||
       WearScreenId.availabilityFill =>
-        _availability(features.availability as WearAvailabilityTaskSlice),
+        _availability(
+          state,
+          features.availability as WearAvailabilityTaskSlice,
+          onVoiceHintsPrepared,
+        ),
       WearScreenId.scannerConnect => WearGlassesPayload.loading(
           screenType: WearGlassesScreenType.status,
           title: 'Сканер',
           statusText: 'Подключение...',
         ),
       WearScreenId.main => WearGlassesPayload.authWaitingBarcode(),
-      WearScreenId.voiceClarification => WearGlassesPayload.status(
-          isError: false,
-          title: 'Уточните команду',
+      WearScreenId.voiceClarification => _voiceClarification(
+          state,
+          runtimePresentation,
+          onVoiceHintsPrepared,
         ),
       WearScreenId.printCodeInput => WearGlassesPayload.loading(
           screenType: WearGlassesScreenType.printing,
@@ -185,7 +217,10 @@ class WearRuntimeProjection {
           statusText: screen.name,
         ),
     };
-    return base.copyWithStatusIcons(
+    final String? feedback = runtimePresentation.recognitionFeedbackFor(screen);
+    final WearGlassesPayload content =
+        feedback == null ? base : base.copyWithStatusText(feedback);
+    return content.copyWithStatusIcons(
       wifiAvailable:
           controls.connectivity.phase == WearConnectivityPhase.online,
       showPrinterIcon: features.printer.selection != null,
@@ -194,7 +229,65 @@ class WearRuntimeProjection {
     );
   }
 
-  static WearGlassesPayload _printer(WearPrinterTaskSlice task) {
+  static WearGlassesPayload _genericStatus(WearStatusScreenArgs args) {
+    return WearGlassesPayload.status(
+      isError: args.kind.name == 'error',
+      title: args.title,
+      subtitle: args.message,
+      statusText: args.glassesStatusText ?? args.details,
+      statusIcon: args.glassesStatusIcon,
+    );
+  }
+
+  static WearGlassesPayload _voiceClarification(
+    WearRuntimeState state,
+    WearRuntimePresentationSlice presentation,
+    void Function()? onVoiceHintsPrepared,
+  ) {
+    final args = presentation.clarificationArgs;
+    final List<VoiceDynamicItem> matches =
+        args?.matches ?? const <VoiceDynamicItem>[];
+    if (matches.isEmpty) {
+      return const WearGlassesPayload(
+        screenType: WearGlassesScreenType.productSelect,
+        phase: WearGlassesPhase.idle,
+        title: 'Уточните фразу',
+        statusText: 'Совпадения не найдены',
+      );
+    }
+    const int pageSize = 4;
+    final int selected =
+        presentation.clarificationFocusedIndex.clamp(0, matches.length - 1);
+    final int pageStart = (selected ~/ pageSize) * pageSize;
+    final int page = (selected ~/ pageSize) + 1;
+    final int pageCount = ((matches.length - 1) ~/ pageSize) + 1;
+    final List<VoiceDynamicItem> visible =
+        matches.skip(pageStart).take(pageSize).toList(growable: false);
+    final VoiceDynamicItemsSnapshot snapshot =
+        selectWearDynamicVoiceItems(state, WearScreenId.voiceClarification);
+    return WearGlassesPayload(
+      screenType: WearGlassesScreenType.productSelect,
+      phase: WearGlassesPhase.idle,
+      title: 'Уточните фразу',
+      subtitle: args?.phrase,
+      items: visible.map((item) => item.label).toList(growable: false),
+      voiceHints: WearGlassesVoiceHints.forVisibleItems(
+        screen: WearScreenId.voiceClarification,
+        snapshot: snapshot,
+        visibleItemIds: visible.map((item) => item.id).toList(growable: false),
+        onPrepared: onVoiceHintsPrepared,
+      ),
+      selectedIndex: selected - pageStart,
+      pageText: pageCount > 1 ? 'Страница: $page из $pageCount' : null,
+      statusText: presentation.clarificationNotice,
+    );
+  }
+
+  static WearGlassesPayload _printer(
+    WearRuntimeState state,
+    WearPrinterTaskSlice task,
+    void Function()? onVoiceHintsPrepared,
+  ) {
     if (task.isLoading) {
       return WearGlassesPayload.loading(
         screenType: WearGlassesScreenType.printer,
@@ -213,6 +306,8 @@ class WearRuntimeProjection {
     final int selected = task.focusedIndex.clamp(0, printers.length - 1);
     final int start = selected ~/ 4 * 4;
     final visible = printers.skip(start).take(4).toList(growable: false);
+    final VoiceDynamicItemsSnapshot snapshot =
+        selectWearDynamicVoiceItems(state, WearScreenId.printerSelect);
     return WearGlassesPayload(
       screenType: WearGlassesScreenType.printer,
       phase: WearGlassesPhase.idle,
@@ -221,6 +316,12 @@ class WearRuntimeProjection {
           ? 'Жёлтые ценники'
           : 'Белые ценники',
       items: visible.map((item) => item.name).toList(growable: false),
+      voiceHints: WearGlassesVoiceHints.forVisibleItems(
+        screen: WearScreenId.printerSelect,
+        snapshot: snapshot,
+        visibleItemIds: visible.map((item) => item.id).toList(growable: false),
+        onPrepared: onVoiceHintsPrepared,
+      ),
       selectedIndex: selected - start,
       pageText: printers.length > 4
           ? 'Страница: ${selected ~/ 4 + 1} из ${(printers.length + 3) ~/ 4}'
@@ -228,7 +329,11 @@ class WearRuntimeProjection {
     );
   }
 
-  static WearGlassesPayload _scan(WearScanTaskSlice task) {
+  static WearGlassesPayload _scan(
+    WearRuntimeState state,
+    WearScanTaskSlice task,
+    void Function()? onVoiceHintsPrepared,
+  ) {
     switch (task.phase) {
       case WearScanTaskPhase.waiting:
         return WearGlassesPayload.scanWaiting();
@@ -261,15 +366,22 @@ class WearRuntimeProjection {
         }
         final int selected = task.focusedIndex.clamp(0, products.length - 1);
         final int start = selected ~/ 4 * 4;
+        final visible = products.skip(start).take(4).toList(growable: false);
+        final VoiceDynamicItemsSnapshot snapshot =
+            selectWearDynamicVoiceItems(state, WearScreenId.productSelect);
         return WearGlassesPayload(
           screenType: WearGlassesScreenType.productSelect,
           phase: WearGlassesPhase.idle,
           title: 'Выбор товара',
-          items: products
-              .skip(start)
-              .take(4)
-              .map((item) => item.name)
-              .toList(growable: false),
+          items: visible.map((item) => item.name).toList(growable: false),
+          voiceHints: WearGlassesVoiceHints.forVisibleItems(
+            screen: WearScreenId.productSelect,
+            snapshot: snapshot,
+            visibleItemIds: visible
+                .map((item) => item.id.toString())
+                .toList(growable: false),
+            onPrepared: onVoiceHintsPrepared,
+          ),
           selectedIndex: selected - start,
           pageText: products.length > 4
               ? 'Страница: ${selected ~/ 4 + 1} из ${(products.length + 3) ~/ 4}'
@@ -278,7 +390,11 @@ class WearRuntimeProjection {
     }
   }
 
-  static WearGlassesPayload _availability(WearAvailabilityTaskSlice task) {
+  static WearGlassesPayload _availability(
+    WearRuntimeState state,
+    WearAvailabilityTaskSlice task,
+    void Function()? onVoiceHintsPrepared,
+  ) {
     if (task.isBusy) {
       return WearAvailabilityGlassesPayloads.loading(title: 'Доступность');
     }
@@ -292,6 +408,7 @@ class WearRuntimeProjection {
       return WearAvailabilityGlassesPayloads.duplicates(
         task.flow.duplicateProducts,
         selectedIndex: task.focusedIndex,
+        onVoiceHintsPrepared: onVoiceHintsPrepared,
       );
     }
     if (task.screen == WearScreenId.availabilityDirectScan) {
@@ -312,6 +429,7 @@ class WearRuntimeProjection {
       return WearAvailabilityGlassesPayloads.groups(
         task.flow.groups,
         selectedIndex: task.focusedIndex,
+        onVoiceHintsPrepared: onVoiceHintsPrepared,
       );
     }
     if (task.screen == WearScreenId.availabilityProduct) {
@@ -323,40 +441,30 @@ class WearRuntimeProjection {
         );
       }
       return _availabilityProducts(
-          group, task.flow.products, task.focusedIndex);
+        state,
+        group,
+        task.flow.products,
+        task.focusedIndex,
+        onVoiceHintsPrepared,
+      );
     }
     return WearAvailabilityGlassesPayloads.fromFlow(task.flow);
   }
 
   static WearGlassesPayload _availabilityProducts(
+    WearRuntimeState state,
     WearAvailabilityGroup group,
     List<WearAvailabilityProduct> products,
     int focusedIndex,
+    void Function()? onVoiceHintsPrepared,
   ) {
-    if (products.isEmpty) {
-      return WearGlassesPayload(
-        screenType: WearGlassesScreenType.availability,
-        phase: WearGlassesPhase.idle,
-        title: group.name,
-        statusText: 'В группе нет заданий',
-      );
-    }
-    final int selected = focusedIndex.clamp(0, products.length - 1);
-    final int start = selected ~/ 4 * 4;
-    return WearGlassesPayload(
-      screenType: WearGlassesScreenType.availability,
-      phase: WearGlassesPhase.idle,
-      title: 'Товарная позиция',
-      subtitle: group.name,
-      items: products
-          .skip(start)
-          .take(4)
-          .map((item) => '${item.name} · ост. ${item.rest}')
-          .toList(growable: false),
-      selectedIndex: selected - start,
-      pageText: products.length > 4
-          ? 'Страница: ${selected ~/ 4 + 1} из ${(products.length + 3) ~/ 4}'
-          : null,
+    return WearAvailabilityGlassesPayloads.products(
+      group: group,
+      products: products,
+      voiceSnapshot:
+          selectWearDynamicVoiceItems(state, WearScreenId.availabilityProduct),
+      selectedIndex: focusedIndex,
+      onVoiceHintsPrepared: onVoiceHintsPrepared,
     );
   }
 }

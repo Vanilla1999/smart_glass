@@ -18,6 +18,7 @@ void main() {
     expect(slice, isNot(contains('class WearRuntimePresentationScheduler')));
     expect(scheduler, contains('final WearRuntimeAuthority _authority'));
     expect(scheduler, contains('DateTime Function() _now'));
+    expect(scheduler, contains('onElapsedAccepted'));
   });
 
   test('root wiring and epoch reset include aggregate presentation', () {
@@ -53,7 +54,7 @@ void main() {
       contains('static WearGlassesPayload _voiceClarification('),
     );
     expect(source, contains('WearRuntimePresentationSlice.from'));
-    expect(source, contains('onPrepared: () {}'));
+    expect(source, contains('onPrepared: onVoiceHintsPrepared'));
   });
 
   test('production facade dispatches typed presentation intents', () {
@@ -76,5 +77,14 @@ void main() {
         .whereType<File>()
         .where((File file) => file.path.contains('apply-wear-s12a'));
     expect(temporary, isEmpty);
+  });
+
+  test('glasses queue has no stale printing envelope bypass', () {
+    final String sender = File(
+      'lib/modules/wear/infrastructure/wear_runtime_glasses_sender.dart',
+    ).readAsStringSync();
+
+    expect(sender, isNot(contains('preservesPrinting')));
+    expect(sender, contains('!identical(_latest, envelope)'));
   });
 }

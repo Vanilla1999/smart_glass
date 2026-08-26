@@ -911,7 +911,7 @@ WEAR_SKIP_SCANNER_CONNECT_SCREEN=true
         ],
       );
 
-      await routerFlow.handleVoiceCommand(WearVoiceCommand.back);
+      await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
 
       expect(

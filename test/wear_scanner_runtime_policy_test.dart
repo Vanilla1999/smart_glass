@@ -1,88 +1,101 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_authority.dart';
 import 'package:smart_glasses/modules/wear/services/wear_scanner_runtime_policy.dart';
 
+import 'support/wear_runtime_test_helper.dart';
+
 void main() {
-  test('pre-auth scanner requires the actual route to match logical state', () {
+  test('authorized matching route prepares scanner for a barcode screen',
+      () async {
+    final WearRuntimeAuthority authority =
+        await createActiveWearRuntimeAuthority(
+      initialScreen: WearScreenId.scanIdle,
+    );
+    addTearDown(authority.dispose);
+    await authority
+        .navigationAdapter()
+        .observePhoneRoute(WearScreenId.scanIdle);
+
     final WearScannerRuntimeDecision decision =
-        resolveWearScannerRuntimeDecision(
-      runtimeTerminated: false,
-      sessionAuthorized: false,
-      phoneUiActive: true,
-      routeMatchesLogicalScreen: false,
+        resolveWearScannerDecisionFromState(
+      authority.state,
       currentScreenAcceptsBarcode: true,
     );
 
+    expect(decision.hardwarePrepared, isTrue);
     expect(decision.barcodeAdmissionEnabled, isFalse);
+  });
+
+  test('authorized route drift closes scanner preparation and admission',
+      () async {
+    final WearRuntimeAuthority authority =
+        await createActiveWearRuntimeAuthority(
+      initialScreen: WearScreenId.scanIdle,
+    );
+    addTearDown(authority.dispose);
+    await authority.navigationAdapter().observePhoneRoute(WearScreenId.help);
+
+    final WearScannerRuntimeDecision decision =
+        resolveWearScannerDecisionFromState(
+      authority.state,
+      currentScreenAcceptsBarcode: true,
+    );
+
     expect(decision.hardwarePrepared, isFalse);
-  });
-
-  test('pre-auth matching route enables scanner admission', () {
-    final WearScannerRuntimeDecision decision =
-        resolveWearScannerRuntimeDecision(
-      runtimeTerminated: false,
-      sessionAuthorized: false,
-      phoneUiActive: true,
-      routeMatchesLogicalScreen: true,
-      currentScreenAcceptsBarcode: true,
-    );
-
-    expect(decision.barcodeAdmissionEnabled, isTrue);
-    expect(decision.hardwarePrepared, isTrue);
-  });
-
-  test('background logical state admits barcode while phone route lags', () {
-    final WearScannerRuntimeDecision decision =
-        resolveWearScannerRuntimeDecision(
-      runtimeTerminated: false,
-      sessionAuthorized: true,
-      phoneUiActive: false,
-      routeMatchesLogicalScreen: false,
-      currentScreenAcceptsBarcode: true,
-    );
-
-    expect(decision.barcodeAdmissionEnabled, isTrue);
-    expect(decision.hardwarePrepared, isTrue);
-  });
-
-  test('active route drift blocks barcode but keeps hardware prepared', () {
-    final WearScannerRuntimeDecision decision =
-        resolveWearScannerRuntimeDecision(
-      runtimeTerminated: false,
-      sessionAuthorized: true,
-      phoneUiActive: true,
-      routeMatchesLogicalScreen: false,
-      currentScreenAcceptsBarcode: true,
-    );
-
     expect(decision.barcodeAdmissionEnabled, isFalse);
+  });
+
+  test('inactive phone UI ignores a stale actual route', () async {
+    final WearRuntimeAuthority authority =
+        await createActiveWearRuntimeAuthority(
+      initialScreen: WearScreenId.scanIdle,
+    );
+    addTearDown(authority.dispose);
+    await authority.navigationAdapter().observePhoneRoute(WearScreenId.help);
+    await authority.setPhoneUiActive(false);
+
+    final WearScannerRuntimeDecision decision =
+        resolveWearScannerDecisionFromState(
+      authority.state,
+      currentScreenAcceptsBarcode: true,
+    );
+
     expect(decision.hardwarePrepared, isTrue);
   });
 
-  test('authorized session keeps hardware prepared outside barcode screens', () {
+  test('non-barcode screen keeps scanner paused', () async {
+    final WearRuntimeAuthority authority =
+        await createActiveWearRuntimeAuthority(
+      initialScreen: WearScreenId.menu,
+    );
+    addTearDown(authority.dispose);
+
     final WearScannerRuntimeDecision decision =
-        resolveWearScannerRuntimeDecision(
-      runtimeTerminated: false,
-      sessionAuthorized: true,
-      phoneUiActive: false,
-      routeMatchesLogicalScreen: false,
+        resolveWearScannerDecisionFromState(
+      authority.state,
       currentScreenAcceptsBarcode: false,
     );
 
+    expect(decision.hardwarePrepared, isFalse);
     expect(decision.barcodeAdmissionEnabled, isFalse);
-    expect(decision.hardwarePrepared, isTrue);
   });
 
-  test('terminal lifecycle disables admission and hardware unconditionally', () {
+  test('terminal runtime disables scanner unconditionally', () async {
+    final WearRuntimeAuthority authority =
+        await createActiveWearRuntimeAuthority(
+      initialScreen: WearScreenId.scanIdle,
+    );
+    addTearDown(authority.dispose);
+    await authority.terminate();
+
     final WearScannerRuntimeDecision decision =
-        resolveWearScannerRuntimeDecision(
-      runtimeTerminated: true,
-      sessionAuthorized: true,
-      phoneUiActive: true,
-      routeMatchesLogicalScreen: true,
+        resolveWearScannerDecisionFromState(
+      authority.state,
       currentScreenAcceptsBarcode: true,
     );
 
-    expect(decision.barcodeAdmissionEnabled, isFalse);
     expect(decision.hardwarePrepared, isFalse);
+    expect(decision.barcodeAdmissionEnabled, isFalse);
   });
 }

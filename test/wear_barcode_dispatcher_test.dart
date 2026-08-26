@@ -1,9 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:multi_scanner/multi_scanner.dart';
+import 'package:smart_glasses/modules/wear/application/wear_screen_id.dart';
+import 'package:smart_glasses/modules/wear/runtime/wear_runtime_control_adapter.dart';
 import 'package:smart_glasses/modules/wear/services/wear_barcode_dispatcher.dart';
+import 'support/wear_runtime_test_helper.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('serial queue preserves barcode order', () async {
     final Completer<void> first = Completer<void>();
     final List<String> calls = <String>[];
@@ -25,7 +31,8 @@ void main() {
     expect(calls, <String>['first', 'second']);
   });
 
-  test('reset drops old pending scans but accepts a new generation', () async {
+  test('reset keeps generations isolated without concurrent handlers',
+      () async {
     final Completer<void> first = Completer<void>();
     final List<String> calls = <String>[];
     final WearBarcodeSerialQueue queue = WearBarcodeSerialQueue(
@@ -41,10 +48,36 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     queue.reset();
     queue.add('fresh');
-    first.complete();
 
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, <String>['first']);
+
+    first.complete();
     await queue.waitUntilIdle();
     expect(calls, <String>['first', 'fresh']);
+  });
+
+  test('waitUntilIdle includes an in-flight handler from before reset',
+      () async {
+    final Completer<void> first = Completer<void>();
+    final WearBarcodeSerialQueue queue = WearBarcodeSerialQueue(
+      handleBarcode: (String payload) async {
+        await first.future;
+        return true;
+      },
+    );
+    queue.add('first');
+    await Future<void>.delayed(Duration.zero);
+    queue.reset();
+    bool idle = false;
+
+    final Future<void> waiting = queue.waitUntilIdle().then((_) => idle = true);
+    await Future<void>.delayed(Duration.zero);
+    expect(idle, isFalse);
+
+    first.complete();
+    await waiting;
+    expect(idle, isTrue);
   });
 
   test('bounded queue reports backpressure', () async {
@@ -100,5 +133,37 @@ void main() {
 
     await queue.waitUntilIdle();
     expect(calls, <String>['old-epoch:second']);
+  });
+
+  test('active phone route drift rejects delivery before semantic dispatch',
+      () async {
+    final authority = await createActiveWearRuntimeAuthority(
+      initialScreen: WearScreenId.scanIdle,
+    );
+    addTearDown(authority.dispose);
+    final adapter = WearRuntimeControlAdapter(authority);
+    await authority
+        .navigationAdapter()
+        .observePhoneRoute(WearScreenId.scanIdle);
+    await adapter.observeScannerPreparing();
+    await adapter.observeScannerPrepared();
+    await adapter.evaluateScannerAdmission(
+      logicalScreen: WearScreenId.scanIdle,
+      screenAcceptsBarcode: true,
+    );
+    expect(authority.controls.scanner.barcodeAdmissionEnabled, isTrue);
+
+    await authority.navigationAdapter().observePhoneRoute(WearScreenId.help);
+    final dispatcher = WearBarcodeDispatcher(
+      authority: authority,
+      scanner: MultiScanner.broadcaster(),
+    )..start();
+    addTearDown(dispatcher.stop);
+
+    expect(dispatcher.onScanEvent('4600000000000'), isTrue);
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(authority.controls.scanner.lastAcceptedDeliveryId, isNull);
   });
 }

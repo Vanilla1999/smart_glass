@@ -19,6 +19,7 @@ class WearPrinterTaskSlice {
     required this.whitePrinter,
     required this.selection,
     required this.returnSelection,
+    this.selectionRevision = 0,
     this.error,
   }) : printers = UnmodifiableListView<WearPrinter>(
           List<WearPrinter>.of(printers),
@@ -43,6 +44,7 @@ class WearPrinterTaskSlice {
   final WearPrinter? whitePrinter;
   final WearPrinterSelection? selection;
   final bool returnSelection;
+  final int selectionRevision;
   final String? error;
 
   bool get isLoading => phase == WearPrinterTaskPhase.loading;
@@ -65,6 +67,7 @@ class WearPrinterTaskSlice {
     WearPrinter? whitePrinter,
     WearPrinterSelection? selection,
     bool? returnSelection,
+    int? selectionRevision,
     String? error,
     bool clearWhite = false,
     bool clearSelection = false,
@@ -78,6 +81,7 @@ class WearPrinterTaskSlice {
       whitePrinter: clearWhite ? null : whitePrinter ?? this.whitePrinter,
       selection: clearSelection ? null : selection ?? this.selection,
       returnSelection: returnSelection ?? this.returnSelection,
+      selectionRevision: selectionRevision ?? this.selectionRevision,
       error: clearError ? null : error ?? this.error,
     );
   }
@@ -212,6 +216,10 @@ class WearPrinterTaskReset extends WearIntent {
   const WearPrinterTaskReset();
 }
 
+class WearPrinterReturnSelectionCancelled extends WearIntent {
+  const WearPrinterReturnSelectionCancelled();
+}
+
 class WearLoadPrintersEffect extends WearEffect {
   const WearLoadPrintersEffect({
     required super.sessionEpoch,
@@ -268,8 +276,11 @@ class WearPrinterSliceReducer implements WearSliceReducer {
           nextAggregate.features as WearRuntimeFeaturePayload;
       final WearPrinterTaskSlice entered = nextFeatures.printer.copyWith(
         returnSelection: intent.returnSelection,
+        step: intent.returnSelection ? WearPrinterTaskStep.white : null,
+        focusedIndex: intent.returnSelection ? 0 : null,
+        clearWhite: intent.returnSelection,
       );
-      if (entered.printers.isNotEmpty) {
+      if (entered.printers.isNotEmpty && !intent.returnSelection) {
         return _commitPrinter(
           nextState,
           nextAggregate,
@@ -404,7 +415,6 @@ class WearPrinterSliceReducer implements WearSliceReducer {
             whitePrinter: selected,
             step: WearPrinterTaskStep.yellow,
             focusedIndex: 0,
-            clearSelection: true,
             clearError: true,
           ),
         );
@@ -419,6 +429,7 @@ class WearPrinterSliceReducer implements WearSliceReducer {
       );
       final WearPrinterTaskSlice completed = printer.copyWith(
         selection: selection,
+        selectionRevision: printer.selectionRevision + 1,
         clearError: true,
       );
       if (printer.returnSelection) {
@@ -483,6 +494,7 @@ class WearPrinterSliceReducer implements WearSliceReducer {
           printers: nextPrinters,
           whitePrinter: intent.selection.whitePrinter,
           selection: intent.selection,
+          selectionRevision: printer.selectionRevision + 1,
           step: WearPrinterTaskStep.yellow,
           clearError: true,
         ),
@@ -502,6 +514,26 @@ class WearPrinterSliceReducer implements WearSliceReducer {
           focusedIndex: 0,
           clearWhite: true,
           clearSelection: true,
+        ),
+      );
+    }
+
+    if (intent is WearPrinterReturnSelectionCancelled) {
+      if (!printer.returnSelection) return WearReduction.accept();
+      final WearPrinterSelection? committed = printer.selection;
+      return _commitPrinter(
+        state,
+        aggregate,
+        features,
+        printer.copyWith(
+          returnSelection: false,
+          step: committed == null
+              ? WearPrinterTaskStep.white
+              : WearPrinterTaskStep.yellow,
+          focusedIndex: 0,
+          whitePrinter: committed?.whitePrinter,
+          clearWhite: committed == null,
+          clearError: true,
         ),
       );
     }
@@ -666,6 +698,21 @@ class WearPrinterSliceReducer implements WearSliceReducer {
       for (final WearPrinter item in refreshed) item.id: item,
     };
     final WearPrinter? currentWhite = current.whitePrinter;
+    final WearPrinterSelection? committed = current.selection;
+    if (current.returnSelection && currentWhite == null && committed != null) {
+      final WearPrinter? white = byId[committed.whitePrinter.id];
+      final WearPrinter? yellow = byId[committed.yellowPrinter.id];
+      if (white != null && yellow != null && white.id != yellow.id) {
+        return current.copyWith(
+          printers: refreshed,
+          selection: WearPrinterSelection(
+            whitePrinter: white,
+            yellowPrinter: yellow,
+          ),
+          step: WearPrinterTaskStep.white,
+        );
+      }
+    }
     if (currentWhite == null) {
       return current.copyWith(
         printers: refreshed,

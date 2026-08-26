@@ -10,6 +10,9 @@ import 'package:multi_scanner/src/platform/multi_scanner_platform_interface.dart
 
 /// An implementation of [MultiScannerPlatform] that uses method channels.
 class MethodChannelMultiScanner extends MultiScannerPlatform {
+  StreamSubscription<dynamic>? _barcodeSubscription;
+  Future<void> _listenerRegistration = Future<void>.value();
+
   /// EventChannel для получния баркода из native
   @visibleForTesting
   EventChannel eventChannel = const EventChannel(
@@ -34,14 +37,33 @@ class MethodChannelMultiScanner extends MultiScannerPlatform {
   @override
   Future<void> registerListenerScan(
     Set<GlobalMultiScannerDelegate> listDelegate,
+  ) {
+    final Future<void> registration = _listenerRegistration
+        .catchError((Object _) {})
+        .then<void>((_) => _replaceListener(listDelegate));
+    _listenerRegistration = registration;
+    return registration;
+  }
+
+  Future<void> _replaceListener(
+    Set<GlobalMultiScannerDelegate> listDelegate,
   ) async {
-    eventChannel.receiveBroadcastStream().listen((data) {
-      debugPrint('Barcode: $data');
-      var barcode = _Barcode.fromJson(jsonDecode(data));
-      for (var d in listDelegate) {
-        d.onEvent(barcode.barcode);
-      }
-    });
+    await _barcodeSubscription?.cancel();
+    _barcodeSubscription = eventChannel.receiveBroadcastStream().listen(
+      (dynamic data) {
+        debugPrint('Barcode: $data');
+        final barcode = _Barcode.fromJson(jsonDecode(data));
+        for (final GlobalMultiScannerDelegate delegate in listDelegate) {
+          delegate.onEvent(barcode.barcode);
+        }
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        debugPrint('Barcode stream error: $error\n$stackTrace');
+      },
+      onDone: () {
+        debugPrint('Barcode stream closed');
+      },
+    );
   }
 
   /// Если flag = false выключается фонарик.

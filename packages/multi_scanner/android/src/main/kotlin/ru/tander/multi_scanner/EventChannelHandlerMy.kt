@@ -6,20 +6,26 @@ import io.flutter.plugin.common.EventChannel
 
 class EventChannelHandler {
     private lateinit var eventChannel: EventChannel
-    private  var event: EventChannel.EventSink? = null
-    fun startListening(messenger: BinaryMessenger?) {
-        eventChannel = EventChannel(messenger, "tander/multi_scanner_plugin/event_barcode");
+    private var event: EventChannel.EventSink? = null
+
+    fun startListening(messenger: BinaryMessenger) {
+        eventChannel = EventChannel(messenger, "tander/multi_scanner_plugin/event_barcode")
         eventChannel.setStreamHandler(
             object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, eventSink: EventChannel.EventSink) {
                     event = eventSink
                 }
 
-                override fun onCancel(p0: Any?) {
-
+                override fun onCancel(arguments: Any?) {
+                    event = null
                 }
             }
         )
+    }
+
+    fun stopListening() {
+        event = null
+        eventChannel.setStreamHandler(null)
     }
 
     fun onScanCompite(barcode: String, tsd: String) {

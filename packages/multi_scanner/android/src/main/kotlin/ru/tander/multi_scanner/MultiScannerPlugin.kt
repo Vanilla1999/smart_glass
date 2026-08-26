@@ -79,6 +79,8 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
             flutterPluginBinding.binaryMessenger, "tander/multi_scanner_plugin/channel"
         )
         channel.setMethodCallHandler(this)
+        eventHandler = EventChannelHandler()
+        eventHandler.startListening(flutterPluginBinding.binaryMessenger)
         eventChannel = EventChannel(flutterPluginBinding.binaryMessenger, "tander/multi_scanner_plugin/eventSinkServiceConnections")
         eventChannel!!.setStreamHandler(this)
         eventScannerDisabled = EventChannel(flutterPluginBinding.binaryMessenger, "tander/multi_scanner_plugin/event_scanner_disabled")
@@ -582,6 +584,7 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
 
     override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
         ViScanner.removeBarcodeCallBack(barcodeCallback)
+        eventHandler.stopListening()
         channel.setMethodCallHandler(null)
         eventChannel!!.setStreamHandler(null)
         eventScannerDisabled!!.setStreamHandler(null)
@@ -593,9 +596,7 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
         activity = binding.activity
         componentActivity = activity as ComponentActivity
         lifecycle = (activity as LifecycleOwner).lifecycle
-        eventHandler = EventChannelHandler()
         viCameraScanner = ViCameraScanner(activity!!, componentActivity!!.activityResultRegistry)
-        eventHandler.startListening(flutterPluginBinding?.binaryMessenger)
         lifecycle?.addObserver(observer)
     }
 
@@ -699,9 +700,7 @@ class MultiScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware, Coro
         activity = binding.activity
         componentActivity = activity as ComponentActivity
         lifecycle = (activity as LifecycleOwner).lifecycle
-        eventHandler = EventChannelHandler()
         viCameraScanner = ViCameraScanner(activity!!, componentActivity!!.activityResultRegistry)
-        eventHandler.startListening(flutterPluginBinding?.binaryMessenger)
         registerListeners()
         lifecycle?.addObserver(observer)
     }

@@ -12,7 +12,8 @@ import 'package:smart_glasses/modules/wear/runtime/wear_runtime_store.dart';
 
 void main() {
   group('aggregate scan phone projection', () {
-    test('projection is a pure immutable read of committed scan state', () async {
+    test('projection is a pure immutable read of committed scan state',
+        () async {
       final WearRuntimeAuthority authority = WearRuntimeAuthority(
         initialScreen: WearScreenId.scanIdle,
       );
@@ -35,6 +36,32 @@ void main() {
   });
 
   group('manual barcode UI effect', () {
+    test('availability screen admits one bounded manual input effect',
+        () async {
+      final WearRuntimeAuthority authority = WearRuntimeAuthority(
+        initialScreen: WearScreenId.availabilityFill,
+      );
+      addTearDown(authority.dispose);
+
+      final WearDispatchResult first = await authority.dispatchSemanticInput(
+        kind: WearSemanticInputKind.requestUiEffect,
+        modality: WearInputModality.touch,
+        expectedScreen: WearScreenId.availabilityFill,
+        uiEffectKind: WearUiEffectKind.manualBarcodeInput,
+      );
+      final WearDispatchResult duplicate =
+          await authority.dispatchSemanticInput(
+        kind: WearSemanticInputKind.requestUiEffect,
+        modality: WearInputModality.touch,
+        expectedScreen: WearScreenId.availabilityFill,
+        uiEffectKind: WearUiEffectKind.manualBarcodeInput,
+      );
+
+      expect(first.accepted, isTrue);
+      expect(duplicate.rejectReason, WearDispatchRejectReason.duplicate);
+      expect(authority.payload.uiEffects.effects, hasLength(1));
+    });
+
     test('duplicate request remains one bounded pending effect', () async {
       final WearRuntimeAuthority authority = WearRuntimeAuthority(
         initialScreen: WearScreenId.scanIdle,
@@ -68,7 +95,8 @@ void main() {
       );
     });
 
-    test('claimed completion removes effect and starts one scan lookup', () async {
+    test('claimed completion removes effect and starts one scan lookup',
+        () async {
       final WearRuntimeAuthority authority = WearRuntimeAuthority(
         initialScreen: WearScreenId.scanIdle,
       );
@@ -186,7 +214,10 @@ void main() {
     ).readAsStringSync();
 
     expect(source, contains('WearScanPhoneProjection.fromState'));
-    expect(source, contains('aggregateStatus ??'));
+    expect(source, contains('WearRuntimePresentationSlice.from'));
+    expect(
+        source, contains('final WearStatusScreenArgs? args = aggregateStatus'));
+    expect(source, isNot(contains('aggregateStatus ?? widget.args')));
     expect(source, contains('projection.phase == WearScanTaskPhase.status'));
   });
 }
