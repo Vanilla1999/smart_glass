@@ -155,6 +155,9 @@ class WearNavigationSlice {
             ..add(screen);
         } else if (nextHistory.isEmpty) {
           nextHistory.add(screen);
+        } else if (nextHistory.length > 1 &&
+            nextHistory[nextHistory.length - 2] == screen) {
+          nextHistory.removeLast();
         } else {
           nextHistory[nextHistory.length - 1] = screen;
         }

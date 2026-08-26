@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_glasses/app/di/app_scope.dart';
 import 'package:smart_glasses/features/home/presentation/cubit/home_cubit.dart';
 import 'package:smart_glasses/features/home/presentation/cubit/home_state.dart';
+import 'package:smart_glasses/features/home/presentation/screens/barcode_frame_test_screen.dart';
 import 'package:smart_glasses/features/home/presentation/widgets/barcode_display_card.dart';
 import 'package:smart_glasses/features/home/presentation/widgets/control_buttons.dart';
 import 'package:smart_glasses/features/home/presentation/widgets/counter_display.dart';
@@ -46,6 +47,16 @@ class _HomeScreenContent extends StatefulWidget {
 }
 
 class _HomeScreenContentState extends State<_HomeScreenContent> {
+  Future<void> _openBarcodeFrameTest(BuildContext context) {
+    return Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        settings: const RouteSettings(name: '/barcode_frame_test'),
+        builder: (_) => const BarcodeFrameTestScreen(),
+      ),
+    );
+  }
+
   Future<void> _openWearModule(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('WEAR_USE_MOCKS', true);
@@ -176,6 +187,8 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
                         onPrintTags: () => _openWearModule(context),
                         onPrintTagsReal: () => _openWearModuleReal(context),
                         onPrintTagsTest: () => _openWearModuleTest(context),
+                        onTestBarcodeFrame: () =>
+                            _openBarcodeFrameTest(context),
                       );
                     }
                     return const CircularProgressIndicator();

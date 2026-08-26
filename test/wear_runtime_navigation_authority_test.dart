@@ -118,6 +118,25 @@ void main() {
     );
   });
 
+  test('replace with previous screen does not duplicate history', () async {
+    final WearRuntimeAuthority authority = WearRuntimeAuthority();
+    addTearDown(authority.dispose);
+    await authority.requestNavigation(WearScreenId.scanIdle);
+    await authority.requestNavigation(WearScreenId.status);
+
+    await authority.requestNavigation(
+      WearScreenId.scanIdle,
+      kind: WearPendingNavigationKind.replace,
+    );
+
+    expect(
+      authority.payload.navigation.history,
+      <WearScreenId>[WearScreenId.main, WearScreenId.scanIdle],
+    );
+    await authority.back();
+    expect(authority.payload.navigation.logicalScreen, WearScreenId.main);
+  });
+
   test('new navigation supersedes the previous pending request', () async {
     final WearRuntimeAuthority authority = WearRuntimeAuthority();
     addTearDown(authority.dispose);

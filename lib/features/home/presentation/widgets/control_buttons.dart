@@ -9,6 +9,7 @@ class ControlButtons extends StatelessWidget {
     required this.onPrintTags,
     required this.onPrintTagsReal,
     required this.onPrintTagsTest,
+    required this.onTestBarcodeFrame,
     super.key,
   });
 
@@ -18,6 +19,7 @@ class ControlButtons extends StatelessWidget {
   final VoidCallback onPrintTags;
   final VoidCallback onPrintTagsReal;
   final VoidCallback onPrintTagsTest;
+  final VoidCallback onTestBarcodeFrame;
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +60,12 @@ class ControlButtons extends StatelessWidget {
             foregroundColor: Colors.white,
           ),
           child: const Text('Печать ценников (ТЕСТ)'),
+        ),
+        const SizedBox(height: 10),
+        ElevatedButton.icon(
+          onPressed: onTestBarcodeFrame,
+          icon: const Icon(Icons.center_focus_strong),
+          label: const Text('Тест рамки ШК'),
         ),
         const SizedBox(height: 10),
         ElevatedButton(
