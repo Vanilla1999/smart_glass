@@ -36,8 +36,8 @@ class WearScanOverlay extends StatelessWidget {
                         left / _reticleSize.width,
                         top / _reticleSize.height,
                       ),
-                      duration: const Duration(milliseconds: 70),
-                      curve: Curves.linear,
+                      duration: const Duration(milliseconds: 150),
+                      curve: Curves.easeOutCubic,
                       child: RepaintBoundary(
                         child: CustomPaint(
                           key: const Key('wear-scan-reticle'),
