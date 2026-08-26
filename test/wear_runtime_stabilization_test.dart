@@ -125,6 +125,28 @@ void main() {
       expect(runtime.dynamicSelections, <String>['2']);
       expect(controller.state.screen, WearScreenId.availabilityProduct);
     });
+
+    test('active UI refreshes voice actions when product runtime becomes ready',
+        () async {
+      final _RecordingRuntime runtime = _RecordingRuntime(
+        handledScreens: <WearScreenId>{WearScreenId.availabilityProduct},
+      );
+      final WearRuntimeAuthority authority = await _activeAuthority();
+      final WearFlowController controller = _controller(authority);
+      controller.setBackgroundRuntime(runtime);
+      addTearDown(controller.dispose);
+      controller.setUiLifecycle(WearUiLifecycle.active);
+      await controller.requestNavigation(WearScreenId.availabilityProduct);
+      final List<WearScreenId> changed = <WearScreenId>[];
+      final StreamSubscription<WearScreenId> subscription =
+          controller.screenActionsChanged.listen(changed.add);
+      addTearDown(subscription.cancel);
+
+      runtime.publish(WearScreenId.availabilityProduct);
+      await _flush();
+
+      expect(changed, <WearScreenId>[WearScreenId.availabilityProduct]);
+    });
   });
 
   group('availability runtime stabilization', () {
@@ -625,6 +647,15 @@ class _RecordingRuntime implements WearBackgroundRuntime {
 
   @override
   Stream<WearBackgroundScreenUpdate> get updates => _updates.stream;
+
+  void publish(WearScreenId screen) {
+    _updates.add(
+      WearBackgroundScreenUpdate(
+        screen: screen,
+        payload: WearGlassesPayload.scanWaiting(),
+      ),
+    );
+  }
 
   @override
   bool acceptsBarcode(WearScreenId screen) => handles(screen);

@@ -308,10 +308,13 @@ class WearFlowController {
     _backgroundRuntime = runtime;
     _backgroundRuntimeSub = runtime.updates.listen(
       (WearBackgroundScreenUpdate update) {
+        final bool isCurrentScreen = _logicalScreen == update.screen;
+        if (isCurrentScreen) {
+          _screenActionsController.add(update.screen);
+        }
         if (_uiLifecycle != WearUiLifecycle.inactive) return;
         rememberScreenPayload(update.screen, update.payload);
-        if (_logicalScreen == update.screen) {
-          _screenActionsController.add(update.screen);
+        if (isCurrentScreen) {
           unawaited(_renderGlasses());
         }
       },
